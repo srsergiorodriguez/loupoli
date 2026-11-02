@@ -114,7 +114,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 
 - Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad inspector, and a live autosave indicator.
 - Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
-- Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (front-only depth-biased topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
+- Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (front-face-culled topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
 - Generalized half-edge DCEL with open boundary loops, validated column reconstruction, per-corner UVs, seam flags, face materials, and adaptive bilinear rendering for non-planar quads.
 - QuadSphere, Cylinder (n-gon caps), and Grid primitives; the first-run scene is an editable QuadSphere.
 - Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.

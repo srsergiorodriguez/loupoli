@@ -1,5 +1,6 @@
 import {
   Euler,
+  Matrix3,
   Matrix4,
   Plane,
   Quaternion,
@@ -141,6 +142,7 @@ interface ElementTransform {
   readonly pivot: Vec3;
   readonly worldMatrix: Matrix4;
   readonly inverseWorld: Matrix4;
+  readonly inverseWorldLinear: Matrix3;
   readonly selectionMode: SelectionMode;
   readonly selectionCount: number;
   readonly modifiersActive: boolean;
@@ -186,6 +188,7 @@ interface ActionDrag {
   readonly loopBase: HalfEdgeMesh | null;
   numeric: string;
   value: number;
+  previewLine: Float32Array | null;
 }
 
 /** Most recent loop cut, used by the separate Loop Slide action. */
@@ -1237,13 +1240,15 @@ export class EditorRuntime {
       edgeIndex,
       loopBase,
       numeric: '',
-      value
+      value,
+      previewLine: null
     };
     try {
       const preview = this.buildActionMesh(drag, value);
       this.armedAction = null;
       this.actionDrag = drag;
       node.setMesh(preview);
+      this.updateActionPreviewLine(drag, preview);
       this.selection.clear();
       this.projectError = null;
       this.syncScene();
@@ -1306,6 +1311,7 @@ export class EditorRuntime {
       const preview = this.buildActionMesh(drag, value);
       drag.value = value;
       drag.node.setMesh(preview);
+      this.updateActionPreviewLine(drag, preview);
       this.projectError = null;
       this.syncScene();
       this.publish();
@@ -1315,6 +1321,72 @@ export class EditorRuntime {
     }
   }
 
+  private updateActionPreviewLine(
+    drag: ActionDrag,
+    preview: HalfEdgeMesh
+  ): void {
+    if (
+      (drag.kind !== 'loop-cut' && drag.kind !== 'loop-slide') ||
+      drag.node.getEvaluatedMesh().modifiersActive
+    ) {
+      this.renderer.setActionPreviewLine(null);
+      drag.previewLine = null;
+      return;
+    }
+    const source =
+      drag.kind === 'loop-cut' ? drag.before : drag.loopBase;
+    if (!source) {
+      this.renderer.setActionPreviewLine(null);
+      drag.previewLine = null;
+      return;
+    }
+    const positions = this.loopCutPreviewLine(source, preview);
+    drag.previewLine = positions.length > 0 ? positions : null;
+    this.renderer.setActionPreviewLine(drag.previewLine);
+  }
+
+  private loopCutPreviewLine(
+    source: HalfEdgeMesh,
+    after: HalfEdgeMesh
+  ): Float32Array {
+    const key = (mesh: HalfEdgeMesh, vertex: number): string => {
+      const offset = vertex * 3;
+      return `${Math.fround(mesh.positions[offset])}|${Math.fround(
+        mesh.positions[offset + 1]
+      )}|${Math.fround(mesh.positions[offset + 2])}`;
+    };
+    const sourcePositions = new Set<string>();
+    for (let vertex = 0; vertex < source.vertexCount; vertex += 1) {
+      sourcePositions.add(key(source, vertex));
+    }
+    const newVertices = new Set<number>();
+    for (let vertex = 0; vertex < after.vertexCount; vertex += 1) {
+      if (!sourcePositions.has(key(after, vertex))) {
+        newVertices.add(vertex);
+      }
+    }
+    const positions: number[] = [];
+    for (let edge = 0; edge < after.edgeCount; edge += 1) {
+      const halfEdge = after.edgeHalfEdge[edge];
+      const from = after.heOrigin[halfEdge];
+      const to = after.heOrigin[after.heNext[halfEdge]];
+      if (!newVertices.has(from) || !newVertices.has(to)) {
+        continue;
+      }
+      const fromOffset = from * 3;
+      const toOffset = to * 3;
+      positions.push(
+        after.positions[fromOffset],
+        after.positions[fromOffset + 1],
+        after.positions[fromOffset + 2],
+        after.positions[toOffset],
+        after.positions[toOffset + 1],
+        after.positions[toOffset + 2]
+      );
+    }
+    return new Float32Array(positions);
+  }
+
   private finishActionGesture(): void {
     const drag = this.actionDrag;
     if (!drag) {
@@ -1322,6 +1394,7 @@ export class EditorRuntime {
     }
     this.actionDrag = null;
     this.armedAction = null;
+    this.renderer.setActionPreviewLine(null);
     const after = drag.node.mesh;
     const label =
       drag.kind === 'extrude'
@@ -1359,6 +1432,7 @@ export class EditorRuntime {
     }
     this.actionDrag = null;
     this.armedAction = null;
+    this.renderer.setActionPreviewLine(null);
     drag.node.setMesh(drag.before);
     this.selection.setValues(drag.selection);
     this.syncScene();
@@ -2203,6 +2277,7 @@ export class EditorRuntime {
           )
         : transformMatrix(node.transform);
       const inverseWorld = worldMatrix.clone().invert();
+      const inverseWorldLinear = new Matrix3().setFromMatrix4(inverseWorld);
       origin = new Vector3(pivot[0], pivot[1], pivot[2]).applyMatrix4(
         worldMatrix
       );
@@ -2213,6 +2288,7 @@ export class EditorRuntime {
         pivot,
         worldMatrix,
         inverseWorld,
+        inverseWorldLinear,
         selectionMode: selection.mode,
         selectionCount: selection.count,
         modifiersActive: node.getEvaluatedMesh().modifiersActive
@@ -2430,6 +2506,7 @@ export class EditorRuntime {
       const preview = this.buildActionMesh(drag, value);
       drag.value = value;
       drag.node.setMesh(preview);
+      this.updateActionPreviewLine(drag, preview);
       this.projectError = null;
       this.syncScene();
       this.publish();
@@ -2603,7 +2680,7 @@ export class EditorRuntime {
         const localDirection =
           modal.orientation === 'local'
             ? axisVector.clone()
-            : axisWorld.clone().transformDirection(element.inverseWorld);
+            : axisWorld.clone().applyMatrix3(element.inverseWorldLinear);
         for (let index = 0; index < positions.length; index += 1) {
           positions[index] = [
             element.before[index][0] + localDirection.x * amount,
@@ -2615,7 +2692,7 @@ export class EditorRuntime {
       } else {
         const localDelta = worldDelta
           .clone()
-          .transformDirection(element.inverseWorld);
+          .applyMatrix3(element.inverseWorldLinear);
         if (this.snapEnabled) {
           localDelta.set(
             snapScalar(localDelta.x, this.snapStep),
@@ -2935,7 +3012,11 @@ export class EditorRuntime {
       if ('primitive' in drag.target && drag.target.parentId !== null) {
         const parent = this.document.getGroup(drag.target.parentId);
         if (parent) {
-          worldDelta.transformDirection(transformMatrix(parent.transform).invert());
+          worldDelta.applyMatrix3(
+            new Matrix3().setFromMatrix4(
+              transformMatrix(parent.transform).invert()
+            )
+          );
         }
       }
       next.position = [

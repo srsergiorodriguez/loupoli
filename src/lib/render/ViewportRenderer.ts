@@ -72,6 +72,7 @@ export class ViewportRenderer {
   private readonly pickingMaterial: MeshBasicMaterial;
   private readonly selectedEdgeMaterial: MeshBasicMaterial;
   private readonly selectedOutlineMaterial: LineBasicMaterial;
+  private readonly previewLineMaterial: LineBasicMaterial;
   private readonly selectedFaceMaterial: MeshBasicMaterial;
 
   private readonly ambientLight: AmbientLight;
@@ -92,6 +93,7 @@ export class ViewportRenderer {
   private currentMode: ShadingMode = 'unlit';
   private transformMode: TransformMode = 'select';
   private transformOrientation: TransformOrientation = 'local';
+  private actionPreviewLine: Float32Array | null = null;
   private activeNodeId: string | null = null;
   private activeGroupId: string | null = null;
   private pixelRatio = 1;
@@ -177,6 +179,14 @@ export class ViewportRenderer {
     this.selectedOutlineMaterial = new LineBasicMaterial({
       name: 'loupoli-selected-outline',
       color: theme.accent.color,
+      depthTest: false,
+      toneMapped: false
+    });
+    this.previewLineMaterial = new LineBasicMaterial({
+      name: 'loupoli-action-preview-line',
+      color: theme.axisZ.color,
+      transparent: true,
+      opacity: 1,
       depthTest: false,
       toneMapped: false
     });
@@ -318,7 +328,25 @@ export class ViewportRenderer {
       this.hasFramed = true;
     }
 
+    this.applyActionPreviewLine();
     this.schedule();
+  }
+
+  /** Show or clear the loop-cut preview line owned by the action system. */
+  setActionPreviewLine(positions: Float32Array | null): void {
+    this.actionPreviewLine = positions ? positions.slice() : null;
+    this.applyActionPreviewLine();
+    this.schedule();
+  }
+
+  private applyActionPreviewLine(): void {
+    for (const view of this.nodeViews.values()) {
+      view.setPreviewLine(null);
+    }
+    if (!this.actionPreviewLine) {
+      return;
+    }
+    this.activeView()?.setPreviewLine(this.actionPreviewLine);
   }
 
   /** Refresh one node after a direct runtime edit such as a drag preview. */
@@ -601,6 +629,7 @@ export class ViewportRenderer {
     this.pickingMaterial.dispose();
     this.selectedEdgeMaterial.dispose();
     this.selectedOutlineMaterial.dispose();
+    this.previewLineMaterial.dispose();
     this.selectedFaceMaterial.dispose();
     disposeViewportMaterials(this.materials);
 
@@ -621,6 +650,7 @@ export class ViewportRenderer {
       selectedVertex: this.selectedVertexMaterial,
       selectedEdge: this.selectedEdgeMaterial,
       selectedOutline: this.selectedOutlineMaterial,
+      previewLine: this.previewLineMaterial,
       selectedFace: this.selectedFaceMaterial
     };
   }
@@ -645,6 +675,9 @@ export class ViewportRenderer {
   private applyShadingMode(mode: ShadingMode): void {
     for (const view of this.nodeViews.values()) {
       view.setShadingMode(mode);
+      if (mode === 'texture-wire') {
+        view.updateFrontWire(this.cameraRig.camera);
+      }
     }
 
     const isLitPath = mode === 'solid' || mode === 'lit';
@@ -681,6 +714,11 @@ export class ViewportRenderer {
     }
 
     this.updateGizmo();
+    if (this.currentMode === 'texture-wire') {
+      for (const view of this.nodeViews.values()) {
+        view.updateFrontWire(this.cameraRig.camera);
+      }
+    }
     this.renderer.render(this.scene, this.cameraRig.camera);
     this.renderCount += 1;
 

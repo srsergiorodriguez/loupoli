@@ -21,7 +21,7 @@ export interface ViewportMaterials {
   readonly lit: MeshLambertMaterial;
   readonly ps1: ShaderMaterial;
   readonly wire: LineBasicMaterial;
-  readonly wireOverlay: ShaderMaterial;
+  readonly wireOverlay: LineBasicMaterial;
   readonly ps1Texture: Texture;
   readonly litTexture: Texture;
 }
@@ -184,35 +184,16 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
     depthWrite: false,
     toneMapped: false
   });
-  const wireOverlay = new ShaderMaterial({
-    name: 'loupoli-wire-overlay',
-    uniforms: {
-      uColor: { value: theme.accent.color },
-      uOpacity: { value: 0.82 },
-      uDepthBias: { value: 0.0012 }
-    },
-    vertexShader: `
-      uniform float uDepthBias;
-      void main() {
-        vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        // Pull only the wire toward the camera so front edges win the depth
-        // test against the textured surface; back edges still fail it.
-        clip.z -= uDepthBias * clip.w;
-        gl_Position = clip;
-      }
-    `,
-    fragmentShader: `
-      uniform vec3 uColor;
-      uniform float uOpacity;
-      void main() {
-        gl_FragColor = vec4(uColor, uOpacity);
-      }
-    `,
+  const wireOverlay = new LineBasicMaterial({
+    name: 'loupoli-wire-front',
+    color: theme.accent.color,
     transparent: true,
-    depthTest: true,
+    opacity: 1,
+    depthTest: false,
     depthWrite: false,
     toneMapped: false
   });
+
 
   return {
     solid,

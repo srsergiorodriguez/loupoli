@@ -495,7 +495,7 @@ Desktop G/R/S runs a transient modal transform in the runtime, targeting selecte
 
 ### Viewport shading modes
 
-Wireframe, Solid, Texture (the PS1/Unlit path), Texture + Wire, and Lit. Texture + Wire draws a front-only topological wire overlay with a clip-space depth bias; back edges remain depth-occluded.
+Wireframe, Solid, Texture (the PS1/Unlit path), Texture + Wire, and Lit. Texture + Wire rebuilds a camera-facing edge subset when rendering: each edge is kept when either adjacent face normal points toward the camera. Back-facing edges are excluded; front edges use an unoccluded overlay. The overlay updates on camera or object changes. A separate blue preview line marks a pending loop cut.
 
 | Mode | Implementation |
 |---|---|

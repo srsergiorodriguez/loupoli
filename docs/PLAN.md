@@ -94,7 +94,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 - `RenderScheduler` with explicit invalidation and instrumentation proving idle frames are zero.
 - Camera rig: orbit, pan, zoom; no damping loop; animated orientation transitions remain scheduler-driven.
 - Interactive top-right orientation gizmo (camera-synced, axis-click views, no second WebGL context).
-- Viewport modes wired: Wireframe, Solid (flat normals), Texture (Unlit/PS1), Texture + Wire (front-only depth-biased topological overlay), Lit.
+- Viewport modes wired: Wireframe, Solid (flat normals), Texture (Unlit/PS1), Texture + Wire (front-face-culled topological overlay), Lit.
 - Custom PS1 unlit material with quantized clip-space vertices and manual affine UV interpolation.
 - **Approved topology seed:** a single real half-edge cube with six quads, per-corner UVs, triangulation, GPU buffers, 16 CSS px vertex picking, pen/mouse vertex dragging, and one localized move-vertex command integrated with history.
 - `InputRouter` with pointer-type routing, pen event payloads (`pressure`, `tiltX/Y`), touch gesture state machine, mouse DCC mapping, 2-finger tap undo, 3-finger tap redo.

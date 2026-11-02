@@ -31,6 +31,7 @@ export interface NodeViewSharedMaterials {
   readonly selectedVertex: PointsMaterial;
   readonly selectedEdge: MeshBasicMaterial;
   readonly selectedOutline: LineBasicMaterial;
+  readonly previewLine: LineBasicMaterial;
   readonly selectedFace: MeshBasicMaterial;
 }
 
@@ -97,7 +98,13 @@ export class MeshNodeView {
   private triangleNormals: Float32Array;
   private triangleUvs: Float32Array;
   private readonly wirePositions: Float32Array;
+  private readonly frontWirePositions: Float32Array;
   private readonly vertexPositions: Float32Array;
+  private readonly faceNormals: Float32Array;
+  private readonly frontWireGeometry = new BufferGeometry();
+  private readonly frontWireSegments: LineSegments;
+  private readonly previewLineGeometry = new BufferGeometry();
+  private readonly previewLine: LineSegments;
 
   private readonly raycaster = new Raycaster();
   private readonly pointerNdc = new Vector2();
@@ -129,7 +136,9 @@ export class MeshNodeView {
     this.triangleNormals = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleUvs = new Float32Array(mesh.triangleVertexCount * 2);
     this.wirePositions = new Float32Array(mesh.edgeCount * 6);
+    this.frontWirePositions = new Float32Array(mesh.edgeCount * 6);
     this.vertexPositions = new Float32Array(mesh.vertexCount * 3);
+    this.faceNormals = new Float32Array(mesh.faceCount * 3);
 
     this.triangleGeometry.setAttribute(
       'position',
@@ -148,6 +157,13 @@ export class MeshNodeView {
       'position',
       new BufferAttribute(this.wirePositions, 3).setUsage(DynamicDrawUsage)
     );
+    this.frontWireGeometry.setAttribute(
+      'position',
+      new BufferAttribute(this.frontWirePositions, 3).setUsage(
+        DynamicDrawUsage
+      )
+    );
+    this.frontWireGeometry.setDrawRange(0, 0);
     this.vertexGeometry.setAttribute(
       'position',
       new BufferAttribute(this.vertexPositions, 3).setUsage(DynamicDrawUsage)
@@ -164,6 +180,24 @@ export class MeshNodeView {
     this.wireSegments.frustumCulled = false;
     this.wireSegments.visible = false;
     this.wireSegments.renderOrder = 1;
+
+    this.frontWireSegments = new LineSegments(
+      this.frontWireGeometry,
+      surfaceMaterials.wireOverlay
+    );
+    this.frontWireSegments.name = 'loupoli-front-wire';
+    this.frontWireSegments.frustumCulled = false;
+    this.frontWireSegments.visible = false;
+    this.frontWireSegments.renderOrder = 1;
+
+    this.previewLine = new LineSegments(
+      this.previewLineGeometry,
+      shared.previewLine
+    );
+    this.previewLine.name = 'loupoli-action-preview-line';
+    this.previewLine.frustumCulled = false;
+    this.previewLine.visible = false;
+    this.previewLine.renderOrder = 4;
 
     this.vertexPoints = new Points(this.vertexGeometry, shared.vertex);
     this.vertexPoints.name = 'loupoli-vertex-handles';
@@ -207,6 +241,8 @@ export class MeshNodeView {
     this.group.add(
       this.triangleMesh,
       this.wireSegments,
+      this.frontWireSegments,
+      this.previewLine,
       this.vertexPoints,
       this.selectedVertexPoint,
       this.selectedEdgeMesh,
@@ -263,10 +299,11 @@ export class MeshNodeView {
     const isWire = mode === 'wireframe';
     const isTextureWire = mode === 'texture-wire';
     this.triangleMesh.visible = !isWire;
-    this.wireSegments.visible = isWire || isTextureWire;
-    this.wireSegments.material = isTextureWire
-      ? this.surfaceMaterials.wireOverlay
-      : this.surfaceMaterials.wire;
+    this.wireSegments.visible = isWire;
+    this.frontWireSegments.visible = isTextureWire;
+    if (this.frontWireSegments.visible) {
+      this.frontWireGeometry.setDrawRange(0, 0);
+    }
 
     if (mode === 'solid') {
       this.triangleMesh.material = this.surfaceMaterials.solid;
@@ -295,6 +332,7 @@ export class MeshNodeView {
       this.triangleUvs
     );
     mesh.writeEdgePositions(this.wirePositions);
+    this.updateFaceNormals(mesh);
     mesh.writeVertexPositions(this.vertexPositions);
 
     this.triangleGeometry.getAttribute('position').needsUpdate = true;
@@ -470,6 +508,8 @@ export class MeshNodeView {
     const faceGeometry = this.selectedFaceMesh.geometry;
     this.triangleGeometry.dispose();
     this.wireGeometry.dispose();
+    this.frontWireGeometry.dispose();
+    this.previewLineGeometry.dispose();
     this.vertexGeometry.dispose();
     this.selectedVertexGeometry.dispose();
     this.selectedEdgeMesh.dispose();
@@ -703,6 +743,96 @@ export class MeshNodeView {
     mesh.count = 0;
     mesh.visible = false;
     return mesh;
+  }
+
+  private updateFaceNormals(mesh: HalfEdgeMesh): void {
+    for (let face = 0; face < mesh.faceCount; face += 1) {
+      const normal = mesh.computeFaceNormal(face);
+      this.faceNormals[face * 3] = normal[0];
+      this.faceNormals[face * 3 + 1] = normal[1];
+      this.faceNormals[face * 3 + 2] = normal[2];
+    }
+  }
+
+  /**
+   * Rebuild the camera-facing wire subset used by Texture + Wire.
+   *
+   * An edge is kept when either adjacent face points toward the camera. This
+   * avoids unstable depth-bias tuning; occluded concave edges are still drawn.
+   */
+  updateFrontWire(camera: Camera): void {
+    if (!this.frontWireSegments.visible) {
+      return;
+    }
+    this.group.updateWorldMatrix(true, false);
+    const cameraLocal = camera.position
+      .clone()
+      .applyMatrix4(this.group.matrixWorld.clone().invert());
+    let cursor = 0;
+    for (let edge = 0; edge < this.mesh.edgeCount; edge += 1) {
+      const halfEdge = this.mesh.edgeHalfEdge[edge];
+      const fromVertex = this.mesh.heOrigin[halfEdge];
+      const toVertex = this.mesh.halfEdgeDestination(halfEdge);
+      const from = fromVertex * 3;
+      const to = toVertex * 3;
+      const midX =
+        (this.mesh.positions[from] + this.mesh.positions[to]) / 2;
+      const midY =
+        (this.mesh.positions[from + 1] + this.mesh.positions[to + 1]) / 2;
+      const midZ =
+        (this.mesh.positions[from + 2] + this.mesh.positions[to + 2]) / 2;
+      const viewX = cameraLocal.x - midX;
+      const viewY = cameraLocal.y - midY;
+      const viewZ = cameraLocal.z - midZ;
+      const faceA = this.mesh.heFace[halfEdge];
+      const faceB = this.mesh.heFace[this.mesh.heTwin[halfEdge]];
+      const frontA =
+        faceA >= 0 &&
+        this.faceNormals[faceA * 3] * viewX +
+          this.faceNormals[faceA * 3 + 1] * viewY +
+          this.faceNormals[faceA * 3 + 2] * viewZ >
+          0;
+      const frontB =
+        faceB >= 0 &&
+        this.faceNormals[faceB * 3] * viewX +
+          this.faceNormals[faceB * 3 + 1] * viewY +
+          this.faceNormals[faceB * 3 + 2] * viewZ >
+          0;
+      if (!frontA && !frontB) {
+        continue;
+      }
+      this.frontWirePositions[cursor] = this.mesh.positions[from];
+      this.frontWirePositions[cursor + 1] = this.mesh.positions[from + 1];
+      this.frontWirePositions[cursor + 2] = this.mesh.positions[from + 2];
+      this.frontWirePositions[cursor + 3] = this.mesh.positions[to];
+      this.frontWirePositions[cursor + 4] = this.mesh.positions[to + 1];
+      this.frontWirePositions[cursor + 5] = this.mesh.positions[to + 2];
+      cursor += 6;
+    }
+    this.frontWireGeometry.getAttribute('position').needsUpdate = true;
+    this.frontWireGeometry.setDrawRange(0, cursor / 3);
+  }
+
+  /** Show or clear the temporary action loop preview line. */
+  setPreviewLine(positions: Float32Array | null): void {
+    if (!positions || positions.length === 0) {
+      this.previewLine.visible = false;
+      return;
+    }
+    const geometry = this.previewLineGeometry;
+    const existing = geometry.getAttribute('position');
+    if (existing && existing.array.length >= positions.length) {
+      (existing.array as Float32Array).set(positions, 0);
+      existing.needsUpdate = true;
+      geometry.setDrawRange(0, positions.length / 3);
+    } else {
+      geometry.setAttribute(
+        'position',
+        new BufferAttribute(positions.slice(), 3).setUsage(DynamicDrawUsage)
+      );
+      geometry.setDrawRange(0, positions.length / 3);
+    }
+    this.previewLine.visible = true;
   }
 
   private rebuildTriangleGeometry(vertexCount: number): void {
