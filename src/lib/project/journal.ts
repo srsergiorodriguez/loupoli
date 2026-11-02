@@ -21,6 +21,12 @@ export type JournalPatch =
       readonly position: Vec3;
     }
   | {
+      readonly type: 'set-edge-seam';
+      readonly nodeId: string;
+      readonly edge: number;
+      readonly seam: boolean;
+    }
+  | {
       readonly type: 'insert-node';
       readonly index: number;
       readonly node: NodeSnapshot;
@@ -76,6 +82,14 @@ export function applyJournalPatch(
         throw new Error(`Autosave references missing node ${patch.nodeId}.`);
       }
       node.mesh.setVertexPosition(patch.vertex, patch.position);
+      return;
+    }
+    case 'set-edge-seam': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.mesh.setEdgeSeam(patch.edge, patch.seam);
       return;
     }
     case 'insert-node': {
@@ -172,6 +186,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'set-modifiers') {
     return patch.nodeId.length * 2 + patch.modifiers.length * 128 + 32;
+  }
+  if (patch.type === 'set-edge-seam') {
+    return patch.nodeId.length * 2 + 24;
   }
   if (patch.type === 'replace-mesh') {
     const mesh = patch.mesh;

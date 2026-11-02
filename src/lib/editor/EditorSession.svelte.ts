@@ -218,6 +218,10 @@ export class EditorSession {
     this.runtime?.loopCut();
   }
 
+  toggleSelectedSeams(): void {
+    this.runtime?.toggleSelectedSeams();
+  }
+
   armAction(kind: MeshActionKind): void {
     this.runtime?.armAction(kind);
   }

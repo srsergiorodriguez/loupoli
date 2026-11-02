@@ -73,6 +73,8 @@ export class ViewportRenderer {
   private readonly selectedEdgeMaterial: MeshBasicMaterial;
   private readonly selectedOutlineMaterial: LineBasicMaterial;
   private readonly previewLineMaterial: LineBasicMaterial;
+  private readonly seamLineMaterial: LineBasicMaterial;
+  private readonly seamEdgeMaterial: MeshBasicMaterial;
   private readonly selectedFaceMaterial: MeshBasicMaterial;
 
   private readonly ambientLight: AmbientLight;
@@ -190,6 +192,22 @@ export class ViewportRenderer {
       transparent: true,
       opacity: 1,
       depthTest: false,
+      toneMapped: false
+    });
+    this.seamLineMaterial = new LineBasicMaterial({
+      name: 'loupoli-seam',
+      color: theme.seam.color,
+      transparent: true,
+      opacity: 1,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    });
+    this.seamEdgeMaterial = new MeshBasicMaterial({
+      name: 'loupoli-seam-tube',
+      color: theme.seam.color,
+      depthTest: false,
+      depthWrite: false,
       toneMapped: false
     });
     this.selectedFaceMaterial = new MeshBasicMaterial({
@@ -658,6 +676,8 @@ export class ViewportRenderer {
     this.selectedEdgeMaterial.dispose();
     this.selectedOutlineMaterial.dispose();
     this.previewLineMaterial.dispose();
+    this.seamLineMaterial.dispose();
+    this.seamEdgeMaterial.dispose();
     this.selectedFaceMaterial.dispose();
     disposeViewportMaterials(this.materials);
 
@@ -679,6 +699,8 @@ export class ViewportRenderer {
       selectedEdge: this.selectedEdgeMaterial,
       selectedOutline: this.selectedOutlineMaterial,
       previewLine: this.previewLineMaterial,
+      seam: this.seamLineMaterial,
+      seamEdge: this.seamEdgeMaterial,
       selectedFace: this.selectedFaceMaterial
     };
   }

@@ -4,6 +4,9 @@ export type Vec3 = [number, number, number];
 /** A two-component texture coordinate. */
 export type Vec2 = [number, number];
 
+/** Edge flag bit marking a UV seam. */
+export const EDGE_SEAM = 1;
+
 /**
  * Rendering resolution for a non-planar quad.
  *
@@ -463,6 +466,61 @@ export class HalfEdgeMesh {
     this.positions[offset + 1] = position[1];
     this.positions[offset + 2] = position[2];
     this.revision += 1;
+  }
+
+  /** Whether an edge carries the UV seam flag. */
+  isEdgeSeam(edge: number): boolean {
+    if (edge < 0 || edge >= this.edgeCount) {
+      throw new RangeError(`Edge ${edge} is outside the mesh.`);
+    }
+    return (this.edgeFlags[edge] & EDGE_SEAM) !== 0;
+  }
+
+  /**
+   * Set or clear the UV seam bit without changing topology.
+   *
+   * Only bit 0 is owned by seam authoring; other edge-flag bits remain reserved
+   * for future topology features and are preserved.
+   */
+  setEdgeSeam(edge: number, seam: boolean): void {
+    if (edge < 0 || edge >= this.edgeCount) {
+      throw new RangeError(`Edge ${edge} is outside the mesh.`);
+    }
+    const next = seam ? this.edgeFlags[edge] | EDGE_SEAM : this.edgeFlags[edge] & ~EDGE_SEAM;
+    if (next === this.edgeFlags[edge]) {
+      return;
+    }
+    this.edgeFlags[edge] = next;
+    this.revision += 1;
+  }
+
+  /**
+   * Write marked-seam endpoints into a caller-owned edge-capacity buffer.
+   *
+   * Returns the number of seam edges written so the overlay can set an exact
+   * draw range without reallocating on every seam toggle.
+   */
+  writeSeamEdgePositions(outPositions: Float32Array): number {
+    if (outPositions.length !== this.edgeCount * 6) {
+      throw new Error('Seam output buffer does not match mesh capacity.');
+    }
+    let cursor = 0;
+    for (let edge = 0; edge < this.edgeCount; edge += 1) {
+      if ((this.edgeFlags[edge] & EDGE_SEAM) === 0) {
+        continue;
+      }
+      const halfEdge = this.edgeHalfEdge[edge];
+      const from = this.heOrigin[halfEdge] * 3;
+      const to = this.halfEdgeDestination(halfEdge) * 3;
+      outPositions[cursor] = this.positions[from];
+      outPositions[cursor + 1] = this.positions[from + 1];
+      outPositions[cursor + 2] = this.positions[from + 2];
+      outPositions[cursor + 3] = this.positions[to];
+      outPositions[cursor + 4] = this.positions[to + 1];
+      outPositions[cursor + 5] = this.positions[to + 2];
+      cursor += 6;
+    }
+    return cursor / 6;
   }
 
   /**

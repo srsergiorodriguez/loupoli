@@ -110,7 +110,7 @@ See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the full protocol and format.
 
 ## 9. Current implementation state
 
-Phase 2 is implemented; Phase 3 foundations are underway for browser and native desktop build:
+Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 began with UV seam authoring:
 
 - Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad inspector, and a live autosave indicator.
 - Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
@@ -138,7 +138,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: evaluate evaluated-space element pivots, then plan and begin Phase 4 texturing. Physical iPad/WKWebView validation remains deferred until an iPad is available.
+Next planned work: Phase 4 Slice 2 — resizable UV viewport with linked corner selection and UV transforms. Then chart extraction/LSCM, the texture-layer stack with `.lpoly` v2 PNG chunks, and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
 
 Approved decisions:
 

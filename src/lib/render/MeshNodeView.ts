@@ -32,6 +32,8 @@ export interface NodeViewSharedMaterials {
   readonly selectedEdge: MeshBasicMaterial;
   readonly selectedOutline: LineBasicMaterial;
   readonly previewLine: LineBasicMaterial;
+  readonly seam: LineBasicMaterial;
+  readonly seamEdge: MeshBasicMaterial;
   readonly selectedFace: MeshBasicMaterial;
 }
 
@@ -80,11 +82,15 @@ export class MeshNodeView {
 
   private triangleGeometry = new BufferGeometry();
   private readonly wireGeometry = new BufferGeometry();
+  private readonly seamGeometry = new BufferGeometry();
   private readonly vertexGeometry = new BufferGeometry();
   private selectedVertexGeometry = new BufferGeometry();
 
   private readonly triangleMesh: Mesh;
   private readonly wireSegments: LineSegments;
+  private readonly seamSegments: LineSegments;
+  private seamEdgeMesh: InstancedMesh;
+  private seamEdgeCapacity = 1;
   private readonly vertexPoints: Points;
   private readonly selectedVertexPoint: Points;
   private readonly pickingMesh: Mesh;
@@ -98,6 +104,7 @@ export class MeshNodeView {
   private triangleNormals: Float32Array;
   private triangleUvs: Float32Array;
   private readonly wirePositions: Float32Array;
+  private readonly seamPositions: Float32Array;
   private readonly frontWirePositions: Float32Array;
   private readonly vertexPositions: Float32Array;
   private readonly faceNormals: Float32Array;
@@ -136,6 +143,7 @@ export class MeshNodeView {
     this.triangleNormals = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleUvs = new Float32Array(mesh.triangleVertexCount * 2);
     this.wirePositions = new Float32Array(mesh.edgeCount * 6);
+    this.seamPositions = new Float32Array(mesh.edgeCount * 6);
     this.frontWirePositions = new Float32Array(mesh.edgeCount * 6);
     this.vertexPositions = new Float32Array(mesh.vertexCount * 3);
     this.faceNormals = new Float32Array(mesh.faceCount * 3);
@@ -164,6 +172,11 @@ export class MeshNodeView {
       )
     );
     this.frontWireGeometry.setDrawRange(0, 0);
+    this.seamGeometry.setAttribute(
+      'position',
+      new BufferAttribute(this.seamPositions, 3).setUsage(DynamicDrawUsage)
+    );
+    this.seamGeometry.setDrawRange(0, 0);
     this.vertexGeometry.setAttribute(
       'position',
       new BufferAttribute(this.vertexPositions, 3).setUsage(DynamicDrawUsage)
@@ -190,6 +203,14 @@ export class MeshNodeView {
     this.frontWireSegments.visible = false;
     this.frontWireSegments.renderOrder = 1;
 
+    this.seamSegments = new LineSegments(
+      this.seamGeometry,
+      shared.seam
+    );
+    this.seamSegments.name = 'loupoli-seams';
+    this.seamSegments.frustumCulled = false;
+    this.seamSegments.renderOrder = 3;
+
     this.previewLine = new LineSegments(
       this.previewLineGeometry,
       shared.previewLine
@@ -215,6 +236,12 @@ export class MeshNodeView {
 
     this.edgeUnitGeometry = new CylinderGeometry(1, 1, 1, 6, 1, false);
     this.selectedEdgeMesh = this.createEdgeInstances(shared.selectedEdge, 1);
+    this.seamEdgeMesh = this.createEdgeInstances(
+      shared.seamEdge,
+      1,
+      'loupoli-seam-tubes',
+      3
+    );
 
     this.selectedFaceMesh = new Mesh(
       new BufferGeometry(),
@@ -242,9 +269,11 @@ export class MeshNodeView {
       this.triangleMesh,
       this.wireSegments,
       this.frontWireSegments,
+      this.seamSegments,
       this.previewLine,
       this.vertexPoints,
       this.selectedVertexPoint,
+      this.seamEdgeMesh,
       this.selectedEdgeMesh,
       this.selectedFaceMesh,
       this.selectedFaceOutline,
@@ -332,6 +361,9 @@ export class MeshNodeView {
       this.triangleUvs
     );
     mesh.writeEdgePositions(this.wirePositions);
+    const seamCount = mesh.writeSeamEdgePositions(this.seamPositions);
+    this.seamGeometry.setDrawRange(0, seamCount * 2);
+    this.updateSeamEdges(seamCount);
     this.updateFaceNormals(mesh);
     mesh.writeVertexPositions(this.vertexPositions);
 
@@ -339,6 +371,7 @@ export class MeshNodeView {
     this.triangleGeometry.getAttribute('normal').needsUpdate = true;
     this.triangleGeometry.getAttribute('uv').needsUpdate = true;
     this.wireGeometry.getAttribute('position').needsUpdate = true;
+    this.seamGeometry.getAttribute('position').needsUpdate = true;
     this.vertexGeometry.getAttribute('position').needsUpdate = true;
 
     this.triangleGeometry.computeBoundingBox();
@@ -678,6 +711,66 @@ export class MeshNodeView {
       this.active && this.selectionMode === 'edge';
   }
 
+  /**
+   * Keep seam tubes visible in every shading mode.
+   *
+   * The line overlay stays for exact one-pixel continuity; the instanced tubes
+   * provide a readable target at tablet viewing distance without duplicating
+   * the selected-edge overlay.
+   */
+  private updateSeamEdges(seamCount: number): void {
+    const mesh = this.mesh;
+    if (seamCount > this.seamEdgeCapacity) {
+      while (this.seamEdgeCapacity < seamCount) {
+        this.seamEdgeCapacity *= 2;
+      }
+      this.seamEdgeMesh.removeFromParent();
+      this.seamEdgeMesh.dispose();
+      this.seamEdgeMesh = this.createEdgeInstances(
+        this.seamEdgeMesh.material as MeshBasicMaterial,
+        this.seamEdgeCapacity,
+        'loupoli-seam-tubes',
+        3
+      );
+      this.group.add(this.seamEdgeMesh);
+    }
+    if (seamCount === 0) {
+      this.seamEdgeMesh.count = 0;
+      this.seamEdgeMesh.visible = false;
+      return;
+    }
+    let cursor = 0;
+    for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+      if (!mesh.isEdgeSeam(edge)) {
+        continue;
+      }
+      const [from, to] = mesh.getEdgeVertices(edge);
+      const start = new Vector3(...mesh.getVertexPosition(from));
+      const end = new Vector3(...mesh.getVertexPosition(to));
+      this.edgeDirection.copy(end).sub(start);
+      const length = this.edgeDirection.length();
+      if (length <= Number.EPSILON) {
+        this.seamEdgeMesh.setMatrixAt(cursor, this.edgeMatrix.makeScale(0, 0, 0));
+      } else {
+        this.edgeDirection.normalize();
+        const radius = Math.min(0.04, Math.max(0.012, length * 0.02));
+        this.edgePosition.copy(start).add(end).multiplyScalar(0.5);
+        this.edgeQuaternion.setFromUnitVectors(Y_AXIS, this.edgeDirection);
+        this.edgeScale.set(radius, length, radius);
+        this.edgeMatrix.compose(
+          this.edgePosition,
+          this.edgeQuaternion,
+          this.edgeScale
+        );
+        this.seamEdgeMesh.setMatrixAt(cursor, this.edgeMatrix);
+      }
+      cursor += 1;
+    }
+    this.seamEdgeMesh.count = cursor;
+    this.seamEdgeMesh.instanceMatrix.needsUpdate = true;
+    this.seamEdgeMesh.visible = true;
+  }
+
   private updateSelectedFaces(): void {
     const mesh = this.mesh;
     const faces = this.selectedElements.filter(
@@ -734,12 +827,14 @@ export class MeshNodeView {
 
   private createEdgeInstances(
     material: MeshBasicMaterial,
-    capacity: number
+    capacity: number,
+    name = 'loupoli-selected-edges',
+    renderOrder = 4
   ): InstancedMesh {
     const mesh = new InstancedMesh(this.edgeUnitGeometry, material, capacity);
-    mesh.name = 'loupoli-selected-edges';
+    mesh.name = name;
     mesh.frustumCulled = false;
-    mesh.renderOrder = 4;
+    mesh.renderOrder = renderOrder;
     mesh.count = 0;
     mesh.visible = false;
     return mesh;

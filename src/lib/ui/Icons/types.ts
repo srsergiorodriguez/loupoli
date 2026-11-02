@@ -26,4 +26,5 @@ export type IconName =
   | 'extrude'
   | 'inset'
   | 'loop-cut'
-  | 'loop-slide';
+  | 'loop-slide'
+  | 'seam';

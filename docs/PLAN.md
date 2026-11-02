@@ -1,9 +1,9 @@
 # loupoli — Master Delivery Plan
 
-**Status:** Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds, including topology editing, groups/join, snapping, modifiers, selection gizmos, and the desktop/touch ActionDock. Physical-iPad/WKWebView validation and the remaining Phase 3 polish remain open; Phase 4 texturing follows.  
+**Status:** Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 has started with UV seam authoring, overlay rendering, undo/autosave, and `.lpoly` persistence; see [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md). Physical-iPad/WKWebView validation remains deferred.  
 **Brand rule:** the name is always written `loupoli`, lowercase.  
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.  
-**Companion docs:** [Architecture](./ARCHITECTURE.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
+**Companion docs:** [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 ---
 

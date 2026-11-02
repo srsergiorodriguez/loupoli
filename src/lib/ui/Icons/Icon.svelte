@@ -108,5 +108,8 @@
   {:else if name === 'loop-slide'}
     <path d="M4 7c4-3 12-3 16 0M4 17c4-3 12-3 16 0" />
     <path d="M13 12h7M17 9l3 3-3 3" />
+  {:else if name === 'seam'}
+    <path d="M4 8h4M16 8h4M4 16h4M16 16h4" />
+    <path d="M12 3v18" stroke-dasharray="2.5 3" />
   {/if}
 </svg>

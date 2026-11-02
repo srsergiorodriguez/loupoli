@@ -17,6 +17,7 @@ export interface Theme {
   readonly axisZ: ThemeColor;
   readonly wireframe: ThemeColor;
   readonly vertexHandle: ThemeColor;
+  readonly seam: ThemeColor;
   readonly accent: ThemeColor;
   readonly solidMaterial: ThemeColor;
   readonly textureA: ThemeColor;
@@ -34,6 +35,7 @@ const FALLBACKS: Record<string, string> = {
   '--axis-z': '#71a8ff',
   '--wireframe-edge': 'rgba(242, 239, 230, 0.26)',
   '--vertex-handle': 'rgba(242, 239, 230, 0.62)',
+  '--accent-warning': '#ffb45e',
   '--accent-primary': '#c9f45c',
   '--material-solid': '#cec8b9',
   '--material-texture-a': '#263129',
@@ -116,6 +118,7 @@ export function readTheme(): Theme {
     axisZ: readToken('--axis-z'),
     wireframe: readToken('--wireframe-edge'),
     vertexHandle: readToken('--vertex-handle'),
+    seam: readToken('--accent-warning'),
     accent: readToken('--accent-primary'),
     solidMaterial: readToken('--material-solid'),
     textureA: readToken('--material-texture-a'),

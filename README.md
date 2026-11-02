@@ -25,6 +25,9 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
   - **PS1 affine** — enable affine UV swim.
   Both start off, apply only to Unlit shading, and the module starts collapsed. It is a render effect, not a geometry modifier.
 - **General half-edge kernel.** Columnar DCEL with explicit face and boundary loops, per-corner UVs, per-edge seam flags, per-face materials, Newell normals, invariant validation, n-gon fan triangulation, and validated reconstruction from serialized columns.
+- **UV seam authoring.** Select edges in Edge mode and use **Seam** to mark or clear UV seams. Seams render as an amber overlay, use one localized undoable command with per-edge autosave patches, and round-trip through `.lpoly`. Unwrapping, a UV viewport, texture layers, and painting are Phase 4 work.
+
+![UV seams shown as amber overlays](docs/media/uv-seams.png)
 - **Three real primitives.** QuadSphere (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
 - **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed beside the existing scene rather than overlapping at the origin.
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
@@ -145,7 +148,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **57 passing** tests across ten files:
+- `npm test`: **62 passing** tests across eleven files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.
@@ -187,6 +190,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Loop-cut one sphere edge: 24 F/26 V became 32 F/34 V with a closed, valid quad ring; repeated under an active Grid Array and produced 64 evaluated faces.
   - Texture + Wire rendering, top-right placement, icon-only touch density, compact scene/selection actions, and Texture + Wire `.lpoly` settings round-trip verified. The wire pass now culls back-facing edges on the CPU: the default sphere drew 28 of 48 edges and a cylinder drew 23 of 36, with the back wall absent.
   - Loop-cut preview: while dragging a Loop Cut, a solid blue loop line marked the prospective cut; it cleared on commit/cancel and remained distinct from the lime front wire. Loop context survived undo/redo of the cut and slide (t 0.65 → 0.3 → 0.65) and cleared after an unrelated transform.
+  - Seam authoring: edge selection toggled an amber seam overlay; undo restored the DCEL flags, autosave journal patches reapplied them, and `.lpoly` round-tripped the flags.
   - Global orientation on a grouped, rotated child: world fields showed the composed pose, the move/rotate gizmo axes were world-aligned, global position/rotation edits converted back to local coordinates, and undo restored the prior pose.
   - Modal G/R/S: free mouse move, X-axis constrained typed move, 45° typed rotation, 2× typed scale, click confirmation, axis toggle, and Escape cancellation were exercised; each commit produced one transform command and undo restored the pose.
   - ActionDock: touch tap armed Extrude; a pencil/mouse drag previewed and committed 30 V/56 E/28 F from 26/48/24; touch targets measured 44 px; Inset matched those closed counts; Loop Cut produced 34/64/32 and enabled Loop Slide; Loop Slide produced a valid 34/64/32 mesh; cancel restored mesh and selection; a Grid Array-evaluated base extrude updated 28 base faces to 56 evaluated faces.
@@ -216,7 +220,7 @@ Not yet verified:
 
 - Nested groups and rename/reparent controls beyond the current one-level groups.
 - Direct base vertex dragging while the modifier stack is active (destructive topology actions and provenance selection work now).
-- Editable UV seams/unwrapping, texture layers, and projection painting.
+- UV viewport and transforms, chart extraction/LSCM unwrap, texture layers, and projection painting. UV seam authoring is implemented; the rest follows the [Phase 4 plan](docs/PHASE4_TEXTURING.md).
 - Scene lights UI, baking, shape keys/timeline, and OBJ/GLB import/export.
 - Touch element dragging. Touch taps select; one-finger drag remains camera orbit.
 - Camera state and active-object selection are not stored in `.lpoly` yet; node transforms and viewport settings are.

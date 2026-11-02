@@ -59,6 +59,27 @@ describe('modifier evaluation', () => {
   });
 
 
+  it('carries base seam flags onto every evaluated array copy', () => {
+    const cube = createCubeMesh(1);
+    cube.setEdgeSeam(0, true);
+    const grid: GridArrayModifier = {
+      ...(createModifier('grid-array') as GridArrayModifier),
+      countX: 2,
+      countY: 1,
+      spacingX: 3,
+      spacingY: 2
+    };
+    const result = evaluateModifiersWithProvenance(cube, [grid]);
+    const copied: number[] = [];
+    for (let edge = 0; edge < result.mesh.edgeCount; edge += 1) {
+      if (result.provenance.edgeBase[edge] === 0) {
+        copied.push(edge);
+      }
+    }
+    expect(copied.length).toBe(2);
+    expect(copied.every((edge) => result.mesh.isEdgeSeam(edge))).toBe(true);
+  });
+
   it('maps evaluated array copies back to the same base elements', () => {
     const cube = createCubeMesh(1);
     const grid: GridArrayModifier = {

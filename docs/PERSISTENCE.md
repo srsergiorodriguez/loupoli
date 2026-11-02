@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 2 implementation baseline. Autosave, `.lpoly` v1, browser fallbacks, and Tauri byte I/O are implemented. Texture/modifier/shape-key persistence is reserved for later phases.  
+**Status:** Phase 3 persistence baseline. Autosave, `.lpoly` v1, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, and seam flags round-trip. Texture persistence will use a versioned v2 with binary PNG chunks; shape keys remain later-phase work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).  
 **Related:** [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
@@ -205,11 +205,11 @@ For each node, in order:
 7. `heEdge` — `u32`, `halfEdgeCount`
 8. `heUv` — `f32`, `halfEdgeCount × 2`
 9. `edgeHalfEdge` — `u32`, `edgeCount`
-10. `edgeFlags` — `u8`, `edgeCount`
+10. `edgeFlags` — `u8`, `edgeCount`. Bit 0 is the UV seam flag; other bits remain reserved.
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
-Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags and face materials round-trip even though Phase 2 has no seam/material UI.
+Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip. UV unwrapping and authored texture layers are Phase 4 work.
 
 ### 3.4 Not yet serialized
 

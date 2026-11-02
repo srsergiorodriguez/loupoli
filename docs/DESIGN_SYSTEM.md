@@ -215,7 +215,7 @@ The renderer reads a small, explicit subset of tokens at startup through `getCom
 
 - `--bg-canvas` → renderer clear color
 - `--grid-minor`, `--grid-major` → grid shader
-- `--wireframe-edge` → Wireframe mode; `--accent-primary` → selection, gizmo, and front-wire overlays
+- `--wireframe-edge` → Wireframe mode; `--accent-primary` → selection, gizmo, and front-wire overlays; `--accent-warning` → UV seams
 - `--axis-x`, `--axis-y`, `--axis-z` → gizmo and transform handles
 - `--vertex-handle` → unselected topology handles
 - `--material-solid`, `--material-texture-a`, `--material-texture-b` → Phase 1 material fixture
@@ -448,7 +448,7 @@ Implemented component files and local patterns:
 | `ProjectBanner` / save state | 2 | Recovery, save/open errors, autosave status | Explicit Recover/Discard; errors persist until dismissed |
 | `.loupoli-panel` surface | 1 | Floating glass surface | Flat nested sections; no nested blur |
 | `.section` / `.section-head` | 1–3 | Inspector section layout | Shared local pattern, not a component file |
-| Selection actions | 3 | Extrude, inset, loop cut, merge, bridge, delete | Compact chips; destructive action separated |
+| Selection actions | 3–4 | Extrude, inset, loop cut, seam, merge, bridge, delete | Compact chips; destructive action separated; seam uses `--accent-warning` |
 | `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | 44px rows/actions, lime selected dots |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
 | Modifier stack | 3 | Ordered cards with enable/order/remove/parameters | Explicit evaluated state and error panel |

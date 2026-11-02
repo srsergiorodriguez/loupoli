@@ -51,6 +51,7 @@ import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
 import { DeleteMeshNodeCommand } from './commands/DeleteMeshNodeCommand';
+import { SetEdgeSeamsCommand } from './commands/SetEdgeSeamsCommand';
 import {
   ReplaceMeshCommand,
   type ReplaceMeshLoopTransition
@@ -1100,6 +1101,24 @@ export class EditorRuntime {
     } catch (error) {
       this.projectError = this.errorMessage(error);
       this.publish();
+    }
+  }
+
+  /** Toggle UV seam flags on the selected edges as one undoable command. */
+  toggleSelectedSeams(): void {
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      this.selection.mode !== 'edge' ||
+      this.selection.count === 0
+    ) {
+      return;
+    }
+    const edges = this.selection.values();
+    const mark = edges.some((edge) => !node.mesh.isEdgeSeam(edge));
+    const command = new SetEdgeSeamsCommand(node.mesh, node.id, edges, mark);
+    if (!command.noop) {
+      this.history.execute(command);
     }
   }
 

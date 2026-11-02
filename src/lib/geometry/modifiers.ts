@@ -630,6 +630,17 @@ export function evaluateModifiersWithProvenance(
       );
     }
   }
+
+  // Seams are authored on the base DCEL. Carry them onto every evaluated edge
+  // through provenance so UV-island boundaries remain visible on duplicated or
+  // mirrored output without duplicating seam state in modifiers.
+  const mesh = current.mesh;
+  for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+    const baseEdge = current.provenance.edgeBase[edge];
+    if (baseEdge >= 0 && base.isEdgeSeam(baseEdge)) {
+      mesh.setEdgeSeam(edge, true);
+    }
+  }
   return current;
 }
 

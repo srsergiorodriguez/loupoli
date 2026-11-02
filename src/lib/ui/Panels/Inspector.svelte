@@ -808,6 +808,17 @@
               <span>Inset</span>
             </button>
           {/if}
+          {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
+            <button
+              type="button"
+              class="topology-action"
+              aria-label="Toggle UV seam on selected edges"
+              onclick={() => session.toggleSelectedSeams()}
+            >
+              <Icon name="seam" size={14} />
+              <span>Seam</span>
+            </button>
+          {/if}
           {#if session.snapshot.selectionMode === 'edge' && selectionCount === 1}
             <button
               type="button"

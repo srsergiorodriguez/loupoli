@@ -421,7 +421,24 @@ shape-key mix → modifier 1 → modifier 2 → … → validate → triangulate
 
 ### Arrays
 
-Grid and radial arrays duplicate complete shells. They do not weld except where explicitly specified. This keeps arrays predictable and avoids accidentally making every copy a continuous mesh. Each copy's UVs are preserved; any required orientation changes are documented per modifier.
+Grid and radial arrays duplicate complete shells. They do not weld except where explicitly specified. This keeps arrays predictable and avoids accidentally making every copy a continuous mesh. Each copy's UVs and base seam flags are preserved; any required orientation changes are documented per modifier. Seam bits reach evaluated edges through the modifier provenance map so UV-island boundaries remain visible on duplicated output.
+
+### Element transforms on modifier stacks
+
+Element transforms deliberately operate in **base space** and use the base
+selection median as the pivot. The evaluated result may contain multiple copies
+of every selected base element, and the selection overlays highlight all copies.
+
+An evaluated-copy pivot is not generally representable as one base-space
+transform: a rotation or scale around a copy's visible median would have to be
+inverted through each modifier stage, and a cross-copy selection has no single
+base pivot. Moving the gizmo to an evaluated median would therefore make
+Translate look plausible while Rotate/Scale became misleading.
+
+Evaluation (2026-11-02): keep the base-space pivot and label it in the status
+hint. A future explicit active-copy mode could add per-copy mapping, but it
+needs a selected-copy identity and a defined cross-copy policy; it is not a
+local math fix.
 
 ---
 
@@ -742,7 +759,7 @@ WKWebView can be killed without a graceful JS unload. The app must assume it can
 2. **Bound every cache.** History bytes, modifier meshes, picker projections, texture composites, and autosave pending deltas all have limits.
 3. **Dispose explicitly.** Every `RenderMesh`, generated material, texture, and geometry has an owner and a `dispose()` path. Teardown is verified by `renderer.info`.
 4. **Autosave early.** Every 30 seconds after a dirty command; additionally on `visibilitychange`/`pagehide` where the browser grants time. Recovery never assumes the process survived.
-5. **Avoid base64 in memory.** Use Blobs or byte chunks for texture persistence; binary PNG chunks are the approved `.lpoly` representation. See [PERSISTENCE.md](./PERSISTENCE.md).
+5. **Avoid base64 in memory.** Use Blobs or byte chunks for texture persistence; binary PNG chunks are the approved `.lpoly` representation. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md) for the texturing plan and [PERSISTENCE.md](./PERSISTENCE.md).
 6. **Throttle DPR and texture dimensions.** Full Retina at arbitrary canvas size is not an entitlement.
 7. **No perpetual timers.** Autosave interval is one timer; rendering only has rAF while invalidated. Clear both on teardown.
 8. **Recover visibly.** If autosave data exists, present a recovery action; never silently replace newer user work.
