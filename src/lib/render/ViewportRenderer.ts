@@ -403,7 +403,10 @@ export class ViewportRenderer {
     const uniforms = this.materials.ps1.uniforms as unknown as Ps1Uniforms;
     uniforms.uSnapEnabled.value = snap ? 1 : 0;
     uniforms.uAffineEnabled.value = affine ? 1 : 0;
-    if (this.currentMode === 'unlit') {
+    if (
+      this.currentMode === 'unlit' ||
+      this.currentMode === 'texture-wire'
+    ) {
       this.schedule();
     }
   }

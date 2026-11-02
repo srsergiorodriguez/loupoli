@@ -15,7 +15,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Z-up WebGL2 viewport.** `THREE.Object3D.DEFAULT_UP` is set once before scene construction; the custom grid lies on the XY plane.
 - **On-demand rendering.** The scheduler draws only for camera, resize, document, selection, or shading invalidation. Headless Chrome measured a stable render count while idle.
 - **Camera rig.** Orbit by dragging empty canvas, by Alt/Option-drag, by middle-mouse drag, or with one-finger touch. Two-finger touch pans/pinches, wheel zooms, and the orientation gizmo animates axis-aligned views. No damping loop.
-- **Four shading modes.** Wireframe (true topological edges), Solid (flat-shaded clay), Unlit/PS1 (custom GLSL), and Lit (flat-shaded checker material).
+- **Five viewport modes.** Wireframe (true topological edges), Solid (flat-shaded clay), Texture (custom GLSL PS1 path), Texture + Wire (x-ray topological overlay over the texture surface), and Lit (flat-shaded checker material). The mode selector now sits immediately left of the orientation gizmo, icon-only on touch layouts and labeled on wide desktop layouts.
 - **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the collapsed **PS1 look** render-effect module at the bottom of the Inspector:
   - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster.
   - **PS1 affine** — enable affine UV swim.
@@ -58,7 +58,11 @@ Deleting two faces creates real boundary loops; the PS1 render-effect module is 
 
 ![QuadSphere with two faces deleted and collapsed PS1 module](docs/media/phase3-delete.png)
 
-![Shading modes: wireframe, solid, unlit/PS1, and lit](docs/media/phase2-shading-modes.png)
+![Legacy four-mode shading comparison](docs/media/phase2-shading-modes.png)
+
+The updated top-right view control, with Texture + Wire in the fourth slot:
+
+![Wireframe, Solid, Texture, Texture + Wire, and Lit controls](docs/media/workflow-shading.png)
 
 Default and opt-in PS1 comparison, same camera position:
 
@@ -96,6 +100,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | X/Y/Z while a vertex is selected | Toggle a world-axis lock for the next vertex drag. 44 px X/Y/Z chips provide the same control for pen/touch. |
 | Grid snap toggle/step | Snap object translation and vertex drags to the selected 0.1–1.0 step. |
 | Move/Rotate/Scale handle | Drag its X/Y/Z handle to transform the active object on that axis. Pen/mouse; finger touch remains camera navigation. |
+| Texture + Wire | Texture surface plus the full topological wire overlay (x-ray, including back edges). |
 | Shift/Cmd/Ctrl + click | Add or remove an element from the current selection. |
 | Add toggle | Sticky additive selection for pen, mouse, and touch taps. |
 | Touch tap / drag | One-finger tap selects the current V/E/F element; drag orbits. With Add on, taps toggle the set. |
@@ -162,6 +167,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - With Grid Array active, deleted and extruded provenance-selected base faces: base/evaluated counts updated together, the stack stayed active, undo restored the base mesh, and no errors were logged.
   - With Grid Array active, dragged an evaluated vertex: its base vertex moved through the inverse per-copy transform, both evaluated copies updated, the stack stayed active, and undo restored the base position.
   - Loop-cut one sphere edge: 24 F/26 V became 32 F/34 V with a closed, valid quad ring; repeated under an active Grid Array and produced 64 evaluated faces.
+  - Texture + Wire rendering, top-right placement, icon-only touch density, compact scene/selection actions, and Texture + Wire `.lpoly` settings round-trip verified.
   - Per-copy modifier linear maps round-tripped through their inverses for Radial Array geometry, covering mapped base-vertex editing.
   - Vertex drag through the real DCEL, undo, redo, and teardown without console errors.
   - Primitive creation, outliner selection, deletion, and undo/redo.
@@ -192,6 +198,16 @@ Not yet verified:
 The Phase 3 topology-polish goal is complete; broader Phase 3 polishing and Phase 4 texturing remain. See the registered feature table in [PLAN.md](docs/PLAN.md#phase-3--object-mode-topology-editing-transforms-and-modifier-stack).
 
 ---
+
+## Workflow layout
+
+- Shading/rendering modes live in a compact segmented control immediately left of the orientation gizmo.
+- Touch layouts show 44 px icon-only mode buttons; wide desktop layouts show labels.
+- Secondary scene actions (**Group**, **Join**, **Ungroup**, **Delete**) are a compact wrapped row rather than full-width bars.
+- Selection actions use compact icon-and-label chips; full-width controls are reserved for primary actions such as Add.
+- Touch controls keep 44 px hit areas even when their visual footprint is reduced.
+
+![iPad layout with icon-only shading control](docs/media/workflow-ipad.png)
 
 ## iPad layout
 

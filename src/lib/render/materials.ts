@@ -21,6 +21,7 @@ export interface ViewportMaterials {
   readonly lit: MeshLambertMaterial;
   readonly ps1: ShaderMaterial;
   readonly wire: LineBasicMaterial;
+  readonly wireOverlay: LineBasicMaterial;
   readonly ps1Texture: Texture;
   readonly litTexture: Texture;
 }
@@ -183,12 +184,22 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
     depthWrite: false,
     toneMapped: false
   });
+  const wireOverlay = new LineBasicMaterial({
+    name: 'loupoli-wire-overlay',
+    color: theme.accent.color,
+    transparent: true,
+    opacity: 0.58,
+    depthWrite: false,
+    depthTest: false,
+    toneMapped: false
+  });
 
   return {
     solid,
     lit,
     ps1: createPs1Material(ps1Texture),
     wire,
+    wireOverlay,
     ps1Texture,
     litTexture
   };
@@ -200,6 +211,7 @@ export function disposeViewportMaterials(materials: ViewportMaterials): void {
   materials.lit.dispose();
   materials.ps1.dispose();
   materials.wire.dispose();
+  materials.wireOverlay.dispose();
   materials.ps1Texture.dispose();
   materials.litTexture.dispose();
 }

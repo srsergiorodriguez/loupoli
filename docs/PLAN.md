@@ -94,7 +94,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 - `RenderScheduler` with explicit invalidation and instrumentation proving idle frames are zero.
 - Camera rig: orbit, pan, zoom; no damping loop; animated orientation transitions remain scheduler-driven.
 - Interactive top-right orientation gizmo (camera-synced, axis-click views, no second WebGL context).
-- Four viewport modes wired: Wireframe, Solid (flat normals), Unlit/PS1, Lit.
+- Viewport modes wired: Wireframe, Solid (flat normals), Texture (Unlit/PS1), Texture + Wire (x-ray topological overlay), Lit.
 - Custom PS1 unlit material with quantized clip-space vertices and manual affine UV interpolation.
 - **Approved topology seed:** a single real half-edge cube with six quads, per-corner UVs, triangulation, GPU buffers, 16 CSS px vertex picking, pen/mouse vertex dragging, and one localized move-vertex command integrated with history.
 - `InputRouter` with pointer-type routing, pen event payloads (`pressure`, `tiltX/Y`), touch gesture state machine, mouse DCC mapping, 2-finger tap undo, 3-finger tap redo.
@@ -109,7 +109,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 4. Pen input never moves the camera. One-finger orbit, two-finger pinch/pan, two-finger tap undo, and three-finger tap redo are independently observable and functional against a real vertex edit.
 5. A vertex within 16 CSS px of the pen/mouse is selected predictably; dragging changes the real DCEL position, updates the mesh, and undo/redo restores it exactly.
 6. Every touch control has at least a 44 CSS px hit region. No hover-only route to a feature.
-7. All four shading modes change visibly without reloading the scene; PS1 mode visibly snaps vertices and warps textures when the camera moves.
+7. All five viewport modes change visibly without reloading the scene; Texture + Wire shows the topological overlay, and PS1 mode visibly snaps vertices and warps textures when the camera moves.
 8. No WebGL warnings in the console; repeated mount/unmount releases renderer resources.
 9. The shell remains usable in iPad landscape and portrait layouts with safe-area insets.
 

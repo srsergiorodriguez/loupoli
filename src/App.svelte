@@ -133,8 +133,8 @@
       </div>
 
       <div class="viewport-hud">
-        <OrientationGizmo {session} />
         <ShadingControl {session} />
+        <OrientationGizmo {session} />
       </div>
     {:else}
       <section class="startup-error loupoli-panel" role="alert">
@@ -246,9 +246,10 @@
       var(--safe-right) + var(--inspector-w) + var(--space-3) * 2
     );
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: var(--space-3);
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
     pointer-events: none;
   }
 
@@ -326,20 +327,7 @@
      leave less vertical breathing room for a taller gizmo/shading stack. Lay
      them side-by-side so they sit above the framed object rather than on it. */
   @media (min-width: 1000px) and (max-width: 1199px) {
-    .selection-mode-wrap {
-    position: fixed;
-    z-index: var(--z-hud);
-    top: calc(
-      var(--safe-top) + var(--topbar-h) + var(--space-3) * 2 + 25px
-    );
-    left: calc(
-      var(--safe-left) + var(--toolrail-w) + var(--space-3) * 2 + 4px
-    );
-    pointer-events: auto;
-  }
-
-  .viewport-hud {
-      flex-direction: row-reverse;
+    .viewport-hud {
       align-items: flex-start;
     }
   }
@@ -365,8 +353,9 @@
       top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
       left: calc(var(--safe-left) + var(--space-3));
       right: calc(var(--safe-right) + var(--space-3));
-      flex-direction: column;
-      align-items: flex-end;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: flex-end;
     }
   }
 </style>

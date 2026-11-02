@@ -21,7 +21,8 @@
   const choices: readonly ShadingChoice[] = [
     { mode: 'wireframe', label: 'Wireframe', icon: 'wire' },
     { mode: 'solid', label: 'Solid', icon: 'solid' },
-    { mode: 'unlit', label: 'Unlit', icon: 'unlit' },
+    { mode: 'unlit', label: 'Texture', icon: 'unlit' },
+    { mode: 'texture-wire', label: 'Texture + Wire', icon: 'texture-wire' },
     { mode: 'lit', label: 'Lit', icon: 'lit' }
   ];
 </script>
@@ -32,10 +33,12 @@
       type="button"
       class:active={session.snapshot.shading === choice.mode}
       aria-pressed={session.snapshot.shading === choice.mode}
+      aria-label={choice.label}
+      title={choice.label}
       onclick={() => session.setShading(choice.mode)}
     >
       <Icon name={choice.icon} size={14} />
-      <span>{choice.label}</span>
+      <span class="shading-label">{choice.label}</span>
     </button>
   {/each}
 </div>
@@ -82,12 +85,29 @@
     color: var(--accent-primary-hover);
   }
 
+  @media (max-width: 1199px) {
+    button {
+      min-width: 40px;
+      padding: 0 7px;
+    }
+
+    .shading-label {
+      display: none;
+    }
+  }
+
   :global(:root[data-density='touch']) .shading-control {
     padding: 4px;
   }
 
   :global(:root[data-density='touch']) button {
+    width: var(--hit-min);
+    min-width: var(--hit-min);
     height: var(--hit-min);
-    min-width: 52px;
+    padding: 0;
+  }
+
+  :global(:root[data-density='touch']) .shading-label {
+    display: none;
   }
 </style>

@@ -261,8 +261,12 @@ export class MeshNodeView {
   /** Switch surface shading for this node. */
   setShadingMode(mode: ShadingMode): void {
     const isWire = mode === 'wireframe';
+    const isTextureWire = mode === 'texture-wire';
     this.triangleMesh.visible = !isWire;
-    this.wireSegments.visible = isWire;
+    this.wireSegments.visible = isWire || isTextureWire;
+    this.wireSegments.material = isTextureWire
+      ? this.surfaceMaterials.wireOverlay
+      : this.surfaceMaterials.wire;
 
     if (mode === 'solid') {
       this.triangleMesh.material = this.surfaceMaterials.solid;

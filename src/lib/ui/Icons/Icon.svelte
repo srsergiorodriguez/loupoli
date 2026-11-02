@@ -58,6 +58,10 @@
       stroke="none"
       opacity=".8"
     />
+  {:else if name === 'texture-wire'}
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M4 12h8V4H4v8ZM12 12h8v8h-8v-8Z" fill="currentColor" stroke="none" opacity=".45" />
+    <path d="M4 20 20 4M4 4l16 16" />
   {:else if name === 'lit'}
     <circle cx="12" cy="12" r="3.7" />
     <path

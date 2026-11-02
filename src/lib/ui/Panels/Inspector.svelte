@@ -272,46 +272,52 @@
         </button>
       </div>
 
-      {#if selectedNodeIds.length > 0 && activeGroupId === null}
-        <button
-          type="button"
-          class="join-button group-button"
-          onclick={() => session.groupSelectedNodes()}
-        >
-          <Icon name="folder" size={14} />
-          <span>Group selected objects</span>
-        </button>
-      {/if}
-
-      {#if selectedNodeIds.length > 1 && activeGroupId === null}
-        <button
-          type="button"
-          class="join-button"
-          onclick={() => session.joinSelectedNodes()}
-        >
-          <Icon name="merge" size={14} />
-          <span>Join selected objects</span>
-        </button>
-      {/if}
-
-      {#if activeGroupId !== null}
-        <button
-          type="button"
-          class="join-button"
-          onclick={() => session.ungroupActiveGroup()}
-        >
-          <Icon name="folder" size={14} />
-          <span>Ungroup active group</span>
-        </button>
-      {:else if nodes.length > 0}
-        <button
-          type="button"
-          class="delete-button"
-          onclick={deleteObject}
-        >
-          <Icon name="trash" size={14} />
-          <span>Delete active object</span>
-        </button>
+      {#if activeNodeId !== null || activeGroupId !== null || selectedNodeIds.length > 0}
+        <div class="scene-action-row">
+          {#if selectedNodeIds.length > 0 && activeGroupId === null}
+            <button
+              type="button"
+              class="compact-action"
+              aria-label="Group selected objects"
+              onclick={() => session.groupSelectedNodes()}
+            >
+              <Icon name="folder" size={13} />
+              <span>Group</span>
+            </button>
+          {/if}
+          {#if selectedNodeIds.length > 1 && activeGroupId === null}
+            <button
+              type="button"
+              class="compact-action"
+              aria-label="Join selected objects"
+              onclick={() => session.joinSelectedNodes()}
+            >
+              <Icon name="merge" size={13} />
+              <span>Join</span>
+            </button>
+          {/if}
+          {#if activeGroupId !== null}
+            <button
+              type="button"
+              class="compact-action"
+              aria-label="Ungroup active group"
+              onclick={() => session.ungroupActiveGroup()}
+            >
+              <Icon name="folder" size={13} />
+              <span>Ungroup</span>
+            </button>
+          {:else if activeNodeId !== null}
+            <button
+              type="button"
+              class="compact-action compact-action--danger"
+              aria-label="Delete active object"
+              onclick={deleteObject}
+            >
+              <Icon name="trash" size={13} />
+              <span>Delete</span>
+            </button>
+          {/if}
+        </div>
       {/if}
     </section>
 
@@ -726,36 +732,40 @@
             <button
               type="button"
               class="topology-action"
+              aria-label="Merge selected vertices"
               onclick={() => session.mergeSelectedVertices()}
             >
               <Icon name="merge" size={14} />
-              <span>Merge selected vertices</span>
+              <span>Merge</span>
             </button>
           {/if}
           {#if session.snapshot.selectionMode === 'face' && selectionCount > 0}
             <button
               type="button"
               class="topology-action"
+              aria-label="Extrude selected faces"
               onclick={() => session.extrudeSelectedFaces()}
             >
               <Icon name="extrude" size={14} />
-              <span>Extrude selected faces</span>
+              <span>Extrude</span>
             </button>
           {/if}
           {#if session.snapshot.selectionMode === 'face' && selectionCount === 1}
             <button
               type="button"
               class="topology-action"
+              aria-label="Inset selected face"
               onclick={() => session.insetSelectedFace()}
             >
               <Icon name="inset" size={14} />
-              <span>Inset face</span>
+              <span>Inset</span>
             </button>
           {/if}
           {#if session.snapshot.selectionMode === 'edge' && selectionCount === 1}
             <button
               type="button"
               class="topology-action"
+              aria-label="Loop cut selected edge"
               onclick={() => session.loopCut()}
             >
               <Icon name="loop-cut" size={14} />
@@ -766,19 +776,21 @@
             <button
               type="button"
               class="topology-action"
+              aria-label="Bridge selected edges"
               onclick={() => session.bridgeSelectedEdges()}
             >
               <Icon name="bridge" size={14} />
-              <span>Bridge selected edges</span>
+              <span>Bridge</span>
             </button>
           {/if}
           <button
             type="button"
             class="delete-selection"
+            aria-label="Delete selected {modePlural}"
             onclick={() => session.deleteSelection()}
           >
             <Icon name="trash" size={14} />
-            <span>Delete selected {modePlural}</span>
+            <span>Delete</span>
           </button>
         </div>
       {/if}
@@ -1006,9 +1018,7 @@
   }
 
   .primitive-select,
-  .scene-button,
-  .join-button,
-  .delete-button {
+  .scene-button {
     min-height: var(--hit-min);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -1023,17 +1033,42 @@
     padding: 0 var(--space-2);
   }
 
-  .join-button {
+  .scene-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+  }
+
+  .compact-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    margin-top: var(--space-2);
-    gap: 6px;
+    min-height: var(--control-h);
+    gap: 5px;
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: var(--text-2xs);
+    cursor: pointer;
   }
 
-  .group-button {
-    color: var(--accent-primary);
+  .compact-action:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .compact-action--danger {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--text-tertiary);
+  }
+
+  .compact-action--danger:hover {
+    color: var(--accent-warning);
   }
 
   .scene-button,
@@ -1407,7 +1442,7 @@
 
   .selection-actions {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: var(--space-1);
     margin-top: var(--space-2);
   }
@@ -1417,9 +1452,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    min-height: var(--hit-min);
-    gap: 6px;
+    width: auto;
+    flex: 1 1 auto;
+    min-height: var(--control-h);
+    padding: 0 var(--space-2);
+    gap: 5px;
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--bg-input);
@@ -1427,27 +1464,16 @@
     font-family: var(--font-body);
     font-size: var(--text-2xs);
     cursor: pointer;
+  }
+
+  .delete-selection {
+    flex: 0 0 auto;
+    margin-left: auto;
   }
 
   .topology-action:hover {
     color: var(--accent-primary);
     background: var(--bg-hover);
-  }
-
-  .delete-selection {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: var(--hit-min);
-    gap: 6px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    color: var(--text-tertiary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-    cursor: pointer;
   }
 
   .delete-selection:hover {

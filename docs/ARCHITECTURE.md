@@ -483,7 +483,9 @@ A `RenderMesh` owns dynamic `BufferGeometry` and materials. Its capacity strateg
 
 Flat normals mean triangle corners are independent in the render buffer. The GPU buffer is not the DCEL and can be duplicated freely for shading quality. Pickers always use topological positions, never render corner copies.
 
-### Four shading modes
+### Viewport shading modes
+
+Wireframe, Solid, Texture (the PS1/Unlit path), Texture + Wire, and Lit. Texture + Wire draws the topological wire overlay over the textured surface as an x-ray pass.
 
 | Mode | Implementation |
 |---|---|

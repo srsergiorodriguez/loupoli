@@ -164,6 +164,7 @@ function isShadingMode(value: unknown): value is ShadingMode {
     value === 'wireframe' ||
     value === 'solid' ||
     value === 'unlit' ||
+    value === 'texture-wire' ||
     value === 'lit'
   );
 }

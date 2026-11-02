@@ -8,6 +8,7 @@ export type IconName =
   | 'wire'
   | 'solid'
   | 'unlit'
+  | 'texture-wire'
   | 'lit'
   | 'close'
   | 'plus'

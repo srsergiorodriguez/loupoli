@@ -118,6 +118,17 @@ describe('.lpoly v1', () => {
     expect(Array.from(second)).toEqual(Array.from(bytes));
   });
 
+
+  it('round-trips the Texture + Wire shading setting', () => {
+    const document = makeDocument();
+    const bytes = encodeLpoly(document, {
+      ...SETTINGS,
+      shading: 'texture-wire'
+    });
+    const decoded = decodeLpoly(bytes);
+    expect(decoded.settings.shading).toBe('texture-wire');
+  });
+
   it('rejects corrupt checksums and foreign files', () => {
     const bytes = encodeLpoly(makeDocument(), SETTINGS);
     const corrupt = bytes.slice();

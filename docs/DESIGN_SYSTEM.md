@@ -431,12 +431,12 @@ Components live under `src/lib/ui/` and are built in Svelte 5 rune syntax. Each 
 | `ToolRail` / `ToolDock` | 1 / 3 | Tool selection groups | Select, Move, Rotate, Scale, Frame; active state not color-only |
 | `StatusBar` | 1 | Hints, topology counts, renderer state | Autosave lives in the top bar's SaveState |
 | `OrientationGizmo` | 1–3 | Interactive camera orientation | Drag-to-orbit; tap axis to snap, center to frame; whole gizmo is hit area |
-| `ShadingControl` | 1 | Four shading modes | Segmented control or compact popover |
+| `ShadingControl` | 1 | Five viewport modes, top-right beside orientation gizmo | Segmented control; labels on wide desktop, 44px icons on touch |
 | `Panel` / `PanelSection` | 1 | Floating surface and section headings | Flat nested sections, no nested blur |
 | `Button` | 1 | Primary/secondary/ghost/danger actions | 30px visual, 44px touch hit area |
 | `IconButton` | 1 | Compact symbol actions | Accessible label mandatory |
 | `ToolButton` | 1 / 3 | Tool rail item with selected state | Non-color selection indicator |
-| `SegmentedControl` | 1–2 | Exclusive shading/selection modes | Vertex/Edge/Face and four shading modes |
+| `SegmentedControl` | 1–2 | Exclusive shading/selection modes | Vertex/Edge/Face and five viewport modes |
 | `Switch` | 1 / 3 | Snap/visibility and boolean settings | Larger hit area than visual track |
 | `Tooltip` | 1 | Explain icon-only controls | Hover on fine pointers; accessible description |
 | `Popover` / `Menu` | 1 | Overflow, shading, view menus | Escape, outside click, focus handling |
@@ -447,6 +447,7 @@ Components live under `src/lib/ui/` and are built in Svelte 5 rune syntax. Each 
 | `Object multi-select` | 3 | Shift/Cmd-click and sticky pen/touch toggle; join action | 44px rows/actions, lime selected dots, separate active state |
 | `Group tree` | 3 | Folder rows, indented children, group/ungroup actions | Group row active state, 44px child rows, bake-on-ungroup |
 | `Modifier stack` | 3 | Ordered cards with enable/order/remove and parameter fields | 44px touch controls, explicit evaluated state, error panel |
+| `Compact action row` | 3 | Secondary Group/Join/Delete and selection actions | 30px visual on desktop, 44px touch region, destructive action separated |
 | `Grid snap / axis lock` | 3 | Snap toggle + step, 44px X/Y/Z chips | Accent active state, axis colors, live status step |
 | `ObjectGizmo` | 3 | Move/Rotate/Scale viewport handles | Axis colors, screen-constant size, pen/mouse drag; no touch gesture conflict |
 | `Vector3Field` | 2 / 3 | XYZ transform rows | Axis colors and optional link |

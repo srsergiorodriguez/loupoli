@@ -20,7 +20,13 @@ export const GRID_SNAP_STEPS = [0.1, 0.25, 0.5, 1] as const;
 export type AxisLock = 'x' | 'y' | 'z' | null;
 
 /** The four required viewport shading modes. */
-export const SHADING_MODES = ['wireframe', 'solid', 'unlit', 'lit'] as const;
+export const SHADING_MODES = [
+  'wireframe',
+  'solid',
+  'unlit',
+  'texture-wire',
+  'lit'
+] as const;
 
 /** A shading mode accepted by the viewport material router. */
 export type ShadingMode = (typeof SHADING_MODES)[number];
