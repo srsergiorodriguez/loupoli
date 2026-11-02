@@ -4,7 +4,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Brand:** always lowercase `loupoli`.
 
-**Status:** Phase 2 is implemented. Phase 3 is underway: multi-element selection with additive touch taps, one-level object groups, multi-object selection and join, object/group transforms and gizmos, view-gizmo orbit, destructive deletion, face extrusion and inset, vertex merge, a two-boundary-edge bridge, grid snapping, vertex axis locks, a collapsed PS1 module, and a provenance-mapped Mirror/Grid Array/Radial Array modifier stack with base topology actions are implemented. Loop bridging controls, loop cut, and direct base-vertex dragging under an active modifier stack follow.
+**Status:** Phase 2 is implemented. Phase 3 is underway: multi-element selection with additive touch taps, one-level object groups, multi-object selection and join, object/group transforms and gizmos, view-gizmo orbit, destructive deletion, face extrusion and inset, vertex merge, multi-segment boundary-chain/loop bridging, grid snapping, vertex axis locks, a collapsed PS1 module, and a provenance-mapped Mirror/Grid Array/Radial Array modifier stack with base topology actions are implemented. Loop bridging controls, loop cut, and direct base-vertex dragging under an active modifier stack follow.
 
 ![loupoli Phase 2 desktop viewport](docs/media/phase2-desktop.png)
 
@@ -133,7 +133,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Scalar grid-snap rounding and axis-projection math.
   - Group creation/transform/ungroup undo and journal replay, plus group/parent round-trip through `.lpoly`.
   - Mirror clipping/winding/seam closure, grid repetition, radial repetition, modifier-stack persistence, stack edit journal replay, and evaluated-element provenance.
-  - Single-face extrusion, multi-face region extrusion with boundary walls, and single-face inset closure/topology.
+  - Single-face extrusion, multi-face region extrusion with boundary walls, single-face inset closure/topology, and multi-segment closed-loop bridging.
   - Face/vertex/edge deletion, boundary regeneration, UV/material preservation, delete-every-face rejection, and deletion command/journal replay.
   - Vertex merge to centroid, collapsed-face cleanup, two-boundary-edge bridging, and invalid-selection rejection.
   - Object join with transformed source baking, target pivot preservation, undo/redo, and multi-patch journal replay.
@@ -181,13 +181,13 @@ Not yet verified:
 
 - Nested groups and rename/reparent controls beyond the current one-level groups.
 - Direct base vertex dragging while the modifier stack is active (destructive topology actions and provenance selection work now).
-- Loop cut and loop/multi-segment bridge controls; only single-face inset and exactly-two-boundary-edge bridging are implemented.
+- Loop cut; direct base vertex dragging while an active modifier stack is present.
 - Editable UV seams/unwrapping, texture layers, and projection painting.
 - Scene lights UI, baking, shape keys/timeline, and OBJ/GLB import/export.
 - Touch element dragging. Touch taps select; one-finger drag remains camera orbit.
 - Camera state and active-object selection are not stored in `.lpoly` yet; node transforms and viewport settings are.
 
-Phase 3 continues with loop/multi-segment bridging, loop cut, and direct base-vertex dragging under an active modifier stack. See the registered feature table in [PLAN.md](docs/PLAN.md#phase-3--object-mode-topology-editing-transforms-and-modifier-stack).
+Phase 3 continues with loop cut and direct base-vertex dragging under an active modifier stack. See the registered feature table in [PLAN.md](docs/PLAN.md#phase-3--object-mode-topology-editing-transforms-and-modifier-stack).
 
 ---
 

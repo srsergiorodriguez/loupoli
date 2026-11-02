@@ -76,6 +76,33 @@ describe('destructive element deletion', () => {
   });
 
 
+
+  it('bridges two closed boundary loops with a multi-segment strip', () => {
+    const quad = (z: number): MeshFaceSpec => ({
+      corners: [
+        { position: [0, 0, z], uv: [0, 0] },
+        { position: [1, 0, z], uv: [1, 0] },
+        { position: [1, 1, z], uv: [1, 1] },
+        { position: [0, 1, z], uv: [0, 1] }
+      ]
+    });
+    const open = HalfEdgeMesh.fromPolygons([quad(0), quad(1)]);
+    const boundaryEdges: number[] = [];
+    for (let edge = 0; edge < open.edgeCount; edge += 1) {
+      const halfEdge = open.edgeHalfEdge[edge];
+      if (
+        open.heFace[halfEdge] === -1 ||
+        open.heFace[open.heTwin[halfEdge]] === -1
+      ) {
+        boundaryEdges.push(edge);
+      }
+    }
+    expect(boundaryEdges).toHaveLength(8);
+    const bridged = bridgeSelectedEdges(open, boundaryEdges);
+    expect(bridged.faceCount).toBe(6);
+    expect(() => bridged.validate()).not.toThrow();
+  });
+
   it('extrudes one face into a closed cap with side walls', () => {
     const cube = createCubeMesh(1);
     const result = extrudeSelectedFaces(cube, [0], 0.5);

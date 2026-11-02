@@ -221,42 +221,122 @@ export function mergeSelectedVertices(
   return HalfEdgeMesh.fromPolygons(faces);
 }
 
+/** One selected boundary edge in its outward boundary direction. */
+interface BoundaryChainEdge {
+  readonly halfEdge: number;
+  readonly from: number;
+  readonly to: number;
+}
+
 /**
- * Bridge exactly two boundary edges with one quad.
+ * Bridge two boundary chains or loops with a strip of quads.
  *
- * Both edges must currently be boundary edges. The new face consumes their
- * boundary directions, so the resulting topology is manifold at those seams.
- * Twisted or non-boundary selections are rejected with a reason.
+ * The selected boundary half-edges are followed in boundary direction. Exactly
+ * two components with equal segment counts are required. The second component
+ * is paired in reverse order so adjacent bridge quads share their new side
+ * edges, producing a manifold strip for open chains and closed loops.
  */
 export function bridgeSelectedEdges(
   mesh: HalfEdgeMesh,
   indices: readonly number[]
 ): HalfEdgeMesh {
-  if (indices.length !== 2 || new Set(indices).size !== 2) {
-    throw new Error('Bridge requires exactly two distinct edges.');
+  const unique = new Set(indices);
+  if (unique.size === 0) {
+    throw new Error('Select at least two boundary edges to bridge.');
   }
-  const boundaryEdges = indices.map((edge) => {
+
+  const edges: BoundaryChainEdge[] = [];
+  for (const edge of unique) {
     if (!Number.isInteger(edge) || edge < 0 || edge >= mesh.edgeCount) {
       throw new RangeError(`Edge ${edge} is outside the mesh.`);
     }
     const halfEdge = mesh.edgeHalfEdge[edge];
     const twin = mesh.heTwin[halfEdge];
+    let boundary: number;
     if (mesh.heFace[halfEdge] === -1) {
-      return halfEdge;
+      boundary = halfEdge;
+    } else if (mesh.heFace[twin] === -1) {
+      boundary = twin;
+    } else {
+      throw new Error('Bridge requires boundary edges.');
     }
-    if (mesh.heFace[twin] === -1) {
-      return twin;
-    }
-    throw new Error('Bridge requires two boundary edges.');
-  });
+    edges.push({
+      halfEdge: boundary,
+      from: mesh.heOrigin[boundary],
+      to: mesh.halfEdgeDestination(boundary)
+    });
+  }
 
-  const [first, second] = boundaryEdges;
-  const p = mesh.heOrigin[first];
-  const q = mesh.halfEdgeDestination(first);
-  const r = mesh.heOrigin[second];
-  const s = mesh.halfEdgeDestination(second);
-  if (p === q || r === s || p === r || p === s || q === r || q === s) {
-    throw new Error('The selected boundary edges must not share a vertex.');
+  const byStart = new Map<number, number>();
+  const incoming = new Set<number>();
+  for (let i = 0; i < edges.length; i += 1) {
+    if (byStart.has(edges[i].from)) {
+      throw new Error('Selected boundary edges share a start vertex.');
+    }
+    byStart.set(edges[i].from, i);
+    incoming.add(edges[i].to);
+  }
+
+  const used = new Set<number>();
+  const components: { edges: number[]; closed: boolean }[] = [];
+
+  const follow = (start: number): { edges: number[]; closed: boolean } => {
+    const chain: number[] = [];
+    let current = start;
+    const seen = new Set<number>();
+    while (current !== undefined && !seen.has(current)) {
+      seen.add(current);
+      used.add(current);
+      chain.push(current);
+      const next = byStart.get(edges[current].to);
+      if (next === undefined) {
+        return { edges: chain, closed: false };
+      }
+      if (next === start) {
+        return { edges: chain, closed: true };
+      }
+      current = next;
+    }
+    return { edges: chain, closed: false };
+  };
+
+  for (let i = 0; i < edges.length; i += 1) {
+    if (!used.has(i) && !incoming.has(edges[i].from)) {
+      components.push(follow(i));
+    }
+  }
+  for (let i = 0; i < edges.length; i += 1) {
+    if (!used.has(i)) {
+      components.push(follow(i));
+    }
+  }
+
+  if (components.length !== 2) {
+    throw new Error('Bridge requires exactly two chains or loops of boundary edges.');
+  }
+  const [first, second] = components;
+  if (
+    first.edges.length !== second.edges.length ||
+    first.edges.length === 0
+  ) {
+    throw new Error('Bridge chains must have equal segment counts.');
+  }
+  if (first.closed !== second.closed) {
+    throw new Error('Bridge both an open chain and a loop is not supported.');
+  }
+
+  const firstVertices = new Set<number>();
+  for (const index of first.edges) {
+    firstVertices.add(edges[index].from);
+    firstVertices.add(edges[index].to);
+  }
+  for (const index of second.edges) {
+    if (
+      firstVertices.has(edges[index].from) ||
+      firstVertices.has(edges[index].to)
+    ) {
+      throw new Error('Bridge chains must not share vertices.');
+    }
   }
 
   const corner = (vertex: number, uv: Vec2): MeshCornerSpec => {
@@ -270,19 +350,28 @@ export function bridgeSelectedEdges(
       uv
     };
   };
-  const owner = mesh.heFace[mesh.heTwin[first]];
-  const material = owner >= 0 ? mesh.faceMaterial[owner] : 0;
-  const bridge: MeshFaceSpec = {
-    corners: [
-      corner(p, [0, 0]),
-      corner(q, [1, 0]),
-      corner(r, [1, 1]),
-      corner(s, [0, 1])
-    ],
-    material
-  };
 
-  return HalfEdgeMesh.fromPolygons([...meshFaceSpecs(mesh), bridge]);
+  const count = first.edges.length;
+  const faces: MeshFaceSpec[] = [...meshFaceSpecs(mesh)];
+  for (let segment = 0; segment < count; segment += 1) {
+    const a = edges[first.edges[segment]];
+    const b = edges[second.edges[count - 1 - segment]];
+    const owner = mesh.heFace[mesh.heTwin[a.halfEdge]];
+    const material = owner >= 0 ? mesh.faceMaterial[owner] : 0;
+    const u0 = segment / count;
+    const u1 = (segment + 1) / count;
+    faces.push({
+      corners: [
+        corner(a.from, [u0, 0]),
+        corner(a.to, [u1, 0]),
+        corner(b.from, [u1, 1]),
+        corner(b.to, [u0, 1])
+      ],
+      material
+    });
+  }
+
+  return HalfEdgeMesh.fromPolygons(faces);
 }
 
 /**

@@ -752,7 +752,7 @@
               <span>Inset face</span>
             </button>
           {/if}
-          {#if session.snapshot.selectionMode === 'edge' && selectionCount === 2}
+          {#if session.snapshot.selectionMode === 'edge' && selectionCount >= 2}
             <button
               type="button"
               class="topology-action"

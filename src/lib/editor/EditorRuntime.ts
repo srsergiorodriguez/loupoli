@@ -952,7 +952,7 @@ export class EditorRuntime {
     if (
       !node ||
       this.selection.mode !== 'edge' ||
-      this.selection.count !== 2
+      this.selection.count < 2
     ) {
       return;
     }
