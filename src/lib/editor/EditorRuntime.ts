@@ -85,6 +85,8 @@ import {
   type ShadingMode,
   type TransformMode,
   type TransformOrientation,
+  type ModalTransformKind,
+  type ModalTransformSnapshot,
   type AxisLock,
   type ModifierPatch
 } from './types';
@@ -122,6 +124,28 @@ interface GizmoDrag {
   readonly startAngle: number;
 }
 
+/** Active keyboard-driven G/R/S modal transform. */
+interface ModalTransform {
+  readonly kind: ModalTransformKind;
+  readonly target: MeshNode | SceneGroup;
+  readonly before: NodeTransform;
+  readonly orientation: TransformOrientation;
+  axis: GizmoAxis | null;
+  readonly startX: number;
+  readonly startY: number;
+  lastX: number;
+  lastY: number;
+  readonly origin: Vector3;
+  readonly plane: Plane;
+  readonly startHit: Vector3;
+  readonly parentQuaternion: Quaternion;
+  readonly localQuaternion: Quaternion;
+  readonly worldQuaternion: Quaternion;
+  readonly viewAxis: Vector3;
+  numeric: string;
+  value: number;
+}
+
 /** Construction options for the editor runtime. */
 interface EditorRuntimeOptions {
   /** Called whenever a small UI-facing snapshot should be refreshed. */
@@ -155,6 +179,7 @@ export class EditorRuntime {
   private shading: ShadingMode = DEFAULT_SHADING;
   private transformMode: TransformMode = 'select';
   private transformOrientation: TransformOrientation = 'local';
+  private modalTransform: ModalTransform | null = null;
   private snapEnabled = false;
   private snapStep = 0.25;
   private axisLock: AxisLock = null;
@@ -210,7 +235,13 @@ export class EditorRuntime {
       deleteSelection: () => this.deleteSelection(),
       toggleAxisLock: (axis) => this.toggleAxisLock(axis),
       tapSelect: (x, y) => this.tapSelect(x, y),
-      setPointerReading: (sample) => this.setPointerReading(sample)
+      setPointerReading: (sample) => this.setPointerReading(sample),
+      isModalTransformActive: () => this.modalTransform !== null,
+      beginModalTransform: (kind, clientX, clientY) =>
+        this.beginModalTransform(kind, clientX, clientY),
+      modalPointerMove: (sample) => this.moveModalTransform(sample),
+      modalTransformKey: (key) => this.handleModalTransformKey(key),
+      commitModalTransform: () => this.commitModalTransform()
     };
 
     this.input = new InputRouter(canvas, this.inputHost);
@@ -283,6 +314,7 @@ export class EditorRuntime {
           : null,
       globalTransform,
       transformOrientation: this.transformOrientation,
+      modalTransform: this.modalSnapshot(),
       boundaryEdges: mesh?.boundaryEdgeCount ?? 0,
       counts: mesh
         ? {
@@ -1614,6 +1646,11 @@ export class EditorRuntime {
   }
 
   private cancelToolPointer(): void {
+    if (this.modalTransform) {
+      this.cancelModalTransform();
+      return;
+    }
+
     if (this.gizmoDrag) {
       const drag = this.gizmoDrag;
       this.gizmoDrag = null;
@@ -1685,6 +1722,292 @@ export class EditorRuntime {
     };
     this.publish();
     return true;
+  }
+
+  private modalSnapshot(): ModalTransformSnapshot | null {
+    const modal = this.modalTransform;
+    if (!modal) {
+      return null;
+    }
+    return {
+      kind: modal.kind,
+      axis: modal.axis,
+      orientation: modal.orientation,
+      numeric: modal.numeric,
+      value: modal.value
+    };
+  }
+
+  private beginModalTransform(
+    kind: ModalTransformKind,
+    clientX: number,
+    clientY: number
+  ): boolean {
+    if (this.modalTransform) {
+      return true;
+    }
+    const target = this.getActiveGroup() ?? this.getActiveNode();
+    if (!target || this.gizmoDrag || this.drag) {
+      return false;
+    }
+    const frame = this.renderer.getGizmoFrame();
+    if (!frame) {
+      return false;
+    }
+    const parent =
+      'primitive' in target && target.parentId !== null
+        ? this.document.getGroup(target.parentId)
+        : null;
+    const parentQuaternion = parent
+      ? new Quaternion().setFromEuler(
+          new Euler(
+            parent.transform.rotation[0],
+            parent.transform.rotation[1],
+            parent.transform.rotation[2],
+            'XYZ'
+          )
+        )
+      : new Quaternion();
+    const localQuaternion = new Quaternion().setFromEuler(
+      new Euler(
+        target.transform.rotation[0],
+        target.transform.rotation[1],
+        target.transform.rotation[2],
+        'XYZ'
+      )
+    );
+    const worldQuaternion = parentQuaternion.clone().multiply(localQuaternion);
+    const plane = this.renderer.createCameraFacingPlane(frame.origin);
+    const startHit =
+      this.renderer.intersectPointerPlane(clientX, clientY, plane) ??
+      frame.origin.clone();
+    this.modalTransform = {
+      kind,
+      target,
+      before: this.cloneTransform(target.transform),
+      orientation: this.transformOrientation,
+      axis: null,
+      startX: clientX,
+      startY: clientY,
+      lastX: clientX,
+      lastY: clientY,
+      origin: frame.origin.clone(),
+      plane,
+      startHit,
+      parentQuaternion,
+      localQuaternion,
+      worldQuaternion,
+      viewAxis: plane.normal.clone().normalize(),
+      numeric: '',
+      value: 0
+    };
+    this.publish();
+    return true;
+  }
+
+  private moveModalTransform(sample: PointerSample): void {
+    const modal = this.modalTransform;
+    if (!modal) {
+      return;
+    }
+    modal.lastX = sample.clientX;
+    modal.lastY = sample.clientY;
+    this.updateModalTransform();
+  }
+
+  private handleModalTransformKey(key: string): void {
+    const modal = this.modalTransform;
+    if (!modal) {
+      return;
+    }
+    const lower = key.toLowerCase();
+    if (lower === 'escape') {
+      this.cancelModalTransform();
+      return;
+    }
+    if (lower === 'enter') {
+      this.commitModalTransform();
+      return;
+    }
+    if (lower === 'x' || lower === 'y' || lower === 'z') {
+      modal.axis = modal.axis === lower ? null : lower;
+      this.updateModalTransform();
+      return;
+    }
+    if (key === 'Backspace') {
+      modal.numeric = modal.numeric.slice(0, -1);
+      this.updateModalTransform();
+      return;
+    }
+    if (key.length === 1) {
+      if (key === '-' && modal.numeric.length === 0) {
+        modal.numeric = '-';
+      } else if (key === '.' && !modal.numeric.includes('.')) {
+        modal.numeric += '.';
+      } else if (/^[0-9]$/.test(key)) {
+        modal.numeric += key;
+      }
+      this.updateModalTransform();
+    }
+  }
+
+  private updateModalTransform(): void {
+    const modal = this.modalTransform;
+    if (!modal) {
+      return;
+    }
+    const next = this.cloneTransform(modal.before);
+    const numeric =
+      modal.numeric.length > 0 && Number.isFinite(Number(modal.numeric))
+        ? Number(modal.numeric)
+        : null;
+    const parentInverse = modal.parentQuaternion.clone().invert();
+    const axisVector = modal.axis ? GIZMO_AXIS_VECTORS[modal.axis] : null;
+    const axisWorld = axisVector
+      ? modal.orientation === 'local'
+        ? axisVector.clone().applyQuaternion(modal.worldQuaternion).normalize()
+        : axisVector.clone()
+      : null;
+    let value = 0;
+
+    if (modal.kind === 'translate') {
+      const hit =
+        this.renderer.intersectPointerPlane(
+          modal.lastX,
+          modal.lastY,
+          modal.plane
+        ) ?? modal.startHit;
+      const worldDelta = hit.clone().sub(modal.startHit);
+      if (axisWorld && axisVector) {
+        let amount =
+          numeric !== null
+            ? numeric
+            : worldDelta.dot(axisWorld);
+        if (numeric === null && this.snapEnabled) {
+          amount = snapScalar(amount, this.snapStep);
+        }
+        const localDirection = axisWorld
+          .clone()
+          .applyQuaternion(parentInverse)
+          .normalize();
+        next.position = [
+          modal.before.position[0] + localDirection.x * amount,
+          modal.before.position[1] + localDirection.y * amount,
+          modal.before.position[2] + localDirection.z * amount
+        ];
+        value = amount;
+      } else {
+        const localDelta = worldDelta.clone().applyQuaternion(parentInverse);
+        next.position = [
+          modal.before.position[0] + localDelta.x,
+          modal.before.position[1] + localDelta.y,
+          modal.before.position[2] + localDelta.z
+        ];
+        if (this.snapEnabled) {
+          next.position = next.position.map((component) =>
+            snapScalar(component, this.snapStep)
+          ) as [number, number, number];
+        }
+        value = localDelta.length();
+      }
+    } else if (modal.kind === 'rotate') {
+      const angleDegrees =
+        numeric !== null
+          ? numeric
+          : (modal.lastX - modal.startX - (modal.lastY - modal.startY)) * 0.5;
+      const radians = (angleDegrees * Math.PI) / 180;
+      const rotationAxis = axisWorld ?? modal.viewAxis;
+      let rotated: Quaternion;
+      if (axisVector && modal.orientation === 'local') {
+        rotated = modal.localQuaternion
+          .clone()
+          .multiply(
+            new Quaternion().setFromAxisAngle(axisVector, radians)
+          );
+      } else {
+        const delta = new Quaternion().setFromAxisAngle(
+          rotationAxis,
+          radians
+        );
+        const world = delta.multiply(modal.worldQuaternion);
+        rotated = parentInverse.clone().multiply(world);
+      }
+      const euler = new Euler().setFromQuaternion(rotated, 'XYZ');
+      next.rotation = [euler.x, euler.y, euler.z];
+      value = angleDegrees;
+    } else {
+      const factor =
+        numeric !== null
+          ? Math.max(0.001, numeric)
+          : Math.max(
+              0.001,
+              1 +
+                (modal.lastX -
+                  modal.startX -
+                  (modal.lastY - modal.startY)) /
+                  200
+            );
+      next.scale = [...modal.before.scale];
+      if (modal.axis) {
+        const index =
+          modal.axis === 'x' ? 0 : modal.axis === 'y' ? 1 : 2;
+        next.scale[index] = Math.max(
+          0.001,
+          modal.before.scale[index] * factor
+        );
+      } else {
+        next.scale = next.scale.map((component) =>
+          Math.max(0.001, component * factor)
+        ) as [number, number, number];
+      }
+      value = factor;
+    }
+
+    modal.value = value;
+    modal.target.setTransform(next);
+    this.syncScene();
+    this.publish();
+  }
+
+  private commitModalTransform(): void {
+    const modal = this.modalTransform;
+    if (!modal) {
+      return;
+    }
+    this.modalTransform = null;
+    const after = this.cloneTransform(modal.target.transform);
+    const changed =
+      after.position.some(
+        (value, index) =>
+          Math.abs(value - modal.before.position[index]) > 1e-7
+      ) ||
+      after.rotation.some(
+        (value, index) =>
+          Math.abs(value - modal.before.rotation[index]) > 1e-7
+      ) ||
+      after.scale.some(
+        (value, index) => Math.abs(value - modal.before.scale[index]) > 1e-7
+      );
+    if (changed) {
+      this.history.execute(
+        'primitive' in modal.target
+          ? new TransformNodeCommand(modal.target, modal.before, after)
+          : new TransformGroupCommand(modal.target, modal.before, after)
+      );
+    } else {
+      this.publish();
+    }
+  }
+
+  private cancelModalTransform(): void {
+    const modal = this.modalTransform;
+    if (!modal) {
+      return;
+    }
+    this.modalTransform = null;
+    modal.target.setTransform(modal.before);
+    this.syncScene();
+    this.publish();
   }
 
   private beginGizmoDrag(

@@ -487,6 +487,8 @@ Flat normals mean triangle corners are independent in the render buffer. The GPU
 
 Node transforms are stored parent-local. The Inspector can display and edit world-space position/rotation for a child of a one-level group, converting back through the group transform. Translate/rotate gizmos can use world axes; scale remains local because parent rotation with nonuniform scale can require shear.
 
+Desktop G/R/S runs a transient modal transform in the runtime. It previews the target transform, derives translation/rotation from the last pointer position or typed values, applies grid snapping to pointer-driven moves, and commits a single TransformNodeCommand/TransformGroupCommand. The transform HUD is a snapshot projection; the document is not cloned for preview.
+
 ### Viewport shading modes
 
 Wireframe, Solid, Texture (the PS1/Unlit path), Texture + Wire, and Lit. Texture + Wire draws the topological wire overlay over the textured surface as an x-ray pass.

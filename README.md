@@ -118,8 +118,15 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Shift+Cmd/Ctrl+Z, Ctrl+Y | Redo. |
 | Cmd/Ctrl+S | Save the project. |
 | Cmd/Ctrl+O | Open a project. |
+| G | Start a modal move of the active object or group. Move the mouse to set the offset. |
+| R | Start a modal rotate. Without an axis constraint, rotation uses the view axis. |
+| S | Start a modal scale. Without an axis constraint, scaling is uniform. |
+| X / Y / Z during G/R/S | Constrain to an axis. Pressing the same axis again clears the constraint. |
+| Type a number during G/R/S | Exact amount: units for move, degrees for rotate, factor for scale. Move requires an axis constraint. |
+| Enter / left click | Commit the modal transform. |
+| Escape / right click | Cancel the modal transform and restore the previous pose. |
 | F | Frame the active object. |
-| Escape | Cancel the active drag, or close the mobile inspector. |
+| Escape | Cancel the active drag or modal transform, or close the mobile inspector. |
 | Orientation gizmo | Drag to orbit the view; click an axis to align, or click the center to frame the active object. |
 
 Selection modes are switched with the **Vertex / Edge / Face** control at the top-left of the viewport. The Scene outliner selects the active object; picking always edits that object.
@@ -169,6 +176,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Loop-cut one sphere edge: 24 F/26 V became 32 F/34 V with a closed, valid quad ring; repeated under an active Grid Array and produced 64 evaluated faces.
   - Texture + Wire rendering, top-right placement, icon-only touch density, compact scene/selection actions, and Texture + Wire `.lpoly` settings round-trip verified.
   - Global orientation on a grouped, rotated child: world fields showed the composed pose, the move/rotate gizmo axes were world-aligned, global position/rotation edits converted back to local coordinates, and undo restored the prior pose.
+  - Modal G/R/S: free mouse move, X-axis constrained typed move, 45° typed rotation, 2× typed scale, click confirmation, axis toggle, and Escape cancellation were exercised; each commit produced one transform command and undo restored the pose.
   - Per-copy modifier linear maps round-tripped through their inverses for Radial Array geometry, covering mapped base-vertex editing.
   - Vertex drag through the real DCEL, undo, redo, and teardown without console errors.
   - Primitive creation, outliner selection, deletion, and undo/redo.
@@ -214,6 +222,21 @@ The Phase 3 topology-polish goal is complete; broader Phase 3 polishing and Phas
 Global transform orientation for a child inside a rotated group:
 
 ![Global transform orientation and world-space fields](docs/media/workflow-orientation.png)
+
+Modal move with an axis constraint and typed exact value:
+
+![G/R/S transform HUD with X axis and typed value](docs/media/workflow-transform-hud.png)
+
+### Desktop modal transforms
+
+- **G** starts a move; the mouse moves the active object/group in the view plane.
+- **R** starts a rotation; without an axis it uses the view axis.
+- **S** starts a uniform scale, or one scale component when constrained.
+- **X/Y/Z** constrain the operation. Press the same axis again to return to free mode.
+- Typing a number switches to an exact preview. For a move, constrain an axis first; rotation values are degrees and scale values are factors.
+- **Enter** or left click commits one undoable transform command. **Escape** or right click restores the previous pose.
+- The HUD shows the operation, axis, value, and key hints.
+- G/R/S act on the active object or group. Multi-element vertex/edge/face transforms are not yet part of this modal controller.
 
 ## iPad layout
 

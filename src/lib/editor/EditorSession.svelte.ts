@@ -28,6 +28,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   activeTransform: null,
   globalTransform: null,
   transformOrientation: 'local',
+  modalTransform: null,
   modifiers: [],
   modifiersActive: false,
   modifierError: null,

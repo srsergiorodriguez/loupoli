@@ -20,6 +20,18 @@ export const TRANSFORM_ORIENTATIONS = ['local', 'global'] as const;
 export type TransformOrientation =
   (typeof TRANSFORM_ORIENTATIONS)[number];
 
+/** The transient modal operation started by desktop G, R, or S. */
+export type ModalTransformKind = 'translate' | 'rotate' | 'scale';
+
+/** Small UI projection of the active modal transform. */
+export interface ModalTransformSnapshot {
+  readonly kind: ModalTransformKind;
+  readonly axis: 'x' | 'y' | 'z' | null;
+  readonly orientation: TransformOrientation;
+  readonly numeric: string;
+  readonly value: number;
+}
+
 /** Supported incremental grid-snap steps. */
 export const GRID_SNAP_STEPS = [0.1, 0.25, 0.5, 1] as const;
 
@@ -89,6 +101,7 @@ export interface EditorSnapshot {
   readonly activeTransform: NodeTransform | null;
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;
+  readonly modalTransform: ModalTransformSnapshot | null;
   readonly modifiers: readonly Modifier[];
   readonly modifiersActive: boolean;
   readonly modifierError: string | null;

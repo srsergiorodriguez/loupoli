@@ -4,6 +4,7 @@
   import ToolRail from './lib/ui/Chrome/ToolRail.svelte';
   import ShadingControl from './lib/ui/Chrome/ShadingControl.svelte';
   import SelectionModeControl from './lib/ui/Chrome/SelectionModeControl.svelte';
+  import TransformHud from './lib/ui/Chrome/TransformHud.svelte';
   import OrientationGizmo from './lib/ui/Chrome/OrientationGizmo.svelte';
   import StatusBar from './lib/ui/Chrome/StatusBar.svelte';
   import Inspector from './lib/ui/Panels/Inspector.svelte';
@@ -136,6 +137,8 @@
         <ShadingControl {session} />
         <OrientationGizmo {session} />
       </div>
+
+      <TransformHud modal={session.snapshot.modalTransform} />
     {:else}
       <section class="startup-error loupoli-panel" role="alert">
         <p class="error-kicker">Graphics unavailable</p>

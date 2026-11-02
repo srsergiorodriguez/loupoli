@@ -34,6 +34,15 @@ export interface InputRouterHost {
   toggleAxisLock(axis: 'x' | 'y' | 'z'): void;
   tapSelect(clientX: number, clientY: number): void;
   setPointerReading(sample: PointerSample | null): void;
+  isModalTransformActive(): boolean;
+  beginModalTransform(
+    kind: 'translate' | 'rotate' | 'scale',
+    clientX: number,
+    clientY: number
+  ): boolean;
+  modalPointerMove(sample: PointerSample): void;
+  modalTransformKey(key: string): void;
+  commitModalTransform(): void;
 }
 
 /** The current phase of a multi-touch recognizer. */
@@ -104,10 +113,31 @@ export class InputRouter {
     lastX: 0,
     lastY: 0
   };
+  private lastMouseX = 0;
+  private lastMouseY = 0;
+  private hasMousePosition = false;
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     const sample = this.toSample(event);
     if (!sample) {
+      return;
+    }
+
+    if (sample.pointerType === 'mouse') {
+      this.lastMouseX = sample.clientX;
+      this.lastMouseY = sample.clientY;
+      this.hasMousePosition = true;
+    }
+
+    if (this.host.isModalTransformActive()) {
+      if (sample.pointerType !== 'mouse') {
+        return;
+      }
+      if (event.button === 0) {
+        this.host.commitModalTransform();
+      } else if (event.button === 2) {
+        this.host.modalTransformKey('Escape');
+      }
       return;
     }
 
@@ -176,6 +206,19 @@ export class InputRouter {
       return;
     }
 
+    if (sample.pointerType === 'mouse') {
+      this.lastMouseX = sample.clientX;
+      this.lastMouseY = sample.clientY;
+      this.hasMousePosition = true;
+    }
+
+    if (this.host.isModalTransformActive()) {
+      if (sample.pointerType === 'mouse') {
+        this.host.modalPointerMove(sample);
+      }
+      return;
+    }
+
     if (sample.pointerType === 'pen') {
       if (this.activePenPointerId !== sample.pointerId) {
         return;
@@ -220,6 +263,15 @@ export class InputRouter {
       return;
     }
 
+    if (this.host.isModalTransformActive()) {
+      if (sample.pointerType === 'mouse') {
+        this.lastMouseX = sample.clientX;
+        this.lastMouseY = sample.clientY;
+        this.hasMousePosition = true;
+      }
+      return;
+    }
+
     this.releasePointerCapture(event.pointerId);
 
     if (sample.pointerType === 'pen') {
@@ -250,6 +302,9 @@ export class InputRouter {
   };
 
   private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (this.host.isModalTransformActive()) {
+      return;
+    }
     this.releasePointerCapture(event.pointerId);
 
     if (event.pointerType === 'pen') {
@@ -274,6 +329,9 @@ export class InputRouter {
 
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault();
+    if (this.host.isModalTransformActive()) {
+      return;
+    }
     this.host.zoom(Math.exp(event.deltaY * 0.0012));
   };
 
@@ -295,6 +353,12 @@ export class InputRouter {
 
     const key = event.key.toLowerCase();
     const command = event.metaKey || event.ctrlKey;
+
+    if (this.host.isModalTransformActive()) {
+      event.preventDefault();
+      this.host.modalTransformKey(event.key);
+      return;
+    }
 
     if (command && key === 'z') {
       event.preventDefault();
@@ -323,6 +387,18 @@ export class InputRouter {
       return;
     }
 
+    if (!command && !event.altKey && (key === 'g' || key === 'r' || key === 's')) {
+      const position = this.mousePosition();
+      const kind =
+        key === 'g' ? 'translate' : key === 'r' ? 'rotate' : 'scale';
+      if (
+        this.host.beginModalTransform(kind, position.x, position.y)
+      ) {
+        event.preventDefault();
+        return;
+      }
+    }
+
     if (
       !command &&
       !event.altKey &&
@@ -339,6 +415,9 @@ export class InputRouter {
   };
 
   private readonly onWindowBlur = (): void => {
+    if (this.host.isModalTransformActive()) {
+      this.host.modalTransformKey('Escape');
+    }
     this.host.cancelToolPointer();
     this.touches.clear();
     this.ignoredTouches.clear();
@@ -347,6 +426,17 @@ export class InputRouter {
     this.mouse.pointerId = null;
     this.host.setPointerReading(null);
   };
+
+  private mousePosition(): { x: number; y: number } {
+    if (this.hasMousePosition) {
+      return { x: this.lastMouseX, y: this.lastMouseY };
+    }
+    const rect = this.element.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+  }
 
   constructor(element: HTMLElement, host: InputRouterHost) {
     this.element = element;

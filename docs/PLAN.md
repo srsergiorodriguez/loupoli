@@ -109,7 +109,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 4. Pen input never moves the camera. One-finger orbit, two-finger pinch/pan, two-finger tap undo, and three-finger tap redo are independently observable and functional against a real vertex edit.
 5. A vertex within 16 CSS px of the pen/mouse is selected predictably; dragging changes the real DCEL position, updates the mesh, and undo/redo restores it exactly.
 6. Every touch control has at least a 44 CSS px hit region. No hover-only route to a feature.
-7. All five viewport modes change visibly without reloading the scene; Texture + Wire shows the topological overlay, and PS1 mode visibly snaps vertices and warps textures when the camera moves. Transform orientation switches between parent-local and world-space display without changing the stored local transform.
+7. All five viewport modes change visibly without reloading the scene; Texture + Wire shows the topological overlay, and PS1 mode visibly snaps vertices and warps textures when the camera moves. Transform orientation switches between parent-local and world-space display without changing the stored local transform. Desktop G/R/S modal transforms preview with the mouse, accept X/Y/Z axis constraints and typed values, commit once with Enter/left click, and cancel with Escape/right click.
 8. No WebGL warnings in the console; repeated mount/unmount releases renderer resources.
 9. The shell remains usable in iPad landscape and portrait layouts with safe-area insets.
 
