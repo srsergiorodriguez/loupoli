@@ -93,4 +93,14 @@ export class ElementSelection {
   clear(): void {
     this.selected.clear();
   }
+
+  /** Replace the set with valid indices, used to restore a cancelled preview. */
+  setValues(values: readonly number[]): void {
+    this.selected.clear();
+    for (const value of values) {
+      if (Number.isInteger(value) && value >= 0) {
+        this.selected.add(value);
+      }
+    }
+  }
 }

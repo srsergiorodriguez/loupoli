@@ -25,4 +25,5 @@ export type IconName =
   | 'chevron-down'
   | 'extrude'
   | 'inset'
-  | 'loop-cut';
+  | 'loop-cut'
+  | 'loop-slide';

@@ -659,19 +659,25 @@ function otherFace(
 }
 
 /**
- * Cut one quad edge loop at its midpoints.
+ * Cut one quad edge loop at a position along its crossing edges.
  *
  * The selected edge seeds a walk across opposite quad edges in both
  * directions. Every quad in that ring is split into two quads along the new
- * midpoint edge. Non-quad faces in the ring are rejected. UVs are interpolated
- * per face and materials are preserved; seam flags are not remapped.
+ * edge. Position 0.5 cuts at the midpoints; other values slide the loop toward
+ * the lower-index endpoint of each crossed edge. Non-quad faces in the ring are
+ * rejected. UVs are interpolated per face and materials are preserved; seam
+ * flags are not remapped.
  */
 export function loopCutFromEdge(
   mesh: HalfEdgeMesh,
-  edge: number
+  edge: number,
+  position = 0.5
 ): HalfEdgeMesh {
   if (!Number.isInteger(edge) || edge < 0 || edge >= mesh.edgeCount) {
     throw new RangeError(`Edge ${edge} is outside the mesh.`);
+  }
+  if (!Number.isFinite(position) || position <= 0 || position >= 1) {
+    throw new Error('Loop cut position must be between 0 and 1.');
   }
   const halfEdge = mesh.edgeHalfEdge[edge];
   const firstFace = mesh.heFace[halfEdge];
@@ -756,16 +762,28 @@ export function loopCutFromEdge(
     const ordered = [0, 1, 2, 3].map(
       (offset) => corners[(pivot + offset) % 4]
     );
-    const midpoint = (a: LoopCorner, b: LoopCorner): MeshCornerSpec => ({
-      position: [
-        (a.position[0] + b.position[0]) / 2,
-        (a.position[1] + b.position[1]) / 2,
-        (a.position[2] + b.position[2]) / 2
-      ],
-      uv: [(a.uv[0] + b.uv[0]) / 2, (a.uv[1] + b.uv[1]) / 2]
-    });
-    const midA = midpoint(ordered[0], ordered[1]);
-    const midB = midpoint(ordered[2], ordered[3]);
+    // Measure from the lower-index endpoint so both faces adjacent to an
+    // edge produce the same cut point. At position 0.5 this is the midpoint.
+    const cutPoint = (a: LoopCorner, b: LoopCorner): MeshCornerSpec => {
+      const start = a.vertex < b.vertex ? a : b;
+      const end = start === a ? b : a;
+      return {
+        position: [
+          start.position[0] +
+            (end.position[0] - start.position[0]) * position,
+          start.position[1] +
+            (end.position[1] - start.position[1]) * position,
+          start.position[2] +
+            (end.position[2] - start.position[2]) * position
+        ],
+        uv: [
+          start.uv[0] + (end.uv[0] - start.uv[0]) * position,
+          start.uv[1] + (end.uv[1] - start.uv[1]) * position
+        ]
+      };
+    };
+    const midA = cutPoint(ordered[0], ordered[1]);
+    const midB = cutPoint(ordered[2], ordered[3]);
     const material = mesh.faceMaterial[face];
 
     faces.push({

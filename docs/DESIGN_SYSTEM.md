@@ -450,6 +450,8 @@ Components live under `src/lib/ui/` and are built in Svelte 5 rune syntax. Each 
 | `Compact action row` | 3 | Secondary Group/Join/Delete and selection actions | 30px visual on desktop, 44px touch region, destructive action separated |
 | `Transform orientation toggle` | 3 | Local/Global transform space | Two-button segmented control in Transform header; 44px touch height and width; hidden for groups where local equals global |
 | `TransformHud` | 2 | Transient desktop G/R/S readout | Bottom-center glass pill showing operation, axis, exact value, and key hints; pointer-events none |
+| `ActionDock` | 3 | Touch one-shot mesh actions | Bottom-left 2×2 grid, 44 px targets, contextual disabled states, armed accent state; hidden on fine pointers |
+| `ActionHud` | 2 | Armed/dragging ActionDock readout | Bottom-center glass pill above the touch tool rail; value, drag/release hint, Esc cancel |
 | `Grid snap / axis lock` | 3 | Snap toggle + step, 44px X/Y/Z chips | Accent active state, axis colors, live status step |
 | `ObjectGizmo` | 3 | Move/Rotate/Scale viewport handles | Axis colors, screen-constant size, pen/mouse drag; no touch gesture conflict |
 | `Vector3Field` | 2 / 3 | XYZ transform rows | Axis colors and optional link |

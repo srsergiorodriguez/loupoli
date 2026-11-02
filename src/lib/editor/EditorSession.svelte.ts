@@ -10,7 +10,8 @@ import {
   type TransformMode,
   type AxisLock,
   type ModifierPatch,
-  type TransformOrientation
+  type TransformOrientation,
+  type MeshActionKind
 } from './types';
 
 const INITIAL_SNAPSHOT: EditorSnapshot = {
@@ -29,6 +30,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   globalTransform: null,
   transformOrientation: 'local',
   modalTransform: null,
+  actionState: null,
+  loopSlideAvailable: false,
   modifiers: [],
   modifiersActive: false,
   modifierError: null,
@@ -213,6 +216,10 @@ export class EditorSession {
 
   loopCut(): void {
     this.runtime?.loopCut();
+  }
+
+  armAction(kind: MeshActionKind): void {
+    this.runtime?.armAction(kind);
   }
 
   async saveProject(): Promise<void> {

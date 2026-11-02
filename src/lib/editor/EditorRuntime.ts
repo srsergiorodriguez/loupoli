@@ -1,6 +1,6 @@
 import { Euler, Plane, Quaternion, Vector3 } from 'three';
 import { readTheme } from '../../design/theme';
-import type { Vec3 } from '../geometry/HalfEdgeMesh';
+import type { HalfEdgeMesh, Vec3 } from '../geometry/HalfEdgeMesh';
 import {
   applyLinearTransform,
   cloneModifiers,
@@ -87,6 +87,8 @@ import {
   type TransformOrientation,
   type ModalTransformKind,
   type ModalTransformSnapshot,
+  type MeshActionKind,
+  type MeshActionSnapshot,
   type AxisLock,
   type ModifierPatch
 } from './types';
@@ -146,6 +148,31 @@ interface ModalTransform {
   value: number;
 }
 
+/** One-shot action drag armed from the touch ActionDock. */
+interface ActionDrag {
+  readonly kind: MeshActionKind;
+  readonly node: MeshNode;
+  readonly pointerId: number;
+  readonly before: HalfEdgeMesh;
+  readonly selection: readonly number[];
+  readonly selectionMode: SelectionMode;
+  readonly startX: number;
+  readonly startY: number;
+  readonly startValue: number;
+  readonly faceIndex: number | null;
+  readonly edgeIndex: number | null;
+  readonly loopBase: HalfEdgeMesh | null;
+  value: number;
+}
+
+/** Most recent loop cut, used by the separate Loop Slide action. */
+interface LastLoopCut {
+  readonly node: MeshNode;
+  readonly edge: number;
+  readonly baseMesh: HalfEdgeMesh;
+  readonly t: number;
+}
+
 /** Construction options for the editor runtime. */
 interface EditorRuntimeOptions {
   /** Called whenever a small UI-facing snapshot should be refreshed. */
@@ -180,6 +207,9 @@ export class EditorRuntime {
   private transformMode: TransformMode = 'select';
   private transformOrientation: TransformOrientation = 'local';
   private modalTransform: ModalTransform | null = null;
+  private armedAction: MeshActionKind | null = null;
+  private actionDrag: ActionDrag | null = null;
+  private lastLoopCut: LastLoopCut | null = null;
   private snapEnabled = false;
   private snapStep = 0.25;
   private axisLock: AxisLock = null;
@@ -315,6 +345,10 @@ export class EditorRuntime {
       globalTransform,
       transformOrientation: this.transformOrientation,
       modalTransform: this.modalSnapshot(),
+      actionState: this.actionSnapshot(),
+      loopSlideAvailable:
+        this.lastLoopCut !== null &&
+        this.lastLoopCut.node === this.getActiveNode(),
       boundaryEdges: mesh?.boundaryEdgeCount ?? 0,
       counts: mesh
         ? {
@@ -1018,20 +1052,286 @@ export class EditorRuntime {
       return;
     }
     const [edge] = this.selection.values();
+    const before = node.mesh;
     try {
-      const after = loopCutFromEdge(node.mesh, edge);
+      const after = loopCutFromEdge(before, edge);
       const command = new ReplaceMeshCommand(
         node,
-        node.mesh,
+        before,
         after,
         'Loop cut'
       );
       this.selection.clear();
       this.history.execute(command);
+      this.lastLoopCut = { node, edge, baseMesh: before, t: 0.5 };
+      this.publish();
     } catch (error) {
       this.projectError = this.errorMessage(error);
       this.publish();
     }
+  }
+
+  /** Arm a one-shot ActionDock operation; the next viewport drag applies it. */
+  armAction(kind: MeshActionKind): void {
+    if (this.actionDrag || this.modalTransform) {
+      return;
+    }
+    if (this.armedAction === kind) {
+      this.armedAction = null;
+      this.publish();
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node || !this.actionAvailable(kind, node)) {
+      return;
+    }
+    this.projectError = null;
+    this.armedAction = kind;
+    this.publish();
+  }
+
+  private actionAvailable(kind: MeshActionKind, node: MeshNode): boolean {
+    if (this.getActiveGroup() !== null) {
+      return false;
+    }
+    if (kind === 'loop-slide') {
+      return this.lastLoopCut !== null && this.lastLoopCut.node === node;
+    }
+    if (this.selection.mode === 'face') {
+      if (kind === 'extrude') {
+        return this.selection.count > 0;
+      }
+      if (kind === 'inset') {
+        return this.selection.count === 1;
+      }
+      return false;
+    }
+    if (this.selection.mode === 'edge' && kind === 'loop-cut') {
+      return this.selection.count === 1;
+    }
+    return false;
+  }
+
+  private defaultActionValue(kind: MeshActionKind): number {
+    if (kind === 'extrude') {
+      return 0.25;
+    }
+    if (kind === 'inset') {
+      return 0.2;
+    }
+    if (kind === 'loop-slide') {
+      return this.lastLoopCut?.t ?? 0.5;
+    }
+    return 0.5;
+  }
+
+  private actionSnapshot(): MeshActionSnapshot | null {
+    if (this.actionDrag) {
+      return {
+        kind: this.actionDrag.kind,
+        phase: 'dragging',
+        value: this.actionDrag.value
+      };
+    }
+    if (this.armedAction) {
+      return {
+        kind: this.armedAction,
+        phase: 'armed',
+        value: this.defaultActionValue(this.armedAction)
+      };
+    }
+    return null;
+  }
+
+  private beginActionGesture(
+    sample: PointerSample,
+    node: MeshNode
+  ): boolean {
+    const kind = this.armedAction;
+    if (!kind) {
+      return false;
+    }
+    let faceIndex: number | null = null;
+    let edgeIndex: number | null = null;
+    let loopBase: HalfEdgeMesh | null = null;
+    let selection: readonly number[] = [];
+    let value = this.defaultActionValue(kind);
+
+    if (kind === 'extrude') {
+      if (this.selection.mode !== 'face' || this.selection.count === 0) {
+        this.armedAction = null;
+        this.publish();
+        return false;
+      }
+      selection = this.selection.values();
+    } else if (kind === 'inset') {
+      if (this.selection.mode !== 'face' || this.selection.count !== 1) {
+        this.armedAction = null;
+        this.publish();
+        return false;
+      }
+      selection = this.selection.values();
+      faceIndex = selection[0];
+    } else if (kind === 'loop-cut') {
+      if (this.selection.mode !== 'edge' || this.selection.count !== 1) {
+        this.armedAction = null;
+        this.publish();
+        return false;
+      }
+      selection = this.selection.values();
+      edgeIndex = selection[0];
+    } else {
+      if (
+        this.lastLoopCut === null ||
+        this.lastLoopCut.node !== node
+      ) {
+        this.armedAction = null;
+        this.publish();
+        return false;
+      }
+      loopBase = this.lastLoopCut.baseMesh;
+      edgeIndex = this.lastLoopCut.edge;
+    }
+
+    const drag: ActionDrag = {
+      kind,
+      node,
+      pointerId: sample.pointerId,
+      before: node.mesh,
+      selection,
+      selectionMode: this.selection.mode,
+      startX: sample.clientX,
+      startY: sample.clientY,
+      startValue: value,
+      faceIndex,
+      edgeIndex,
+      loopBase,
+      value
+    };
+    try {
+      const preview = this.buildActionMesh(drag, value);
+      this.armedAction = null;
+      this.actionDrag = drag;
+      node.setMesh(preview);
+      this.selection.clear();
+      this.projectError = null;
+      this.syncScene();
+      this.publish();
+      return true;
+    } catch (error) {
+      this.armedAction = null;
+      this.projectError = this.errorMessage(error);
+      this.publish();
+      return false;
+    }
+  }
+
+  private buildActionMesh(
+    drag: ActionDrag,
+    value: number
+  ): HalfEdgeMesh {
+    if (drag.kind === 'extrude') {
+      return extrudeSelectedFaces(drag.before, drag.selection, value);
+    }
+    if (drag.kind === 'inset') {
+      if (drag.faceIndex === null) {
+        throw new Error('Inset requires one face.');
+      }
+      return insetSelectedFace(drag.before, drag.faceIndex, value);
+    }
+    if (drag.edgeIndex === null) {
+      throw new Error('Loop action requires one edge.');
+    }
+    if (drag.kind === 'loop-cut') {
+      return loopCutFromEdge(drag.before, drag.edgeIndex, value);
+    }
+    if (!drag.loopBase) {
+      throw new Error('Loop slide has no source loop.');
+    }
+    return loopCutFromEdge(drag.loopBase, drag.edgeIndex, value);
+  }
+
+  private updateActionPointer(sample: PointerSample): void {
+    const drag = this.actionDrag;
+    if (!drag || drag.pointerId !== sample.pointerId) {
+      return;
+    }
+    const travel =
+      drag.startY -
+      sample.clientY +
+      (sample.clientX - drag.startX) * 0.5;
+    let value: number;
+    if (drag.kind === 'extrude') {
+      value = Math.min(8, Math.max(0.001, drag.startValue + travel * 0.005));
+    } else if (drag.kind === 'inset') {
+      value = Math.min(0.9, Math.max(0.01, drag.startValue + travel * 0.002));
+    } else {
+      value = Math.min(0.95, Math.max(0.05, drag.startValue + travel * 0.002));
+    }
+    if (Math.abs(value - drag.value) < 1e-6) {
+      return;
+    }
+    try {
+      const preview = this.buildActionMesh(drag, value);
+      drag.value = value;
+      drag.node.setMesh(preview);
+      this.projectError = null;
+      this.syncScene();
+      this.publish();
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.publish();
+    }
+  }
+
+  private finishActionGesture(): void {
+    const drag = this.actionDrag;
+    if (!drag) {
+      return;
+    }
+    this.actionDrag = null;
+    this.armedAction = null;
+    const after = drag.node.mesh;
+    const label =
+      drag.kind === 'extrude'
+        ? `Extrude ${drag.selection.length} face${drag.selection.length === 1 ? '' : 's'}`
+        : drag.kind === 'inset'
+          ? 'Inset face'
+          : drag.kind === 'loop-cut'
+            ? 'Loop cut'
+            : 'Loop slide';
+    this.selection.clear();
+    this.history.execute(
+      new ReplaceMeshCommand(drag.node, drag.before, after, label)
+    );
+    if (
+      (drag.kind === 'loop-cut' || drag.kind === 'loop-slide') &&
+      drag.edgeIndex !== null
+    ) {
+      this.lastLoopCut = {
+        node: drag.node,
+        edge: drag.edgeIndex,
+        baseMesh:
+          drag.kind === 'loop-cut'
+            ? drag.before
+            : (drag.loopBase ?? drag.before),
+        t: drag.value
+      };
+      this.publish();
+    }
+  }
+
+  private cancelActionGesture(): void {
+    const drag = this.actionDrag;
+    if (!drag) {
+      return;
+    }
+    this.actionDrag = null;
+    this.armedAction = null;
+    drag.node.setMesh(drag.before);
+    this.selection.setValues(drag.selection);
+    this.syncScene();
+    this.publish();
   }
 
   /** Weld the selected vertices to their centroid. */
@@ -1349,6 +1649,16 @@ export class EditorRuntime {
       this.cancelToolPointer();
     }
 
+    if (this.armedAction) {
+      const actionNode = this.getActiveNode();
+      if (actionNode) {
+        return this.beginActionGesture(sample, actionNode);
+      }
+      this.armedAction = null;
+      this.publish();
+      return false;
+    }
+
     const node = this.getActiveNode();
     const group = this.getActiveGroup();
     const target = group ?? node;
@@ -1491,6 +1801,11 @@ export class EditorRuntime {
   }
 
   private moveToolPointer(sample: PointerSample): void {
+    if (this.actionDrag) {
+      this.updateActionPointer(sample);
+      return;
+    }
+
     if (this.gizmoDrag && this.gizmoDrag.pointerId === sample.pointerId) {
       this.updateGizmoDrag(sample);
       return;
@@ -1613,6 +1928,11 @@ export class EditorRuntime {
   }
 
   private endToolPointer(sample: PointerSample): void {
+    if (this.actionDrag) {
+      this.finishActionGesture();
+      return;
+    }
+
     if (this.gizmoDrag && this.gizmoDrag.pointerId === sample.pointerId) {
       this.finishGizmoDrag();
       return;
@@ -1648,6 +1968,17 @@ export class EditorRuntime {
   private cancelToolPointer(): void {
     if (this.modalTransform) {
       this.cancelModalTransform();
+      return;
+    }
+
+    if (this.actionDrag) {
+      this.cancelActionGesture();
+      return;
+    }
+
+    if (this.armedAction) {
+      this.armedAction = null;
+      this.publish();
       return;
     }
 
@@ -2229,6 +2560,8 @@ export class EditorRuntime {
   }
 
   private afterDocumentChanged(event: HistoryEvent): void {
+    this.lastLoopCut = null;
+    this.armedAction = null;
     if (this.activeGroupId !== null && !this.document.getGroup(this.activeGroupId)) {
       this.activeGroupId = null;
     }

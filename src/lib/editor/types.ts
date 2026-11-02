@@ -32,6 +32,23 @@ export interface ModalTransformSnapshot {
   readonly value: number;
 }
 
+/** One-shot modeling actions offered by the touch ActionDock. */
+export const MESH_ACTIONS = [
+  'extrude',
+  'inset',
+  'loop-cut',
+  'loop-slide'
+] as const;
+
+export type MeshActionKind = (typeof MESH_ACTIONS)[number];
+
+/** Armed or dragging state for a one-shot mesh action. */
+export interface MeshActionSnapshot {
+  readonly kind: MeshActionKind;
+  readonly phase: 'armed' | 'dragging';
+  readonly value: number;
+}
+
 /** Supported incremental grid-snap steps. */
 export const GRID_SNAP_STEPS = [0.1, 0.25, 0.5, 1] as const;
 
@@ -102,6 +119,8 @@ export interface EditorSnapshot {
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;
   readonly modalTransform: ModalTransformSnapshot | null;
+  readonly actionState: MeshActionSnapshot | null;
+  readonly loopSlideAvailable: boolean;
   readonly modifiers: readonly Modifier[];
   readonly modifiersActive: boolean;
   readonly modifierError: string | null;

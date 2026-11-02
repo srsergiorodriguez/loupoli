@@ -16,6 +16,9 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **On-demand rendering.** The scheduler draws only for camera, resize, document, selection, or shading invalidation. Headless Chrome measured a stable render count while idle.
 - **Camera rig.** Orbit by dragging empty canvas, by Alt/Option-drag, by middle-mouse drag, or with one-finger touch. Two-finger touch pans/pinches, wheel zooms, and the orientation gizmo animates axis-aligned views. No damping loop.
 - **Five viewport modes.** Wireframe (true topological edges), Solid (flat-shaded clay), Texture (custom GLSL PS1 path), Texture + Wire (x-ray topological overlay over the texture surface), and Lit (flat-shaded checker material). The mode selector now sits immediately left of the orientation gizmo, icon-only on touch layouts and labeled on wide desktop layouts.
+- **Local/Global transforms.** Node transforms stay parent-local in the document; the Inspector can display world-space position/rotation and orient translate/rotate gizmos to world axes. Scale remains local to avoid unsupported shear.
+- **Desktop G/R/S.** Blender-style modal Grab, Rotate, and Scale for the active object or group, with mouse preview, X/Y/Z constraints, typed exact values, a transform HUD, Enter/click commit, and Escape/right-click cancel.
+- **Touch ActionDock.** Bottom-left one-shot actions for Extrude, Inset, Loop Cut, and Loop Slide. Tap once to arm, drag with the pencil/mouse for a live amount, and release to commit one undoable mesh replacement. Loop Slide is separate from Loop Cut.
 - **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the collapsed **PS1 look** render-effect module at the bottom of the Inspector:
   - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster.
   - **PS1 affine** — enable affine UV swim.
@@ -101,6 +104,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Grid snap toggle/step | Snap object translation and vertex drags to the selected 0.1–1.0 step. |
 | Move/Rotate/Scale handle | Drag its X/Y/Z handle to transform the active object on that axis. Pen/mouse; finger touch remains camera navigation. |
 | Texture + Wire | Texture surface plus the full topological wire overlay (x-ray, including back edges). |
+| ActionDock (touch) | Tap Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right with the pencil to set the amount; release applies. Tap the active action again or press Esc to cancel. |
 | Shift/Cmd/Ctrl + click | Add or remove an element from the current selection. |
 | Add toggle | Sticky additive selection for pen, mouse, and touch taps. |
 | Touch tap / drag | One-finger tap selects the current V/E/F element; drag orbits. With Add on, taps toggle the set. |
@@ -177,6 +181,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Texture + Wire rendering, top-right placement, icon-only touch density, compact scene/selection actions, and Texture + Wire `.lpoly` settings round-trip verified.
   - Global orientation on a grouped, rotated child: world fields showed the composed pose, the move/rotate gizmo axes were world-aligned, global position/rotation edits converted back to local coordinates, and undo restored the prior pose.
   - Modal G/R/S: free mouse move, X-axis constrained typed move, 45° typed rotation, 2× typed scale, click confirmation, axis toggle, and Escape cancellation were exercised; each commit produced one transform command and undo restored the pose.
+  - ActionDock: touch tap armed Extrude; a pencil/mouse drag previewed and committed 30 V/56 E/28 F from 26/48/24; touch targets measured 44 px; Inset matched those closed counts; Loop Cut produced 34/64/32 and enabled Loop Slide; Loop Slide produced a valid 34/64/32 mesh; cancel restored mesh and selection; a Grid Array-evaluated base extrude updated 28 base faces to 56 evaluated faces.
   - Per-copy modifier linear maps round-tripped through their inverses for Radial Array geometry, covering mapped base-vertex editing.
   - Vertex drag through the real DCEL, undo, redo, and teardown without console errors.
   - Primitive creation, outliner selection, deletion, and undo/redo.
@@ -237,6 +242,20 @@ Modal move with an axis constraint and typed exact value:
 - **Enter** or left click commits one undoable transform command. **Escape** or right click restores the previous pose.
 - The HUD shows the operation, axis, value, and key hints.
 - G/R/S act on the active object or group. Multi-element vertex/edge/face transforms are not yet part of this modal controller.
+
+### Touch ActionDock
+
+![ActionDock armed for Extrude with live HUD](docs/media/actiondock-extrude.png)
+
+- Appears at the bottom-left on touch layouts when an object is active; hidden on fine-pointer desktop layouts.
+- **Extrude** requires one or more selected faces.
+- **Inset** requires exactly one selected face.
+- **Loop Cut** requires exactly one selected edge.
+- **Loop Slide** becomes available after a loop cut and adjusts that most recent cut loop.
+- Tap once to arm; the active button and HUD identify the action. Drag up or right in the viewport to increase the amount, then release to apply one undoable command.
+- Amounts are shown live: world units for extrude, percentages for inset and loop position.
+- **Esc** or tapping the active action again cancels an armed action; cancelling a drag restores both the mesh and selection.
+- Loop Cut inserts a loop; Loop Slide re-cuts the retained original loop source at a new position. Undo, autosave mesh patches, and modifier evaluation apply normally.
 
 ## iPad layout
 

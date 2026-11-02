@@ -487,6 +487,8 @@ Flat normals mean triangle corners are independent in the render buffer. The GPU
 
 Node transforms are stored parent-local. The Inspector can display and edit world-space position/rotation for a child of a one-level group, converting back through the group transform. Translate/rotate gizmos can use world axes; scale remains local because parent rotation with nonuniform scale can require shear.
 
+The touch ActionDock uses a separate one-shot action state. On pointer-down it swaps the node's base DCEL for a preview generated from the preserved source mesh, clears the element selection, and re-evaluates modifiers; pointer movement regenerates the preview, release commits one ReplaceMeshCommand, and cancel restores the source mesh and selection. Loop Slide recuts the retained source loop at a new position.
+
 Desktop G/R/S runs a transient modal transform in the runtime. It previews the target transform, derives translation/rotation from the last pointer position or typed values, applies grid snapping to pointer-driven moves, and commits a single TransformNodeCommand/TransformGroupCommand. The transform HUD is a snapshot projection; the document is not cloned for preview.
 
 ### Viewport shading modes

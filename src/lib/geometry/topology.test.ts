@@ -147,6 +147,16 @@ describe('destructive element deletion', () => {
     expect(() => result.validate()).not.toThrow();
   });
 
+  it('slides a loop cut to a non-midpoint position', () => {
+    const cube = createQuadSphereMesh(1.25, 2);
+    const result = loopCutFromEdge(cube, 0, 0.3);
+    expect(result.faceCount).toBe(32);
+    expect(result.vertexCount).toBe(34);
+    expect(() => result.validate()).not.toThrow();
+    expect(() => loopCutFromEdge(cube, 0, 0)).toThrow(/between 0 and 1/);
+    expect(() => loopCutFromEdge(cube, 0, 1)).toThrow(/between 0 and 1/);
+  });
+
   it('preserves open grid topology and rejects deleting every face', () => {
     const grid = createGridMesh(4, 2);
     const next = deleteSelectedElements(grid, 'face', [0, 1]);

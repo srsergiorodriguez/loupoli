@@ -137,7 +137,10 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: the tap-to-arm iPad bottom-left ActionDock for modal Extrude, Inset, Loop Cut, and Loop Slide, then multi-element modal transforms.
+- Touch ActionDock at bottom-left: tap-to-arm one-shot Extrude, Inset, Loop Cut, and Loop Slide; pencil/mouse drag sets a live amount; release commits one validated mesh replacement; Esc cancels and restores mesh/selection. Loop Slide is separate and operates on the most recent loop cut. 44 px targets; hidden on fine-pointer layouts.
+- Single-segment quad loop cuts accept a 0–1 position; the last cut loop is retained for Loop Slide.
+
+Next planned work: multi-element G/R/S transforms, loop-slide history refinements, and broader Phase 3 polish before Phase 4 texturing.
 
 Approved decisions:
 
