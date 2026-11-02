@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { HalfEdgeMesh, type MeshFaceSpec } from './HalfEdgeMesh';
 import { createCubeMesh, createGridMesh, createQuadSphereMesh } from './primitives';
-import { bridgeSelectedEdges, deleteSelectedElements, mergeSelectedVertices } from './topology';
+import {
+  bridgeSelectedEdges,
+  deleteSelectedElements,
+  extrudeSelectedFaces,
+  insetSelectedFace,
+  mergeSelectedVertices
+} from './topology';
 
 describe('destructive element deletion', () => {
   it('removes selected faces and leaves valid boundary loops', () => {
@@ -67,6 +73,32 @@ describe('destructive element deletion', () => {
     expect(() =>
       bridgeSelectedEdges(open, [0, 1])
     ).toThrow(/boundary edges/);
+  });
+
+
+  it('extrudes one face into a closed cap with side walls', () => {
+    const cube = createCubeMesh(1);
+    const result = extrudeSelectedFaces(cube, [0], 0.5);
+    expect(result.faceCount).toBe(cube.faceCount + 4);
+    expect(result.vertexCount).toBe(cube.vertexCount + 4);
+    expect(result.boundaryEdgeCount).toBe(0);
+    expect(() => result.validate()).not.toThrow();
+  });
+
+  it('extrudes a multi-face region with boundary side walls', () => {
+    const grid = createGridMesh(2, 2);
+    const result = extrudeSelectedFaces(grid, [0, 1], 0.25);
+    expect(result.faceCount).toBeGreaterThan(grid.faceCount);
+    expect(() => result.validate()).not.toThrow();
+  });
+
+  it('insets one face into an inner face and ring', () => {
+    const cube = createCubeMesh(1);
+    const result = insetSelectedFace(cube, 0, 0.2);
+    expect(result.faceCount).toBe(cube.faceCount + 4);
+    expect(result.vertexCount).toBe(cube.vertexCount + 4);
+    expect(result.boundaryEdgeCount).toBe(0);
+    expect(() => result.validate()).not.toThrow();
   });
 
   it('preserves open grid topology and rejects deleting every face', () => {

@@ -284,3 +284,239 @@ export function bridgeSelectedEdges(
 
   return HalfEdgeMesh.fromPolygons([...meshFaceSpecs(mesh), bridge]);
 }
+
+/**
+ * Extrude a selected face region outward along its average normal.
+ *
+ * Every vertex of the region is duplicated by the extrusion distance. The
+ * original selected faces are removed, duplicate vertices form the new top
+ * faces, and boundary half-edges generate side quads. UVs and materials are
+ * copied; edge seam flags are not yet remapped.
+ */
+export function extrudeSelectedFaces(
+  mesh: HalfEdgeMesh,
+  indices: readonly number[],
+  distance = 0.25
+): HalfEdgeMesh {
+  const selected = new Set(
+    indices.filter((index) => Number.isInteger(index) && index >= 0)
+  );
+  if (selected.size === 0) {
+    throw new Error('Select at least one face to extrude.');
+  }
+  if (!Number.isFinite(distance) || distance <= 0) {
+    throw new Error('Extrude distance must be positive.');
+  }
+  for (const face of selected) {
+    if (face >= mesh.faceCount) {
+      throw new RangeError(`Face ${face} is outside the mesh.`);
+    }
+  }
+
+  let nx = 0;
+  let ny = 0;
+  let nz = 0;
+  for (const face of selected) {
+    const normal = mesh.computeFaceNormal(face);
+    nx += normal[0];
+    ny += normal[1];
+    nz += normal[2];
+  }
+  const length = Math.hypot(nx, ny, nz);
+  if (length <= 1e-9) {
+    throw new Error('The selected face normals cancel out.');
+  }
+  const direction: Vec3 = [nx / length, ny / length, nz / length];
+  const offset: Vec3 = [
+    direction[0] * distance,
+    direction[1] * distance,
+    direction[2] * distance
+  ];
+
+  const duplicate = new Map<number, Vec3>();
+  for (const face of selected) {
+    const start = mesh.faceHalfEdge[face];
+    let current = start;
+    do {
+      const vertex = mesh.heOrigin[current];
+      if (!duplicate.has(vertex)) {
+        duplicate.set(vertex, [
+          mesh.positions[vertex * 3] + offset[0],
+          mesh.positions[vertex * 3 + 1] + offset[1],
+          mesh.positions[vertex * 3 + 2] + offset[2]
+        ]);
+      }
+      current = mesh.heNext[current];
+    } while (current !== start);
+  }
+
+  const faces: MeshFaceSpec[] = [];
+  const base = meshFaceSpecs(mesh);
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    if (!selected.has(face)) {
+      faces.push(base[face]);
+    }
+  }
+
+  for (const face of selected) {
+    const corners: MeshCornerSpec[] = [];
+    const start = mesh.faceHalfEdge[face];
+    let current = start;
+    do {
+      const vertex = mesh.heOrigin[current];
+      const uvOffset = current * 2;
+      const position = duplicate.get(vertex);
+      if (!position) {
+        throw new Error('Extrude duplicate vertex is missing.');
+      }
+      corners.push({
+        position: [...position] as Vec3,
+        uv: [mesh.heUv[uvOffset], mesh.heUv[uvOffset + 1]]
+      });
+      current = mesh.heNext[current];
+    } while (current !== start);
+    faces.push({ corners, material: mesh.faceMaterial[face] });
+  }
+
+  for (const face of selected) {
+    const start = mesh.faceHalfEdge[face];
+    let current = start;
+    do {
+      const twin = mesh.heTwin[current];
+      const twinFace = mesh.heFace[twin];
+      if (twinFace !== -1 && selected.has(twinFace)) {
+        current = mesh.heNext[current];
+        continue;
+      }
+      const a = mesh.heOrigin[current];
+      const next = mesh.heNext[current];
+      const b = mesh.heOrigin[next];
+      const topA = duplicate.get(a);
+      const topB = duplicate.get(b);
+      if (!topA || !topB) {
+        throw new Error('Extrude boundary duplicate is missing.');
+      }
+      const uvAOffset = current * 2;
+      const uvBOffset = next * 2;
+      faces.push({
+        material: mesh.faceMaterial[face],
+        corners: [
+          {
+            position: [
+              mesh.positions[a * 3],
+              mesh.positions[a * 3 + 1],
+              mesh.positions[a * 3 + 2]
+            ],
+            uv: [mesh.heUv[uvAOffset], mesh.heUv[uvAOffset + 1]]
+          },
+          {
+            position: [
+              mesh.positions[b * 3],
+              mesh.positions[b * 3 + 1],
+              mesh.positions[b * 3 + 2]
+            ],
+            uv: [mesh.heUv[uvBOffset], mesh.heUv[uvBOffset + 1]]
+          },
+          {
+            position: [...topB] as Vec3,
+            uv: [mesh.heUv[uvBOffset], mesh.heUv[uvBOffset + 1]]
+          },
+          {
+            position: [...topA] as Vec3,
+            uv: [mesh.heUv[uvAOffset], mesh.heUv[uvAOffset + 1]]
+          }
+        ]
+      });
+      current = mesh.heNext[current];
+    } while (current !== start);
+  }
+
+  return HalfEdgeMesh.fromPolygons(faces);
+}
+
+/**
+ * Inset one face by moving its corners toward its centroid.
+ *
+ * The original face is replaced by an inner face and a ring of side quads.
+ * Per-corner UVs and materials are preserved; only one face may be inset
+ * because independent adjacent insets would duplicate boundary edges.
+ */
+export function insetSelectedFace(
+  mesh: HalfEdgeMesh,
+  face: number,
+  amount = 0.2
+): HalfEdgeMesh {
+  if (!Number.isInteger(face) || face < 0 || face >= mesh.faceCount) {
+    throw new RangeError(`Face ${face} is outside the mesh.`);
+  }
+  if (!Number.isFinite(amount) || amount <= 0 || amount >= 1) {
+    throw new Error('Inset amount must be between 0 and 1.');
+  }
+
+  const start = mesh.faceHalfEdge[face];
+  const original: MeshCornerSpec[] = [];
+  let current = start;
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  let count = 0;
+  do {
+    const vertex = mesh.heOrigin[current];
+    const offset = vertex * 3;
+    const uvOffset = current * 2;
+    const position: Vec3 = [
+      mesh.positions[offset],
+      mesh.positions[offset + 1],
+      mesh.positions[offset + 2]
+    ];
+    original.push({
+      position,
+      uv: [mesh.heUv[uvOffset], mesh.heUv[uvOffset + 1]]
+    });
+    cx += position[0];
+    cy += position[1];
+    cz += position[2];
+    count += 1;
+    current = mesh.heNext[current];
+  } while (current !== start);
+  cx /= count;
+  cy /= count;
+  cz /= count;
+
+  const inner = original.map((corner): MeshCornerSpec => ({
+    position: [
+      corner.position[0] + (cx - corner.position[0]) * amount,
+      corner.position[1] + (cy - corner.position[1]) * amount,
+      corner.position[2] + (cz - corner.position[2]) * amount
+    ],
+    uv: [...corner.uv] as Vec2
+  }));
+
+  const faces: MeshFaceSpec[] = [];
+  const base = meshFaceSpecs(mesh);
+  for (let candidate = 0; candidate < mesh.faceCount; candidate += 1) {
+    if (candidate !== face) {
+      faces.push(base[candidate]);
+    }
+  }
+  faces.push({ corners: inner, material: mesh.faceMaterial[face] });
+
+  for (let index = 0; index < original.length; index += 1) {
+    const nextIndex = (index + 1) % original.length;
+    const a = original[index];
+    const b = original[nextIndex];
+    const ai = inner[index];
+    const bi = inner[nextIndex];
+    faces.push({
+      material: mesh.faceMaterial[face],
+      corners: [
+        { position: [...a.position] as Vec3, uv: [...a.uv] as Vec2 },
+        { position: [...b.position] as Vec3, uv: [...b.uv] as Vec2 },
+        { position: [...bi.position] as Vec3, uv: [...b.uv] as Vec2 },
+        { position: [...ai.position] as Vec3, uv: [...a.uv] as Vec2 }
+      ]
+    });
+  }
+
+  return HalfEdgeMesh.fromPolygons(faces);
+}

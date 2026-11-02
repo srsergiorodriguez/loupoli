@@ -21,4 +21,6 @@ export type IconName =
   | 'bridge'
   | 'folder'
   | 'chevron-up'
-  | 'chevron-down';
+  | 'chevron-down'
+  | 'extrude'
+  | 'inset';

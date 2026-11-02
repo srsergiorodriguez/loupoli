@@ -157,7 +157,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 **Goal:** the core low-poly modeling loop: organize, transform, cut, join, bridge, and repeat geometry non-destructively.
 
-**Status:** 3B selection foundation, destructive vertex/edge/face deletion, vertex merge, a two-boundary-edge bridge, and object join are implemented. 3A object transforms, gizmos, view-gizmo drag orbit, session object multi-selection, one-level persistent groups, grid snapping, and vertex axis locks are implemented. The PS1 look module is a collapsed render effect. The non-destructive Mirror / Grid Array / Radial Array stack, provenance-mapped picking/overlays, and additive touch tap selection are implemented; loop bridging controls, extrude/inset/loop cut, and editing base topology while a stack is active remain.
+**Status:** 3B selection foundation, destructive vertex/edge/face deletion, vertex merge, a two-boundary-edge bridge, and object join are implemented. 3A object transforms, gizmos, view-gizmo drag orbit, session object multi-selection, one-level persistent groups, grid snapping, and vertex axis locks are implemented. The PS1 look module is a collapsed render effect. The non-destructive Mirror / Grid Array / Radial Array stack, provenance-mapped picking/overlays, additive touch tap selection, face extrusion, and single-face inset are implemented; loop bridging controls, loop cut, and editing base topology while a stack is active remain.
 
 **Sequence:** 3A object/view operations → 3B base-mesh topology editing → 3C modifiers and final snapping polish. Object transforms must land before join (join bakes node transforms); selection/delete commands and edge selection must land before merge/bridge.
 
@@ -201,13 +201,13 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 | Request | Phase | Integration intent |
 |---|---|---|
 | Create groups of objects | **3A (one level implemented)** | Groups are scene data with average-position pivots, outliner children, numeric/gizmo transforms, ungroup baking, undo, autosave patches, and `.lpoly` serialization. Nested groups and viewport child selection remain. |
-| Transform objects — position, rotate, scale | **3A (individual objects implemented)** | Numeric local transform fields, undo/persistence, and object-space Move/Rotate/Scale gizmos are implemented. Group transforms remain. |
+| Transform objects — position, rotate, scale | **3A (implemented)** | Numeric local transforms, object-space Move/Rotate/Scale gizmos, group transforms, undo/persistence, and group gizmos are implemented. |
 | Rotate the world by moving the gizmo | **3A (implemented)** | Dragging the viewport orientation gizmo orbits the view/world around the camera target; axis-click snap and center-frame remain. |
 | Delete sides, vertices, and faces | **3B (implemented)** | Selected faces are removed, or every face incident to selected edges/vertices. The DCEL is rebuilt with boundary loops, UVs/materials retained, and one undoable command. Seam flags are not yet remapped. |
-| Join objects | **3B** | Bake node transforms, combine DCEL topology, preserve UVs/seams/materials, and leave coincident vertices unwelded until an explicit merge. |
+| Join objects | **3B (implemented)** | Session object multi-selection joins into the active target with relative-transform baking, UV/material preservation, undo, and journal replay. Exact coincident positions can still weld in the DCEL builder. |
 | Merge vertices | **3B (implemented)** | Selected vertices weld to their centroid; collapsed faces are dropped and the resulting DCEL is validated. No tolerance-based auto-weld yet. |
 | Bridge edges | **3B (minimal implemented)** | Exactly two boundary edges bridge into one quad with validated topology. Loop/multi-segment bridging, twist/orientation controls, and non-boundary bridge paths remain. |
-| Select multiple vertices, edges, and faces | **3B (foundation) — implemented** | Session selection sets per active node and element mode. Additive/toggle selection via Shift/Cmd/Ctrl and a sticky 44px Add toggle for pen. Multi-element overlays, no duplicate indices, selection stays non-undoable. Touch remains camera navigation. |
+| Select multiple vertices, edges, and faces | **3B (implemented)** | Session selection sets per active node and element mode. Additive/toggle selection via Shift/Cmd/Ctrl, a sticky 44px Add toggle, and one-finger touch taps. Multi-element overlays, no duplicate indices, selection stays non-undoable; touch drag remains camera orbit. |
 | Hide PS1 options in a collapsible/render-effect module | **3C (implemented)** | The Inspector now exposes a collapsed **PS1 look** render-effect module. It remains a view/render effect, not a geometry modifier; both toggles remain off by default and unaffected by Solid/Lit. |
 
 ---

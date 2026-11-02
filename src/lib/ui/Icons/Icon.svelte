@@ -94,5 +94,9 @@
     <path d="m6 14 6-6 6 6" />
   {:else if name === 'chevron-down'}
     <path d="m6 10 6 6 6-6" />
+  {:else if name === 'extrude'}
+    <path d="M4 15h16M6 15V9h12v6M12 9V3M9 6l3-3 3 3" />
+  {:else if name === 'inset'}
+    <path d="M3 3h18v18H3V3ZM8 8h8v8H8V8Z" />
   {/if}
 </svg>

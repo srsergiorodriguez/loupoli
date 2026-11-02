@@ -731,6 +731,26 @@
               <span>Merge selected vertices</span>
             </button>
           {/if}
+          {#if session.snapshot.selectionMode === 'face' && selectionCount > 0}
+            <button
+              type="button"
+              class="topology-action"
+              onclick={() => session.extrudeSelectedFaces()}
+            >
+              <Icon name="extrude" size={14} />
+              <span>Extrude selected faces</span>
+            </button>
+          {/if}
+          {#if session.snapshot.selectionMode === 'face' && selectionCount === 1}
+            <button
+              type="button"
+              class="topology-action"
+              onclick={() => session.insetSelectedFace()}
+            >
+              <Icon name="inset" size={14} />
+              <span>Inset face</span>
+            </button>
+          {/if}
           {#if session.snapshot.selectionMode === 'edge' && selectionCount === 2}
             <button
               type="button"

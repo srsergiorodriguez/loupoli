@@ -14,6 +14,8 @@ import {
   bridgeSelectedEdges,
   deleteSelectedElements,
   deletionLabel,
+  extrudeSelectedFaces,
+  insetSelectedFace,
   mergeSelectedVertices
 } from '../geometry/topology';
 import type { PrimitiveKind } from '../geometry/primitives';
@@ -862,6 +864,70 @@ export class EditorRuntime {
       this.history.execute(command);
       this.renderer.frameActiveNode();
       this.publish();
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.publish();
+    }
+  }
+
+  /** Extrude the selected face region along its average normal. */
+  extrudeSelectedFaces(): void {
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      this.selection.mode !== 'face' ||
+      this.selection.count === 0
+    ) {
+      return;
+    }
+    if (node.getEvaluatedMesh().modifiersActive) {
+      this.projectError = 'Disable modifiers before editing the base mesh.';
+      this.publish();
+      return;
+    }
+    const indices = this.selection.values();
+    try {
+      const after = extrudeSelectedFaces(node.mesh, indices);
+      const command = new ReplaceMeshCommand(
+        node,
+        node.mesh,
+        after,
+        `Extrude ${indices.length} face${indices.length === 1 ? '' : 's'}`
+      );
+      this.selection.clear();
+      this.history.execute(command);
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.publish();
+    }
+  }
+
+  /** Inset the single selected face toward its centroid. */
+  insetSelectedFace(): void {
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      this.selection.mode !== 'face' ||
+      this.selection.count !== 1
+    ) {
+      return;
+    }
+    if (node.getEvaluatedMesh().modifiersActive) {
+      this.projectError = 'Disable modifiers before editing the base mesh.';
+      this.publish();
+      return;
+    }
+    const [face] = this.selection.values();
+    try {
+      const after = insetSelectedFace(node.mesh, face);
+      const command = new ReplaceMeshCommand(
+        node,
+        node.mesh,
+        after,
+        'Inset face'
+      );
+      this.selection.clear();
+      this.history.execute(command);
     } catch (error) {
       this.projectError = this.errorMessage(error);
       this.publish();

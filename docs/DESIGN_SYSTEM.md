@@ -443,7 +443,7 @@ Components live under `src/lib/ui/` and are built in Svelte 5 rune syntax. Each 
 | `NumberField` | 2 / 3 | Numeric transform and parameter input | Drag-scrub, step, axis accent |
 | `Vector3Field` | 3 | Object position/rotation/scale rows | Implemented with 44px inputs, axis colors, unit suffix |
 | `PS1 look` | 3 | Collapsed opt-in render-effect module | Uses native details/summary; 44px summary, off by default |
-| `Selection actions` | 3 | Merge, bridge, and delete selected elements | Contextual 44px actions; hidden when not applicable |
+| `Selection actions` | 3 | Extrude, inset, merge, bridge, and delete selected elements | Contextual 44px actions; hidden when not applicable |
 | `Object multi-select` | 3 | Shift/Cmd-click and sticky pen/touch toggle; join action | 44px rows/actions, lime selected dots, separate active state |
 | `Group tree` | 3 | Folder rows, indented children, group/ungroup actions | Group row active state, 44px child rows, bake-on-ungroup |
 | `Modifier stack` | 3 | Ordered cards with enable/order/remove and parameter fields | 44px touch controls, explicit evaluated state, error panel |

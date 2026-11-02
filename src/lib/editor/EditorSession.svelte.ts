@@ -192,6 +192,14 @@ export class EditorSession {
     this.runtime?.bridgeSelectedEdges();
   }
 
+  extrudeSelectedFaces(): void {
+    this.runtime?.extrudeSelectedFaces();
+  }
+
+  insetSelectedFace(): void {
+    this.runtime?.insetSelectedFace();
+  }
+
   async saveProject(): Promise<void> {
     await this.runtime?.saveProject();
   }

@@ -123,6 +123,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Move/Rotate/Scale object gizmos with axis-constrained pen/mouse drags, screen-constant handle size, and undoable transform commits. Finger touch remains camera navigation.
 - Destructive deletion of selected faces or all faces incident to selected edges/vertices, with DCEL rebuild, boundary regeneration, undo, and autosave mesh-replacement patches. The PS1 look is a collapsed render-effect module at the Inspector bottom.
 - Vertex merge-to-centroid, collapsed-face cleanup, and a minimal bridge of exactly two boundary edges into one quad. Both use validated mesh replacement and autosave patches.
+- Face extrusion (single or multi-face regions, average-normal offset, boundary side walls) and single-face inset toward the centroid. Both preserve UVs/materials and use validated mesh replacement.
 - Session-only object multi-selection (modifier-click or sticky touch/pen toggle) and join into the active target, with relative-transform baking, source removal, undo, and ordered multi-patch autosave transitions.
 - Grid snap (0.1/0.25/0.5/1.0) for object translation and vertex drags, plus world X/Y/Z vertex axis locks through keyboard keys and 44 px touch/pen chips. Snap state is session-only; typed numeric transforms stay exact.
 - One-level scene groups with an average-position pivot, outliner tree, group numeric/gizmo transforms, ungroup with transform baking, undo, ordered group autosave patches, and optional `.lpoly` group manifests/node parentage.
@@ -134,7 +135,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: Phase 3 polish — loop/multi-segment bridge controls, extrude/inset/loop cut, and editing base topology while a modifier stack is active.
+Next planned work: Phase 3 polish — loop/multi-segment bridge controls, loop cut, and editing base topology while a modifier stack is active.
 
 Approved decisions:
 
