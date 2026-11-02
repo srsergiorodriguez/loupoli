@@ -583,8 +583,8 @@
           {#if modifiersActive}
             <p class="hint">
               Modifiers are non-destructive. Picking maps through provenance;
-              destructive topology actions edit the base mesh. Disable all
-              modifiers to drag base vertices directly.
+              dragging a vertex or running a topology action edits the base
+              mesh and re-evaluates the stack.
             </p>
           {/if}
         {/if}
@@ -652,8 +652,8 @@
           {selectionCount > 0 ? `${selectionCount} ${modePlural} selected` : 'Modifiers active'}
         </p>
         <p class="hint">
-          Picking maps through provenance. Topology actions edit the base mesh
-          and re-evaluate the stack; direct vertex dragging is disabled.
+          Picking maps through provenance. Vertex dragging and topology actions
+          edit the base mesh, and the stack re-evaluates automatically.
         </p>
       {:else if activeNodeId === null}
         <p class="empty-state">

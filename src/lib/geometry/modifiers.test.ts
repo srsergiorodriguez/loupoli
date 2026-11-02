@@ -5,9 +5,11 @@ import {
   createQuadSphereMesh
 } from './primitives';
 import {
+  applyLinearTransform,
   createModifier,
   evaluateModifiers,
   evaluateModifiersWithProvenance,
+  invertLinearTransform,
   type GridArrayModifier,
   type MirrorModifier,
   type RadialArrayModifier
@@ -100,6 +102,43 @@ describe('modifier evaluation', () => {
         (edge) => edge >= -1 && edge < sphere.edgeCount
       )
     ).toBe(true);
+  });
+
+
+  it('tracks invertible per-copy linear maps for mapped editing', () => {
+    const grid = createGridMesh(2, 2);
+    for (let vertex = 0; vertex < grid.vertexCount; vertex += 1) {
+      const position = grid.getVertexPosition(vertex);
+      grid.setVertexPosition(vertex, [position[0] + 2, position[1], position[2]]);
+    }
+    const modifiers: RadialArrayModifier[] = [
+      {
+        ...(createModifier('radial-array') as RadialArrayModifier),
+        axis: 'z',
+        count: 4
+      }
+    ];
+    const result = evaluateModifiersWithProvenance(grid, modifiers);
+    expect(result.provenance.vertexLinear).toHaveLength(
+      result.mesh.vertexCount * 9
+    );
+    const delta: [number, number, number] = [0.25, -0.1, 0.3];
+    let checked = 0;
+    for (let vertex = 0; vertex < result.mesh.vertexCount; vertex += 1) {
+      if (result.provenance.vertexBase[vertex] < 0) continue;
+      const linear = Array.from(
+        result.provenance.vertexLinear.subarray(vertex * 9, vertex * 9 + 9)
+      );
+      const inverse = invertLinearTransform(linear);
+      expect(inverse).not.toBeNull();
+      const mapped = applyLinearTransform(linear, delta);
+      const roundTrip = applyLinearTransform(inverse!, mapped);
+      expect(roundTrip[0]).toBeCloseTo(delta[0]);
+      expect(roundTrip[1]).toBeCloseTo(delta[1]);
+      expect(roundTrip[2]).toBeCloseTo(delta[2]);
+      checked += 1;
+    }
+    expect(checked).toBe(result.mesh.vertexCount);
   });
 
   it('radially repeats an offset mesh and validates the result', () => {

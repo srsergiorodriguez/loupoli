@@ -2,8 +2,10 @@ import { Euler, Plane, Quaternion, Vector3 } from 'three';
 import { readTheme } from '../../design/theme';
 import type { Vec3 } from '../geometry/HalfEdgeMesh';
 import {
+  applyLinearTransform,
   cloneModifiers,
   createModifier,
+  invertLinearTransform,
   modifierLabel,
   validateModifier,
   validateModifiers,
@@ -87,6 +89,9 @@ interface VertexDrag {
   readonly vertex: number;
   readonly original: Vec3;
   readonly originalWorld: Vector3;
+  readonly evaluatedVertex: number;
+  readonly evaluatedOriginal: Vec3;
+  readonly inverseLinear: number[] | null;
   readonly startClientX: number;
   readonly startClientY: number;
   readonly plane: Plane;
@@ -1290,6 +1295,35 @@ export class EditorRuntime {
       sample.ctrlKey;
 
     if (node.getEvaluatedMesh().modifiersActive) {
+      if (this.selection.mode === 'vertex' && !additive) {
+        const evaluatedVertex = this.renderer.pickVertex(
+          sample.clientX,
+          sample.clientY
+        );
+        const evaluated = node.getEvaluatedMesh();
+        if (
+          evaluatedVertex !== null &&
+          evaluated.provenance !== null
+        ) {
+          const baseVertex =
+            evaluated.provenance.vertexBase[evaluatedVertex] ?? -1;
+          if (baseVertex >= 0) {
+            this.selection.pick(baseVertex, false);
+            this.syncScene();
+            this.publish();
+            if (
+              this.beginMappedVertexDrag(
+                node,
+                baseVertex,
+                evaluatedVertex,
+                sample
+              )
+            ) {
+              return true;
+            }
+          }
+        }
+      }
       this.selectEvaluatedElementAt(
         sample.clientX,
         sample.clientY,
@@ -1362,6 +1396,9 @@ export class EditorRuntime {
       vertex,
       original,
       originalWorld: world.clone(),
+      evaluatedVertex: vertex,
+      evaluatedOriginal: original,
+      inverseLinear: null,
       startClientX: sample.clientX,
       startClientY: sample.clientY,
       plane,
@@ -1378,6 +1415,45 @@ export class EditorRuntime {
     }
 
     if (!this.drag || this.drag.pointerId !== sample.pointerId) {
+      return;
+    }
+
+    if (this.drag.inverseLinear) {
+      const hit = this.renderer.intersectPointerPlane(
+        sample.clientX,
+        sample.clientY,
+        this.drag.plane
+      );
+      if (!hit) {
+        return;
+      }
+      const local = this.renderer.worldToActiveNodeLocal(
+        hit.add(this.drag.offset)
+      );
+      if (!local) {
+        return;
+      }
+      const delta = applyLinearTransform(this.drag.inverseLinear, [
+        local.x - this.drag.evaluatedOriginal[0],
+        local.y - this.drag.evaluatedOriginal[1],
+        local.z - this.drag.evaluatedOriginal[2]
+      ]);
+      const next: Vec3 = [
+        this.drag.original[0] + delta[0],
+        this.drag.original[1] + delta[1],
+        this.drag.original[2] + delta[2]
+      ];
+      const current = this.drag.node.mesh.getVertexPosition(this.drag.vertex);
+      if (
+        Math.abs(next[0] - current[0]) < 1e-7 &&
+        Math.abs(next[1] - current[1]) < 1e-7 &&
+        Math.abs(next[2] - current[2]) < 1e-7
+      ) {
+        return;
+      }
+      this.drag.node.mesh.setVertexPosition(this.drag.vertex, next);
+      this.syncScene();
+      this.publish();
       return;
     }
 
@@ -1503,9 +1579,62 @@ export class EditorRuntime {
     const drag = this.drag;
     this.drag = null;
     drag.node.mesh.setVertexPosition(drag.vertex, drag.original);
-    this.renderer.refreshNode(drag.node.id);
-    this.syncScene();
+    if (drag.inverseLinear) {
+      this.syncScene();
+    } else {
+      this.renderer.refreshNode(drag.node.id);
+      this.syncScene();
+    }
     this.publish();
+  }
+
+  private beginMappedVertexDrag(
+    node: MeshNode,
+    baseVertex: number,
+    evaluatedVertex: number,
+    sample: PointerSample
+  ): boolean {
+    const evaluated = node.getEvaluatedMesh();
+    if (!evaluated.provenance) {
+      return false;
+    }
+    const linear = Array.from(
+      evaluated.provenance.vertexLinear.subarray(
+        evaluatedVertex * 9,
+        evaluatedVertex * 9 + 9
+      )
+    );
+    const inverseLinear = invertLinearTransform(linear);
+    if (!inverseLinear) {
+      return false;
+    }
+    const evaluatedOriginal =
+      evaluated.mesh.getVertexPosition(evaluatedVertex);
+    const original = node.mesh.getVertexPosition(baseVertex);
+    const world = this.renderer.getVertexWorldPosition(evaluatedVertex);
+    const plane = this.renderer.createCameraFacingPlane(world);
+    const grabPoint = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      plane
+    );
+    const offset = grabPoint ? world.clone().sub(grabPoint) : new Vector3();
+    this.drag = {
+      pointerId: sample.pointerId,
+      node,
+      vertex: baseVertex,
+      original,
+      originalWorld: world.clone(),
+      evaluatedVertex,
+      evaluatedOriginal,
+      inverseLinear,
+      startClientX: sample.clientX,
+      startClientY: sample.clientY,
+      plane,
+      offset
+    };
+    this.publish();
+    return true;
   }
 
   private beginGizmoDrag(

@@ -102,9 +102,87 @@ export function hasEnabledModifier(
   return modifiers.some((modifier) => modifier.enabled);
 }
 
+const IDENTITY_LINEAR = [1, 0, 0, 0, 1, 0, 0, 0, 1] as const;
+
+function multiplyLinear(a: readonly number[], b: readonly number[]): number[] {
+  const out = new Array<number>(9);
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      out[row * 3 + col] =
+        a[row * 3] * b[col] +
+        a[row * 3 + 1] * b[3 + col] +
+        a[row * 3 + 2] * b[6 + col];
+    }
+  }
+  return out;
+}
+
+function reflectionLinear(axis: ModifierAxis): number[] {
+  const out: number[] = [...IDENTITY_LINEAR];
+  out[axis === 'x' ? 0 : axis === 'y' ? 4 : 8] = -1;
+  return out;
+}
+
+function rotationLinear(axis: ModifierAxis, angle: number): number[] {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  if (axis === 'z') {
+    return [cos, -sin, 0, sin, cos, 0, 0, 0, 1];
+  }
+  if (axis === 'x') {
+    return [1, 0, 0, 0, cos, -sin, 0, sin, cos];
+  }
+  return [cos, 0, sin, 0, 1, 0, -sin, 0, cos];
+}
+
+/** Apply a row-major 3x3 delta transform. */
+export function applyLinearTransform(
+  matrix: readonly number[],
+  vector: readonly [number, number, number]
+): [number, number, number] {
+  return [
+    matrix[0] * vector[0] + matrix[1] * vector[1] + matrix[2] * vector[2],
+    matrix[3] * vector[0] + matrix[4] * vector[1] + matrix[5] * vector[2],
+    matrix[6] * vector[0] + matrix[7] * vector[1] + matrix[8] * vector[2]
+  ];
+}
+
+/** Invert a row-major 3x3 linear transform, or return null when singular. */
+export function invertLinearTransform(
+  matrix: readonly number[]
+): number[] | null {
+  const a = matrix[0];
+  const b = matrix[1];
+  const c = matrix[2];
+  const d = matrix[3];
+  const e = matrix[4];
+  const f = matrix[5];
+  const g = matrix[6];
+  const h = matrix[7];
+  const i = matrix[8];
+  const determinant =
+    a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (Math.abs(determinant) < 1e-12) {
+    return null;
+  }
+  const inv = 1 / determinant;
+  return [
+    (e * i - f * h) * inv,
+    (c * h - b * i) * inv,
+    (b * f - c * e) * inv,
+    (f * g - d * i) * inv,
+    (a * i - c * g) * inv,
+    (c * d - a * f) * inv,
+    (d * h - e * g) * inv,
+    (b * g - a * h) * inv,
+    (a * e - b * d) * inv
+  ];
+}
+
 interface ProvenanceCorner extends MeshCornerSpec {
   readonly baseVertex: number;
   readonly baseEdge: number;
+  readonly baseLinear: readonly number[];
 }
 
 interface ProvenanceFace {
@@ -118,6 +196,8 @@ export interface ModifierProvenance {
   readonly vertexBase: Int32Array;
   readonly edgeBase: Int32Array;
   readonly faceBase: Int32Array;
+  /** Row-major 3x3 base-delta to evaluated-delta maps, 9 per vertex. */
+  readonly vertexLinear: Float32Array;
 }
 
 /** Evaluated geometry and its provenance to the unchanged base mesh. */
@@ -140,6 +220,10 @@ function identityProvenance(mesh: HalfEdgeMesh): ModifierProvenance {
     faceBase: Int32Array.from(
       { length: mesh.faceCount },
       (_, index) => index
+    ),
+    vertexLinear: Float32Array.from(
+      { length: mesh.vertexCount * 9 },
+      (_, index) => IDENTITY_LINEAR[index % 9]
     )
   };
 }
@@ -165,7 +249,10 @@ function collectProvenanceFaces(
         ],
         uv: [mesh.heUv[uvOffset], mesh.heUv[uvOffset + 1]],
         baseVertex: provenance.vertexBase[vertex] ?? -1,
-        baseEdge: provenance.edgeBase[mesh.heEdge[current]] ?? -1
+        baseEdge: provenance.edgeBase[mesh.heEdge[current]] ?? -1,
+        baseLinear: Array.from(
+          provenance.vertexLinear.subarray(vertex * 9, vertex * 9 + 9)
+        )
       });
       current = mesh.heNext[current];
     } while (current !== start);
@@ -182,9 +269,13 @@ function positionKey(position: readonly number[]): string {
   return `${position[0]}|${position[1]}|${position[2]}`;
 }
 
+function meshPositionKey(position: readonly number[]): string {
+  return `${Math.fround(position[0])}|${Math.fround(position[1])}|${Math.fround(position[2])}`;
+}
+
 function edgeKey(a: readonly number[], b: readonly number[]): string {
-  const first = positionKey(a);
-  const second = positionKey(b);
+  const first = meshPositionKey(a);
+  const second = meshPositionKey(b);
   return first < second ? `${first}/${second}` : `${second}/${first}`;
 }
 
@@ -198,16 +289,22 @@ function buildEvaluated(faces: readonly ProvenanceFace[]): EvaluatedModifierMesh
   }));
   const mesh = HalfEdgeMesh.fromPolygons(specs);
 
-  const baseByPosition = new Map<string, number>();
+  const baseByPosition = new Map<
+    string,
+    { vertex: number; linear: readonly number[] }
+  >();
   const baseByEdge = new Map<string, number>();
   for (const face of faces) {
     const n = face.corners.length;
     for (let index = 0; index < n; index += 1) {
       const corner = face.corners[index];
       if (corner.baseVertex >= 0) {
-        const key = positionKey(corner.position);
+        const key = meshPositionKey(corner.position);
         if (!baseByPosition.has(key)) {
-          baseByPosition.set(key, corner.baseVertex);
+          baseByPosition.set(key, {
+            vertex: corner.baseVertex,
+            linear: corner.baseLinear
+          });
         }
       }
       if (corner.baseEdge >= 0) {
@@ -223,6 +320,12 @@ function buildEvaluated(faces: readonly ProvenanceFace[]): EvaluatedModifierMesh
   }
 
   const vertexBase = new Int32Array(mesh.vertexCount).fill(-1);
+  const vertexLinear = new Float32Array(
+    Float32Array.from(
+      { length: mesh.vertexCount * 9 },
+      (_, index) => IDENTITY_LINEAR[index % 9]
+    )
+  );
   for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
     const offset = vertex * 3;
     const key = positionKey([
@@ -230,7 +333,11 @@ function buildEvaluated(faces: readonly ProvenanceFace[]): EvaluatedModifierMesh
       mesh.positions[offset + 1],
       mesh.positions[offset + 2]
     ]);
-    vertexBase[vertex] = baseByPosition.get(key) ?? -1;
+    const mapped = baseByPosition.get(key);
+    if (mapped) {
+      vertexBase[vertex] = mapped.vertex;
+      vertexLinear.set(mapped.linear, vertex * 9);
+    }
   }
 
   const edgeBase = new Int32Array(mesh.edgeCount).fill(-1);
@@ -254,7 +361,10 @@ function buildEvaluated(faces: readonly ProvenanceFace[]): EvaluatedModifierMesh
   const faceBase = new Int32Array(
     faces.map((face) => face.baseFace)
   );
-  return { mesh, provenance: { vertexBase, edgeBase, faceBase } };
+  return {
+    mesh,
+    provenance: { vertexBase, edgeBase, faceBase, vertexLinear }
+  };
 }
 
 function clipProvenanceFace(
@@ -294,7 +404,8 @@ function clipProvenanceFace(
         ],
         // The cut introduces vertices/edges that have no single base element.
         baseVertex: -1,
-        baseEdge: -1
+        baseEdge: -1,
+        baseLinear: [...IDENTITY_LINEAR]
       });
     }
   }
@@ -327,6 +438,7 @@ function reflectProvenanceFace(
   const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
   const source = face.corners;
   const n = source.length;
+  const reflection = reflectionLinear(axis);
   const corners = [...source].reverse().map((corner, j) => {
     const position = [...corner.position] as [number, number, number];
     position[index] = -position[index];
@@ -335,7 +447,8 @@ function reflectProvenanceFace(
       position,
       uv: corner.uv,
       baseVertex: corner.baseVertex,
-      baseEdge: sourceEdge.baseEdge
+      baseEdge: sourceEdge.baseEdge,
+      baseLinear: multiplyLinear(reflection, corner.baseLinear)
     };
   });
   return { corners, material: face.material, baseFace: face.baseFace };
@@ -401,7 +514,8 @@ function gridEvaluated(
             ],
             uv: [...corner.uv] as [number, number],
             baseVertex: corner.baseVertex,
-            baseEdge: corner.baseEdge
+            baseEdge: corner.baseEdge,
+            baseLinear: corner.baseLinear
           }))
         });
       }
@@ -441,6 +555,7 @@ function radialEvaluated(
   const faces: ProvenanceFace[] = [];
   for (let copy = 0; copy < count; copy += 1) {
     const angle = step * copy;
+    const rotation = rotationLinear(axis, angle);
     for (const face of source) {
       faces.push({
         material: face.material,
@@ -453,7 +568,8 @@ function radialEvaluated(
           ),
           uv: [...corner.uv] as [number, number],
           baseVertex: corner.baseVertex,
-          baseEdge: corner.baseEdge
+          baseEdge: corner.baseEdge,
+          baseLinear: multiplyLinear(rotation, corner.baseLinear)
         }))
       });
     }
