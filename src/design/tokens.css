@@ -112,6 +112,8 @@
   --toolrail-w: 52px;
   --inspector-w: 304px;
   --status-h: 28px;
+  --hud-bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
+  --hud-bottom-raised: calc(var(--hud-bottom) + 64px);
   --gizmo-size: 88px;
   --gizmo-size-touch: 112px;
   --safe-top: env(safe-area-inset-top, 0px);

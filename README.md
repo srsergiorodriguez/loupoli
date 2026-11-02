@@ -4,9 +4,9 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Brand:** always lowercase `loupoli`.
 
-**Status:** Phase 2 is implemented. Phase 3 is underway: multi-element selection with additive touch taps, one-level object groups, multi-object selection and join, object/group transforms and gizmos, view-gizmo orbit, destructive deletion, face extrusion and inset, loop cut, vertex merge, multi-segment boundary-chain/loop bridging, grid snapping, vertex axis locks, a collapsed PS1 module, and a provenance-mapped Mirror/Grid Array/Radial Array modifier stack with base topology actions and mapped base-vertex dragging are implemented.
+**Status:** Phase 2 and the Phase 3 foundations are implemented. Current work includes context-sensitive object/group and selection gizmos, a Pencil ActionDock with exact action amounts, desktop G/R/S, front-face-culled Texture + Wire, loop-cut previews, groups and joins, destructive topology actions, and provenance-mapped Mirror/Grid Array/Radial Array stacks. Broader Phase 3 cleanup remains: free-plane/uniform selection handles, evaluated-space element pivots, loop-slide history, and physical iPad validation.
 
-![loupoli Phase 2 desktop viewport](docs/media/phase2-desktop.png)
+![Current loupoli desktop viewport with the selection gizmo and ActionDock](docs/media/desktop-overview.png)
 
 ---
 
@@ -28,15 +28,16 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Three real primitives.** QuadSphere (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
 - **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed beside the existing scene rather than overlapping at the origin.
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
-- **Object transform gizmos.** Move, Rotate, and Scale tools expose object-space handles on the canvas. Dragging an axis handle commits one axis-constrained `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation. The gizmo maintains a constant screen size and follows the object's world position and orientation. A V/E/F control switches modes. Vertices and edges use the 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to the source DCEL face. Shift/Cmd/Ctrl-click, a sticky **Add** toggle, or additive one-finger touch taps build a set; clicking/tapping a selected element with Add toggles it out. A one-finger touch drag still orbits. Selected vertices, edges, and faces all render distinct overlays. Selection remains session state, not scene state.
+- **Object/group transform gizmos.** With no element selection, Move/Rotate/Scale show object-space handles. Dragging an axis commits one `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation.
+- **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Selected vertices, edges, and faces render distinct overlays. Selection remains session state.
 - **Draggable view gizmo.** Dragging the orientation gizmo orbits the view; tapping an axis still snaps to that axis and tapping the center frames the active object.
 - **Quad-aware deformation.** A bent quad renders as a 4 × 4 bilinear patch instead of two independent texture panels, avoiding a diagonal texture crease. The DCEL remains one quad, and displayed V/E/F/triangle counts stay topological.
 - **Bounded command history.** Localized vertex deltas and node add/delete snapshots, redo truncation, a 100-command cap, and a 32 MB retained-byte budget.
 - **Local-first autosave.** A checkpoint plus localized command deltas is written to IndexedDB every 30 seconds while dirty and on visibility loss. Cold start offers **Recover** or **Discard**; recovered work is labelled until saved.
 - **Versioned `.lpoly` v1.** Binary container with a CRC-checked manifest and aligned typed-array columns. It round-trips multiple nodes, quads, n-gons, boundary loops, per-corner UVs, seam flags, face materials, transforms, and viewport settings.
 - **Native and browser file I/O.** Tauri uses the native dialog plugin plus Rust byte-level read/write commands with size checks, same-directory temporary files, `fsync`, and rename. Browser mode uses download and file-picker fallbacks. `Cmd/Ctrl+S` and `Cmd/Ctrl+O` are wired.
-- **Pointer routing.** Pen never moves the camera; it selects in the current mode and drags vertices. Touch remains the camera/gesture surface. Mouse supports the documented DCC orbit mappings.
-- **Design system.** Vanilla CSS tokens, local icon registry, floating glass panels, responsive iPad portrait/touch layouts, 44 px touch targets, focus states, safe-area handling, and reduced-motion/reduced-transparency fallbacks.
+- **Pointer routing.** Pen never moves the camera; it selects, drags selection/action gizmos, and edits vertices. Touch remains the camera/gesture surface, with taps selecting and one-finger drag orbiting. Mouse supports the documented DCC orbit mappings.
+- **Design system.** Vanilla CSS tokens, local icon registry, floating glass panels, responsive iPad portrait/touch layouts, 44 px touch targets, documented action-size tiers and bottom-HUD offsets, focus states, safe-area handling, and reduced-motion/reduced-transparency fallbacks.
 
 ![Multi-object Phase 2 scene with the QuadSphere, Cylinder, and Grid](docs/media/phase2-scene.png)
 

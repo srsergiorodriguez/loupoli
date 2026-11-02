@@ -41,19 +41,19 @@
       return 'Scene empty · add a primitive in the inspector';
     }
     if (session.snapshot.modifiersActive) {
-      return 'Modifiers active · edits apply to base and re-evaluate';
+      return 'Modifiers active · base edits re-evaluate · gizmo uses base median';
     }
     if (selectionCount === 1) {
       if (session.snapshot.selectionMode === 'vertex') {
         const axis = session.snapshot.axisLock;
         return axis
-          ? `Vertex ${selectedElements[0] + 1} selected · ${axis.toUpperCase()} axis · drag to move`
-          : `Vertex ${selectedElements[0] + 1} selected · drag to move`;
+          ? `Vertex ${selectedElements[0] + 1} · ${axis.toUpperCase()} axis · drag or use the gizmo`
+          : `Vertex ${selectedElements[0] + 1} selected · drag or use the gizmo`;
       }
-      return `${modeLabel} ${selectedElements[0] + 1} selected`;
+      return `${modeLabel} ${selectedElements[0] + 1} selected · Move/Rotate/Scale gizmo`;
     }
     if (selectionCount > 1) {
-      return `${selectionCount} ${modePlural} selected`;
+      return `${selectionCount} ${modePlural} selected · Move/Rotate/Scale gizmo`;
     }
     return '';
   });
@@ -64,8 +64,8 @@
     {#if dynamicHint}
       <span>{dynamicHint}</span>
     {:else}
-      <span class="hint-desktop">Drag to orbit · Drag vertex to edit · Add/Shift multi-select · F frame</span>
-      <span class="hint-touch">Tap select · 1-finger drag orbit · 2-finger pan/zoom · 2/3-finger tap undo/redo</span>
+      <span class="hint-desktop">Drag orbit · Move/Rotate/Scale gizmo · E/I actions · Add/Shift select · F frame</span>
+      <span class="hint-touch">Tap select · Pencil gizmo/actions · 1-finger orbit · 2-finger pan/zoom · 2/3-finger undo/redo</span>
     {/if}
   </div>
 

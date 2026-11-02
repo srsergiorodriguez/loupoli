@@ -212,7 +212,6 @@ interface ActionDrag {
   readonly loopBase: HalfEdgeMesh | null;
   numeric: string;
   value: number;
-  previewLine: Float32Array | null;
 }
 
 /** Most recent loop cut, used by the separate Loop Slide action. */
@@ -1265,8 +1264,7 @@ export class EditorRuntime {
       edgeIndex,
       loopBase,
       numeric: '',
-      value,
-      previewLine: null
+      value
     };
     try {
       const preview = this.buildActionMesh(drag, value);
@@ -1355,19 +1353,18 @@ export class EditorRuntime {
       drag.node.getEvaluatedMesh().modifiersActive
     ) {
       this.renderer.setActionPreviewLine(null);
-      drag.previewLine = null;
       return;
     }
     const source =
       drag.kind === 'loop-cut' ? drag.before : drag.loopBase;
     if (!source) {
       this.renderer.setActionPreviewLine(null);
-      drag.previewLine = null;
       return;
     }
     const positions = this.loopCutPreviewLine(source, preview);
-    drag.previewLine = positions.length > 0 ? positions : null;
-    this.renderer.setActionPreviewLine(drag.previewLine);
+    this.renderer.setActionPreviewLine(
+      positions.length > 0 ? positions : null
+    );
   }
 
   private loopCutPreviewLine(
@@ -2281,6 +2278,9 @@ export class EditorRuntime {
   ): boolean {
     if (this.modalTransform) {
       return true;
+    }
+    if (this.armedAction || this.actionDrag) {
+      return false;
     }
     const node = this.getActiveNode();
     const group = this.getActiveGroup();

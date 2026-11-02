@@ -215,15 +215,16 @@ The renderer reads a small, explicit subset of tokens at startup through `getCom
 
 - `--bg-canvas` → renderer clear color
 - `--grid-minor`, `--grid-major` → grid shader
-- `--wireframe-edge`, `--selection` → overlays
+- `--wireframe-edge` → Wireframe mode; `--accent-primary` → selection, gizmo, and front-wire overlays
 - `--axis-x`, `--axis-y`, `--axis-z` → gizmo and transform handles
 - `--vertex-handle` → unselected topology handles
 - `--material-solid`, `--material-texture-a`, `--material-texture-b` → Phase 1 material fixture
 - `--viewport-key-light`, `--viewport-fill-light` → viewport lighting
+- `--hud-bottom`, `--hud-bottom-raised` → bottom HUD and touch-toolrail clearance
 
 Do not maintain a second hex palette in TypeScript. The CSS token file is the source of truth.
 
-The 16 CSS px picking radius is a behavioral constant, not a visual token. It lives in `input/constants.ts` and is tested.
+The 16 CSS px picking radius is a behavioral constant, not a visual token. It lives in `render/MeshNodeView.ts` (with the shared export in `render/ViewportRenderer.ts`) and is exercised by picking tests.
 
 ### 3.3 Token rules
 
@@ -424,57 +425,52 @@ Components live under `src/lib/ui/` and are built in Svelte 5 rune syntax. Each 
 
 ### 6.1 Component inventory
 
-| Component | Phase | Purpose | Notes |
+Implemented component files and local patterns:
+
+| Component / pattern | Phase | Purpose | Notes |
 |---|---:|---|---|
-| `AppShell` | 1 | Canvas + chrome layout, safe areas, density | Owns layout only, no editor state |
-| `TopBar` | 1–2 | Brand, project title, open/save, autosave state, history actions | File actions collapse on narrow widths; actions disabled during recovery |
-| `ToolRail` / `ToolDock` | 1 / 3 | Tool selection groups | Select, Move, Rotate, Scale, Frame; active state not color-only |
-| `StatusBar` | 1 | Hints, topology counts, renderer state | Autosave lives in the top bar's SaveState |
-| `OrientationGizmo` | 1–3 | Interactive camera orientation | Drag-to-orbit; tap axis to snap, center to frame; whole gizmo is hit area |
-| `ShadingControl` | 1 | Five viewport modes, top-right beside orientation gizmo | Segmented control; labels on wide desktop, 44px icons on touch |
-| `Panel` / `PanelSection` | 1 | Floating surface and section headings | Flat nested sections, no nested blur |
-| `Button` | 1 | Primary/secondary/ghost/danger actions | 30px visual, 44px touch hit area |
-| `IconButton` | 1 | Compact symbol actions | Accessible label mandatory |
-| `ToolButton` | 1 / 3 | Tool rail item with selected state | Non-color selection indicator |
-| `SegmentedControl` | 1–2 | Exclusive shading/selection modes | Vertex/Edge/Face and five viewport modes |
-| `Switch` | 1 / 3 | Snap/visibility and boolean settings | Larger hit area than visual track |
-| `Tooltip` | 1 | Explain icon-only controls | Hover on fine pointers; accessible description |
-| `Popover` / `Menu` | 1 | Overflow, shading, view menus | Escape, outside click, focus handling |
-| `NumberField` | 2 / 3 | Numeric transform and parameter input | Drag-scrub, step, axis accent |
-| `Vector3Field` | 3 | Object position/rotation/scale rows | Implemented with 44px inputs, axis colors, unit suffix |
-| `PS1 look` | 3 | Collapsed opt-in render-effect module | Uses native details/summary; 44px summary, off by default |
-| `Selection actions` | 3 | Extrude, inset, loop cut, merge, bridge, and delete selected elements | Contextual 44px actions; hidden when not applicable |
-| `Object multi-select` | 3 | Shift/Cmd-click and sticky pen/touch toggle; join action | 44px rows/actions, lime selected dots, separate active state |
-| `Group tree` | 3 | Folder rows, indented children, group/ungroup actions | Group row active state, 44px child rows, bake-on-ungroup |
-| `Modifier stack` | 3 | Ordered cards with enable/order/remove and parameter fields | 44px touch controls, explicit evaluated state, error panel |
-| `Compact action row` | 3 | Secondary Group/Join/Delete and selection actions | 30px visual on desktop, 44px touch region, destructive action separated |
-| `Transform orientation toggle` | 3 | Local/Global transform space | Two-button segmented control in Transform header; 44px touch height and width; hidden for groups where local equals global |
-| `TransformHud` | 2 | Transient desktop G/R/S readout | Bottom-center glass pill showing object/element target, operation, axis, exact value, and key hints; pointer-events none |
-| `Selection gizmo` | 3 | Element Move/Rotate/Scale | Existing axis gizmo placed at the selected-element median; enlarged hit volumes for Pencil; object/group fallback when no elements are selected |
-| `ActionDock` | 3 | One-shot mesh actions on touch and desktop | Bottom-left 2×2 grid, 44 px targets, contextual disabled states, armed accent state; E/I/L/Shift+L shortcuts |
-| `ActionHud` | 2 | Armed/numeric/dragging ActionDock readout | Bottom-center glass pill; value, drag/Enter/release hints, Esc cancel |
-| `Grid snap / axis lock` | 3 | Snap toggle + step, 44px X/Y/Z chips | Accent active state, axis colors, live status step |
-| `ObjectGizmo` | 3 | Move/Rotate/Scale viewport handles | Axis colors, screen-constant size, pen/mouse drag; no touch gesture conflict |
-| `Vector3Field` | 2 / 3 | XYZ transform rows | Axis colors and optional link |
-| `Select` | 2–3 | Primitive palette and modifier/parameter enumerations | Native select with 44px target |
-| `Slider` | 3 | Modifier/opacity ranges | Always paired with a numeric value |
-| `Tabs` | 3 | Inspector Object / Modifiers / Material | 44px tab hit areas on touch |
-| `EmptyState` | 1 | Empty outliner/viewport | Short, actionable, no illustration bloat |
-| `Kbd` | 1 | Keyboard hints | Hidden when no physical keyboard? Keep discoverable |
-| `Badge` | 2 | Counts, active selection mode, save/recovery state | Never the only status cue |
-| `ProjectBanner` / `SaveState` | 2 | Recovery, save/open errors, autosave status | Explicit Recover/Discard; errors persist until dismissed |
-| `Progress` | 4 / 5 | Bake/unwrap/long operations | Cancellable where possible |
-| `Dialog` | 2 / 5 | Recovery, destructive confirmations, save failures | Focus trap; no nested dialogs |
-| `DropZone` | 5 | Import drag intent | Explicit supported formats |
-| `ListRow` | 2 | Outliner rows, recent files | Selection and visibility affordances |
-| `ColorSwatch` / `ColorField` | 5 | Material colors | Native color picker where acceptable |
-| `ModifierCard` | 3 | Ordered modifier stack row | Drag handle 44px touch |
-| `TextureLayerRow` | 4 | Layer reorder/visibility/blend | Compact but 44px touch actions |
-| `Timeline` | 5 | Shape-key scrubber and playback | Bottom panel, no free-running render |
-| `SplitViewport` | 4 | 3D / UV split with draggable divider | Minimum pane sizes; one WebGL context |
+| App shell layout | 1 | Canvas + chrome layout, safe areas, density | `App.svelte` owns layout only, no editor state |
+| `TopBar` | 1–2 | Brand, project title, open/save, autosave state, history actions | File actions collapse on narrow widths |
+| `ToolRail` | 1–3 | Desktop left rail; bottom-docked touch toolrail | Select, Move, Rotate, Scale, Frame; active state is not color-only |
+| `StatusBar` | 1 | Hints, topology counts, renderer state | Hints are context-sensitive; autosave lives in the top bar |
+| `OrientationGizmo` | 1–3 | Interactive camera orientation | Drag-to-orbit; tap axis to snap, center to frame |
+| `ShadingControl` | 1 | Five viewport modes | Labels on wide desktop, 44px icon-only buttons on touch |
 | `SelectionModeControl` | 2 | Vertex/Edge/Face mode switch | 44px targets, active state not color-only |
-| `RecoveryBanner` | 2 | Offer restored unsaved work | Explicit Recover/Discard, never silent |
-| `SaveState` | 2 | Autosave/save status text | Distinguishes cached vs file saved |
+| `ActionDock` | 3 | One-shot mesh actions | Bottom-left 2×2 grid, 64×44 minimum targets, contextual disabled states |
+| `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
+| `TransformHud` | 2 | G/R/S readout | Bottom-center pill with target, axis, exact value, key hints |
+| `Inspector` | 1–3 | Scene, transform, modifiers, mesh actions | Floating panel; section-head pattern |
+| `IconButton` | 1 | Compact symbol actions | Accessible label mandatory |
+| `ToolButton` | 1–3 | Tool rail item | Selected state has a non-color indicator |
+| `Switch` | 1–3 | Snap/visibility and booleans | Larger hit area than visual track |
+| `Vector3Field` | 2–3 | XYZ transform rows | Axis colors, unit suffix, 44px touch inputs |
+| `Icon` | 1–3 | Local SVG registry | No icon package |
+| `ProjectBanner` / save state | 2 | Recovery, save/open errors, autosave status | Explicit Recover/Discard; errors persist until dismissed |
+| `.loupoli-panel` surface | 1 | Floating glass surface | Flat nested sections; no nested blur |
+| `.section` / `.section-head` | 1–3 | Inspector section layout | Shared local pattern, not a component file |
+| Selection actions | 3 | Extrude, inset, loop cut, merge, bridge, delete | Compact chips; destructive action separated |
+| `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | 44px rows/actions, lime selected dots |
+| Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
+| Modifier stack | 3 | Ordered cards with enable/order/remove/parameters | Explicit evaluated state and error panel |
+| Transform orientation toggle | 3 | Local/Global transform space | Two-button control; 44px touch width/height |
+| `Selection gizmo` / `ObjectGizmo` | 3 | Move/Rotate/Scale axes | Median placement for elements; screen-constant size; enlarged Pencil hit volumes |
+| Grid snap / axis chips | 3 | Snap toggle/step and X/Y/Z locks | 44px chips, accent state, axis colors |
+| PS1 look | 3 | Collapsed render-effect module | Native details/summary; off by default |
+| Native selects | 2–3 | Primitive palette and modifier parameters | 44px touch target |
+
+Planned primitives not yet extracted:
+
+- Shared `Button`, `SegmentedControl`, `Tooltip`, `Popover`/`Menu`, `NumberField`, `Kbd`, `Tabs`, `Slider`, `EmptyState`, `Badge`, `Dialog`, `DropZone`, `ListRow`, `ColorField`, `ModifierCard`, `TextureLayerRow`, `Timeline`, `SplitViewport`.
+- A shared bottom-HUD shell. Until extracted, `ActionHud` and `TransformHud` use the `--hud-bottom` / `--hud-bottom-raised` tokens and must not be active simultaneously.
+- 6.2 behavior rules describe the intended interaction contract for both current local markup and future extracted primitives.
+
+#### Action sizing hierarchy
+
+- **Primary:** 44px minimum height; full-width only for decisive actions such as Add.
+- **Tool rail:** 52px rail on desktop; 44px+ touch targets in the bottom dock (measured 64×52 in the iPad toolrail).
+- **ActionDock:** 64px minimum width, 44px minimum height; 2×2 grid.
+- **Compact Inspector actions:** 30px visual on desktop, 44px touch hit region.
+- **HUDs:** non-interactive; minimum height `--control-h`, pointer-events none.
 
 ### 6.2 Core component behavior
 

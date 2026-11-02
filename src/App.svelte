@@ -102,9 +102,12 @@
     <p id="viewport-help" class="visually-hidden">
       Z-up 3D viewport. Choose vertex, edge, or face selection. With a pen or the
       primary mouse button, select elements; use Add mode or Shift/Cmd-click to
-      select multiple. Vertex mode supports dragging one vertex. Use one finger
-      to orbit, two fingers to pan and pinch, two-finger tap to undo, and
-      three-finger tap to redo.
+      select multiple. With elements selected, Move, Rotate, and Scale place a
+      gizmo at their median; drag its axes with the pen or mouse. The ActionDock
+      provides E/I/L/Shift+L actions with drag or exact amounts. Desktop G/R/S
+      transforms selections or the active object. Use one finger to orbit, two
+      fingers to pan and pinch, two-finger tap to undo, and three-finger tap to
+      redo.
     </p>
     <canvas
       bind:this={canvas}

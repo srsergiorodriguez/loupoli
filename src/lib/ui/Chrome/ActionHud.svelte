@@ -55,9 +55,7 @@
     position: fixed;
     z-index: var(--z-hud);
     left: 50%;
-    bottom: calc(
-      var(--safe-bottom) + var(--status-h) + var(--space-3) + 64px
-    );
+    bottom: var(--hud-bottom-raised);
     display: flex;
     align-items: center;
     gap: var(--space-2);

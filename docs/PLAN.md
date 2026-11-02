@@ -1,6 +1,6 @@
 # loupoli — Master Delivery Plan
 
-**Status:** Phase 2 core implemented for browser and native desktop builds; physical-iPad and iOS packaging verification remain pending. Phase 3 is next, with object/group transforms, topology editing, join/merge/bridge, view-gizmo orbit, snapping, and modifiers.  
+**Status:** Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds, including topology editing, groups/join, snapping, modifiers, selection gizmos, and the desktop/touch ActionDock. Physical-iPad/WKWebView validation and the remaining Phase 3 polish remain open; Phase 4 texturing follows.  
 **Brand rule:** the name is always written `loupoli`, lowercase.  
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.  
 **Companion docs:** [Architecture](./ARCHITECTURE.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
