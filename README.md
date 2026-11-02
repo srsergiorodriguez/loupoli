@@ -4,7 +4,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Brand:** always lowercase `loupoli`.
 
-**Status:** Phase 2 is implemented. Phase 3 is underway: multi-element selection with additive touch taps, one-level object groups, multi-object selection and join, object/group transforms and gizmos, view-gizmo orbit, destructive deletion, face extrusion and inset, vertex merge, a two-boundary-edge bridge, grid snapping, vertex axis locks, a collapsed PS1 module, and a provenance-mapped Mirror/Grid Array/Radial Array modifier stack are implemented. Loop bridging controls, loop cut, and editing base topology under an active modifier stack follow.
+**Status:** Phase 2 is implemented. Phase 3 is underway: multi-element selection with additive touch taps, one-level object groups, multi-object selection and join, object/group transforms and gizmos, view-gizmo orbit, destructive deletion, face extrusion and inset, vertex merge, a two-boundary-edge bridge, grid snapping, vertex axis locks, a collapsed PS1 module, and a provenance-mapped Mirror/Grid Array/Radial Array modifier stack with base topology actions are implemented. Loop bridging controls, loop cut, and direct base-vertex dragging under an active modifier stack follow.
 
 ![loupoli Phase 2 desktop viewport](docs/media/phase2-desktop.png)
 
@@ -159,6 +159,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - One-finger touch taps selected and toggled vertices with Add mode, multi-vertex overlays updated, empty taps cleared, and one-finger drag still orbited. Two/three-finger gesture paths remain unchanged.
   - Arrayed/mirrored picking mapped evaluated faces/vertices back to base indices; selected vertices highlighted on both array copies, selected faces highlighted on both copies, and disabling the modifier reduced the overlay to the single base element.
   - Extrude and Inset through the Selection panel; counts rose to 30 V/56 E/28 F after a single-face operation, multi-face extrusion reached 32 V/60 E/30 F, the rebuilt meshes validated, and both actions were 44 px targets.
+  - With Grid Array active, deleted and extruded provenance-selected base faces: base/evaluated counts updated together, the stack stayed active, undo restored the base mesh, and no errors were logged.
   - Vertex drag through the real DCEL, undo, redo, and teardown without console errors.
   - Primitive creation, outliner selection, deletion, and undo/redo.
   - PS1 effects default off; enabling both produces snapping/UV swim.
@@ -179,14 +180,14 @@ Not yet verified:
 ## Deliberately deferred
 
 - Nested groups and rename/reparent controls beyond the current one-level groups.
-- Base-topology editing while the modifier stack is active (selection/provenance is available, editing is paused).
+- Direct base vertex dragging while the modifier stack is active (destructive topology actions and provenance selection work now).
 - Loop cut and loop/multi-segment bridge controls; only single-face inset and exactly-two-boundary-edge bridging are implemented.
 - Editable UV seams/unwrapping, texture layers, and projection painting.
 - Scene lights UI, baking, shape keys/timeline, and OBJ/GLB import/export.
 - Touch element dragging. Touch taps select; one-finger drag remains camera orbit.
 - Camera state and active-object selection are not stored in `.lpoly` yet; node transforms and viewport settings are.
 
-Phase 3 continues with loop/multi-segment bridging, loop cut, and editing base topology under an active modifier stack. See the registered feature table in [PLAN.md](docs/PLAN.md#phase-3--object-mode-topology-editing-transforms-and-modifier-stack).
+Phase 3 continues with loop/multi-segment bridging, loop cut, and direct base-vertex dragging under an active modifier stack. See the registered feature table in [PLAN.md](docs/PLAN.md#phase-3--object-mode-topology-editing-transforms-and-modifier-stack).
 
 ---
 

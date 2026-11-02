@@ -795,11 +795,6 @@ export class EditorRuntime {
     if (!node || this.selection.count === 0) {
       return;
     }
-    if (node.getEvaluatedMesh().modifiersActive) {
-      this.projectError = 'Disable modifiers before editing the base mesh.';
-      this.publish();
-      return;
-    }
     const mode = this.selection.mode;
     const indices = this.selection.values();
     try {
@@ -880,11 +875,6 @@ export class EditorRuntime {
     ) {
       return;
     }
-    if (node.getEvaluatedMesh().modifiersActive) {
-      this.projectError = 'Disable modifiers before editing the base mesh.';
-      this.publish();
-      return;
-    }
     const indices = this.selection.values();
     try {
       const after = extrudeSelectedFaces(node.mesh, indices);
@@ -910,11 +900,6 @@ export class EditorRuntime {
       this.selection.mode !== 'face' ||
       this.selection.count !== 1
     ) {
-      return;
-    }
-    if (node.getEvaluatedMesh().modifiersActive) {
-      this.projectError = 'Disable modifiers before editing the base mesh.';
-      this.publish();
       return;
     }
     const [face] = this.selection.values();
@@ -944,11 +929,6 @@ export class EditorRuntime {
     ) {
       return;
     }
-    if (node.getEvaluatedMesh().modifiersActive) {
-      this.projectError = 'Disable modifiers before editing the base mesh.';
-      this.publish();
-      return;
-    }
     const indices = this.selection.values();
     try {
       const after = mergeSelectedVertices(node.mesh, indices);
@@ -974,11 +954,6 @@ export class EditorRuntime {
       this.selection.mode !== 'edge' ||
       this.selection.count !== 2
     ) {
-      return;
-    }
-    if (node.getEvaluatedMesh().modifiersActive) {
-      this.projectError = 'Disable modifiers before editing the base mesh.';
-      this.publish();
       return;
     }
     const indices = this.selection.values();

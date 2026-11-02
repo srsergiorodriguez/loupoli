@@ -127,7 +127,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Session-only object multi-selection (modifier-click or sticky touch/pen toggle) and join into the active target, with relative-transform baking, source removal, undo, and ordered multi-patch autosave transitions.
 - Grid snap (0.1/0.25/0.5/1.0) for object translation and vertex drags, plus world X/Y/Z vertex axis locks through keyboard keys and 44 px touch/pen chips. Snap state is session-only; typed numeric transforms stay exact.
 - One-level scene groups with an average-position pivot, outliner tree, group numeric/gizmo transforms, ungroup with transform baking, undo, ordered group autosave patches, and optional `.lpoly` group manifests/node parentage.
-- Ordered non-destructive Mirror / Grid Array / Radial Array stacks with base-DCEL preservation, evaluated rendering/counts, Inspector add/toggle/reorder/edit/remove controls, undo, autosave patches, `.lpoly` serialization, and evaluated-to-base vertex/edge/face provenance. Picking selects base elements and overlays highlight every evaluated copy. Base topology editing pauses while modifiers are active.
+- Ordered non-destructive Mirror / Grid Array / Radial Array stacks with base-DCEL preservation, evaluated rendering/counts, Inspector add/toggle/reorder/edit/remove controls, undo, autosave patches, `.lpoly` serialization, and evaluated-to-base vertex/edge/face provenance. Picking selects base elements and overlays highlight every evaluated copy. Destructive topology actions edit the base mesh while the stack re-evaluates; direct base vertex dragging remains paused.
 - Localized vertex moves and scene-node commands; redo truncation, a 100-command cap, and a 32 MB history budget.
 - IndexedDB autosave checkpoint plus localized deltas every 30 seconds and on visibility loss, with explicit Recover/Discard.
 - `.lpoly` v1 binary codec with a CRC-checked manifest, aligned typed-array columns, file-size limits, and multi-node round-trip tests.
@@ -135,7 +135,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: Phase 3 polish — loop/multi-segment bridge controls, loop cut, and editing base topology while a modifier stack is active.
+Next planned work: Phase 3 polish — loop/multi-segment bridge controls, loop cut, and direct base-vertex dragging while a modifier stack is active.
 
 Approved decisions:
 

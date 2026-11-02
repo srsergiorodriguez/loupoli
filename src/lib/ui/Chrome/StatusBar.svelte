@@ -41,7 +41,7 @@
       return 'Scene empty · add a primitive in the inspector';
     }
     if (session.snapshot.modifiersActive) {
-      return 'Modifiers active · selection mapped · disable the stack to edit base topology';
+      return 'Modifiers active · topology edits apply to base · vertex drag paused';
     }
     if (selectionCount === 1) {
       if (session.snapshot.selectionMode === 'vertex') {

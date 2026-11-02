@@ -582,8 +582,9 @@
 
           {#if modifiersActive}
             <p class="hint">
-              Modifiers are non-destructive. Picking maps through provenance to
-              base elements; disable all modifiers to edit the source mesh.
+              Modifiers are non-destructive. Picking maps through provenance;
+              destructive topology actions edit the base mesh. Disable all
+              modifiers to drag base vertices directly.
             </p>
           {/if}
         {/if}
@@ -651,8 +652,8 @@
           {selectionCount > 0 ? `${selectionCount} ${modePlural} selected` : 'Modifiers active'}
         </p>
         <p class="hint">
-          Picking is mapped back to base elements, and every evaluated copy is
-          highlighted. Disable modifiers to edit the source topology.
+          Picking maps through provenance. Topology actions edit the base mesh
+          and re-evaluate the stack; direct vertex dragging is disabled.
         </p>
       {:else if activeNodeId === null}
         <p class="empty-state">
@@ -719,7 +720,7 @@
         </p>
       {/if}
 
-      {#if selectionCount > 0 && !modifiersActive}
+      {#if selectionCount > 0}
         <div class="selection-actions">
           {#if session.snapshot.selectionMode === 'vertex' && selectionCount >= 2}
             <button

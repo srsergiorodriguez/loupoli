@@ -465,7 +465,7 @@ class RenderScheduler {
 - Scene contents:
   - `Grid` (XY, custom shader or line geometry; depth-write off, drawn first).
   - Root group of `RenderMesh` objects, with one level of scene group wrappers for grouped objects.
-- Modifier stacks evaluate a separate render mesh from the unchanged base DCEL and carry vertex/edge/face provenance back to base elements. Picking and overlays use provenance; base editing is paused while a stack is active.
+- Modifier stacks evaluate a separate render mesh from the unchanged base DCEL and carry vertex/edge/face provenance back to base elements. Picking and overlays use provenance; destructive base edits re-evaluate the stack, while direct base-vertex dragging is paused.
   - Selection/edge overlays.
   - Transform gizmo rendered only when a transform tool is active.
 - The orientation gizmo is **not** a second WebGL scene. It is an SVG/canvas overlay computed from the camera basis, which avoids another GPU context and fits the crisp UI language.
