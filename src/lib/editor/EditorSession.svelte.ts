@@ -9,7 +9,8 @@ import {
   type ShadingMode,
   type TransformMode,
   type AxisLock,
-  type ModifierPatch
+  type ModifierPatch,
+  type TransformOrientation
 } from './types';
 
 const INITIAL_SNAPSHOT: EditorSnapshot = {
@@ -25,6 +26,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   selectionMode: 'vertex',
   selectedPosition: null,
   activeTransform: null,
+  globalTransform: null,
+  transformOrientation: 'local',
   modifiers: [],
   modifiersActive: false,
   modifierError: null,
@@ -120,8 +123,15 @@ export class EditorSession {
     this.runtime?.setAdditiveSelection(enabled);
   }
 
-  setActiveTransform(transform: NodeTransform): void {
-    this.runtime?.setActiveTransform(transform);
+  setActiveTransform(
+    transform: NodeTransform,
+    orientation: TransformOrientation = 'local'
+  ): void {
+    this.runtime?.setActiveTransform(transform, orientation);
+  }
+
+  setTransformOrientation(orientation: TransformOrientation): void {
+    this.runtime?.setTransformOrientation(orientation);
   }
 
   orbitView(dx: number, dy: number): void {

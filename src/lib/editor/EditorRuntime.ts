@@ -53,7 +53,13 @@ import {
   UngroupGroupCommand,
   type GroupChildChange
 } from './commands/GroupCommands';
-import { bakeGroupTransform, transformMatrix } from './groupTransforms';
+import {
+  bakeGroupTransform,
+  localPositionFromWorld,
+  localRotationFromWorld,
+  transformMatrix,
+  worldTransformForNode
+} from './groupTransforms';
 import { MoveVertexCommand } from './commands/MoveVertexCommand';
 import { TransformNodeCommand } from './commands/TransformNodeCommand';
 import {
@@ -78,6 +84,7 @@ import {
   type MeshCounts,
   type ShadingMode,
   type TransformMode,
+  type TransformOrientation,
   type AxisLock,
   type ModifierPatch
 } from './types';
@@ -103,6 +110,7 @@ interface GizmoDrag {
   readonly pointerId: number;
   readonly mode: GizmoMode;
   readonly axis: GizmoAxis;
+  readonly orientation: TransformOrientation;
   readonly target: MeshNode | SceneGroup;
   readonly before: NodeTransform;
   readonly origin: Vector3;
@@ -146,6 +154,7 @@ export class EditorRuntime {
 
   private shading: ShadingMode = DEFAULT_SHADING;
   private transformMode: TransformMode = 'select';
+  private transformOrientation: TransformOrientation = 'local';
   private snapEnabled = false;
   private snapStep = 0.25;
   private axisLock: AxisLock = null;
@@ -227,6 +236,14 @@ export class EditorRuntime {
     const active = this.getActiveNode();
     const mesh = active?.mesh ?? null;
     const evaluated = active?.getEvaluatedMesh() ?? null;
+    const parentTransform = active
+      ? (this.document.getGroup(active.parentId)?.transform ?? null)
+      : null;
+    const globalTransform = activeGroup
+      ? this.cloneTransform(activeGroup.transform)
+      : active
+        ? worldTransformForNode(active.transform, parentTransform)
+        : null;
     const selectedElements = this.selection.values();
     const selectedPosition =
       this.selection.mode === 'vertex' &&
@@ -264,6 +281,8 @@ export class EditorRuntime {
         : active
           ? this.cloneTransform(active.transform)
           : null,
+      globalTransform,
+      transformOrientation: this.transformOrientation,
       boundaryEdges: mesh?.boundaryEdgeCount ?? 0,
       counts: mesh
         ? {
@@ -317,6 +336,15 @@ export class EditorRuntime {
   setPs1Affine(enabled: boolean): void {
     this.ps1Affine = enabled;
     this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
+    this.publish();
+  }
+
+  setTransformOrientation(orientation: TransformOrientation): void {
+    if (this.transformOrientation === orientation) {
+      return;
+    }
+    this.transformOrientation = orientation;
+    this.syncScene();
     this.publish();
   }
 
@@ -524,7 +552,10 @@ export class EditorRuntime {
    * Scale is kept positive to avoid mirrored winding until explicit mirroring
    * tools land; near-zero values are clamped to a safe minimum.
    */
-  setActiveTransform(transform: NodeTransform): void {
+  setActiveTransform(
+    transform: NodeTransform,
+    orientation: TransformOrientation = 'local'
+  ): void {
     const group = this.getActiveGroup();
     if (group) {
       const values = [
@@ -572,15 +603,34 @@ export class EditorRuntime {
     if (!values.every(Number.isFinite)) {
       return;
     }
-    const next: NodeTransform = {
-      position: [...transform.position],
-      rotation: [...transform.rotation],
-      scale: [
-        Math.max(0.001, transform.scale[0]),
-        Math.max(0.001, transform.scale[1]),
-        Math.max(0.001, transform.scale[2])
-      ]
-    };
+    const parentTransform =
+      this.document.getGroup(node.parentId)?.transform ?? null;
+    const next: NodeTransform =
+      orientation === 'global'
+        ? {
+            position: localPositionFromWorld(
+              transform.position,
+              parentTransform
+            ),
+            rotation: localRotationFromWorld(
+              transform.rotation,
+              parentTransform
+            ),
+            scale: [
+              Math.max(0.001, transform.scale[0]),
+              Math.max(0.001, transform.scale[1]),
+              Math.max(0.001, transform.scale[2])
+            ]
+          }
+        : {
+            position: [...transform.position],
+            rotation: [...transform.rotation],
+            scale: [
+              Math.max(0.001, transform.scale[0]),
+              Math.max(0.001, transform.scale[1]),
+              Math.max(0.001, transform.scale[2])
+            ]
+          };
     const before = this.cloneTransform(node.transform);
     const unchanged =
       before.position.every((value, i) => Math.abs(value - next.position[i]) < 1e-7) &&
@@ -1673,6 +1723,7 @@ export class EditorRuntime {
       pointerId: sample.pointerId,
       mode: hit.mode,
       axis: hit.axis,
+      orientation: this.transformOrientation,
       target,
       before: this.cloneTransform(target.transform),
       origin: frame.origin,
@@ -1768,9 +1819,38 @@ export class EditorRuntime {
           'XYZ'
         )
       );
-      const local = GIZMO_AXIS_VECTORS[drag.axis];
-      const deltaQuaternion = new Quaternion().setFromAxisAngle(local, delta);
-      const rotated = start.multiply(deltaQuaternion);
+      let rotated: Quaternion;
+      if (drag.orientation === 'global') {
+        let parent = new Quaternion();
+        if ('primitive' in drag.target && drag.target.parentId !== null) {
+          const group = this.document.getGroup(drag.target.parentId);
+          if (group) {
+            parent = new Quaternion().setFromEuler(
+              new Euler(
+                group.transform.rotation[0],
+                group.transform.rotation[1],
+                group.transform.rotation[2],
+                'XYZ'
+              )
+            );
+          }
+        }
+        const startWorld = parent.clone().multiply(start);
+        const worldAxis = GIZMO_AXIS_VECTORS[drag.axis];
+        const deltaWorld = new Quaternion().setFromAxisAngle(
+          worldAxis,
+          delta
+        );
+        const newWorld = deltaWorld.multiply(startWorld);
+        rotated = parent.invert().multiply(newWorld);
+      } else {
+        const local = GIZMO_AXIS_VECTORS[drag.axis];
+        const deltaQuaternion = new Quaternion().setFromAxisAngle(
+          local,
+          delta
+        );
+        rotated = start.multiply(deltaQuaternion);
+      }
       const euler = new Euler().setFromQuaternion(rotated, 'XYZ');
       next.rotation = [euler.x, euler.y, euler.z];
     }
@@ -1907,7 +1987,8 @@ export class EditorRuntime {
       this.activeGroupId,
       this.selection.mode,
       this.evaluatedSelectionValues(),
-      this.transformMode
+      this.transformMode,
+      this.transformOrientation
     );
   }
 

@@ -120,6 +120,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.
 - Additive multi-element selection: Shift/Cmd/Ctrl-click, a sticky 44 px Add mode for pen/mouse, and one-finger touch taps; selected sets render multi-vertex points, instanced edge tubes, and merged face fills.
 - Numeric object transforms (position, rotation, scale) through undoable commands; selection overlays follow the node transform. The orientation gizmo supports drag-to-orbit while retaining axis-click snap and center-frame.
+- Local/Global orientation for node transforms, with world-space position/rotation fields and world-oriented translate/rotate gizmos. Scale stays local to avoid unsupported shear; conversions use the one-level parent group transform.
 - Move/Rotate/Scale object gizmos with axis-constrained pen/mouse drags, screen-constant handle size, and undoable transform commits. Finger touch remains camera navigation.
 - Destructive deletion of selected faces or all faces incident to selected edges/vertices, with DCEL rebuild, boundary regeneration, undo, and autosave mesh-replacement patches. The PS1 look is a collapsed render-effect module at the Inspector bottom.
 - Vertex merge-to-centroid, collapsed-face cleanup, and bridging of two ordered boundary chains/loops with equal segment counts into a quad strip. Both use validated mesh replacement and autosave patches.
@@ -135,7 +136,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: global/local transform orientation, Blender-style desktop G/R/S modal transforms, and the tap-to-arm iPad ActionDock for modal modeling actions.
+Next planned work: Blender-style desktop G/R/S modal transforms and the tap-to-arm iPad ActionDock for modal modeling actions.
 
 Approved decisions:
 

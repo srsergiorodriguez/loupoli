@@ -168,6 +168,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - With Grid Array active, dragged an evaluated vertex: its base vertex moved through the inverse per-copy transform, both evaluated copies updated, the stack stayed active, and undo restored the base position.
   - Loop-cut one sphere edge: 24 F/26 V became 32 F/34 V with a closed, valid quad ring; repeated under an active Grid Array and produced 64 evaluated faces.
   - Texture + Wire rendering, top-right placement, icon-only touch density, compact scene/selection actions, and Texture + Wire `.lpoly` settings round-trip verified.
+  - Global orientation on a grouped, rotated child: world fields showed the composed pose, the move/rotate gizmo axes were world-aligned, global position/rotation edits converted back to local coordinates, and undo restored the prior pose.
   - Per-copy modifier linear maps round-tripped through their inverses for Radial Array geometry, covering mapped base-vertex editing.
   - Vertex drag through the real DCEL, undo, redo, and teardown without console errors.
   - Primitive creation, outliner selection, deletion, and undo/redo.
@@ -206,8 +207,13 @@ The Phase 3 topology-polish goal is complete; broader Phase 3 polishing and Phas
 - Secondary scene actions (**Group**, **Join**, **Ungroup**, **Delete**) are a compact wrapped row rather than full-width bars.
 - Selection actions use compact icon-and-label chips; full-width controls are reserved for primary actions such as Add.
 - Touch controls keep 44 px hit areas even when their visual footprint is reduced.
+- The Transform header switches between Local and Global. Global space is useful for grouped children: the numeric fields and move/rotate gizmo use world axes while the stored node transform remains parent-local.
 
 ![iPad layout with icon-only shading control](docs/media/workflow-ipad.png)
+
+Global transform orientation for a child inside a rotated group:
+
+![Global transform orientation and world-space fields](docs/media/workflow-orientation.png)
 
 ## iPad layout
 

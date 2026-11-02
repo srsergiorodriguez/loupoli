@@ -46,3 +46,51 @@ export function cloneNodeTransform(transform: NodeTransform): NodeTransform {
     scale: [...transform.scale]
   };
 }
+
+
+/** Decompose a child node's world transform under an optional one-level group. */
+export function worldTransformForNode(
+  child: NodeTransform,
+  parent: NodeTransform | null
+): NodeTransform {
+  return parent ? bakeGroupTransform(parent, child) : cloneNodeTransform(child);
+}
+
+/** Convert a world-space translation to a parent-local position. */
+export function localPositionFromWorld(
+  world: readonly [number, number, number],
+  parent: NodeTransform | null
+): [number, number, number] {
+  if (!parent) {
+    return [world[0], world[1], world[2]];
+  }
+  const inverse = transformMatrix(parent).invert();
+  const position = new Vector3(world[0], world[1], world[2]).applyMatrix4(
+    inverse
+  );
+  return [position.x, position.y, position.z];
+}
+
+/** Convert a world-space XYZ Euler rotation to parent-local Euler angles. */
+export function localRotationFromWorld(
+  world: readonly [number, number, number],
+  parent: NodeTransform | null
+): [number, number, number] {
+  if (!parent) {
+    return [world[0], world[1], world[2]];
+  }
+  const parentRotation = new Quaternion().setFromEuler(
+    new Euler(
+      parent.rotation[0],
+      parent.rotation[1],
+      parent.rotation[2],
+      'XYZ'
+    )
+  );
+  const worldRotation = new Quaternion().setFromEuler(
+    new Euler(world[0], world[1], world[2], 'XYZ')
+  );
+  const local = parentRotation.invert().multiply(worldRotation);
+  const euler = new Euler().setFromQuaternion(local, 'XYZ');
+  return [euler.x, euler.y, euler.z];
+}

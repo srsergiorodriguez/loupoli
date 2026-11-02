@@ -40,6 +40,16 @@
   );
   const selectedPosition = $derived(session.snapshot.selectedPosition);
   const activeTransform = $derived(session.snapshot.activeTransform);
+  const globalTransform = $derived(session.snapshot.globalTransform);
+  const transformOrientation = $derived(
+    session.snapshot.transformOrientation
+  );
+  const useGlobalOrientation = $derived(
+    transformOrientation === 'global' && session.snapshot.activeGroupId === null
+  );
+  const displayTransform = $derived(
+    useGlobalOrientation ? (globalTransform ?? activeTransform) : activeTransform
+  );
   const nodes = $derived(session.snapshot.nodes);
   const selectedNodeIds = $derived(session.snapshot.selectedNodeIds);
   const activeNodeId = $derived(session.snapshot.activeNodeId);
@@ -76,44 +86,55 @@
   }
 
   function rotationDegrees(): [number, number, number] {
-    if (!activeTransform) {
+    if (!displayTransform) {
       return [0, 0, 0];
     }
     const factor = 180 / Math.PI;
     return [
-      activeTransform.rotation[0] * factor,
-      activeTransform.rotation[1] * factor,
-      activeTransform.rotation[2] * factor
+      displayTransform.rotation[0] * factor,
+      displayTransform.rotation[1] * factor,
+      displayTransform.rotation[2] * factor
     ];
   }
 
   function commitPosition(position: [number, number, number]): void {
-    if (!activeTransform) {
+    if (!activeTransform || !displayTransform) {
       return;
     }
-    session.setActiveTransform({ ...activeTransform, position });
+    session.setActiveTransform(
+      {
+        position,
+        rotation: [...displayTransform.rotation],
+        scale: [...activeTransform.scale]
+      },
+      useGlobalOrientation ? 'global' : 'local'
+    );
   }
 
   function commitRotation(degrees: [number, number, number]): void {
-    if (!activeTransform) {
+    if (!activeTransform || !displayTransform) {
       return;
     }
     const factor = Math.PI / 180;
-    session.setActiveTransform({
-      ...activeTransform,
-      rotation: [
-        degrees[0] * factor,
-        degrees[1] * factor,
-        degrees[2] * factor
-      ]
-    });
+    session.setActiveTransform(
+      {
+        position: [...displayTransform.position],
+        rotation: [
+          degrees[0] * factor,
+          degrees[1] * factor,
+          degrees[2] * factor
+        ],
+        scale: [...activeTransform.scale]
+      },
+      useGlobalOrientation ? 'global' : 'local'
+    );
   }
 
   function commitScale(scale: [number, number, number]): void {
     if (!activeTransform) {
       return;
     }
-    session.setActiveTransform({ ...activeTransform, scale });
+    session.setActiveTransform({ ...activeTransform, scale }, 'local');
   }
 
   function updateModifierAxis(modifierId: string, event: Event): void {
@@ -324,13 +345,34 @@
     <section class="section" aria-labelledby="transform-heading">
       <div class="section-head">
         <h2 id="transform-heading" class="section-label">Transform</h2>
-        <span class="section-meta">Local</span>
+        {#if activeNodeId !== null}
+          <div class="orientation-toggle" role="group" aria-label="Transform orientation">
+            <button
+              type="button"
+              class:active={transformOrientation === 'local'}
+              aria-pressed={transformOrientation === 'local'}
+              onclick={() => session.setTransformOrientation('local')}
+            >
+              Local
+            </button>
+            <button
+              type="button"
+              class:active={transformOrientation === 'global'}
+              aria-pressed={transformOrientation === 'global'}
+              onclick={() => session.setTransformOrientation('global')}
+            >
+              Global
+            </button>
+          </div>
+        {:else}
+          <span class="section-meta">Local</span>
+        {/if}
       </div>
       {#if activeTransform}
         <div class="transform-stack">
           <Vector3Field
             label="Position"
-            values={activeTransform.position}
+            values={displayTransform?.position ?? activeTransform.position}
             step={0.1}
             precision={3}
             onCommit={commitPosition}
@@ -344,7 +386,7 @@
             onCommit={commitRotation}
           />
           <Vector3Field
-            label="Scale"
+            label={useGlobalOrientation ? 'Scale (local)' : 'Scale'}
             values={activeTransform.scale}
             step={0.05}
             precision={3}
@@ -352,6 +394,11 @@
             onCommit={commitScale}
           />
         </div>
+        {#if useGlobalOrientation}
+          <p class="hint">
+            Position and rotation are world-space. Scale remains object-local.
+          </p>
+        {/if}
         <div class="snap-line">
           <button
             type="button"
@@ -1219,6 +1266,37 @@
     font-size: var(--text-2xs);
     line-height: 1;
     text-overflow: ellipsis;
+  }
+
+  .orientation-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 2px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+  }
+
+  .orientation-toggle button {
+    min-height: var(--control-h-sm);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-xs);
+    color: var(--text-tertiary);
+    font-family: var(--font-body);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .orientation-toggle button.active {
+    color: var(--accent-primary);
+    background: var(--bg-selected);
+  }
+
+  :global(:root[data-density='touch']) .orientation-toggle button {
+    min-width: var(--hit-min);
+    min-height: var(--hit-min);
+    padding: 0 var(--space-2);
   }
 
   .snap-line {

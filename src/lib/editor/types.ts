@@ -13,6 +13,13 @@ export const TRANSFORM_MODES = ['select', 'translate', 'rotate', 'scale'] as con
 /** The active object transform tool. */
 export type TransformMode = (typeof TRANSFORM_MODES)[number];
 
+/** The coordinate space used for transform display and gizmo constraints. */
+export const TRANSFORM_ORIENTATIONS = ['local', 'global'] as const;
+
+/** Local or world transform orientation. */
+export type TransformOrientation =
+  (typeof TRANSFORM_ORIENTATIONS)[number];
+
 /** Supported incremental grid-snap steps. */
 export const GRID_SNAP_STEPS = [0.1, 0.25, 0.5, 1] as const;
 
@@ -80,6 +87,8 @@ export interface EditorSnapshot {
   readonly selectionMode: SelectionMode;
   readonly selectedPosition: [number, number, number] | null;
   readonly activeTransform: NodeTransform | null;
+  readonly globalTransform: NodeTransform | null;
+  readonly transformOrientation: TransformOrientation;
   readonly modifiers: readonly Modifier[];
   readonly modifiersActive: boolean;
   readonly modifierError: string | null;

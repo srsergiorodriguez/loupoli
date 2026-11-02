@@ -22,7 +22,11 @@ import {
 import type { Theme } from '../../design/theme';
 import type { MeshNode, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
-import type { ShadingMode, TransformMode } from '../editor/types';
+import type {
+  ShadingMode,
+  TransformMode,
+  TransformOrientation
+} from '../editor/types';
 import { ObjectGizmo, type GizmoHit } from './ObjectGizmo';
 import { CameraRig, type AxisProjection, type AxisName } from './CameraRig';
 import { ViewportGrid } from './Grid';
@@ -87,6 +91,7 @@ export class ViewportRenderer {
 
   private currentMode: ShadingMode = 'unlit';
   private transformMode: TransformMode = 'select';
+  private transformOrientation: TransformOrientation = 'local';
   private activeNodeId: string | null = null;
   private activeGroupId: string | null = null;
   private pixelRatio = 1;
@@ -222,7 +227,8 @@ export class ViewportRenderer {
     activeGroupId: string | null,
     selectionMode: SelectionMode,
     selectedElements: readonly number[],
-    transformMode: TransformMode
+    transformMode: TransformMode,
+    transformOrientation: TransformOrientation
   ): void {
     const incoming = new Set(nodes.map((node) => node.id));
 
@@ -300,6 +306,7 @@ export class ViewportRenderer {
         ? activeNodeId
         : null;
     this.transformMode = transformMode;
+    this.transformOrientation = transformOrientation;
     this.objectGizmo.setMode(transformMode);
     this.updateGizmo();
 
@@ -444,6 +451,12 @@ export class ViewportRenderer {
     target.updateMatrixWorld(true);
     const origin = target.getWorldPosition(new Vector3());
     const quaternion = target.getWorldQuaternion(new Quaternion());
+    if (
+      this.transformOrientation === 'global' &&
+      this.transformMode !== 'scale'
+    ) {
+      quaternion.identity();
+    }
     const size = Math.max(
       0.05,
       this.cameraRig.camera.position.distanceTo(origin) * 0.16
