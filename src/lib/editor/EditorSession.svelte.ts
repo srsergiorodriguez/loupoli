@@ -200,6 +200,10 @@ export class EditorSession {
     this.runtime?.insetSelectedFace();
   }
 
+  loopCut(): void {
+    this.runtime?.loopCut();
+  }
+
   async saveProject(): Promise<void> {
     await this.runtime?.saveProject();
   }

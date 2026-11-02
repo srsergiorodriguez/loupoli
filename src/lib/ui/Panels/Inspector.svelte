@@ -752,6 +752,16 @@
               <span>Inset face</span>
             </button>
           {/if}
+          {#if session.snapshot.selectionMode === 'edge' && selectionCount === 1}
+            <button
+              type="button"
+              class="topology-action"
+              onclick={() => session.loopCut()}
+            >
+              <Icon name="loop-cut" size={14} />
+              <span>Loop cut</span>
+            </button>
+          {/if}
           {#if session.snapshot.selectionMode === 'edge' && selectionCount >= 2}
             <button
               type="button"

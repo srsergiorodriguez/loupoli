@@ -23,4 +23,5 @@ export type IconName =
   | 'chevron-up'
   | 'chevron-down'
   | 'extrude'
-  | 'inset';
+  | 'inset'
+  | 'loop-cut';

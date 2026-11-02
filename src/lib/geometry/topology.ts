@@ -609,3 +609,184 @@ export function insetSelectedFace(
 
   return HalfEdgeMesh.fromPolygons(faces);
 }
+
+/** A face corner with its outgoing edge for loop-cut processing. */
+interface LoopCorner {
+  readonly vertex: number;
+  readonly edge: number;
+  readonly position: Vec3;
+  readonly uv: Vec2;
+}
+
+function faceLoopCorners(mesh: HalfEdgeMesh, face: number): LoopCorner[] {
+  const corners: LoopCorner[] = [];
+  const start = mesh.faceHalfEdge[face];
+  let current = start;
+  do {
+    const vertex = mesh.heOrigin[current];
+    const offset = vertex * 3;
+    const uvOffset = current * 2;
+    corners.push({
+      vertex,
+      edge: mesh.heEdge[current],
+      position: [
+        mesh.positions[offset],
+        mesh.positions[offset + 1],
+        mesh.positions[offset + 2]
+      ],
+      uv: [mesh.heUv[uvOffset], mesh.heUv[uvOffset + 1]]
+    });
+    current = mesh.heNext[current];
+  } while (current !== start);
+  return corners;
+}
+
+function otherFace(
+  mesh: HalfEdgeMesh,
+  edge: number,
+  face: number
+): number | null {
+  const halfEdge = mesh.edgeHalfEdge[edge];
+  const first = mesh.heFace[halfEdge];
+  const second = mesh.heFace[mesh.heTwin[halfEdge]];
+  if (first === face) {
+    return second >= 0 ? second : null;
+  }
+  if (second === face) {
+    return first >= 0 ? first : null;
+  }
+  return null;
+}
+
+/**
+ * Cut one quad edge loop at its midpoints.
+ *
+ * The selected edge seeds a walk across opposite quad edges in both
+ * directions. Every quad in that ring is split into two quads along the new
+ * midpoint edge. Non-quad faces in the ring are rejected. UVs are interpolated
+ * per face and materials are preserved; seam flags are not remapped.
+ */
+export function loopCutFromEdge(
+  mesh: HalfEdgeMesh,
+  edge: number
+): HalfEdgeMesh {
+  if (!Number.isInteger(edge) || edge < 0 || edge >= mesh.edgeCount) {
+    throw new RangeError(`Edge ${edge} is outside the mesh.`);
+  }
+  const halfEdge = mesh.edgeHalfEdge[edge];
+  const firstFace = mesh.heFace[halfEdge];
+  const secondFace = mesh.heFace[mesh.heTwin[halfEdge]];
+  if (firstFace === -1 && secondFace === -1) {
+    throw new Error('Loop cut requires a face adjacent to the edge.');
+  }
+
+  const loopEdges = new Set<number>([edge]);
+  const visitedFaces = new Set<number>();
+  const maxFaces = mesh.faceCount * 2 + 4;
+
+  const isQuad = (face: number): boolean => {
+    const corners = faceLoopCorners(mesh, face);
+    return corners.length === 4;
+  };
+
+  const walk = (startFace: number): void => {
+    let currentFace = startFace;
+    let currentEdge = edge;
+    while (currentFace >= 0 && !visitedFaces.has(currentFace)) {
+      if (visitedFaces.size > maxFaces) {
+        throw new Error('Loop cut could not close its edge ring.');
+      }
+      if (!isQuad(currentFace)) {
+        throw new Error('Loop cut requires a loop of quads.');
+      }
+      visitedFaces.add(currentFace);
+      const corners = faceLoopCorners(mesh, currentFace);
+      const index = corners.findIndex((corner) => corner.edge === currentEdge);
+      if (index < 0) {
+        throw new Error('Loop cut lost the current edge.');
+      }
+      const opposite = corners[(index + 2) % 4].edge;
+      if (loopEdges.has(opposite)) {
+        return;
+      }
+      loopEdges.add(opposite);
+      const next = otherFace(mesh, opposite, currentFace);
+      if (next === null) {
+        return;
+      }
+      currentEdge = opposite;
+      currentFace = next;
+    }
+  };
+
+  if (firstFace >= 0) {
+    walk(firstFace);
+  }
+  if (secondFace >= 0) {
+    walk(secondFace);
+  }
+
+  if (loopEdges.size < 2) {
+    throw new Error('Loop cut needs a closed opposite edge.');
+  }
+
+  const faces: MeshFaceSpec[] = [];
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const corners = faceLoopCorners(mesh, face);
+    const selectedIndices: number[] = [];
+    for (let index = 0; index < corners.length; index += 1) {
+      if (loopEdges.has(corners[index].edge)) {
+        selectedIndices.push(index);
+      }
+    }
+    if (selectedIndices.length === 0) {
+      faces.push(...meshFaceSpecs(mesh).slice(face, face + 1));
+      continue;
+    }
+    if (corners.length !== 4 || selectedIndices.length !== 2) {
+      throw new Error('Loop cut encountered a non-quad edge ring.');
+    }
+    const opposite =
+      (selectedIndices[0] + 2) % 4 === selectedIndices[1];
+    if (!opposite) {
+      throw new Error('Loop cut ring does not cross opposite edges.');
+    }
+
+    const pivot = selectedIndices[0];
+    const ordered = [0, 1, 2, 3].map(
+      (offset) => corners[(pivot + offset) % 4]
+    );
+    const midpoint = (a: LoopCorner, b: LoopCorner): MeshCornerSpec => ({
+      position: [
+        (a.position[0] + b.position[0]) / 2,
+        (a.position[1] + b.position[1]) / 2,
+        (a.position[2] + b.position[2]) / 2
+      ],
+      uv: [(a.uv[0] + b.uv[0]) / 2, (a.uv[1] + b.uv[1]) / 2]
+    });
+    const midA = midpoint(ordered[0], ordered[1]);
+    const midB = midpoint(ordered[2], ordered[3]);
+    const material = mesh.faceMaterial[face];
+
+    faces.push({
+      corners: [
+        { position: [...ordered[0].position] as Vec3, uv: [...ordered[0].uv] as Vec2 },
+        { position: [...midA.position] as Vec3, uv: [...midA.uv] as Vec2 },
+        { position: [...midB.position] as Vec3, uv: [...midB.uv] as Vec2 },
+        { position: [...ordered[3].position] as Vec3, uv: [...ordered[3].uv] as Vec2 }
+      ],
+      material
+    });
+    faces.push({
+      corners: [
+        { position: [...midA.position] as Vec3, uv: [...midA.uv] as Vec2 },
+        { position: [...ordered[1].position] as Vec3, uv: [...ordered[1].uv] as Vec2 },
+        { position: [...ordered[2].position] as Vec3, uv: [...ordered[2].uv] as Vec2 },
+        { position: [...midB.position] as Vec3, uv: [...midB.uv] as Vec2 }
+      ],
+      material
+    });
+  }
+
+  return HalfEdgeMesh.fromPolygons(faces);
+}

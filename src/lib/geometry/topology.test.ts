@@ -6,6 +6,7 @@ import {
   deleteSelectedElements,
   extrudeSelectedFaces,
   insetSelectedFace,
+  loopCutFromEdge,
   mergeSelectedVertices
 } from './topology';
 
@@ -125,6 +126,24 @@ describe('destructive element deletion', () => {
     expect(result.faceCount).toBe(cube.faceCount + 4);
     expect(result.vertexCount).toBe(cube.vertexCount + 4);
     expect(result.boundaryEdgeCount).toBe(0);
+    expect(() => result.validate()).not.toThrow();
+  });
+
+
+  it('cuts a quad edge loop through a closed cube', () => {
+    const cube = createCubeMesh(1);
+    const result = loopCutFromEdge(cube, 0);
+    expect(result.faceCount).toBe(cube.faceCount + 4);
+    expect(result.vertexCount).toBe(cube.vertexCount + 4);
+    expect(result.boundaryEdgeCount).toBe(0);
+    expect(() => result.validate()).not.toThrow();
+  });
+
+  it('cuts a loop through an open quad grid', () => {
+    const grid = createGridMesh(2, 2);
+    const result = loopCutFromEdge(grid, 0);
+    expect(result.faceCount).toBeGreaterThan(grid.faceCount);
+    expect(result.vertexCount).toBeGreaterThan(grid.vertexCount);
     expect(() => result.validate()).not.toThrow();
   });
 

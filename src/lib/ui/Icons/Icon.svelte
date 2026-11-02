@@ -98,5 +98,8 @@
     <path d="M4 15h16M6 15V9h12v6M12 9V3M9 6l3-3 3 3" />
   {:else if name === 'inset'}
     <path d="M3 3h18v18H3V3ZM8 8h8v8H8V8Z" />
+  {:else if name === 'loop-cut'}
+    <path d="M4 12a8 8 0 1 1 16 0a8 8 0 0 1-16 0Z" />
+    <path d="M4 12h16M12 4v16" />
   {/if}
 </svg>

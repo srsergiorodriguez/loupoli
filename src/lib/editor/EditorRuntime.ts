@@ -16,6 +16,7 @@ import {
   deletionLabel,
   extrudeSelectedFaces,
   insetSelectedFace,
+  loopCutFromEdge,
   mergeSelectedVertices
 } from '../geometry/topology';
 import type { PrimitiveKind } from '../geometry/primitives';
@@ -910,6 +911,33 @@ export class EditorRuntime {
         node.mesh,
         after,
         'Inset face'
+      );
+      this.selection.clear();
+      this.history.execute(command);
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.publish();
+    }
+  }
+
+  /** Cut one quad edge loop through the single selected edge. */
+  loopCut(): void {
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      this.selection.mode !== 'edge' ||
+      this.selection.count !== 1
+    ) {
+      return;
+    }
+    const [edge] = this.selection.values();
+    try {
+      const after = loopCutFromEdge(node.mesh, edge);
+      const command = new ReplaceMeshCommand(
+        node,
+        node.mesh,
+        after,
+        'Loop cut'
       );
       this.selection.clear();
       this.history.execute(command);

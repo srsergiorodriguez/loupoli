@@ -157,7 +157,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 **Goal:** the core low-poly modeling loop: organize, transform, cut, join, bridge, and repeat geometry non-destructively.
 
-**Status:** 3B selection foundation, destructive vertex/edge/face deletion, vertex merge, a two-boundary-edge bridge, and object join are implemented. 3A object transforms, gizmos, view-gizmo drag orbit, session object multi-selection, one-level persistent groups, grid snapping, and vertex axis locks are implemented. The PS1 look module is a collapsed render effect. The non-destructive Mirror / Grid Array / Radial Array stack, provenance-mapped picking/overlays, additive touch tap selection, face extrusion, and single-face inset are implemented; destructive base edits now work under an active stack, and bridge supports equal-length boundary chains/loops. Loop cut and direct base-vertex dragging under modifiers remain.
+**Status:** 3B selection foundation, destructive vertex/edge/face deletion, vertex merge, a two-boundary-edge bridge, and object join are implemented. 3A object transforms, gizmos, view-gizmo drag orbit, session object multi-selection, one-level persistent groups, grid snapping, and vertex axis locks are implemented. The PS1 look module is a collapsed render effect. The non-destructive Mirror / Grid Array / Radial Array stack, provenance-mapped picking/overlays, additive touch tap selection, face extrusion, and single-face inset are implemented; destructive base edits now work under an active stack, bridge supports equal-length boundary chains/loops, and a single-segment quad loop cut is implemented. Direct base-vertex dragging under modifiers remains.
 
 **Sequence:** 3A object/view operations → 3B base-mesh topology editing → 3C modifiers and final snapping polish. Object transforms must land before join (join bakes node transforms); selection/delete commands and edge selection must land before merge/bridge.
 
@@ -182,7 +182,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 1. Axis locking produces strictly zero motion on the two locked axes under adversarial pointer movement.
 2. Grid snapping lands moved coordinates exactly on the chosen increment and is reversible as one command.
-3. Extrude/inset/loop cut/weld preserve 2-manifold invariants and undo exactly.
+3. Extrude/inset/loop cut/weld preserve 2-manifold invariants and undo exactly. (Single-segment loop cut implemented for quad rings.)
 4. Mirror center seam is welded with no duplicate center vertices or visible split; mirrored winding faces outward.
 5. Reordering, disabling, and parameter-editing modifiers updates the evaluated mesh and invalidation only downstream stages.
 6. Every modifier parameter is serialized, round-tripped, and restored with the correct evaluated result.
