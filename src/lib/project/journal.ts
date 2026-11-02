@@ -1,0 +1,214 @@
+import type { Vec3 } from '../geometry/HalfEdgeMesh';
+import type { NodeTransform } from '../scene/MeshNode';
+import { validateModifiers, type Modifier } from '../geometry/modifiers';
+import { SceneDocument } from '../scene/SceneDocument';
+import {
+  restoreGroup,
+  restoreMesh,
+  restoreNode,
+  snapshotNode,
+  type GroupSnapshot,
+  type MeshSnapshot,
+  type NodeSnapshot
+} from './lpoly';
+
+/** One applied document transition recorded by the autosave journal. */
+export type JournalPatch =
+  | {
+      readonly type: 'move-vertex';
+      readonly nodeId: string;
+      readonly vertex: number;
+      readonly position: Vec3;
+    }
+  | {
+      readonly type: 'insert-node';
+      readonly index: number;
+      readonly node: NodeSnapshot;
+    }
+  | {
+      readonly type: 'remove-node';
+      readonly nodeId: string;
+    }
+  | {
+      readonly type: 'transform-node';
+      readonly nodeId: string;
+      readonly transform: NodeTransform;
+    }
+  | {
+      readonly type: 'replace-mesh';
+      readonly nodeId: string;
+      readonly mesh: MeshSnapshot;
+    }
+  | {
+      readonly type: 'insert-group';
+      readonly index: number;
+      readonly group: GroupSnapshot;
+    }
+  | {
+      readonly type: 'remove-group';
+      readonly groupId: string;
+    }
+  | {
+      readonly type: 'parent-node';
+      readonly nodeId: string;
+      readonly parentId: string | null;
+    }
+  | {
+      readonly type: 'transform-group';
+      readonly groupId: string;
+      readonly transform: NodeTransform;
+    }
+  | {
+      readonly type: 'set-modifiers';
+      readonly nodeId: string;
+      readonly modifiers: readonly Modifier[];
+    };
+
+/** Apply one journal patch to a reconstructed scene document. */
+export function applyJournalPatch(
+  document: SceneDocument,
+  patch: JournalPatch
+): void {
+  switch (patch.type) {
+    case 'move-vertex': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.mesh.setVertexPosition(patch.vertex, patch.position);
+      return;
+    }
+    case 'insert-node': {
+      document.insertNode(restoreNode(patch.node), patch.index);
+      return;
+    }
+    case 'remove-node': {
+      if (!document.removeNode(patch.nodeId)) {
+        throw new Error(`Autosave cannot remove missing node ${patch.nodeId}.`);
+      }
+      return;
+    }
+    case 'transform-node': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.setTransform(patch.transform);
+      return;
+    }
+    case 'replace-mesh': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.setMesh(restoreMesh(patch.mesh));
+      return;
+    }
+    case 'insert-group': {
+      document.insertGroup(restoreGroup(patch.group), patch.index);
+      return;
+    }
+    case 'remove-group': {
+      if (!document.removeGroup(patch.groupId)) {
+        throw new Error(`Autosave cannot remove missing group ${patch.groupId}.`);
+      }
+      return;
+    }
+    case 'parent-node': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      if (patch.parentId !== null && !document.getGroup(patch.parentId)) {
+        throw new Error(`Autosave references missing group ${patch.parentId}.`);
+      }
+      node.setParentId(patch.parentId);
+      return;
+    }
+    case 'transform-group': {
+      const group = document.getGroup(patch.groupId);
+      if (!group) {
+        throw new Error(`Autosave references missing group ${patch.groupId}.`);
+      }
+      group.setTransform(patch.transform);
+      return;
+    }
+    case 'set-modifiers': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.setModifiers(validateModifiers(patch.modifiers));
+    }
+  }
+}
+
+/** Approximate structured-clone byte footprint of one journal patch. */
+export function journalPatchBytes(patch: JournalPatch): number {
+  if (patch.type === 'move-vertex') {
+    return 48;
+  }
+  if (patch.type === 'remove-node') {
+    return patch.nodeId.length * 2 + 16;
+  }
+  if (patch.type === 'transform-node') {
+    return patch.nodeId.length * 2 + 96;
+  }
+  if (patch.type === 'remove-group') {
+    return patch.groupId.length * 2 + 16;
+  }
+  if (patch.type === 'parent-node') {
+    return patch.nodeId.length * 2 + (patch.parentId?.length ?? 0) * 2 + 32;
+  }
+  if (patch.type === 'transform-group') {
+    return patch.groupId.length * 2 + 96;
+  }
+  if (patch.type === 'insert-group') {
+    return (
+      patch.group.id.length * 2 +
+      patch.group.name.length * 2 +
+      192
+    );
+  }
+  if (patch.type === 'set-modifiers') {
+    return patch.nodeId.length * 2 + patch.modifiers.length * 128 + 32;
+  }
+  if (patch.type === 'replace-mesh') {
+    const mesh = patch.mesh;
+    return (
+      patch.nodeId.length * 2 +
+      mesh.positions.byteLength +
+      mesh.vertexOut.byteLength +
+      mesh.heOrigin.byteLength +
+      mesh.heTwin.byteLength +
+      mesh.heNext.byteLength +
+      mesh.heFace.byteLength +
+      mesh.heEdge.byteLength +
+      mesh.heUv.byteLength +
+      mesh.edgeHalfEdge.byteLength +
+      mesh.edgeFlags.byteLength +
+      mesh.faceHalfEdge.byteLength +
+      mesh.faceMaterial.byteLength +
+      64
+    );
+  }
+  const mesh = patch.node.mesh;
+  return (
+    patch.node.name.length * 2 +
+    patch.node.id.length * 2 +
+    mesh.positions.byteLength +
+    mesh.vertexOut.byteLength +
+    mesh.heOrigin.byteLength +
+    mesh.heTwin.byteLength +
+    mesh.heNext.byteLength +
+    mesh.heFace.byteLength +
+    mesh.heEdge.byteLength +
+    mesh.heUv.byteLength +
+    mesh.edgeHalfEdge.byteLength +
+    mesh.edgeFlags.byteLength +
+    mesh.faceHalfEdge.byteLength +
+    mesh.faceMaterial.byteLength +
+    96
+  );
+}
+export { snapshotNode };

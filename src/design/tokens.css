@@ -1,0 +1,183 @@
+:root {
+  color-scheme: dark;
+
+  /* Canvas and surfaces */
+  --bg-canvas: #121214;
+  --bg-panel: rgba(24, 24, 28, 0.88);
+  --bg-panel-strong: rgba(26, 26, 31, 0.96);
+  --bg-surface: #18181c;
+  --bg-raised: #202027;
+  --bg-input: rgba(9, 9, 12, 0.72);
+  --bg-hover: rgba(255, 255, 255, 0.055);
+  --bg-pressed: rgba(255, 255, 255, 0.09);
+  --bg-selected: rgba(201, 244, 92, 0.13);
+  --bg-scrim: rgba(0, 0, 0, 0.45);
+
+  /* Structure */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --border-focus: #c9f45c;
+  --hairline: 1px;
+
+  /* Type */
+  --text-primary: #f2efe6;
+  --text-secondary: #a6a3ac;
+  --text-tertiary: #8e8c96;
+  --text-disabled: #57565e;
+  --text-inverse: #151807;
+
+  /* Signal colors */
+  --accent-primary: #c9f45c;
+  --accent-primary-hover: #d8ff7d;
+  --accent-primary-muted: rgba(201, 244, 92, 0.13);
+  --accent-secondary: #8f8ff8;
+  --accent-danger: #ff6b7a;
+  --accent-warning: #ffb45e;
+  --accent-success: #72e2b2;
+  --selection: var(--accent-primary);
+  --selection-hover: #ffffff;
+
+  /* Axes */
+  --axis-x: #ff6b7d;
+  --axis-y: #9bdd72;
+  --axis-z: #71a8ff;
+
+  /* Viewport furniture */
+  --grid-minor: rgba(255, 255, 255, 0.065);
+  --grid-major: rgba(255, 255, 255, 0.12);
+  --wireframe-edge: rgba(242, 239, 230, 0.26);
+  --wireframe-edge-active: var(--accent-primary);
+  --vertex-handle: rgba(242, 239, 230, 0.62);
+  --material-solid: #cec8b9;
+  --material-texture-a: #263129;
+  --material-texture-b: #c8c2ad;
+  --viewport-key-light: #fff2dc;
+  --viewport-fill-light: #8eb6ff;
+
+  /* Typography */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Cascadia Mono", "Roboto Mono", monospace;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.75rem;
+  --leading-tight: 1.2;
+  --leading-ui: 1.35;
+  --leading-body: 1.5;
+  --tracking-ui: 0.005em;
+  --tracking-label: 0.08em;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Spacing */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-panel: var(--space-3);
+  --space-control-gap: var(--space-2);
+
+  /* Shape */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* Controls */
+  --control-h-sm: 24px;
+  --control-h: 30px;
+  --control-h-lg: 36px;
+  --hit-min: 44px;
+  --control-h-touch: 44px;
+  --icon-size: 18px;
+  --icon-size-touch: 20px;
+
+  /* Chrome geometry */
+  --shell-inset: 12px;
+  --topbar-h: 48px;
+  --toolrail-w: 52px;
+  --inspector-w: 304px;
+  --status-h: 28px;
+  --gizmo-size: 88px;
+  --gizmo-size-touch: 112px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Glass and elevation */
+  --blur-panel: 8px;
+  --blur-strong: 16px;
+  --shadow-panel:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 12px 32px rgba(0, 0, 0, 0.32);
+  --shadow-popover:
+    0 18px 50px rgba(0, 0, 0, 0.48),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* Focus and disabled */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --opacity-disabled: 0.38;
+  --opacity-muted: 0.64;
+
+  /* Motion */
+  --motion-instant: 80ms;
+  --motion-fast: 140ms;
+  --motion-panel: 220ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Stacking */
+  --z-canvas: 0;
+  --z-hud: 10;
+  --z-chrome: 20;
+  --z-panel: 30;
+  --z-popover: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+}
+
+:root[data-density="touch"] {
+  --control-h: var(--control-h-touch);
+  --control-h-sm: 36px;
+  --control-h-lg: 48px;
+  --hit-min: 44px;
+  --topbar-h: 56px;
+  --status-h: 32px;
+  --inspector-w: 288px;
+  --icon-size: var(--icon-size-touch);
+  --space-panel: var(--space-4);
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --border-subtle: rgba(255, 255, 255, 0.2);
+    --border-strong: rgba(255, 255, 255, 0.32);
+    --text-secondary: #c2bfc8;
+    --text-tertiary: #a09da6;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --bg-panel: #18181c;
+    --bg-panel-strong: #1a1a1f;
+    --blur-panel: 0px;
+    --blur-strong: 0px;
+  }
+}

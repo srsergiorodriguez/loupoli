@@ -1,0 +1,31 @@
+node_modules
+dist
+dist-ssr
+*.local
+.npm-cache
+
+# Rust / Tauri
+src-tauri/target
+target
+.cargo-home
+
+# Generated platform projects are managed by the Tauri CLI.
+src-tauri/gen
+
+# Local browser verification profiles
+.chrome-debug
+.chrome-profile
+
+# Editor / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Test output
+coverage

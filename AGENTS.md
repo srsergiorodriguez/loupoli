@@ -1,0 +1,162 @@
+# loupoli — Working Instructions
+
+Read this before changing the project. It is the persisted version of the master instructions, including the later persistence, precision, modifier, and PS1 addenda.
+
+**Brand:** the name is always written `loupoli`, lowercase.
+
+---
+
+## 1. Mission
+
+`loupoli` is a bespoke, high-performance, pen-first low-poly 3D modeler for iPad and desktop. It favors instant, precise topological control and a deliberately retro visual language over modern sculpting bloat.
+
+The product is being built in the phases in [docs/PLAN.md](docs/PLAN.md); architecture boundaries are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+---
+
+## 2. Technology and dependency rules
+
+- **Tauri v2** (Rust) for desktop and iOS, **Svelte 5** runes for UI, **Vite**, **strict TypeScript**, **Three.js** on WebGL2.
+- No SvelteKit, Tailwind, Bootstrap, CSS framework, state-management library, icon package, geometry/CSG kernel, or LSCM library.
+- Add a dependency only when the native/bespoke alternative is genuinely insufficient. Record the reason and iOS memory impact.
+- No Svelte reactive proxies around Three.js objects, DCEL columns, typed arrays, or canvas contexts.
+- Every exported class and interface gets a JSDoc block. Non-obvious topology math gets inline comments explaining the invariant.
+
+---
+
+## 3. Non-negotiable engine rules
+
+- **Z-up, right-handed.** X right, Y forward, Z up. Set `THREE.Object3D.DEFAULT_UP.set(0, 0, 1)` once before scene construction. The grid lies on XY (`z = 0`).
+- **DCEL is the source of truth.** `THREE.BufferGeometry` is derived render data only. The editable mesh is a custom half-edge structure; quads and continuous topology must remain first-class. Open surfaces are represented by explicit boundary half-edge loops, never by fake faces.
+- **Scene ownership.** `SceneDocument` owns mesh nodes; active object, selection mode, selection set, camera, and UI state are session state. Node creation/deletion and vertex moves are commands. Selection is never undoable scene state.
+- **Command pattern.** Every document mutation is a `Command` with `execute()`/`undo()`. Store geometric deltas or localized topology snapshots, never full-scene clones. Gestures commit once on pointer-up.
+- **On-demand rendering.** No continuous `requestAnimationFrame` loop. Only camera changes, mesh/document updates, selection, viewport resize, and shading changes may schedule a frame. Animations are finite, scheduler-driven, and cancelable. Idle WebGL frame count must be zero.
+- **Buffer mutation.** Reuse typed-array capacity and mutate GPU buffers. Do not reallocate geometry, materials, or arrays for position-only changes. The one allowed exception is derived-geometry rebuild when a quad crosses the planarity threshold and adaptive bilinear tessellation changes its render triangle count; the DCEL remains untouched.
+- **Quad continuity.** A bent quad must not render as two visibly independent textured triangles with a long diagonal crease. Render non-planar quads as a bilinear patch while preserving the quad in the editable topology. Do not silently triangulate the DCEL to hide renderer artifacts.
+- **Screen-space picking.** Vertices and edges use a **16 CSS px** screen-space distance threshold for touch and Apple Pencil reliability. Reject occluded candidates. Faces use a raycast mapped through render-triangle ranges to the source DCEL face. Selection overlays operate on DCEL elements, never on internal render tessellation.
+- **Multi-selection.** Element selection is a session set per active node/mode. Shift/Cmd/Ctrl-click and the sticky Add toggle add or remove elements; a plain pick replaces the set; changing node or mode clears it. Selection never enters undo history or project persistence.
+- **Input routing.** One route based on `PointerEvent.pointerType`:
+  - Pen bypasses camera controls entirely; it performs selection, topology edits, vertex drag, and later texture paint, with pressure and tilt forwarded.
+  - Touch: 1-finger tap selects (sticky Add supplies additive selection), 1-finger drag orbits, 2-finger pinch/pan, 2-finger tap undo, 3-finger tap redo.
+  - Mouse: LMB on a topology handle edits; LMB drag on empty canvas or a face away from a handle orbits as a trackpad-friendly fallback. Alt/Option+LMB orbits, Alt/Option+Shift+LMB pans, MMB orbits, Shift+MMB pans, wheel zooms.
+  - The iPad inspector is non-modal. It must not block camera or editing gestures in the viewport above it.
+- **44 CSS px touch targets.** The canvas is full-viewport, `touch-action: none`, `user-select: none`. Use safe-area insets and `100dvh` where appropriate.
+- **Design tokens.** Use vanilla CSS custom properties from `src/design/tokens.css`; no hard-coded palette values in components. `--bg-canvas: #121214`, translucent `--bg-panel` with 8px backdrop blur.
+
+---
+
+## 4. Persistence and iOS memory addendum
+
+1. **Local-first.** WKWebView may suspend or kill the app. Never rely on volatile memory for long sessions.
+2. **Autosave.** Implement an IndexedDB cache that records geometric state transitions every 30 seconds while dirty, plus a best-effort flush on background/visibility change. Keep a checkpoint plus deltas; never append full scene clones.
+3. **Recovery.** On cold start, offer recovery of unsaved work explicitly. Never silently replace newer file data. Distinguish autosave, manual save, recovery, and failure states.
+4. **Project format.** `.lpoly` is a single versioned file containing DCEL topology, the modifier stack, UV/seam data, shape keys, lights, and texture layers. Texture layers use **binary PNG chunks** in the container, not base64 (approved 2026-11-01).
+5. **Native I/O.** Encode/decode in TypeScript; use Tauri Rust commands for byte-level file access. Validate magic/length/checksums, enforce size limits, and use temp-file + atomic rename. Rust does not parse document semantics.
+6. **Memory safety.**
+   - Do not put document data in Svelte runes.
+   - Bound history by bytes and command count.
+   - Cap DPR, texture dimensions, layer counts, autosave journal, and all caches.
+   - Dispose every geometry, material, texture, and canvas owner.
+   - No base64 strings retained in memory.
+7. **iOS prerequisites.** iPadOS 16.4+ baseline. The local machine still needs CocoaPods, Rust iOS targets, simulator runtimes, and signing before a device build.
+
+See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the full protocol and format.
+
+---
+
+## 5. Precision and transform rules
+
+- Translate, rotate, and scale must support **axis locking**. Desktop: X/Y/Z during a transform. Touch/pen: 44px on-screen axis chips. Locking must project the drag vector onto the selected axis mathematically, not just visually.
+- **Incremental grid snapping** is a toggleable constraint. Round moved coordinates to the chosen step in the global grid (default set: 0.1, 0.25, 0.5, 1.0). Show when snapping is active. Snap only committed number values, never display-only values.
+- Exact numeric transforms must be available in the inspector once transform tools exist.
+- Escape cancels a transform; Enter commits.
+
+---
+
+## 6. Modifier-stack rules
+
+- `MeshNode` evaluates `Modifier[]` over the base DCEL, then triangulates for the GPU. Base geometry stays editable.
+- Every modifier is serializable, ordered, individually disableable, and undoable when added/removed/reordered/edited.
+- Required Phase 3 modifiers:
+  - **Mirror** across a local axis, correct winding, weld vertices on the center seam, stitch seam boundary.
+  - **Grid Array** X/Y repetition.
+  - **Radial Array** circular repetition around a local axis.
+- Any reflection must reverse winding. Validate manifoldness after mirror clipping; report failures instead of rendering broken topology.
+- Evaluate with provenance maps so picking mirrored/arrayed output can map back to base elements.
+
+---
+
+## 7. Authentic PS1 rules
+
+- The Unlit/PS1 mode uses a custom GLSL `ShaderMaterial`, never `MeshBasicMaterial`.
+- **Vertex snapping:** snap clip-space XY to a low-resolution virtual raster (default 320 × 240) by dividing, rounding, and re-multiplying by w. Do not snap Z. Handle clipping correctly.
+- **Affine texture mapping:** GLSL ES has no `noperspective`; pass `uv * w` and `w` varyings and divide in the fragment shader. Do not settle for perspective-correct interpolation.
+- PS1 effects are optional toggles; Solid and Lit must stay readable modeling modes.
+- **Default Unlit is correct, unsnapped perspective mapping.** Vertex snapping and affine UV interpolation are opt-in. Do not silently turn either on as a default; PS1 is a deliberate aesthetic mode, not the baseline editing view.
+- Test near-plane clipping, extreme zoom, multiple aspect ratios, nearest filtering, and color-space output.
+
+---
+
+## 8. UI behavior
+
+- Page/app canvas is `100vw` × `100vh` with `100dvh` enhancement; no page scroll.
+- Use floating dark glass panels, hairlines, warm text, a single lime signal color, and conventional X/Y/Z axis colors.
+- No hover-only actions on touch. Icon-only actions need accessible labels and tooltips where appropriate. Focus states are always visible.
+- Do not leave dead controls or disabled future features in the UI. Build components when their feature arrives.
+- The interface should feel like a compact professional DCC editor, not a dashboard.
+- Future timeline, modifier panels, texture layers, and save states must use the same token/component system.
+
+---
+
+## 9. Current implementation state
+
+Phase 2 is implemented; Phase 3 foundations are underway for browser and native desktop build:
+
+- Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad inspector, and a live autosave indicator.
+- Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
+- Four shading modes, custom PS1 Unlit shader with snap/affine toggles; correct unsnapped perspective mapping is the default.
+- Generalized half-edge DCEL with open boundary loops, validated column reconstruction, per-corner UVs, seam flags, face materials, and adaptive bilinear rendering for non-planar quads.
+- QuadSphere, Cylinder (n-gon caps), and Grid primitives; the first-run scene is an editable QuadSphere.
+- Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.
+- Additive multi-element selection: Shift/Cmd/Ctrl-click, a sticky 44 px Add mode for pen/mouse, and one-finger touch taps; selected sets render multi-vertex points, instanced edge tubes, and merged face fills.
+- Numeric object transforms (position, rotation, scale) through undoable commands; selection overlays follow the node transform. The orientation gizmo supports drag-to-orbit while retaining axis-click snap and center-frame.
+- Move/Rotate/Scale object gizmos with axis-constrained pen/mouse drags, screen-constant handle size, and undoable transform commits. Finger touch remains camera navigation.
+- Destructive deletion of selected faces or all faces incident to selected edges/vertices, with DCEL rebuild, boundary regeneration, undo, and autosave mesh-replacement patches. The PS1 look is a collapsed render-effect module at the Inspector bottom.
+- Vertex merge-to-centroid, collapsed-face cleanup, and a minimal bridge of exactly two boundary edges into one quad. Both use validated mesh replacement and autosave patches.
+- Session-only object multi-selection (modifier-click or sticky touch/pen toggle) and join into the active target, with relative-transform baking, source removal, undo, and ordered multi-patch autosave transitions.
+- Grid snap (0.1/0.25/0.5/1.0) for object translation and vertex drags, plus world X/Y/Z vertex axis locks through keyboard keys and 44 px touch/pen chips. Snap state is session-only; typed numeric transforms stay exact.
+- One-level scene groups with an average-position pivot, outliner tree, group numeric/gizmo transforms, ungroup with transform baking, undo, ordered group autosave patches, and optional `.lpoly` group manifests/node parentage.
+- Ordered non-destructive Mirror / Grid Array / Radial Array stacks with base-DCEL preservation, evaluated rendering/counts, Inspector add/toggle/reorder/edit/remove controls, undo, autosave patches, `.lpoly` serialization, and evaluated-to-base vertex/edge/face provenance. Picking selects base elements and overlays highlight every evaluated copy. Base topology editing pauses while modifiers are active.
+- Localized vertex moves and scene-node commands; redo truncation, a 100-command cap, and a 32 MB history budget.
+- IndexedDB autosave checkpoint plus localized deltas every 30 seconds and on visibility loss, with explicit Recover/Discard.
+- `.lpoly` v1 binary codec with a CRC-checked manifest, aligned typed-array columns, file-size limits, and multi-node round-trip tests.
+- Tauri native open/save dialogs and Rust atomic byte-level file I/O; browser download/file-picker fallbacks.
+- Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
+- Camera state and active-object selection are not serialized; node transforms and viewport settings are.
+
+Next planned work: Phase 3 polish — loop/multi-segment bridge controls, extrude/inset/loop cut, and editing base topology while a modifier stack is active.
+
+Approved decisions:
+
+1. Phase 1 includes a minimal DCEL cube and a real vertex-move command.
+2. Minimum iPadOS is 16.4.
+3. `.lpoly` textures are binary PNG chunks.
+4. Bundle identifier is `com.loupoli.studio` (no `.app` suffix).
+5. Correct perspective mapping with no vertex snapping is the Unlit default. PS1 vertex snapping and affine UVs are opt-in.
+6. Non-planar quads use render-only bilinear tessellation. The editable DCEL remains quads, and topological counts do not change.
+7. `.lpoly` v1 uses a binary CRC-checked container; autosave uses an IndexedDB checkpoint plus localized command deltas, never a full-scene clone per edit.
+
+---
+
+## 10. Quality gates for changes
+
+Before claiming work done:
+
+- `npm run check`, `npm test`, and `npm run build` pass.
+- Idle render count stays flat; no loop leaked.
+- No new console warnings or TODO/stub features.
+- Touch target and pointer-type behavior verified where relevant.
+- Every document mutation can be undone and, where it belongs in the document, serialized.
+- Tests cover topology invariants, format round-trip, and math that can fail silently.
+- Documentation is updated to match behavior, including limitations.
+- No feature is added outside the requested scope.
