@@ -607,7 +607,7 @@ export class EditorRuntime {
   /** Rebuild the UV corner set from the active 3D element selection. */
   syncUvFrom3d(): void {
     this.rebuildUvSelection();
-    this.lastUvSourceSignature = `${this.getActiveNode()?.id ?? ''}|${this.selection.mode}|${this.selection.values().join(',')}`;
+    this.lastUvSourceSignature = this.uvSourceSignature();
     this.publish();
   }
 
@@ -677,6 +677,7 @@ export class EditorRuntime {
       this.uvSelection.add(hit);
     }
     this.uvRevision += 1;
+    this.linkUvSelectionTo3d();
     this.publish();
     return true;
   }
@@ -4307,17 +4308,57 @@ export class EditorRuntime {
    * only a change in active node, element mode, or selected 3D elements rebuilds
    * the UV set.
    */
+  private uvSourceSignature(): string {
+    return `${this.getActiveNode()?.id ?? ''}|${this.selection.mode}|${this.selection.values().join(',')}`;
+  }
+
   private syncUvSelectionIfChanged(): void {
     if (!this.uvOpen) {
       return;
     }
-    const node = this.getActiveNode();
-    const signature = `${node?.id ?? ''}|${this.selection.mode}|${this.selection.values().join(',')}`;
+    const signature = this.uvSourceSignature();
     if (signature === this.lastUvSourceSignature) {
       return;
     }
     this.lastUvSourceSignature = signature;
     this.rebuildUvSelection();
+  }
+
+  /**
+   * Highlight the 3D faces owning the selected UV corners.
+   *
+   * The UV set is intentionally not rebuilt from those faces: a UV pick on one
+   * corner should not silently expand to every corner of the linked face. The
+   * source signature is advanced before the publish so the normal 3D-to-UV sync
+   * does not overwrite the precise UV selection.
+   */
+  private linkUvSelectionTo3d(): void {
+    const node = this.getActiveNode();
+    if (!node || this.uvSelection.size === 0) {
+      return;
+    }
+    const faces = new Set<number>();
+    for (const corner of this.uvSelection) {
+      if (corner < 0 || corner >= node.mesh.halfEdgeCount) {
+        continue;
+      }
+      const face = node.mesh.heFace[corner];
+      if (face >= 0) {
+        faces.add(face);
+      }
+    }
+    if (faces.size === 0) {
+      return;
+    }
+    if (this.selection.mode !== 'face') {
+      this.selection.setMode('face');
+      if (this.axisLock !== null) {
+        this.axisLock = null;
+      }
+    }
+    this.selection.setValues(Array.from(faces).sort((a, b) => a - b));
+    this.lastUvSourceSignature = this.uvSourceSignature();
+    this.syncScene();
   }
 
   private rebuildUvSelection(): void {

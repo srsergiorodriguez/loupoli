@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, and a resizable UV split with linked corner selection, Move/Rotate/Scale drag, U/V locks, snap, and exact numeric entry are implemented. Two-way UV-to-3D linking, unwrap, texture layers, and projection painting remain.
+**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, and a resizable UV split with linked corner selection, Move/Rotate/Scale drag, U/V locks, snap, and exact numeric entry are implemented. Two-way UV-to-3D linking is implemented; unwrap, texture layers, and projection painting remain.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -65,7 +65,7 @@
 ### Slice 2 — UV viewport and UV transforms (implemented)
 
 - Resizable 3D/UV split with one renderer and one scheduler. **Implemented.**
-- 2D UV canvas with chart-agnostic corner selection, 16 CSS px tolerance, and linked 3D selection. **Implemented; 3D-to-UV sync is signature-driven, and Sync 3D is explicit.**
+- 2D UV canvas with chart-agnostic corner selection, 16 CSS px tolerance, and linked 3D selection. **Implemented both ways: 3D-to-UV sync is signature-driven, Sync 3D is explicit, and a UV pick highlights the owning 3D faces without expanding the UV set.**
 - Move UVs with U/V constraints and snap, undo/cancel. **Implemented: `MoveUvCornersCommand`, per-corner autosave patches, 0.25 default snap increment.**
 - Rotate/scale UVs around the median and exact numeric entry. **Implemented; rotate snap is 15°, numeric values are exact and unsnapped.**
 - UV overlays for selected corners/edges/faces and seam boundaries. **Implemented for seams, selected corners, and selected faces.**
