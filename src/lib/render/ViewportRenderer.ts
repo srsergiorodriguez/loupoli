@@ -427,6 +427,10 @@ export class ViewportRenderer {
   ): void {
     this.selectionGizmoOrigin = origin ? origin.clone() : null;
     this.selectionGizmoQuaternion = quaternion ? quaternion.clone() : null;
+    if (this.transformMode !== 'select') {
+      this.updateGizmo();
+    }
+    this.schedule();
   }
 
   /** Current camera-space axis projections for the orientation gizmo. */

@@ -3218,6 +3218,7 @@ export class EditorRuntime {
     for (let index = 0; index < drag.vertices.length; index += 1) {
       drag.node.mesh.setVertexPosition(drag.vertices[index], positions[index]);
     }
+    this.updateSelectionGizmoFrame();
     if (drag.node.getEvaluatedMesh().modifiersActive) {
       this.syncScene();
     } else {
@@ -3270,6 +3271,7 @@ export class EditorRuntime {
     for (let index = 0; index < drag.vertices.length; index += 1) {
       drag.node.mesh.setVertexPosition(drag.vertices[index], drag.before[index]);
     }
+    this.updateSelectionGizmoFrame();
     if (drag.node.getEvaluatedMesh().modifiersActive) {
       this.syncScene();
     } else {

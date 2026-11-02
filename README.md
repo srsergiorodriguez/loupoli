@@ -269,7 +269,7 @@ Context-sensitive element transform: face selection, local X constraint, exact 0
 - Select vertices, edges, or faces first.
 - Tap **Move**, **Rotate**, or **Scale** in the tool rail.
 - The axis gizmo is placed at the median of the selected elements.
-- Drag an X/Y/Z handle with the Pencil or mouse. Selection remains active after the commit.
+- Drag an X/Y/Z handle with the Pencil or mouse. The gizmo follows the live selection median during the drag; selection remains active after the commit.
 - Local/Global orientation applies; modifiers operate in base space at the base-selection median.
 - With no element selection, the same tools return to object/group transforms.
 - Current limits: axis handles only (no free-plane or uniform center handle), and one-finger touch still orbits rather than drags the gizmo.
