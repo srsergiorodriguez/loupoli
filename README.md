@@ -28,6 +28,10 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **UV seam authoring.** Select edges in Edge mode and use **Seam** to mark or clear UV seams. Seams render as an amber overlay, use one localized undoable command with per-edge autosave patches, and round-trip through `.lpoly`. Unwrapping, a UV viewport, texture layers, and painting are Phase 4 work.
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
+
+- **UV editing split.** Toggle **UV** in the viewport HUD to split the workspace. Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move per-corner UVs. **U** and **V** lock the drag axis; grid snap applies to UV increments. UV moves are one undoable command with per-corner autosave patches, and the split can be resized with the grip above the panel. UV rotate/scale, numeric entry, unwrapping, layers, and painting are not implemented yet.
+
+![UV editing split with selected corners and seams](docs/media/uv-split.png)
 - **Three real primitives.** QuadSphere (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
 - **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed beside the existing scene rather than overlapping at the origin.
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
@@ -148,7 +152,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **62 passing** tests across eleven files:
+- `npm test`: **67 passing** tests across thirteen files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.
@@ -191,6 +195,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Texture + Wire rendering, top-right placement, icon-only touch density, compact scene/selection actions, and Texture + Wire `.lpoly` settings round-trip verified. The wire pass now culls back-facing edges on the CPU: the default sphere drew 28 of 48 edges and a cylinder drew 23 of 36, with the back wall absent.
   - Loop-cut preview: while dragging a Loop Cut, a solid blue loop line marked the prospective cut; it cleared on commit/cancel and remained distinct from the lime front wire. Loop context survived undo/redo of the cut and slide (t 0.65 → 0.3 → 0.65) and cleared after an unrelated transform.
   - Seam authoring: edge selection toggled an amber seam overlay; undo restored the DCEL flags, autosave journal patches reapplied them, and `.lpoly` round-tripped the flags.
+  - UV split: a selected face produced four linked UV corners; dragging moved all four under one `Move 4 UV corners` command, undo restored them, U-lock changed only U, and snap produced a 0.25 UV increment. The split resized from 38% to 50%, 3D selection changes refreshed the linked corner set, and closing restored the full 3D viewport and ActionDock. After the canvas-only resize fix, the camera aspect tracked the split (3.070 measured vs 3.068 expected) and returned to 1.902 on close. Idle renders stayed flat with the UV view open (5 → 5) and closed (7 → 7).
   - Global orientation on a grouped, rotated child: world fields showed the composed pose, the move/rotate gizmo axes were world-aligned, global position/rotation edits converted back to local coordinates, and undo restored the prior pose.
   - Modal G/R/S: free mouse move, X-axis constrained typed move, 45° typed rotation, 2× typed scale, click confirmation, axis toggle, and Escape cancellation were exercised; each commit produced one transform command and undo restored the pose.
   - ActionDock: touch tap armed Extrude; a pencil/mouse drag previewed and committed 30 V/56 E/28 F from 26/48/24; touch targets measured 44 px; Inset matched those closed counts; Loop Cut produced 34/64/32 and enabled Loop Slide; Loop Slide produced a valid 34/64/32 mesh; cancel restored mesh and selection; a Grid Array-evaluated base extrude updated 28 base faces to 56 evaluated faces.

@@ -138,7 +138,7 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: Phase 4 Slice 2 — resizable UV viewport with linked corner selection and UV transforms. Then chart extraction/LSCM, the texture-layer stack with `.lpoly` v2 PNG chunks, and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
+Next planned work: finish Phase 4 Slice 2 with UV rotate/scale and numeric UV entry, then chart extraction/LSCM, the texture-layer stack with `.lpoly` v2 PNG chunks, and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
 
 Approved decisions:
 

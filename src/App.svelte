@@ -11,6 +11,7 @@
   import StatusBar from './lib/ui/Chrome/StatusBar.svelte';
   import Inspector from './lib/ui/Panels/Inspector.svelte';
   import ProjectBanner from './lib/ui/Chrome/ProjectBanner.svelte';
+  import UvPanel from './lib/ui/Uv/UvPanel.svelte';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
   import { EditorRuntime } from './lib/editor/EditorRuntime';
 
@@ -21,6 +22,13 @@
 
   function focusViewport(): void {
     canvas?.focus({ preventScroll: true });
+  }
+
+  function toggleUvView(): void {
+    if (!session.snapshot.uvOpen) {
+      session.closeInspector();
+    }
+    session.toggleUvView();
   }
 
   onMount(() => {
@@ -98,7 +106,12 @@
 </svelte:head>
 
 <div class="app-shell">
-  <main class="viewport" aria-label="3D viewport">
+  <main
+    class="viewport"
+    class:uv-open={session.snapshot.uvOpen}
+    style={`--uv-height:${session.snapshot.uvSplit * 100}%`}
+    aria-label="3D viewport"
+  >
     <p id="viewport-help" class="visually-hidden">
       Z-up 3D viewport. Choose vertex, edge, or face selection. With a pen or the
       primary mouse button, select elements; use Add mode or Shift/Cmd-click to
@@ -139,13 +152,25 @@
       </div>
 
       <div class="viewport-hud">
+        <button
+          type="button"
+          class="uv-toggle"
+          class:active={session.snapshot.uvOpen}
+          aria-label="Toggle UV editor"
+          aria-pressed={session.snapshot.uvOpen}
+          onclick={toggleUvView}
+        >UV</button>
         <ShadingControl {session} />
         <OrientationGizmo {session} />
       </div>
 
-      <TransformHud modal={session.snapshot.modalTransform} />
-      <ActionDock {session} />
-      <ActionHud state={session.snapshot.actionState} />
+      {#if !session.snapshot.uvOpen}
+        <TransformHud modal={session.snapshot.modalTransform} />
+        <ActionDock {session} />
+        <ActionHud state={session.snapshot.actionState} />
+      {:else}
+        <UvPanel {session} />
+      {/if}
     {:else}
       <section class="startup-error loupoli-panel" role="alert">
         <p class="error-kicker">Graphics unavailable</p>
@@ -193,9 +218,45 @@
     outline: none;
   }
 
+  .viewport.uv-open > canvas {
+    height: calc(100% - var(--uv-height));
+  }
+
   canvas:focus-visible {
     outline: var(--focus-ring-width) solid var(--border-focus);
     outline-offset: -4px;
+  }
+
+  .uv-toggle {
+    min-width: var(--hit-min);
+    min-height: var(--hit-min);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-panel);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-label);
+    cursor: pointer;
+    -webkit-backdrop-filter: blur(var(--blur-panel));
+    backdrop-filter: blur(var(--blur-panel));
+  }
+
+  .uv-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .uv-toggle.active {
+    border-color: var(--accent-primary);
+    background: var(--bg-selected);
+    color: var(--accent-primary);
+  }
+
+  .uv-toggle:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 2px;
   }
 
   .viewport-context {

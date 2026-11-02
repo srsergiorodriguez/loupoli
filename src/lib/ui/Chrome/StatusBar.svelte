@@ -40,6 +40,12 @@
     if (session.snapshot.nodes.length === 0) {
       return 'Scene empty · add a primitive in the inspector';
     }
+    if (session.snapshot.uvOpen) {
+      const count = session.snapshot.uvSelectedCorners.length;
+      return count > 0
+        ? `UV · ${count} corner${count === 1 ? '' : 's'} · drag to move · U/V lock`
+        : 'UV · select 3D faces or click UV corners';
+    }
     if (session.snapshot.modifiersActive) {
       return 'Modifiers active · base edits re-evaluate · gizmo uses base median';
     }

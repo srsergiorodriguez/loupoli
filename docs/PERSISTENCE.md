@@ -206,6 +206,8 @@ For each node, in order:
 8. `heUv` — `f32`, `halfEdgeCount × 2`
 9. `edgeHalfEdge` — `u32`, `edgeCount`
 10. `edgeFlags` — `u8`, `edgeCount`. Bit 0 is the UV seam flag; other bits remain reserved.
+
+UV moves use a localized `move-uv` autosave patch per corner; UV coordinates remain in the existing per-corner `heUv` column.
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 

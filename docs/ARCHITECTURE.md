@@ -444,6 +444,10 @@ local math fix.
 
 ## 7. Rendering architecture
 
+### Viewport sizing
+
+The renderer observes the **canvas** element, not its parent, and derives width/height from the canvas CSS box. This keeps the perspective aspect, picking rectangle, and drawing-buffer size synchronized when a split view changes only the canvas height while the full-viewport parent stays fixed.
+
 ### Scheduler
 
 ```ts

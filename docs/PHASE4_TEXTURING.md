@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation started. UV seam authoring, overlay rendering, undo/autosave, and `.lpoly` persistence are implemented. UV viewport, unwrap, texture layers, and projection painting remain.
+**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, and a resizable UV split with linked corner selection, drag, U/V locks, and snap are implemented. UV rotate/scale, numeric entry, unwrap, texture layers, and projection painting remain.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -31,7 +31,7 @@
 - UVs remain per half-edge corner so one topological vertex can carry different coordinates on either side of a seam.
 - UV edits are localized commands over corner indices and before/after `Vec2` values.
 - UV selection is a session-only set, just like 3D element selection. It never enters undo history.
-- The UV view uses the same 16 CSS px selection tolerance and 44 px tool targets.
+- The UV view uses the same 16 CSS px selection tolerance and 44 px tool targets. **Move path implemented; rotate/scale and numeric fields pending.**
 - UV transforms must support axis constraints, numeric entry, snap, undo, and cancel, reusing the transform interaction model where practical.
 
 ### Texture layers
@@ -62,13 +62,14 @@
 - `EDGE_SEAM` flag API, seam overlay, Inspector toggle, command, journal patches, tests.
 - Seam bits already round-trip through `.lpoly`.
 
-### Slice 2 — UV viewport and UV transforms
+### Slice 2 — UV viewport and UV transforms (move path implemented)
 
-- Resizable 3D/UV split with one renderer and one scheduler.
-- 2D UV canvas with chart-agnostic corner selection, 16 CSS px tolerance, and linked 3D selection.
-- Move/rotate/scale UVs with X/Y constraints, numeric entry, snap, undo/cancel.
-- UV overlays for selected corners/edges/faces and seam boundaries.
-- No unwrap yet; existing primitive UVs are editable immediately.
+- Resizable 3D/UV split with one renderer and one scheduler. **Implemented.**
+- 2D UV canvas with chart-agnostic corner selection, 16 CSS px tolerance, and linked 3D selection. **Implemented; 3D-to-UV sync is signature-driven, and Sync 3D is explicit.**
+- Move UVs with U/V constraints and snap, undo/cancel. **Implemented: `MoveUvCornersCommand`, per-corner autosave patches, 0.25 default snap increment.**
+- Rotate/scale UVs and numeric UV entry. **Pending.**
+- UV overlays for selected corners/edges/faces and seam boundaries. **Implemented for seams, selected corners, and selected faces.**
+- No unwrap yet; existing primitive UVs are editable immediately. **Implemented.**
 
 ### Slice 3 — Chart extraction and LSCM unwrap
 

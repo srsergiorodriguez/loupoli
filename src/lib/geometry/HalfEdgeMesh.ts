@@ -468,6 +468,32 @@ export class HalfEdgeMesh {
     this.revision += 1;
   }
 
+  /** Read one per-corner UV coordinate. */
+  getCornerUv(halfEdge: number): Vec2 {
+    if (halfEdge < 0 || halfEdge >= this.halfEdgeCount) {
+      throw new RangeError(`Half-edge ${halfEdge} is outside the mesh.`);
+    }
+    const offset = halfEdge * 2;
+    return [this.heUv[offset], this.heUv[offset + 1]];
+  }
+
+  /** Move one per-corner UV without changing topology. */
+  setCornerUv(halfEdge: number, uv: Vec2): void {
+    if (halfEdge < 0 || halfEdge >= this.halfEdgeCount) {
+      throw new RangeError(`Half-edge ${halfEdge} is outside the mesh.`);
+    }
+    if (!uv.every(Number.isFinite)) {
+      throw new Error('UV coordinates must be finite.');
+    }
+    const offset = halfEdge * 2;
+    if (this.heUv[offset] === uv[0] && this.heUv[offset + 1] === uv[1]) {
+      return;
+    }
+    this.heUv[offset] = uv[0];
+    this.heUv[offset + 1] = uv[1];
+    this.revision += 1;
+  }
+
   /** Whether an edge carries the UV seam flag. */
   isEdgeSeam(edge: number): boolean {
     if (edge < 0 || edge >= this.edgeCount) {

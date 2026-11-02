@@ -56,6 +56,9 @@ export const GRID_SNAP_STEPS = [0.1, 0.25, 0.5, 1] as const;
 /** The optional world-axis lock for vertex drags. */
 export type AxisLock = 'x' | 'y' | 'z' | null;
 
+/** U/V axis restriction for UV drags. */
+export type UvAxisLock = 'u' | 'v' | null;
+
 /** The four required viewport shading modes. */
 export const SHADING_MODES = [
   'wireframe',
@@ -116,6 +119,11 @@ export interface EditorSnapshot {
   readonly additiveSelection: boolean;
   readonly selectionMode: SelectionMode;
   readonly selectedPosition: [number, number, number] | null;
+  readonly uvOpen: boolean;
+  readonly uvSplit: number;
+  readonly uvAxisLock: UvAxisLock;
+  readonly uvSelectedCorners: readonly number[];
+  readonly uvRevision: number;
   readonly activeTransform: NodeTransform | null;
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;

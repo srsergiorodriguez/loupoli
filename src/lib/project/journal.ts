@@ -1,4 +1,4 @@
-import type { Vec3 } from '../geometry/HalfEdgeMesh';
+import type { Vec2, Vec3 } from '../geometry/HalfEdgeMesh';
 import type { NodeTransform } from '../scene/MeshNode';
 import { validateModifiers, type Modifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
@@ -25,6 +25,12 @@ export type JournalPatch =
       readonly nodeId: string;
       readonly edge: number;
       readonly seam: boolean;
+    }
+  | {
+      readonly type: 'move-uv';
+      readonly nodeId: string;
+      readonly corner: number;
+      readonly uv: Vec2;
     }
   | {
       readonly type: 'insert-node';
@@ -82,6 +88,14 @@ export function applyJournalPatch(
         throw new Error(`Autosave references missing node ${patch.nodeId}.`);
       }
       node.mesh.setVertexPosition(patch.vertex, patch.position);
+      return;
+    }
+    case 'move-uv': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.mesh.setCornerUv(patch.corner, patch.uv);
       return;
     }
     case 'set-edge-seam': {
@@ -189,6 +203,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'set-edge-seam') {
     return patch.nodeId.length * 2 + 24;
+  }
+  if (patch.type === 'move-uv') {
+    return patch.nodeId.length * 2 + 32;
   }
   if (patch.type === 'replace-mesh') {
     const mesh = patch.mesh;

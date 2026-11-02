@@ -232,10 +232,9 @@ export class ViewportRenderer {
     this.scene.add(this.ambientLight, this.keyLight, this.fillLight);
 
     this.resizeObserver = new ResizeObserver(this.handleWindowResize);
-    const resizeTarget = canvas.parentElement;
-    if (resizeTarget) {
-      this.resizeObserver.observe(resizeTarget);
-    }
+    // Observe the canvas itself, not its parent: the UV split changes the
+    // canvas CSS height while the full-viewport parent keeps its size.
+    this.resizeObserver.observe(canvas);
     window.addEventListener('resize', this.handleWindowResize);
 
     this.resize();
@@ -787,8 +786,14 @@ export class ViewportRenderer {
 
   private resize(): void {
     const host = this.canvas.parentElement;
-    const width = Math.max(1, host?.clientWidth || window.innerWidth);
-    const height = Math.max(1, host?.clientHeight || window.innerHeight);
+    const width = Math.max(
+      1,
+      this.canvas.clientWidth || host?.clientWidth || window.innerWidth
+    );
+    const height = Math.max(
+      1,
+      this.canvas.clientHeight || host?.clientHeight || window.innerHeight
+    );
 
     const coarsePointer =
       typeof window.matchMedia === 'function' &&

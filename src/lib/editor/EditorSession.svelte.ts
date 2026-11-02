@@ -26,6 +26,11 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   additiveSelection: false,
   selectionMode: 'vertex',
   selectedPosition: null,
+  uvOpen: false,
+  uvSplit: 0.38,
+  uvAxisLock: null,
+  uvSelectedCorners: [],
+  uvRevision: 0,
   activeTransform: null,
   globalTransform: null,
   transformOrientation: 'local',
@@ -121,6 +126,61 @@ export class EditorSession {
 
   setSelectionMode(mode: SelectionMode): void {
     this.runtime?.setSelectionMode(mode);
+  }
+
+  toggleUvView(): void {
+    this.runtime?.toggleUvView();
+  }
+
+  setUvSplit(fraction: number): void {
+    this.runtime?.setUvSplit(fraction);
+  }
+
+  setUvAxisLock(axis: 'u' | 'v'): void {
+    this.runtime?.setUvAxisLock(axis);
+  }
+
+  syncUvFrom3d(): void {
+    this.runtime?.syncUvFrom3d();
+  }
+
+  drawUvView(
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number
+  ): void {
+    this.runtime?.drawUvView(canvas, width, height);
+  }
+
+  pickUvCorner(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    additive: boolean
+  ): boolean {
+    return this.runtime?.pickUvCorner(x, y, width, height, additive) ?? false;
+  }
+
+  beginUvDrag(): boolean {
+    return this.runtime?.beginUvDrag() ?? false;
+  }
+
+  updateUvDragFromPixels(
+    dx: number,
+    dy: number,
+    width: number,
+    height: number
+  ): void {
+    this.runtime?.updateUvDragFromPixels(dx, dy, width, height);
+  }
+
+  finishUvDrag(): void {
+    this.runtime?.finishUvDrag();
+  }
+
+  cancelUvDrag(): void {
+    this.runtime?.cancelUvDrag();
   }
 
   setAdditiveSelection(enabled: boolean): void {

@@ -7,7 +7,7 @@ import {
   Vector3
 } from 'three';
 import { readTheme } from '../../design/theme';
-import type { HalfEdgeMesh, Vec3 } from '../geometry/HalfEdgeMesh';
+import type { HalfEdgeMesh, Vec2, Vec3 } from '../geometry/HalfEdgeMesh';
 import {
   applyLinearTransform,
   cloneModifiers,
@@ -47,11 +47,18 @@ import {
 import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
+import {
+  computeUvProjection,
+  pickUvCorner as pickNearestUvCorner,
+  uvToCanvas
+} from '../uv/uvView';
+import { drawUvCanvas } from '../uv/uvCanvas';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
 import { DeleteMeshNodeCommand } from './commands/DeleteMeshNodeCommand';
 import { SetEdgeSeamsCommand } from './commands/SetEdgeSeamsCommand';
+import { MoveUvCornersCommand } from './commands/MoveUvCornersCommand';
 import {
   ReplaceMeshCommand,
   type ReplaceMeshLoopTransition
@@ -102,6 +109,7 @@ import {
   type ModalTransformSnapshot,
   type MeshActionKind,
   type MeshActionSnapshot,
+  type UvAxisLock,
   type AxisLock,
   type ModifierPatch
 } from './types';
@@ -222,6 +230,13 @@ interface ActionDrag {
   value: number;
 }
 
+/** A localized UV-corner drag with its pre-drag values. */
+interface UvDrag {
+  readonly node: MeshNode;
+  readonly corners: readonly number[];
+  readonly before: readonly Vec2[];
+}
+
 /** Most recent loop cut, used by the separate Loop Slide action. */
 interface LastLoopCut {
   readonly node: MeshNode;
@@ -278,6 +293,13 @@ export class EditorRuntime {
   private additiveNodeSelection = false;
   private readonly selection = new ElementSelection('vertex');
   private additiveSelection = false;
+  private uvOpen = false;
+  private uvSplit = 0.38;
+  private uvAxisLock: UvAxisLock = null;
+  private readonly uvSelection = new Set<number>();
+  private uvDrag: UvDrag | null = null;
+  private uvRevision = 0;
+  private lastUvSourceSignature = '';
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
@@ -389,6 +411,11 @@ export class EditorRuntime {
       additiveSelection: this.additiveSelection,
       selectionMode: this.selection.mode,
       selectedPosition,
+      uvOpen: this.uvOpen,
+      uvSplit: this.uvSplit,
+      uvAxisLock: this.uvAxisLock,
+      uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
+      uvRevision: this.uvRevision,
       modifiers: active ? active.modifiers.map((modifier) => ({ ...modifier })) : [],
       modifiersActive: evaluated?.modifiersActive ?? false,
       modifierError: evaluated?.error ?? null,
@@ -517,6 +544,223 @@ export class EditorRuntime {
     }
     this.transformMode = mode;
     this.syncScene();
+    this.publish();
+  }
+
+  /** Open or close the UV editing split. */
+  toggleUvView(): void {
+    if (this.uvOpen) {
+      this.cancelUvDrag();
+      this.uvOpen = false;
+      this.uvRevision += 1;
+      this.publish();
+      return;
+    }
+    if (this.modalTransform) {
+      this.cancelModalTransform();
+    }
+    if (this.actionDrag) {
+      this.cancelActionGesture();
+    } else {
+      this.armedAction = null;
+      this.renderer.setActionPreviewLine(null);
+    }
+    this.uvOpen = true;
+    this.uvSelection.clear();
+    this.lastUvSourceSignature = '';
+    this.uvRevision += 1;
+    this.syncUvSelectionIfChanged();
+    this.publish();
+  }
+
+  /** Set the fraction of the viewport occupied by the UV pane. */
+  setUvSplit(fraction: number): void {
+    const clamped = Math.min(0.65, Math.max(0.25, fraction));
+    if (Math.abs(clamped - this.uvSplit) < 1e-4) {
+      return;
+    }
+    this.uvSplit = clamped;
+    this.publish();
+  }
+
+  /** Toggle the U/V constraint used by UV drags. */
+  setUvAxisLock(axis: 'u' | 'v'): void {
+    this.uvAxisLock = this.uvAxisLock === axis ? null : axis;
+    this.publish();
+  }
+
+  /** Rebuild the UV corner set from the active 3D element selection. */
+  syncUvFrom3d(): void {
+    this.rebuildUvSelection();
+    this.lastUvSourceSignature = `${this.getActiveNode()?.id ?? ''}|${this.selection.mode}|${this.selection.values().join(',')}`;
+    this.publish();
+  }
+
+  /** Draw the UV layout into the panel canvas. */
+  drawUvView(canvas: HTMLCanvasElement, width: number, height: number): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    drawUvCanvas(canvas, node.mesh, this.uvSelection, width, height);
+  }
+
+  /**
+   * Pick a UV corner in panel-local CSS pixels.
+   *
+   * A plain click on an already selected corner preserves the rest of a
+   * multi-selection so the same pointer-down can begin a drag; a plain click on
+   * an unselected corner replaces the set.
+   */
+  pickUvCorner(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    additive: boolean
+  ): boolean {
+    const node = this.getActiveNode();
+    if (!node) {
+      return false;
+    }
+    const projection = computeUvProjection(node.mesh, width, height);
+    let hit: number | null = null;
+    if (!additive && this.uvSelection.size > 0) {
+      // Coincident UV corners are common across seams. Prefer a corner that is
+      // already selected so clicking a multi-corner island starts a drag
+      // instead of replacing the set with an arbitrary duplicate.
+      let bestDistanceSq = 16 * 16;
+      for (const corner of this.uvSelection) {
+        if (corner < 0 || corner >= node.mesh.halfEdgeCount) {
+          continue;
+        }
+        const point = uvToCanvas(node.mesh.getCornerUv(corner), projection);
+        const distanceSq = (point.x - x) ** 2 + (point.y - y) ** 2;
+        if (distanceSq <= bestDistanceSq) {
+          bestDistanceSq = distanceSq;
+          hit = corner;
+        }
+      }
+    }
+    hit ??= pickNearestUvCorner(node.mesh, x, y, projection);
+    if (hit === null) {
+      if (!additive && this.uvSelection.size > 0) {
+        this.uvSelection.clear();
+        this.uvRevision += 1;
+        this.publish();
+      }
+      return false;
+    }
+    if (additive) {
+      if (this.uvSelection.has(hit)) {
+        this.uvSelection.delete(hit);
+      } else {
+        this.uvSelection.add(hit);
+      }
+    } else if (!this.uvSelection.has(hit)) {
+      this.uvSelection.clear();
+      this.uvSelection.add(hit);
+    }
+    this.uvRevision += 1;
+    this.publish();
+    return true;
+  }
+
+  /** Capture the selected UV corners before a drag. */
+  beginUvDrag(): boolean {
+    const node = this.getActiveNode();
+    if (!node || this.uvSelection.size === 0) {
+      return false;
+    }
+    const corners = Array.from(this.uvSelection)
+      .filter((corner) => corner >= 0 && corner < node.mesh.halfEdgeCount)
+      .sort((a, b) => a - b);
+    if (corners.length === 0) {
+      return false;
+    }
+    this.uvDrag = {
+      node,
+      corners,
+      before: corners.map((corner) => node.mesh.getCornerUv(corner))
+    };
+    return true;
+  }
+
+  /** Apply a pixel-space drag delta to the selected UV corners. */
+  updateUvDragFromPixels(
+    dx: number,
+    dy: number,
+    width: number,
+    height: number
+  ): void {
+    const drag = this.uvDrag;
+    if (!drag) {
+      return;
+    }
+    const projection = computeUvProjection(drag.node.mesh, width, height);
+    let du = dx / projection.scale;
+    let dv = -dy / projection.scale;
+    if (this.uvAxisLock === 'u') {
+      dv = 0;
+    } else if (this.uvAxisLock === 'v') {
+      du = 0;
+    }
+    if (this.snapEnabled) {
+      du = snapScalar(du, this.snapStep);
+      dv = snapScalar(dv, this.snapStep);
+    }
+    for (let index = 0; index < drag.corners.length; index += 1) {
+      drag.node.mesh.setCornerUv(drag.corners[index], [
+        drag.before[index][0] + du,
+        drag.before[index][1] + dv
+      ]);
+    }
+    this.uvRevision += 1;
+    this.renderer.refreshNode(drag.node.id);
+    this.publish();
+  }
+
+  /** Commit the current UV drag as one localized command. */
+  finishUvDrag(): void {
+    const drag = this.uvDrag;
+    if (!drag) {
+      return;
+    }
+    this.uvDrag = null;
+    const after = drag.corners.map((corner) => drag.node.mesh.getCornerUv(corner));
+    const changed = after.some((uv, index) =>
+      uv.some(
+        (value, component) =>
+          Math.abs(value - drag.before[index][component]) > 1e-7
+      )
+    );
+    if (!changed) {
+      this.publish();
+      return;
+    }
+    this.history.execute(
+      new MoveUvCornersCommand(
+        drag.node.mesh,
+        drag.node.id,
+        drag.corners,
+        drag.before,
+        after
+      )
+    );
+  }
+
+  /** Restore the UVs captured at drag start. */
+  cancelUvDrag(): void {
+    const drag = this.uvDrag;
+    if (!drag) {
+      return;
+    }
+    this.uvDrag = null;
+    for (let index = 0; index < drag.corners.length; index += 1) {
+      drag.node.mesh.setCornerUv(drag.corners[index], drag.before[index]);
+    }
+    this.uvRevision += 1;
+    this.renderer.refreshNode(drag.node.id);
     this.publish();
   }
 
@@ -1162,6 +1406,9 @@ export class EditorRuntime {
 
   /** Arm a one-shot ActionDock operation; the next viewport drag applies it. */
   armAction(kind: MeshActionKind): void {
+    if (this.uvOpen) {
+      return;
+    }
     if (this.actionDrag || this.modalTransform) {
       return;
     }
@@ -2320,7 +2567,7 @@ export class EditorRuntime {
     if (this.modalTransform) {
       return true;
     }
-    if (this.armedAction || this.actionDrag) {
+    if (this.uvOpen || this.armedAction || this.actionDrag) {
       return false;
     }
     const node = this.getActiveNode();
@@ -3630,6 +3877,8 @@ export class EditorRuntime {
   }
 
   private afterDocumentChanged(event: HistoryEvent): void {
+    this.pruneUvSelection();
+    this.uvRevision += 1;
     const loopContext =
       event.command instanceof ReplaceMeshCommand
         ? event.action === 'undo'
@@ -3873,7 +4122,83 @@ export class EditorRuntime {
 
   private publish(): void {
     if (!this.disposed) {
+      this.syncUvSelectionIfChanged();
       this.onSnapshot(this.getSnapshot());
+    }
+  }
+
+  /**
+   * Link the UV corner selection to the current 3D element selection.
+   *
+   * The signature check keeps a UV-only selection edit from being overwritten:
+   * only a change in active node, element mode, or selected 3D elements rebuilds
+   * the UV set.
+   */
+  private syncUvSelectionIfChanged(): void {
+    if (!this.uvOpen) {
+      return;
+    }
+    const node = this.getActiveNode();
+    const signature = `${node?.id ?? ''}|${this.selection.mode}|${this.selection.values().join(',')}`;
+    if (signature === this.lastUvSourceSignature) {
+      return;
+    }
+    this.lastUvSourceSignature = signature;
+    this.rebuildUvSelection();
+  }
+
+  private rebuildUvSelection(): void {
+    this.uvSelection.clear();
+    const node = this.getActiveNode();
+    if (!node || this.selection.count === 0) {
+      this.uvRevision += 1;
+      return;
+    }
+    const mesh = node.mesh;
+    const selected = new Set(this.selection.values());
+    if (this.selection.mode === 'face') {
+      for (const face of selected) {
+        if (face < 0 || face >= mesh.faceCount) {
+          continue;
+        }
+        const start = mesh.faceHalfEdge[face];
+        let halfEdge = start;
+        do {
+          this.uvSelection.add(halfEdge);
+          halfEdge = mesh.heNext[halfEdge];
+        } while (halfEdge !== start);
+      }
+    } else if (this.selection.mode === 'vertex') {
+      for (let halfEdge = 0; halfEdge < mesh.halfEdgeCount; halfEdge += 1) {
+        if (selected.has(mesh.heOrigin[halfEdge])) {
+          this.uvSelection.add(halfEdge);
+        }
+      }
+    } else {
+      for (const edge of selected) {
+        if (edge < 0 || edge >= mesh.edgeCount) {
+          continue;
+        }
+        const halfEdge = mesh.edgeHalfEdge[edge];
+        for (const side of [halfEdge, mesh.heTwin[halfEdge]]) {
+          if (side < 0) {
+            continue;
+          }
+          this.uvSelection.add(side);
+          this.uvSelection.add(mesh.heNext[side]);
+        }
+      }
+    }
+    this.uvRevision += 1;
+  }
+
+  private pruneUvSelection(): void {
+    const node = this.getActiveNode();
+    const limit = node?.mesh.halfEdgeCount ?? 0;
+    for (const corner of this.uvSelection) {
+      if (corner < 0 || corner >= limit) {
+        this.uvSelection.delete(corner);
+      }
     }
   }
 }
