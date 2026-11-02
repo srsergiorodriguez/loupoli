@@ -51,7 +51,10 @@ import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
 import { DeleteMeshNodeCommand } from './commands/DeleteMeshNodeCommand';
-import { ReplaceMeshCommand } from './commands/ReplaceMeshCommand';
+import {
+  ReplaceMeshCommand,
+  type ReplaceMeshLoopTransition
+} from './commands/ReplaceMeshCommand';
 import { SetModifiersCommand } from './commands/SetModifiersCommand';
 import { JoinNodesCommand, type JoinedSource } from './commands/JoinNodesCommand';
 import { joinMeshNodes } from './joinMeshes';
@@ -1114,16 +1117,24 @@ export class EditorRuntime {
     const before = node.mesh;
     try {
       const after = loopCutFromEdge(before, edge);
+      const previous = this.loopContext();
       const command = new ReplaceMeshCommand(
         node,
         before,
         after,
-        'Loop cut'
+        'Loop cut',
+        {
+          before: previous,
+          after: {
+            nodeId: node.id,
+            edge,
+            baseMesh: before,
+            t: 0.5
+          }
+        }
       );
       this.selection.clear();
       this.history.execute(command);
-      this.lastLoopCut = { node, edge, baseMesh: before, t: 0.5 };
-      this.publish();
     } catch (error) {
       this.projectError = this.errorMessage(error);
       this.publish();
@@ -1431,24 +1442,31 @@ export class EditorRuntime {
             ? 'Loop cut'
             : 'Loop slide';
     this.selection.clear();
-    this.history.execute(
-      new ReplaceMeshCommand(drag.node, drag.before, after, label)
-    );
-    if (
+    const loopTransition: ReplaceMeshLoopTransition | null =
       (drag.kind === 'loop-cut' || drag.kind === 'loop-slide') &&
       drag.edgeIndex !== null
-    ) {
-      this.lastLoopCut = {
-        node: drag.node,
-        edge: drag.edgeIndex,
-        baseMesh:
-          drag.kind === 'loop-cut'
-            ? drag.before
-            : (drag.loopBase ?? drag.before),
-        t: drag.value
-      };
-      this.publish();
-    }
+        ? {
+            before: this.loopContext(),
+            after: {
+              nodeId: drag.node.id,
+              edge: drag.edgeIndex,
+              baseMesh:
+                drag.kind === 'loop-cut'
+                  ? drag.before
+                  : (drag.loopBase ?? drag.before),
+              t: drag.value
+            }
+          }
+        : null;
+    this.history.execute(
+      new ReplaceMeshCommand(
+        drag.node,
+        drag.before,
+        after,
+        label,
+        loopTransition
+      )
+    );
   }
 
   private cancelActionGesture(): void {
@@ -3580,8 +3598,37 @@ export class EditorRuntime {
     }
   }
 
+  private loopContext(): ReplaceMeshLoopTransition['before'] {
+    if (!this.lastLoopCut) {
+      return null;
+    }
+    return {
+      nodeId: this.lastLoopCut.node.id,
+      edge: this.lastLoopCut.edge,
+      baseMesh: this.lastLoopCut.baseMesh,
+      t: this.lastLoopCut.t
+    };
+  }
+
   private afterDocumentChanged(event: HistoryEvent): void {
-    this.lastLoopCut = null;
+    const loopContext =
+      event.command instanceof ReplaceMeshCommand
+        ? event.action === 'undo'
+          ? event.command.loopContextBefore
+          : event.command.loopContextAfter
+        : null;
+    const loopNode = loopContext
+      ? this.document.getNode(loopContext.nodeId)
+      : null;
+    this.lastLoopCut =
+      loopContext && loopNode
+        ? {
+            node: loopNode,
+            edge: loopContext.edge,
+            baseMesh: loopContext.baseMesh,
+            t: loopContext.t
+          }
+        : null;
     this.armedAction = null;
     if (this.activeGroupId !== null && !this.document.getGroup(this.activeGroupId)) {
       this.activeGroupId = null;

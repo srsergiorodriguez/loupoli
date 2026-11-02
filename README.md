@@ -4,7 +4,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Brand:** always lowercase `loupoli`.
 
-**Status:** Phase 2 and the Phase 3 foundations are implemented. Current work includes context-sensitive object/group and selection gizmos, a Pencil ActionDock with exact action amounts, desktop G/R/S, front-face-culled Texture + Wire, loop-cut previews, groups and joins, destructive topology actions, and provenance-mapped Mirror/Grid Array/Radial Array stacks. Broader Phase 3 cleanup remains: evaluated-space element pivots, loop-slide history, and physical iPad validation.
+**Status:** Phase 2 and the Phase 3 foundations are implemented. Current work includes context-sensitive object/group and selection gizmos, a Pencil ActionDock with exact action amounts, desktop G/R/S, front-face-culled Texture + Wire, loop-cut previews, groups and joins, destructive topology actions, and provenance-mapped Mirror/Grid Array/Radial Array stacks. Broader Phase 3 cleanup remains: evaluated-space element pivots and physical iPad validation.
 
 ![Current loupoli desktop viewport with the selection gizmo and ActionDock](docs/media/desktop-overview.png)
 
@@ -186,7 +186,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - With Grid Array active, dragged an evaluated vertex: its base vertex moved through the inverse per-copy transform, both evaluated copies updated, the stack stayed active, and undo restored the base position.
   - Loop-cut one sphere edge: 24 F/26 V became 32 F/34 V with a closed, valid quad ring; repeated under an active Grid Array and produced 64 evaluated faces.
   - Texture + Wire rendering, top-right placement, icon-only touch density, compact scene/selection actions, and Texture + Wire `.lpoly` settings round-trip verified. The wire pass now culls back-facing edges on the CPU: the default sphere drew 28 of 48 edges and a cylinder drew 23 of 36, with the back wall absent.
-  - Loop-cut preview: while dragging a Loop Cut, a solid blue loop line marked the prospective cut; it cleared on commit/cancel and remained distinct from the lime front wire.
+  - Loop-cut preview: while dragging a Loop Cut, a solid blue loop line marked the prospective cut; it cleared on commit/cancel and remained distinct from the lime front wire. Loop context survived undo/redo of the cut and slide (t 0.65 → 0.3 → 0.65) and cleared after an unrelated transform.
   - Global orientation on a grouped, rotated child: world fields showed the composed pose, the move/rotate gizmo axes were world-aligned, global position/rotation edits converted back to local coordinates, and undo restored the prior pose.
   - Modal G/R/S: free mouse move, X-axis constrained typed move, 45° typed rotation, 2× typed scale, click confirmation, axis toggle, and Escape cancellation were exercised; each commit produced one transform command and undo restored the pose.
   - ActionDock: touch tap armed Extrude; a pencil/mouse drag previewed and committed 30 V/56 E/28 F from 26/48/24; touch targets measured 44 px; Inset matched those closed counts; Loop Cut produced 34/64/32 and enabled Loop Slide; Loop Slide produced a valid 34/64/32 mesh; cancel restored mesh and selection; a Grid Array-evaluated base extrude updated 28 base faces to 56 evaluated faces.
@@ -288,7 +288,7 @@ Context-sensitive element transform: face selection, local X constraint, exact 0
 - Amounts are shown live: world units for extrude, percentages for inset and loop position.
 - Desktop shortcuts: **E** extrude, **I** inset, **L** loop cut, **Shift+L** loop slide. The ActionDock remains visible for mouse use.
 - **Esc** or tapping the active action again cancels an armed action; cancelling a drag restores both the mesh and selection.
-- Loop Cut inserts a loop; Loop Slide re-cuts the retained original loop source at a new position. While adjusting, a blue loop-preview line marks the prospective cut. Undo, autosave mesh patches, and modifier evaluation apply normally.
+- Loop Cut inserts a loop; Loop Slide re-cuts the retained original loop source at a new position. While adjusting, a blue loop-preview line marks the prospective cut. The last-loop context is restored through undo/redo of loop cuts and slides, and clears on unrelated edits. Undo, autosave mesh patches, and modifier evaluation apply normally.
 
 Desktop action with an exact typed amount:
 

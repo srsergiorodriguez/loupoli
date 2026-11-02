@@ -5,6 +5,20 @@ import type { JournalPatch } from '../../project/journal';
 import type { MeshNode } from '../../scene/MeshNode';
 import type { EditorCommand } from './EditorCommand';
 
+/** Loop-slide provenance attached to a mesh replacement. */
+export interface ReplaceMeshLoopContext {
+  readonly nodeId: string;
+  readonly edge: number;
+  readonly baseMesh: HalfEdgeMesh;
+  readonly t: number;
+}
+
+/** Loop-slide context before and after a replacement command. */
+export interface ReplaceMeshLoopTransition {
+  readonly before: ReplaceMeshLoopContext | null;
+  readonly after: ReplaceMeshLoopContext | null;
+}
+
 function meshBytes(mesh: HalfEdgeMesh): number {
   return (
     mesh.positions.byteLength +
@@ -33,16 +47,21 @@ export class ReplaceMeshCommand implements EditorCommand {
   readonly estimatedBytes: number;
   private readonly before: HalfEdgeMesh;
   private readonly after: HalfEdgeMesh;
+  readonly loopContextBefore: ReplaceMeshLoopContext | null;
+  readonly loopContextAfter: ReplaceMeshLoopContext | null;
 
   constructor(
     private readonly node: MeshNode,
     before: HalfEdgeMesh,
     after: HalfEdgeMesh,
-    label: string
+    label: string,
+    loopTransition: ReplaceMeshLoopTransition | null = null
   ) {
     this.before = before;
     this.after = after;
     this.label = label;
+    this.loopContextBefore = loopTransition?.before ?? null;
+    this.loopContextAfter = loopTransition?.after ?? null;
     this.estimatedBytes = meshBytes(before) + meshBytes(after);
   }
 
