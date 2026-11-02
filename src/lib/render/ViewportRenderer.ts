@@ -697,6 +697,9 @@ export class ViewportRenderer {
       return;
     }
     this.objectGizmo.setMode(this.transformMode);
+    this.objectGizmo.setCenterHandles(
+      this.activeGroupId === null && this.selectionGizmoOrigin !== null
+    );
     this.objectGizmo.update(frame.origin, frame.quaternion, frame.size);
   }
 

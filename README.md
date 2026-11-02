@@ -4,7 +4,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Brand:** always lowercase `loupoli`.
 
-**Status:** Phase 2 and the Phase 3 foundations are implemented. Current work includes context-sensitive object/group and selection gizmos, a Pencil ActionDock with exact action amounts, desktop G/R/S, front-face-culled Texture + Wire, loop-cut previews, groups and joins, destructive topology actions, and provenance-mapped Mirror/Grid Array/Radial Array stacks. Broader Phase 3 cleanup remains: free-plane/uniform selection handles, evaluated-space element pivots, loop-slide history, and physical iPad validation.
+**Status:** Phase 2 and the Phase 3 foundations are implemented. Current work includes context-sensitive object/group and selection gizmos, a Pencil ActionDock with exact action amounts, desktop G/R/S, front-face-culled Texture + Wire, loop-cut previews, groups and joins, destructive topology actions, and provenance-mapped Mirror/Grid Array/Radial Array stacks. Broader Phase 3 cleanup remains: evaluated-space element pivots, loop-slide history, and physical iPad validation.
 
 ![Current loupoli desktop viewport with the selection gizmo and ActionDock](docs/media/desktop-overview.png)
 
@@ -18,7 +18,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Five viewport modes.** Wireframe (true topological edges), Solid (flat-shaded clay), Texture (custom GLSL PS1 path), Texture + Wire (front-only topological overlay over the texture surface), and Lit (flat-shaded checker material). The mode selector now sits immediately left of the orientation gizmo, icon-only on touch layouts and labeled on wide desktop layouts.
 - **Local/Global transforms.** Node transforms stay parent-local in the document; the Inspector can display world-space position/rotation and orient translate/rotate gizmos to world axes. Scale remains local to avoid unsupported shear.
 - **Context-sensitive Desktop G/R/S.** If vertices, edges, or faces are selected, Grab/Rotate/Scale transform those elements around their median pivot; with no element selection they transform the active object or group. Mouse preview, X/Y/Z constraints, typed exact values, a transform HUD, Enter/click commit, and Escape/right-click cancel are shared. Element transforms are localized vertex moves with their own undo/autosave patches.
-- **Selection gizmo on iPad and desktop.** With elements selected, the Move/Rotate/Scale tools place their axis gizmo at the selection median. Drag a handle with the Pencil or mouse to move, rotate, or scale the selection; the object/group gizmo returns when the element selection is empty. Selection stays active after commit.
+- **Selection gizmo on iPad and desktop.** With elements selected, the Move/Rotate/Scale tools place a gizmo at the selection median. Move has X/Y/Z axes plus a free view-plane center handle; Scale has axes plus a uniform center handle; Rotate uses axis rings. Drag with the Pencil or mouse; the object/group gizmo returns when the element selection is empty. Selection stays active after commit.
 - **ActionDock.** Bottom-left one-shot actions for Extrude, Inset, Loop Cut, and Loop Slide, available on touch and desktop. Tap/click to arm, then drag for a live amount or type an exact amount; Enter/release commits one undoable mesh replacement. Keyboard shortcuts: E extrude, I inset, L loop cut, Shift+L loop slide. Loop Slide is separate from Loop Cut.
 - **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the collapsed **PS1 look** render-effect module at the bottom of the Inspector:
   - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster.
@@ -270,10 +270,10 @@ Context-sensitive element transform: face selection, local X constraint, exact 0
 - Select vertices, edges, or faces first.
 - Tap **Move**, **Rotate**, or **Scale** in the tool rail.
 - The axis gizmo is placed at the median of the selected elements.
-- Drag an X/Y/Z handle with the Pencil or mouse. The gizmo follows the live selection median during the drag; selection remains active after the commit.
+- Drag an X/Y/Z axis with the Pencil or mouse. Move and Scale also expose a center handle for free-plane movement and uniform scaling. The gizmo follows the live selection median during the drag; selection remains active after the commit.
 - Local/Global orientation applies; modifiers operate in base space at the base-selection median.
 - With no element selection, the same tools return to object/group transforms.
-- Current limits: axis handles only (no free-plane or uniform center handle), and one-finger touch still orbits rather than drags the gizmo.
+- One-finger touch still orbits rather than dragging the gizmo; use the Pencil or mouse.
 
 ### ActionDock
 

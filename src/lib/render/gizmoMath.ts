@@ -8,6 +8,9 @@ import {
 /** The three local object axes used by transform handles. */
 export type GizmoAxis = 'x' | 'y' | 'z';
 
+/** An axis handle or the screen-facing center handle. */
+export type GizmoHandle = GizmoAxis | 'view';
+
 export const GIZMO_AXIS_VECTORS: Readonly<Record<GizmoAxis, Vector3>> = {
   x: new Vector3(1, 0, 0),
   y: new Vector3(0, 1, 0),

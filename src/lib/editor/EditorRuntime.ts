@@ -41,7 +41,8 @@ import {
   shortestAngleDelta,
   snapScalar,
   worldAxis,
-  type GizmoAxis
+  type GizmoAxis,
+  type GizmoHandle
 } from '../render/gizmoMath';
 import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
@@ -138,7 +139,7 @@ interface GizmoDrag {
 interface SelectionGizmoDrag {
   readonly pointerId: number;
   readonly mode: GizmoMode;
-  readonly axis: GizmoAxis;
+  readonly axis: GizmoHandle;
   readonly orientation: TransformOrientation;
   readonly node: MeshNode;
   readonly vertices: readonly number[];
@@ -150,9 +151,12 @@ interface SelectionGizmoDrag {
   readonly selectionMode: SelectionMode;
   readonly selectionCount: number;
   readonly origin: Vector3;
-  readonly axisWorld: Vector3;
+  readonly axisWorld: Vector3 | null;
   readonly size: number;
   readonly startParameter: number;
+  readonly startX: number;
+  readonly startY: number;
+  readonly startHit: Vector3 | null;
   readonly plane: Plane | null;
   readonly basis: { u: Vector3; v: Vector3 } | null;
   readonly startAngle: number;
@@ -3022,12 +3026,19 @@ export class EditorRuntime {
       pivot[1] += position[1] / before.length;
       pivot[2] += position[2] / before.length;
     }
-    const axisWorld = worldAxis(hit.axis, frame.quaternion).normalize();
+    if (hit.axis === 'view' && hit.mode === 'rotate') {
+      return false;
+    }
+    const axisWorld =
+      hit.axis === 'view'
+        ? null
+        : worldAxis(hit.axis, frame.quaternion).normalize();
     let startParameter = 0;
     let plane: Plane | null = null;
     let basis: { u: Vector3; v: Vector3 } | null = null;
     let startAngle = 0;
-    if (hit.mode === 'rotate') {
+    let startHit: Vector3 | null = null;
+    if (hit.mode === 'rotate' && axisWorld) {
       plane = new Plane().setFromNormalAndCoplanarPoint(
         axisWorld,
         frame.origin
@@ -3038,7 +3049,15 @@ export class EditorRuntime {
       }
       basis = planeBasis(axisWorld);
       startAngle = angleAroundAxis(point, frame.origin, basis);
-    } else {
+    } else if (hit.axis === 'view' && hit.mode === 'translate') {
+      plane = this.renderer.createCameraFacingPlane(frame.origin);
+      startHit = ray.intersectPlane(plane, new Vector3());
+      if (!startHit) {
+        return false;
+      }
+    } else if (!axisWorld && hit.mode !== 'scale') {
+      return false;
+    } else if (axisWorld) {
       const parameter = closestAxisParameter(
         ray,
         frame.origin,
@@ -3067,6 +3086,9 @@ export class EditorRuntime {
       axisWorld,
       size: frame.size,
       startParameter,
+      startX: sample.clientX,
+      startY: sample.clientY,
+      startHit,
       plane,
       basis,
       startAngle
@@ -3088,50 +3110,103 @@ export class EditorRuntime {
       (position) => [...position] as Vec3
     );
     if (drag.mode === 'translate') {
-      const parameter = closestAxisParameter(
-        ray,
-        drag.origin,
-        drag.axisWorld
-      );
-      if (parameter === null) {
-        return;
-      }
-      let delta = parameter - drag.startParameter;
-      if (this.snapEnabled) {
-        delta = snapScalar(delta, this.snapStep);
-      }
-      const localDelta = drag.axisWorld
-        .clone()
-        .multiplyScalar(delta)
-        .applyMatrix3(drag.inverseWorldLinear);
-      for (let index = 0; index < positions.length; index += 1) {
-        positions[index] = [
-          drag.before[index][0] + localDelta.x,
-          drag.before[index][1] + localDelta.y,
-          drag.before[index][2] + localDelta.z
-        ];
+      if (drag.axis === 'view') {
+        if (!drag.plane || !drag.startHit) {
+          return;
+        }
+        const point = ray.intersectPlane(drag.plane, new Vector3());
+        if (!point) {
+          return;
+        }
+        const localDelta = point
+          .sub(drag.startHit)
+          .applyMatrix3(drag.inverseWorldLinear);
+        if (this.snapEnabled) {
+          localDelta.set(
+            snapScalar(localDelta.x, this.snapStep),
+            snapScalar(localDelta.y, this.snapStep),
+            snapScalar(localDelta.z, this.snapStep)
+          );
+        }
+        for (let index = 0; index < positions.length; index += 1) {
+          positions[index] = [
+            drag.before[index][0] + localDelta.x,
+            drag.before[index][1] + localDelta.y,
+            drag.before[index][2] + localDelta.z
+          ];
+        }
+      } else {
+        if (!drag.axisWorld) {
+          return;
+        }
+        const parameter = closestAxisParameter(
+          ray,
+          drag.origin,
+          drag.axisWorld
+        );
+        if (parameter === null) {
+          return;
+        }
+        let delta = parameter - drag.startParameter;
+        if (this.snapEnabled) {
+          delta = snapScalar(delta, this.snapStep);
+        }
+        const localDelta = drag.axisWorld
+          .clone()
+          .multiplyScalar(delta)
+          .applyMatrix3(drag.inverseWorldLinear);
+        for (let index = 0; index < positions.length; index += 1) {
+          positions[index] = [
+            drag.before[index][0] + localDelta.x,
+            drag.before[index][1] + localDelta.y,
+            drag.before[index][2] + localDelta.z
+          ];
+        }
       }
     } else if (drag.mode === 'scale') {
-      const parameter = closestAxisParameter(
-        ray,
-        drag.origin,
-        drag.axisWorld
-      );
-      if (parameter === null) {
-        return;
+      const uniform = drag.axis === 'view';
+      let factor = 1;
+      let axisIndex = 0;
+      if (uniform) {
+        factor = Math.max(
+          0.001,
+          1 +
+            ((sample.clientX - drag.startX) -
+              (sample.clientY - drag.startY)) /
+              200
+        );
+      } else {
+        if (!drag.axisWorld) {
+          return;
+        }
+        const parameter = closestAxisParameter(
+          ray,
+          drag.origin,
+          drag.axisWorld
+        );
+        if (parameter === null) {
+          return;
+        }
+        factor = Math.max(
+          0.001,
+          1 + (parameter - drag.startParameter) / (drag.size * 0.9)
+        );
+        axisIndex = drag.axis === 'x' ? 0 : drag.axis === 'y' ? 1 : 2;
       }
-      const delta = parameter - drag.startParameter;
-      const factor = Math.max(0.001, 1 + delta / (drag.size * 0.9));
-      const axisIndex =
-        drag.axis === 'x' ? 0 : drag.axis === 'y' ? 1 : 2;
-      if (drag.orientation === 'local') {
+      if (uniform || drag.orientation === 'local') {
         for (let index = 0; index < positions.length; index += 1) {
           const offset = [
             drag.before[index][0] - drag.pivot[0],
             drag.before[index][1] - drag.pivot[1],
             drag.before[index][2] - drag.pivot[2]
           ];
-          offset[axisIndex] *= factor;
+          if (uniform) {
+            offset[0] *= factor;
+            offset[1] *= factor;
+            offset[2] *= factor;
+          } else {
+            offset[axisIndex] *= factor;
+          }
           positions[index] = [
             drag.pivot[0] + offset[0],
             drag.pivot[1] + offset[1],
@@ -3163,7 +3238,7 @@ export class EditorRuntime {
         }
       }
     } else {
-      if (!drag.plane || !drag.basis) {
+      if (drag.axis === 'view' || !drag.plane || !drag.basis) {
         return;
       }
       const point = ray.intersectPlane(drag.plane, new Vector3());
@@ -3191,6 +3266,9 @@ export class EditorRuntime {
           ];
         }
       } else {
+        if (!drag.axisWorld) {
+          return;
+        }
         const rotation = new Quaternion().setFromAxisAngle(
           drag.axisWorld,
           radians
@@ -3287,7 +3365,7 @@ export class EditorRuntime {
   ): boolean {
     const frame = this.renderer.getGizmoFrame();
     const ray = this.renderer.getPointerRay(sample.clientX, sample.clientY);
-    if (!frame || !ray) {
+    if (!frame || !ray || hit.axis === 'view') {
       return false;
     }
     const axisWorld = worldAxis(hit.axis, frame.quaternion).normalize();

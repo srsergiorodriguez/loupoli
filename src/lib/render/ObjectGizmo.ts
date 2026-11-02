@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   Quaternion,
+  SphereGeometry,
   TorusGeometry,
   Vector3,
   type Raycaster
@@ -15,7 +16,8 @@ import type { TransformMode } from '../editor/types';
 import {
   GIZMO_AXES,
   GIZMO_AXIS_VECTORS,
-  type GizmoAxis
+  type GizmoAxis,
+  type GizmoHandle
 } from './gizmoMath';
 
 /** Transform tools that display handles (select is handled separately). */
@@ -24,7 +26,7 @@ export type GizmoMode = Exclude<TransformMode, 'select'>;
 /** A picked gizmo handle. */
 export interface GizmoHit {
   readonly mode: GizmoMode;
-  readonly axis: GizmoAxis;
+  readonly axis: GizmoHandle;
 }
 
 const Y_AXIS = new Vector3(0, 1, 0);
@@ -52,6 +54,15 @@ export class ObjectGizmo {
   private readonly ringGeometry = new TorusGeometry(0.8, 0.014, 6, 48);
   private readonly hitCylinderGeometry = new CylinderGeometry(0.13, 0.13, 1, 8);
   private readonly hitRingGeometry = new TorusGeometry(0.8, 0.12, 6, 32);
+  private readonly centerGeometry = new SphereGeometry(0.1, 14, 10);
+  private readonly centerHitGeometry = new SphereGeometry(0.17, 10, 8);
+  private readonly centerGroups: Record<'translate' | 'scale', Group> = {
+    translate: new Group(),
+    scale: new Group()
+  };
+  private readonly centerMaterial: MeshBasicMaterial;
+  private readonly centerHitMaterial: MeshBasicMaterial;
+  private centerVisible = false;
 
   private mode: TransformMode = 'select';
 
@@ -68,6 +79,18 @@ export class ObjectGizmo {
       depthTest: false,
       transparent: false
     });
+    this.centerMaterial = new MeshBasicMaterial({
+      name: 'loupoli-gizmo-center',
+      color: theme.vertexHandle.color,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    });
+    this.centerHitMaterial = new MeshBasicMaterial({
+      colorWrite: false,
+      depthWrite: false,
+      depthTest: false
+    });
 
     for (const mode of ['translate', 'rotate', 'scale'] as const) {
       const modeGroup = this.modeGroups[mode];
@@ -76,6 +99,8 @@ export class ObjectGizmo {
       this.group.add(modeGroup);
     }
 
+    this.buildCenter('translate');
+    this.buildCenter('scale');
     this.buildTranslate();
     this.buildRotate();
     this.buildScale();
@@ -89,6 +114,16 @@ export class ObjectGizmo {
     for (const key of ['translate', 'rotate', 'scale'] as const) {
       this.modeGroups[key].visible = key === mode;
     }
+    this.syncCenterVisibility();
+  }
+
+  /** Center handles are for element selections, not object/group transforms. */
+  setCenterHandles(visible: boolean): void {
+    if (this.centerVisible === visible) {
+      return;
+    }
+    this.centerVisible = visible;
+    this.syncCenterVisibility();
   }
 
   /** Position the gizmo at the active object's world frame. */
@@ -109,12 +144,14 @@ export class ObjectGizmo {
     for (const intersection of intersections) {
       const data = intersection.object.userData as {
         gizmoMode?: GizmoMode;
-        gizmoAxis?: GizmoAxis;
+        gizmoAxis?: GizmoHandle;
       };
       if (
         data.gizmoMode === this.mode &&
         data.gizmoAxis &&
-        GIZMO_AXES.includes(data.gizmoAxis)
+        (data.gizmoAxis === 'view'
+          ? this.centerVisible
+          : GIZMO_AXES.includes(data.gizmoAxis as GizmoAxis))
       ) {
         return { mode: data.gizmoMode, axis: data.gizmoAxis };
       }
@@ -132,13 +169,38 @@ export class ObjectGizmo {
     this.ringGeometry.dispose();
     this.hitCylinderGeometry.dispose();
     this.hitRingGeometry.dispose();
+    this.centerGeometry.dispose();
+    this.centerHitGeometry.dispose();
     this.hitMaterial.dispose();
+    this.centerMaterial.dispose();
+    this.centerHitMaterial.dispose();
     for (const material of Object.values(this.materials)) {
       material.dispose();
     }
   }
 
-  private markVisible(mesh: Mesh, mode: GizmoMode, axis: GizmoAxis): void {
+  private syncCenterVisibility(): void {
+    for (const key of ['translate', 'scale'] as const) {
+      this.centerGroups[key].visible =
+        this.centerVisible && this.mode === key;
+    }
+  }
+
+  private buildCenter(mode: 'translate' | 'scale'): void {
+    const group = this.centerGroups[mode];
+    group.name = `loupoli-gizmo-center-${mode}`;
+    const visible = new Mesh(this.centerGeometry, this.centerMaterial);
+    this.markVisible(visible, mode, 'view');
+    group.add(visible);
+    const hit = new Mesh(this.centerHitGeometry, this.centerHitMaterial);
+    hit.userData = { gizmoMode: mode, gizmoAxis: 'view' };
+    hit.renderOrder = 1001;
+    hit.frustumCulled = false;
+    group.add(hit);
+    this.modeGroups[mode].add(group);
+  }
+
+  private markVisible(mesh: Mesh, mode: GizmoMode, axis: GizmoHandle): void {
     mesh.userData = { gizmoMode: mode, gizmoAxis: axis };
     mesh.renderOrder = 1000;
     mesh.frustumCulled = false;
