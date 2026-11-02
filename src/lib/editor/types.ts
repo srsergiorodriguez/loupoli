@@ -59,6 +59,9 @@ export type AxisLock = 'x' | 'y' | 'z' | null;
 /** U/V axis restriction for UV drags. */
 export type UvAxisLock = 'u' | 'v' | null;
 
+/** The direct UV transform tool. */
+export type UvTransformMode = 'move' | 'rotate' | 'scale';
+
 /** The four required viewport shading modes. */
 export const SHADING_MODES = [
   'wireframe',
@@ -122,6 +125,7 @@ export interface EditorSnapshot {
   readonly uvOpen: boolean;
   readonly uvSplit: number;
   readonly uvAxisLock: UvAxisLock;
+  readonly uvTransformMode: UvTransformMode;
   readonly uvSelectedCorners: readonly number[];
   readonly uvRevision: number;
   readonly activeTransform: NodeTransform | null;

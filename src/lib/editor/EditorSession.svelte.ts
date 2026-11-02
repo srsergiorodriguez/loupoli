@@ -29,6 +29,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvOpen: false,
   uvSplit: 0.38,
   uvAxisLock: null,
+  uvTransformMode: 'move',
   uvSelectedCorners: [],
   uvRevision: 0,
   activeTransform: null,
@@ -162,17 +163,38 @@ export class EditorSession {
     return this.runtime?.pickUvCorner(x, y, width, height, additive) ?? false;
   }
 
-  beginUvDrag(): boolean {
-    return this.runtime?.beginUvDrag() ?? false;
+  setUvTransformMode(mode: 'move' | 'rotate' | 'scale'): void {
+    this.runtime?.setUvTransformMode(mode);
   }
 
-  updateUvDragFromPixels(
-    dx: number,
-    dy: number,
+  beginUvDrag(
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): boolean {
+    return this.runtime?.beginUvDrag(x, y, width, height) ?? false;
+  }
+
+  updateUvDrag(
+    x: number,
+    y: number,
     width: number,
     height: number
   ): void {
-    this.runtime?.updateUvDragFromPixels(dx, dy, width, height);
+    this.runtime?.updateUvDrag(x, y, width, height);
+  }
+
+  applyUvMove(du: number, dv: number): void {
+    this.runtime?.applyUvMove(du, dv);
+  }
+
+  applyUvRotate(degrees: number): void {
+    this.runtime?.applyUvRotate(degrees);
+  }
+
+  applyUvScale(factor: number): void {
+    this.runtime?.applyUvScale(factor);
   }
 
   finishUvDrag(): void {

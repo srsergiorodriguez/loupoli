@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
+  import Icon from '../Icons/Icon.svelte';
 
   /** Props for the UV editing pane. */
   interface Props {
@@ -15,13 +16,16 @@
   let height = $state(0);
   let resizing = $state(false);
   let dragging = $state(false);
-  let dragStartX = 0;
-  let dragStartY = 0;
+  let deltaU = $state(0);
+  let deltaV = $state(0);
+  let angle = $state(0);
+  let scaleFactor = $state(1);
   let activePointerId: number | null = null;
 
   const selectedCount = $derived(session.snapshot.uvSelectedCorners.length);
   const uvSplit = $derived(session.snapshot.uvSplit);
   const axisLock = $derived(session.snapshot.uvAxisLock);
+  const transformMode = $derived(session.snapshot.uvTransformMode);
 
   onMount(() => {
     const observer = new ResizeObserver((entries) => {
@@ -84,12 +88,13 @@
       height,
       additive
     );
-    if (!hit || !session.beginUvDrag()) {
+    if (
+      !hit ||
+      !session.beginUvDrag(point.x, point.y, width, height)
+    ) {
       return;
     }
     dragging = true;
-    dragStartX = point.x;
-    dragStartY = point.y;
     activePointerId = event.pointerId;
     window.addEventListener('pointermove', windowPointerMove);
     window.addEventListener('pointerup', windowPointerUp);
@@ -102,12 +107,7 @@
     }
     event.preventDefault();
     const point = localPoint(event);
-    session.updateUvDragFromPixels(
-      point.x - dragStartX,
-      point.y - dragStartY,
-      width,
-      height
-    );
+    session.updateUvDrag(point.x, point.y, width, height);
   }
 
   function windowPointerUp(event: PointerEvent): void {
@@ -170,6 +170,24 @@
     }
   }
 
+  function numberValue(event: Event): number {
+    const value = Number((event.currentTarget as HTMLInputElement).value);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function applyNumeric(mode: 'move' | 'rotate' | 'scale'): void {
+    if (selectedCount === 0) {
+      return;
+    }
+    if (mode === 'move') {
+      session.applyUvMove(Number(deltaU), Number(deltaV));
+    } else if (mode === 'rotate') {
+      session.applyUvRotate(Number(angle));
+    } else {
+      session.applyUvScale(Number(scaleFactor));
+    }
+  }
+
   function resizeKey(event: KeyboardEvent): void {
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
       return;
@@ -202,9 +220,36 @@
       <span class="uv-count">{selectedCount} corner{selectedCount === 1 ? '' : 's'}</span>
     </div>
     <div class="uv-actions">
+      <div class="uv-modes" role="group" aria-label="UV transform mode">
+        <button
+          type="button"
+          class="uv-mode"
+          class:active={transformMode === 'move'}
+          aria-label="UV Move"
+          aria-pressed={transformMode === 'move'}
+          onclick={() => session.setUvTransformMode('move')}
+        ><Icon name="move" size={15} /></button>
+        <button
+          type="button"
+          class="uv-mode"
+          class:active={transformMode === 'rotate'}
+          aria-label="UV Rotate"
+          aria-pressed={transformMode === 'rotate'}
+          onclick={() => session.setUvTransformMode('rotate')}
+        ><Icon name="rotate" size={15} /></button>
+        <button
+          type="button"
+          class="uv-mode"
+          class:active={transformMode === 'scale'}
+          aria-label="UV Scale"
+          aria-pressed={transformMode === 'scale'}
+          onclick={() => session.setUvTransformMode('scale')}
+        ><Icon name="scale" size={15} /></button>
+      </div>
       <button
         type="button"
         class="uv-chip"
+        disabled={transformMode === 'rotate'}
         class:active={axisLock === 'u'}
         aria-label="Constrain UV drag to U"
         aria-pressed={axisLock === 'u'}
@@ -216,6 +261,7 @@
         class:active={axisLock === 'v'}
         aria-label="Constrain UV drag to V"
         aria-pressed={axisLock === 'v'}
+        disabled={transformMode === 'rotate'}
         onclick={() => session.setUvAxisLock('v')}
       >V</button>
       <button
@@ -251,8 +297,68 @@
   </div>
 
   <footer class="uv-foot">
-    <span>16 px pick · drag corners</span>
-    <span>{session.snapshot.snapEnabled ? `Snap ${session.snapshot.snapStep}` : 'Snap off'}</span>
+    <form
+      class="uv-numeric"
+      onsubmit={(event) => {
+        event.preventDefault();
+        applyNumeric(transformMode);
+      }}
+    >
+      {#if transformMode === 'move'}
+        <label class="uv-field">
+          <span>ΔU</span>
+          <input
+            type="number"
+            step="any"
+            value={deltaU}
+            oninput={(event) => (deltaU = numberValue(event))}
+            aria-label="Exact U delta"
+          />
+        </label>
+        <label class="uv-field">
+          <span>ΔV</span>
+          <input
+            type="number"
+            step="any"
+            value={deltaV}
+            oninput={(event) => (deltaV = numberValue(event))}
+            aria-label="Exact V delta"
+          />
+        </label>
+      {:else if transformMode === 'rotate'}
+        <label class="uv-field">
+          <span>Angle°</span>
+          <input
+            type="number"
+            step="any"
+            value={angle}
+            oninput={(event) => (angle = numberValue(event))}
+            aria-label="Exact rotation angle in degrees"
+          />
+        </label>
+      {:else}
+        <label class="uv-field">
+          <span>Factor</span>
+          <input
+            type="number"
+            step="any"
+            min="0.001"
+            value={scaleFactor}
+            oninput={(event) => (scaleFactor = numberValue(event))}
+            aria-label="Exact scale factor"
+          />
+        </label>
+      {/if}
+      <button
+        type="submit"
+        class="uv-apply"
+        aria-label="Apply exact UV transform"
+        disabled={selectedCount === 0}
+      >Apply</button>
+    </form>
+    <span class="uv-foot-hint">
+      16 px pick · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
+    </span>
   </footer>
 </section>
 
@@ -342,7 +448,8 @@
 
   .uv-chip,
   .uv-action,
-  .uv-close {
+  .uv-close,
+  .uv-mode {
     min-width: var(--hit-min);
     min-height: var(--hit-min);
     border: var(--hairline) solid var(--border-subtle);
@@ -357,15 +464,36 @@
 
   .uv-chip:hover,
   .uv-action:hover,
-  .uv-close:hover {
+  .uv-close:hover,
+  .uv-mode:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
   }
 
-  .uv-chip.active {
+  .uv-chip.active,
+  .uv-mode.active {
     border-color: var(--accent-primary);
     background: var(--bg-selected);
     color: var(--accent-primary);
+  }
+
+  .uv-chip:disabled,
+  .uv-mode:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .uv-modes {
+    display: flex;
+    gap: 1px;
+    margin-right: var(--space-1);
+  }
+
+  .uv-mode {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
   }
 
   .uv-action {
@@ -417,16 +545,75 @@
 
   .uv-foot {
     display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-    min-height: var(--control-h);
+    min-height: var(--hit-min);
     padding: 0 var(--space-3);
     border-top: var(--hairline) solid var(--border-subtle);
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
-    line-height: var(--control-h);
     white-space: nowrap;
+  }
+
+  .uv-numeric {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .uv-field {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-tertiary);
+  }
+
+  .uv-field input {
+    width: 62px;
+    min-height: var(--control-h);
+    padding: 0 6px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+  }
+
+  .uv-field input:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 1px;
+  }
+
+  .uv-apply {
+    min-height: var(--hit-min);
+    min-width: var(--hit-min);
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-strong);
+    border-radius: var(--radius-xs);
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .uv-apply:hover:not(:disabled) {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+
+  .uv-apply:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .uv-foot-hint {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   @media (max-width: 1100px) {

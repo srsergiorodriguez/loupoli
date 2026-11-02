@@ -42,8 +42,14 @@
     }
     if (session.snapshot.uvOpen) {
       const count = session.snapshot.uvSelectedCorners.length;
+      const mode =
+        session.snapshot.uvTransformMode === 'rotate'
+          ? 'rotate'
+          : session.snapshot.uvTransformMode === 'scale'
+            ? 'scale'
+            : 'move';
       return count > 0
-        ? `UV · ${count} corner${count === 1 ? '' : 's'} · drag to move · U/V lock`
+        ? `UV · ${count} corner${count === 1 ? '' : 's'} · drag to ${mode}${mode === 'rotate' ? '' : ' · U/V lock'}`
         : 'UV · select 3D faces or click UV corners';
     }
     if (session.snapshot.modifiersActive) {

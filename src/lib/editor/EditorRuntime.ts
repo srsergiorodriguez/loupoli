@@ -53,6 +53,7 @@ import {
   uvToCanvas
 } from '../uv/uvView';
 import { drawUvCanvas } from '../uv/uvCanvas';
+import { rotateUv, scaleUv, uvMedian } from '../uv/uvTransform';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
@@ -110,6 +111,7 @@ import {
   type MeshActionKind,
   type MeshActionSnapshot,
   type UvAxisLock,
+  type UvTransformMode,
   type AxisLock,
   type ModifierPatch
 } from './types';
@@ -233,8 +235,13 @@ interface ActionDrag {
 /** A localized UV-corner drag with its pre-drag values. */
 interface UvDrag {
   readonly node: MeshNode;
+  readonly mode: UvTransformMode;
   readonly corners: readonly number[];
   readonly before: readonly Vec2[];
+  readonly pivot: Vec2;
+  readonly startUv: Vec2;
+  readonly startAngle: number;
+  readonly startDistance: number;
 }
 
 /** Most recent loop cut, used by the separate Loop Slide action. */
@@ -296,6 +303,7 @@ export class EditorRuntime {
   private uvOpen = false;
   private uvSplit = 0.38;
   private uvAxisLock: UvAxisLock = null;
+  private uvTransformMode: UvTransformMode = 'move';
   private readonly uvSelection = new Set<number>();
   private uvDrag: UvDrag | null = null;
   private uvRevision = 0;
@@ -414,6 +422,7 @@ export class EditorRuntime {
       uvOpen: this.uvOpen,
       uvSplit: this.uvSplit,
       uvAxisLock: this.uvAxisLock,
+      uvTransformMode: this.uvTransformMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvRevision: this.uvRevision,
       modifiers: active ? active.modifiers.map((modifier) => ({ ...modifier })) : [],
@@ -589,6 +598,12 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Switch direct UV transforms between move, rotate, and scale. */
+  setUvTransformMode(mode: UvTransformMode): void {
+    this.uvTransformMode = mode;
+    this.publish();
+  }
+
   /** Rebuild the UV corner set from the active 3D element selection. */
   syncUvFrom3d(): void {
     this.rebuildUvSelection();
@@ -666,8 +681,13 @@ export class EditorRuntime {
     return true;
   }
 
-  /** Capture the selected UV corners before a drag. */
-  beginUvDrag(): boolean {
+  /** Capture the selected UV corners and drag basis before a drag. */
+  beginUvDrag(
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): boolean {
     const node = this.getActiveNode();
     if (!node || this.uvSelection.size === 0) {
       return false;
@@ -678,42 +698,97 @@ export class EditorRuntime {
     if (corners.length === 0) {
       return false;
     }
+    const before = corners.map((corner) => node.mesh.getCornerUv(corner));
+    const projection = computeUvProjection(node.mesh, width, height);
+    const startUv: Vec2 = [
+      (x - projection.offsetX) / projection.scale,
+      (height - projection.offsetY - y) / projection.scale
+    ];
+    const pivot = uvMedian(before);
+    const startAngle = Math.atan2(
+      startUv[1] - pivot[1],
+      startUv[0] - pivot[0]
+    );
+    const startDistance = Math.max(
+      1e-6,
+      Math.hypot(startUv[0] - pivot[0], startUv[1] - pivot[1])
+    );
     this.uvDrag = {
       node,
+      mode: this.uvTransformMode,
       corners,
-      before: corners.map((corner) => node.mesh.getCornerUv(corner))
+      before,
+      pivot,
+      startUv,
+      startAngle,
+      startDistance
     };
     return true;
   }
 
-  /** Apply a pixel-space drag delta to the selected UV corners. */
-  updateUvDragFromPixels(
-    dx: number,
-    dy: number,
-    width: number,
-    height: number
-  ): void {
+  /** Apply an absolute UV-space pointer position to the active UV drag. */
+  updateUvDrag(x: number, y: number, width: number, height: number): void {
     const drag = this.uvDrag;
     if (!drag) {
       return;
     }
     const projection = computeUvProjection(drag.node.mesh, width, height);
-    let du = dx / projection.scale;
-    let dv = -dy / projection.scale;
-    if (this.uvAxisLock === 'u') {
-      dv = 0;
-    } else if (this.uvAxisLock === 'v') {
-      du = 0;
-    }
-    if (this.snapEnabled) {
-      du = snapScalar(du, this.snapStep);
-      dv = snapScalar(dv, this.snapStep);
+    const current: Vec2 = [
+      (x - projection.offsetX) / projection.scale,
+      (height - projection.offsetY - y) / projection.scale
+    ];
+    const next: Vec2[] = drag.before.map((uv) => [...uv] as Vec2);
+    if (drag.mode === 'move') {
+      let du = current[0] - drag.startUv[0];
+      let dv = current[1] - drag.startUv[1];
+      if (this.uvAxisLock === 'u') {
+        dv = 0;
+      } else if (this.uvAxisLock === 'v') {
+        du = 0;
+      }
+      if (this.snapEnabled) {
+        du = snapScalar(du, this.snapStep);
+        dv = snapScalar(dv, this.snapStep);
+      }
+      for (let index = 0; index < next.length; index += 1) {
+        next[index][0] += du;
+        next[index][1] += dv;
+      }
+    } else if (drag.mode === 'rotate') {
+      const angle = Math.atan2(
+        current[1] - drag.pivot[1],
+        current[0] - drag.pivot[0]
+      );
+      let radians = shortestAngleDelta(drag.startAngle, angle);
+      if (this.snapEnabled) {
+        radians = snapScalar(radians, Math.PI / 12);
+      }
+      for (let index = 0; index < next.length; index += 1) {
+        next[index] = rotateUv(drag.before[index], drag.pivot, radians);
+      }
+    } else {
+      const distance = Math.hypot(
+        current[0] - drag.pivot[0],
+        current[1] - drag.pivot[1]
+      );
+      let factor = distance / drag.startDistance;
+      if (this.snapEnabled) {
+        factor = Math.max(
+          1e-3,
+          snapScalar(factor, Math.max(this.snapStep, 1e-3))
+        );
+      }
+      for (let index = 0; index < next.length; index += 1) {
+        next[index] = scaleUv(
+          drag.before[index],
+          drag.pivot,
+          factor,
+          this.uvAxisLock
+        );
+      }
     }
     for (let index = 0; index < drag.corners.length; index += 1) {
-      drag.node.mesh.setCornerUv(drag.corners[index], [
-        drag.before[index][0] + du,
-        drag.before[index][1] + dv
-      ]);
+      drag.node.mesh.setCornerUv(drag.corners[index], next[index]);
     }
     this.uvRevision += 1;
     this.renderer.refreshNode(drag.node.id);
@@ -738,13 +813,111 @@ export class EditorRuntime {
       this.publish();
       return;
     }
+    const verb =
+      drag.mode === 'rotate'
+        ? 'Rotate'
+        : drag.mode === 'scale'
+          ? 'Scale'
+          : 'Move';
     this.history.execute(
       new MoveUvCornersCommand(
         drag.node.mesh,
         drag.node.id,
         drag.corners,
         drag.before,
-        after
+        after,
+        `${verb} ${drag.corners.length} UV corner${drag.corners.length === 1 ? '' : 's'}`
+      )
+    );
+  }
+
+  /** Apply an exact UV-space move to the selected corners. */
+  applyUvMove(du: number, dv: number): void {
+    if (!Number.isFinite(du) || !Number.isFinite(dv)) {
+      return;
+    }
+    this.commitExactUvTransform(
+      (uv) => [uv[0] + du, uv[1] + dv],
+      'Move'
+    );
+  }
+
+  /** Apply an exact rotation in degrees around the UV median. */
+  applyUvRotate(degrees: number): void {
+    if (!Number.isFinite(degrees)) {
+      return;
+    }
+    const pivot = this.selectedUvPivot();
+    if (!pivot) {
+      return;
+    }
+    const radians = (degrees * Math.PI) / 180;
+    this.commitExactUvTransform(
+      (uv) => rotateUv(uv, pivot, radians),
+      'Rotate'
+    );
+  }
+
+  /** Apply an exact scale factor around the UV median. */
+  applyUvScale(factor: number): void {
+    if (!Number.isFinite(factor) || factor <= 0) {
+      return;
+    }
+    const pivot = this.selectedUvPivot();
+    if (!pivot) {
+      return;
+    }
+    this.commitExactUvTransform(
+      (uv) => scaleUv(uv, pivot, factor, this.uvAxisLock),
+      'Scale'
+    );
+  }
+
+  private selectedUvPivot(): Vec2 | null {
+    const node = this.getActiveNode();
+    if (!node || this.uvSelection.size === 0) {
+      return null;
+    }
+    const values = Array.from(this.uvSelection)
+      .filter((corner) => corner >= 0 && corner < node.mesh.halfEdgeCount)
+      .map((corner) => node.mesh.getCornerUv(corner));
+    return values.length > 0 ? uvMedian(values) : null;
+  }
+
+  private commitExactUvTransform(
+    transform: (uv: Vec2) => Vec2,
+    verb: string
+  ): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const corners = Array.from(this.uvSelection)
+      .filter((corner) => corner >= 0 && corner < node.mesh.halfEdgeCount)
+      .sort((a, b) => a - b);
+    if (corners.length === 0) {
+      return;
+    }
+    const before = corners.map((corner) => node.mesh.getCornerUv(corner));
+    const after = before.map((uv) => transform(uv));
+    if (
+      after.every((uv, index) =>
+        uv.every(
+          (value, component) =>
+            Math.abs(value - before[index][component]) <= 1e-9
+        )
+      )
+    ) {
+      return;
+    }
+    this.history.execute(
+      new MoveUvCornersCommand(
+        node.mesh,
+        node.id,
+        corners,
+        before,
+        after,
+        `${verb} ${corners.length} UV corner${corners.length === 1 ? '' : 's'}`
       )
     );
   }

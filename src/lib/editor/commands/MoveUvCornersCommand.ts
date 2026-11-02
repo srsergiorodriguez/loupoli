@@ -15,7 +15,8 @@ export class MoveUvCornersCommand implements EditorCommand {
     private readonly nodeId: string,
     corners: readonly number[],
     before: readonly Vec2[],
-    after: readonly Vec2[]
+    after: readonly Vec2[],
+    label?: string
   ) {
     if (before.length !== corners.length || after.length !== corners.length) {
       throw new Error('UV corner transform count does not match.');
@@ -23,7 +24,9 @@ export class MoveUvCornersCommand implements EditorCommand {
     this.corners = [...corners];
     this.before = before.map((uv) => [...uv] as Vec2);
     this.after = after.map((uv) => [...uv] as Vec2);
-    this.label = `Move ${corners.length} UV corner${corners.length === 1 ? '' : 's'}`;
+    this.label =
+      label ??
+      `Move ${corners.length} UV corner${corners.length === 1 ? '' : 's'}`;
     this.estimatedBytes = corners.length * 32 + 64;
   }
 
