@@ -1,4 +1,10 @@
-import { Euler, Plane, Quaternion, Vector3 } from 'three';
+import {
+  Euler,
+  Matrix4,
+  Plane,
+  Quaternion,
+  Vector3
+} from 'three';
 import { readTheme } from '../../design/theme';
 import type { HalfEdgeMesh, Vec3 } from '../geometry/HalfEdgeMesh';
 import {
@@ -61,6 +67,7 @@ import {
   worldTransformForNode
 } from './groupTransforms';
 import { MoveVertexCommand } from './commands/MoveVertexCommand';
+import { TransformVerticesCommand } from './commands/TransformVerticesCommand';
 import { TransformNodeCommand } from './commands/TransformNodeCommand';
 import {
   AutosaveService,
@@ -126,10 +133,25 @@ interface GizmoDrag {
   readonly startAngle: number;
 }
 
+/** Selected mesh elements captured for a context-sensitive G/R/S transform. */
+interface ElementTransform {
+  readonly node: MeshNode;
+  readonly vertices: readonly number[];
+  readonly before: readonly Vec3[];
+  readonly pivot: Vec3;
+  readonly worldMatrix: Matrix4;
+  readonly inverseWorld: Matrix4;
+  readonly selectionMode: SelectionMode;
+  readonly selectionCount: number;
+  readonly modifiersActive: boolean;
+}
+
 /** Active keyboard-driven G/R/S modal transform. */
 interface ModalTransform {
   readonly kind: ModalTransformKind;
   readonly target: MeshNode | SceneGroup;
+  readonly element: ElementTransform | null;
+  readonly targetLabel: string;
   readonly before: NodeTransform;
   readonly orientation: TransformOrientation;
   axis: GizmoAxis | null;
@@ -152,7 +174,7 @@ interface ModalTransform {
 interface ActionDrag {
   readonly kind: MeshActionKind;
   readonly node: MeshNode;
-  readonly pointerId: number;
+  readonly pointerId: number | null;
   readonly before: HalfEdgeMesh;
   readonly selection: readonly number[];
   readonly selectionMode: SelectionMode;
@@ -162,6 +184,7 @@ interface ActionDrag {
   readonly faceIndex: number | null;
   readonly edgeIndex: number | null;
   readonly loopBase: HalfEdgeMesh | null;
+  numeric: string;
   value: number;
 }
 
@@ -271,7 +294,12 @@ export class EditorRuntime {
         this.beginModalTransform(kind, clientX, clientY),
       modalPointerMove: (sample) => this.moveModalTransform(sample),
       modalTransformKey: (key) => this.handleModalTransformKey(key),
-      commitModalTransform: () => this.commitModalTransform()
+      commitModalTransform: () => this.commitModalTransform(),
+      armAction: (kind) => this.armAction(kind),
+      hasActiveAction: () => this.hasActiveAction(),
+      isActionAdjusting: () =>
+        this.actionDrag !== null && this.actionDrag.pointerId === null,
+      actionKey: (key) => this.handleActionKey(key)
     };
 
     this.input = new InputRouter(canvas, this.inputHost);
@@ -1129,7 +1157,8 @@ export class EditorRuntime {
     if (this.actionDrag) {
       return {
         kind: this.actionDrag.kind,
-        phase: 'dragging',
+        phase:
+          this.actionDrag.pointerId === null ? 'adjusting' : 'dragging',
         value: this.actionDrag.value
       };
     }
@@ -1145,7 +1174,8 @@ export class EditorRuntime {
 
   private beginActionGesture(
     sample: PointerSample,
-    node: MeshNode
+    node: MeshNode,
+    pointerId: number | null = sample.pointerId
   ): boolean {
     const kind = this.armedAction;
     if (!kind) {
@@ -1196,7 +1226,7 @@ export class EditorRuntime {
     const drag: ActionDrag = {
       kind,
       node,
-      pointerId: sample.pointerId,
+      pointerId,
       before: node.mesh,
       selection,
       selectionMode: this.selection.mode,
@@ -1206,6 +1236,7 @@ export class EditorRuntime {
       faceIndex,
       edgeIndex,
       loopBase,
+      numeric: '',
       value
     };
     try {
@@ -2064,8 +2095,52 @@ export class EditorRuntime {
       kind: modal.kind,
       axis: modal.axis,
       orientation: modal.orientation,
+      target: modal.targetLabel,
       numeric: modal.numeric,
       value: modal.value
+    };
+  }
+
+  private modalSelectedVertices(
+    node: MeshNode
+  ): { vertices: number[]; mode: SelectionMode; count: number } | null {
+    if (this.selection.count === 0) {
+      return null;
+    }
+    const selected = new Set<number>();
+    const mesh = node.mesh;
+    for (const value of this.selection.values()) {
+      if (this.selection.mode === 'vertex') {
+        if (value >= 0 && value < mesh.vertexCount) {
+          selected.add(value);
+        }
+      } else if (this.selection.mode === 'edge') {
+        if (value < 0 || value >= mesh.edgeCount) {
+          continue;
+        }
+        const halfEdge = mesh.edgeHalfEdge[value];
+        const next = mesh.heNext[halfEdge];
+        selected.add(mesh.heOrigin[halfEdge]);
+        selected.add(mesh.heOrigin[next]);
+      } else {
+        if (value < 0 || value >= mesh.faceCount) {
+          continue;
+        }
+        const start = mesh.faceHalfEdge[value];
+        let current = start;
+        do {
+          selected.add(mesh.heOrigin[current]);
+          current = mesh.heNext[current];
+        } while (current !== start);
+      }
+    }
+    if (selected.size === 0) {
+      return null;
+    }
+    return {
+      vertices: Array.from(selected).sort((a, b) => a - b),
+      mode: this.selection.mode,
+      count: this.selection.count
     };
   }
 
@@ -2077,12 +2152,12 @@ export class EditorRuntime {
     if (this.modalTransform) {
       return true;
     }
-    const target = this.getActiveGroup() ?? this.getActiveNode();
+    const node = this.getActiveNode();
+    const group = this.getActiveGroup();
+    const selection = node ? this.modalSelectedVertices(node) : null;
+    const useElements = node !== null && selection !== null;
+    const target = useElements ? node : (group ?? node);
     if (!target || this.gizmoDrag || this.drag) {
-      return false;
-    }
-    const frame = this.renderer.getGizmoFrame();
-    if (!frame) {
       return false;
     }
     const parent =
@@ -2108,13 +2183,67 @@ export class EditorRuntime {
       )
     );
     const worldQuaternion = parentQuaternion.clone().multiply(localQuaternion);
-    const plane = this.renderer.createCameraFacingPlane(frame.origin);
+
+    let element: ElementTransform | null = null;
+    let origin: Vector3;
+    let targetLabel: string;
+    if (useElements && node && selection) {
+      const before = selection.vertices.map((vertex) =>
+        node.mesh.getVertexPosition(vertex)
+      );
+      const pivot: Vec3 = [0, 0, 0];
+      for (const position of before) {
+        pivot[0] += position[0] / before.length;
+        pivot[1] += position[1] / before.length;
+        pivot[2] += position[2] / before.length;
+      }
+      const worldMatrix = parent
+        ? transformMatrix(parent.transform).multiply(
+            transformMatrix(node.transform)
+          )
+        : transformMatrix(node.transform);
+      const inverseWorld = worldMatrix.clone().invert();
+      origin = new Vector3(pivot[0], pivot[1], pivot[2]).applyMatrix4(
+        worldMatrix
+      );
+      element = {
+        node,
+        vertices: selection.vertices,
+        before,
+        pivot,
+        worldMatrix,
+        inverseWorld,
+        selectionMode: selection.mode,
+        selectionCount: selection.count,
+        modifiersActive: node.getEvaluatedMesh().modifiersActive
+      };
+      const singular =
+        selection.mode === 'vertex'
+          ? 'vertex'
+          : selection.mode === 'edge'
+            ? 'edge'
+            : 'face';
+      targetLabel = `${selection.count} ${singular}${
+        selection.count === 1 ? '' : 's'
+      }${element.modifiersActive ? ' (base)' : ''}`;
+    } else {
+      const frame = this.renderer.getGizmoFrame();
+      if (!frame) {
+        return false;
+      }
+      origin = frame.origin.clone();
+      targetLabel = group ? 'Group' : 'Object';
+    }
+
+    const plane = this.renderer.createCameraFacingPlane(origin);
     const startHit =
       this.renderer.intersectPointerPlane(clientX, clientY, plane) ??
-      frame.origin.clone();
+      origin.clone();
     this.modalTransform = {
       kind,
       target,
+      element,
+      targetLabel,
       before: this.cloneTransform(target.transform),
       orientation: this.transformOrientation,
       axis: null,
@@ -2122,7 +2251,7 @@ export class EditorRuntime {
       startY: clientY,
       lastX: clientX,
       lastY: clientY,
-      origin: frame.origin.clone(),
+      origin,
       plane,
       startHit,
       parentQuaternion,
@@ -2132,6 +2261,7 @@ export class EditorRuntime {
       numeric: '',
       value: 0
     };
+    this.projectError = null;
     this.publish();
     return true;
   }
@@ -2182,6 +2312,133 @@ export class EditorRuntime {
     }
   }
 
+  /** True while the ActionDock is armed or an action preview exists. */
+  private hasActiveAction(): boolean {
+    return this.armedAction !== null || this.actionDrag !== null;
+  }
+
+  /**
+   * Route keyboard input to a one-shot action.
+   *
+   * Armed actions accept digits (starting a numeric preview), Enter, and
+   * Escape. Numeric previews consume every key so modal transform shortcuts
+   * cannot start underneath them.
+   */
+  private handleActionKey(key: string): boolean {
+    const lower = key.toLowerCase();
+    if (this.armedAction) {
+      if (lower === 'escape') {
+        this.armedAction = null;
+        this.publish();
+        return true;
+      }
+      if (key.length === 1 && (/^[0-9]$/.test(key) || key === '.' || key === '-')) {
+        if (!this.beginNumericAction()) {
+          return true;
+        }
+        this.appendActionNumeric(key);
+        return true;
+      }
+      if (lower === 'enter') {
+        return true;
+      }
+      return false;
+    }
+
+    const drag = this.actionDrag;
+    if (!drag) {
+      return false;
+    }
+    if (lower === 'escape') {
+      this.cancelActionGesture();
+      return true;
+    }
+    if (lower === 'enter') {
+      this.finishActionGesture();
+      return true;
+    }
+    if (drag.pointerId !== null) {
+      return false;
+    }
+    if (key === 'Backspace') {
+      drag.numeric = drag.numeric.slice(0, -1);
+      this.applyActionNumeric();
+      return true;
+    }
+    if (key.length === 1 && (/^[0-9]$/.test(key) || key === '.' || key === '-')) {
+      this.appendActionNumeric(key);
+      return true;
+    }
+    return true;
+  }
+
+  private beginNumericAction(): boolean {
+    const kind = this.armedAction;
+    const node = this.getActiveNode();
+    if (!kind || !node) {
+      return false;
+    }
+    const sample: PointerSample = {
+      pointerId: -1,
+      pointerType: 'mouse',
+      clientX: 0,
+      clientY: 0,
+      pressure: 0,
+      tiltX: 0,
+      tiltY: 0,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      ctrlKey: false
+    };
+    return this.beginActionGesture(sample, node, null);
+  }
+
+  private appendActionNumeric(key: string): void {
+    const drag = this.actionDrag;
+    if (!drag) {
+      return;
+    }
+    if (key === '-' && drag.numeric.length === 0) {
+      drag.numeric = '-';
+    } else if (key === '.' && !drag.numeric.includes('.')) {
+      drag.numeric += '.';
+    } else if (/^[0-9]$/.test(key)) {
+      drag.numeric += key;
+    }
+    this.applyActionNumeric();
+  }
+
+  private applyActionNumeric(): void {
+    const drag = this.actionDrag;
+    if (!drag) {
+      return;
+    }
+    const parsed = Number(drag.numeric);
+    let value = drag.startValue;
+    if (drag.numeric.length > 0 && Number.isFinite(parsed)) {
+      if (drag.kind === 'extrude') {
+        value = Math.min(8, Math.max(0.001, parsed));
+      } else {
+        value = Math.min(0.95, Math.max(0.01, parsed / 100));
+        if (drag.kind === 'inset') {
+          value = Math.min(0.9, value);
+        }
+      }
+    }
+    try {
+      const preview = this.buildActionMesh(drag, value);
+      drag.value = value;
+      drag.node.setMesh(preview);
+      this.projectError = null;
+      this.syncScene();
+      this.publish();
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.publish();
+    }
+  }
+
   private updateModalTransform(): void {
     const modal = this.modalTransform;
     if (!modal) {
@@ -2200,6 +2457,23 @@ export class EditorRuntime {
         : axisVector.clone()
       : null;
     let value = 0;
+
+    if (modal.element) {
+      modal.value = this.updateElementModal(
+        modal,
+        modal.element,
+        numeric,
+        axisVector,
+        axisWorld
+      );
+      if (modal.element.modifiersActive) {
+        this.syncScene();
+      } else {
+        this.renderer.refreshNode(modal.element.node.id);
+      }
+      this.publish();
+      return;
+    }
 
     if (modal.kind === 'translate') {
       const hit =
@@ -2300,12 +2574,224 @@ export class EditorRuntime {
     this.publish();
   }
 
+  private updateElementModal(
+    modal: ModalTransform,
+    element: ElementTransform,
+    numeric: number | null,
+    axisVector: Vector3 | null,
+    axisWorld: Vector3 | null
+  ): number {
+    const positions: Vec3[] = element.before.map(
+      (position) => [...position] as Vec3
+    );
+    let value = 0;
+
+    if (modal.kind === 'translate') {
+      const hit =
+        this.renderer.intersectPointerPlane(
+          modal.lastX,
+          modal.lastY,
+          modal.plane
+        ) ?? modal.startHit;
+      const worldDelta = hit.clone().sub(modal.startHit);
+      if (axisVector && axisWorld) {
+        let amount =
+          numeric !== null ? numeric : worldDelta.dot(axisWorld);
+        if (numeric === null && this.snapEnabled) {
+          amount = snapScalar(amount, this.snapStep);
+        }
+        const localDirection =
+          modal.orientation === 'local'
+            ? axisVector.clone()
+            : axisWorld.clone().transformDirection(element.inverseWorld);
+        for (let index = 0; index < positions.length; index += 1) {
+          positions[index] = [
+            element.before[index][0] + localDirection.x * amount,
+            element.before[index][1] + localDirection.y * amount,
+            element.before[index][2] + localDirection.z * amount
+          ];
+        }
+        value = amount;
+      } else {
+        const localDelta = worldDelta
+          .clone()
+          .transformDirection(element.inverseWorld);
+        if (this.snapEnabled) {
+          localDelta.set(
+            snapScalar(localDelta.x, this.snapStep),
+            snapScalar(localDelta.y, this.snapStep),
+            snapScalar(localDelta.z, this.snapStep)
+          );
+        }
+        for (let index = 0; index < positions.length; index += 1) {
+          positions[index] = [
+            element.before[index][0] + localDelta.x,
+            element.before[index][1] + localDelta.y,
+            element.before[index][2] + localDelta.z
+          ];
+        }
+        value = localDelta.length();
+      }
+    } else if (modal.kind === 'rotate') {
+      const angleDegrees =
+        numeric !== null
+          ? numeric
+          : (modal.lastX - modal.startX - (modal.lastY - modal.startY)) * 0.5;
+      const radians = (angleDegrees * Math.PI) / 180;
+      if (axisVector && modal.orientation === 'local') {
+        const rotation = new Quaternion().setFromAxisAngle(axisVector, radians);
+        for (let index = 0; index < positions.length; index += 1) {
+          const offset = new Vector3(
+            element.before[index][0] - element.pivot[0],
+            element.before[index][1] - element.pivot[1],
+            element.before[index][2] - element.pivot[2]
+          ).applyQuaternion(rotation);
+          positions[index] = [
+            element.pivot[0] + offset.x,
+            element.pivot[1] + offset.y,
+            element.pivot[2] + offset.z
+          ];
+        }
+      } else {
+        const rotation = new Quaternion().setFromAxisAngle(
+          axisWorld ?? modal.viewAxis,
+          radians
+        );
+        const pivotWorld = new Vector3(
+          element.pivot[0],
+          element.pivot[1],
+          element.pivot[2]
+        ).applyMatrix4(element.worldMatrix);
+        for (let index = 0; index < positions.length; index += 1) {
+          const world = new Vector3(
+            element.before[index][0],
+            element.before[index][1],
+            element.before[index][2]
+          ).applyMatrix4(element.worldMatrix);
+          const offset = world.sub(pivotWorld).applyQuaternion(rotation);
+          const result = pivotWorld.clone().add(offset).applyMatrix4(
+            element.inverseWorld
+          );
+          positions[index] = [result.x, result.y, result.z];
+        }
+      }
+      value = angleDegrees;
+    } else {
+      const factor =
+        numeric !== null
+          ? Math.max(0.001, numeric)
+          : Math.max(
+              0.001,
+              1 +
+                (modal.lastX -
+                  modal.startX -
+                  (modal.lastY - modal.startY)) /
+                  200
+            );
+      const axisIndex = modal.axis
+        ? modal.axis === 'x'
+          ? 0
+          : modal.axis === 'y'
+            ? 1
+            : 2
+        : null;
+      if (modal.orientation === 'local') {
+        for (let index = 0; index < positions.length; index += 1) {
+          const offset = [
+            element.before[index][0] - element.pivot[0],
+            element.before[index][1] - element.pivot[1],
+            element.before[index][2] - element.pivot[2]
+          ];
+          for (let component = 0; component < 3; component += 1) {
+            if (axisIndex === null || axisIndex === component) {
+              offset[component] *= factor;
+            }
+          }
+          positions[index] = [
+            element.pivot[0] + offset[0],
+            element.pivot[1] + offset[1],
+            element.pivot[2] + offset[2]
+          ];
+        }
+      } else {
+        const pivotWorld = new Vector3(
+          element.pivot[0],
+          element.pivot[1],
+          element.pivot[2]
+        ).applyMatrix4(element.worldMatrix);
+        for (let index = 0; index < positions.length; index += 1) {
+          const world = new Vector3(
+            element.before[index][0],
+            element.before[index][1],
+            element.before[index][2]
+          ).applyMatrix4(element.worldMatrix);
+          const offset = world.sub(pivotWorld);
+          if (axisIndex === null) {
+            offset.multiplyScalar(factor);
+          } else {
+            offset.setComponent(
+              axisIndex,
+              offset.getComponent(axisIndex) * factor
+            );
+          }
+          const result = pivotWorld
+            .clone()
+            .add(offset)
+            .applyMatrix4(element.inverseWorld);
+          positions[index] = [result.x, result.y, result.z];
+        }
+      }
+      value = factor;
+    }
+
+    for (let index = 0; index < element.vertices.length; index += 1) {
+      element.node.mesh.setVertexPosition(
+        element.vertices[index],
+        positions[index]
+      );
+    }
+    return value;
+  }
+
   private commitModalTransform(): void {
     const modal = this.modalTransform;
     if (!modal) {
       return;
     }
     this.modalTransform = null;
+    if (modal.element) {
+      const element = modal.element;
+      const after = element.vertices.map((vertex) =>
+        element.node.mesh.getVertexPosition(vertex)
+      );
+      const changed = after.some((position, index) =>
+        position.some(
+          (value, component) =>
+            Math.abs(value - element.before[index][component]) > 1e-7
+        )
+      );
+      if (changed) {
+        const operation =
+          modal.kind === 'translate'
+            ? 'Move'
+            : modal.kind === 'rotate'
+              ? 'Rotate'
+              : 'Scale';
+        this.history.execute(
+          new TransformVerticesCommand(
+            element.node.mesh,
+            element.vertices,
+            element.before,
+            after,
+            element.node.id,
+            `${operation} ${modal.targetLabel}`
+          )
+        );
+      } else {
+        this.publish();
+      }
+      return;
+    }
     const after = this.cloneTransform(modal.target.transform);
     const changed =
       after.position.some(
@@ -2336,6 +2822,21 @@ export class EditorRuntime {
       return;
     }
     this.modalTransform = null;
+    if (modal.element) {
+      for (let index = 0; index < modal.element.vertices.length; index += 1) {
+        modal.element.node.mesh.setVertexPosition(
+          modal.element.vertices[index],
+          modal.element.before[index]
+        );
+      }
+      if (modal.element.modifiersActive) {
+        this.syncScene();
+      } else {
+        this.renderer.refreshNode(modal.element.node.id);
+      }
+      this.publish();
+      return;
+    }
     modal.target.setTransform(modal.before);
     this.syncScene();
     this.publish();

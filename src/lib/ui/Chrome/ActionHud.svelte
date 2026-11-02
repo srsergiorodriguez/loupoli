@@ -38,7 +38,10 @@
   >
     <span class="label">{label}</span>
     {#if state.phase === 'armed'}
-      <span class="prompt">Drag up or right in the viewport</span>
+      <span class="prompt">Drag up or right, or type an exact amount</span>
+    {:else if state.phase === 'adjusting'}
+      <span class="value">{value}</span>
+      <span class="prompt">Enter to apply</span>
     {:else}
       <span class="value">{value}</span>
       <span class="prompt">Release to apply</span>
@@ -95,7 +98,4 @@
     border-left: var(--hairline) solid var(--border-subtle);
   }
 
-  :global(:root[data-density='fine']) .action-hud {
-    display: none;
-  }
 </style>

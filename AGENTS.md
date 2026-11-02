@@ -114,14 +114,14 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 
 - Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad inspector, and a live autosave indicator.
 - Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
-- Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (x-ray topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
+- Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (front-only depth-biased topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
 - Generalized half-edge DCEL with open boundary loops, validated column reconstruction, per-corner UVs, seam flags, face materials, and adaptive bilinear rendering for non-planar quads.
 - QuadSphere, Cylinder (n-gon caps), and Grid primitives; the first-run scene is an editable QuadSphere.
 - Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.
 - Additive multi-element selection: Shift/Cmd/Ctrl-click, a sticky 44 px Add mode for pen/mouse, and one-finger touch taps; selected sets render multi-vertex points, instanced edge tubes, and merged face fills.
 - Numeric object transforms (position, rotation, scale) through undoable commands; selection overlays follow the node transform. The orientation gizmo supports drag-to-orbit while retaining axis-click snap and center-frame.
 - Local/Global orientation for node transforms, with world-space position/rotation fields and world-oriented translate/rotate gizmos. Scale stays local to avoid unsupported shear; conversions use the one-level parent group transform.
-- Desktop G/R/S modal transforms for active objects/groups: mouse previews, X/Y/Z constraints, numeric entry, a transform HUD, Enter/left-click commit, Escape/right-click cancel, and one undoable command. Element-selection transforms are not yet included.
+- Context-sensitive desktop G/R/S: if elements are selected, transform their unique vertices around the median pivot; otherwise transform the active object/group. Uses mouse previews, X/Y/Z constraints, numeric entry, a target-aware HUD, Enter/left-click commit, Escape/right-click cancel, and localized vertex-transform commands with autosave patches. Element transforms with an active modifier stack operate in base space and are labelled `(base)`; all evaluated copies re-evaluate.
 - Move/Rotate/Scale object gizmos with axis-constrained pen/mouse drags, screen-constant handle size, and undoable transform commits. Finger touch remains camera navigation.
 - Destructive deletion of selected faces or all faces incident to selected edges/vertices, with DCEL rebuild, boundary regeneration, undo, and autosave mesh-replacement patches. The PS1 look is a collapsed render-effect module at the Inspector bottom.
 - Vertex merge-to-centroid, collapsed-face cleanup, and bridging of two ordered boundary chains/loops with equal segment counts into a quad strip. Both use validated mesh replacement and autosave patches.
@@ -137,10 +137,10 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-- Touch ActionDock at bottom-left: tap-to-arm one-shot Extrude, Inset, Loop Cut, and Loop Slide; pencil/mouse drag sets a live amount; release commits one validated mesh replacement; Esc cancels and restores mesh/selection. Loop Slide is separate and operates on the most recent loop cut. 44 px targets; hidden on fine-pointer layouts.
+- ActionDock at bottom-left on touch and desktop: tap/click or E/I/L/Shift+L to arm one-shot Extrude, Inset, Loop Cut, or Loop Slide. Drag sets a live amount or type an exact amount (units for extrude, percent for inset/loop) and press Enter. Release/Enter commits one validated mesh replacement; Esc cancels and restores mesh/selection. Loop Slide is separate and operates on the most recent loop cut. 44 px targets.
 - Single-segment quad loop cuts accept a 0–1 position; the last cut loop is retained for Loop Slide.
 
-Next planned work: multi-element G/R/S transforms, loop-slide history refinements, and broader Phase 3 polish before Phase 4 texturing.
+Next planned work: loop-slide history refinements, evaluated-space element pivots, and broader Phase 3 polish before Phase 4 texturing.
 
 Approved decisions:
 

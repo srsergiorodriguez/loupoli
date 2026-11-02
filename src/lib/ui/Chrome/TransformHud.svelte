@@ -57,6 +57,7 @@
     aria-label="{operationLabel} {axisLabel} {displayValue}"
   >
     <span class="operation">{operationLabel}</span>
+    <span class="target">{modal.target}</span>
     <span class="axis">{axisLabel}</span>
     <span class="value">{displayValue}</span>
     <span class="hint">{hint}</span>
@@ -89,6 +90,15 @@
     font-weight: var(--weight-medium);
     letter-spacing: var(--tracking-label);
     text-transform: uppercase;
+  }
+
+  .target {
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: var(--text-2xs);
   }
 
   .axis {

@@ -43,6 +43,10 @@ export interface InputRouterHost {
   modalPointerMove(sample: PointerSample): void;
   modalTransformKey(key: string): void;
   commitModalTransform(): void;
+  armAction(kind: 'extrude' | 'inset' | 'loop-cut' | 'loop-slide'): void;
+  hasActiveAction(): boolean;
+  isActionAdjusting(): boolean;
+  actionKey(key: string): boolean;
 }
 
 /** The current phase of a multi-touch recognizer. */
@@ -137,6 +141,15 @@ export class InputRouter {
         this.host.commitModalTransform();
       } else if (event.button === 2) {
         this.host.modalTransformKey('Escape');
+      }
+      return;
+    }
+
+    if (this.host.isActionAdjusting()) {
+      if (sample.pointerType === 'mouse' && event.button === 0) {
+        this.host.actionKey('Enter');
+      } else if (sample.pointerType === 'mouse' && event.button === 2) {
+        this.host.actionKey('Escape');
       }
       return;
     }
@@ -360,6 +373,13 @@ export class InputRouter {
       return;
     }
 
+    if (this.host.hasActiveAction()) {
+      if (this.host.actionKey(event.key)) {
+        event.preventDefault();
+        return;
+      }
+    }
+
     if (command && key === 'z') {
       event.preventDefault();
       if (event.shiftKey) {
@@ -378,6 +398,18 @@ export class InputRouter {
 
     if (key === 'escape') {
       this.host.cancelToolPointer();
+      return;
+    }
+
+    if (!command && !event.altKey && (key === 'e' || key === 'i')) {
+      event.preventDefault();
+      this.host.armAction(key === 'e' ? 'extrude' : 'inset');
+      return;
+    }
+
+    if (!command && !event.altKey && key === 'l') {
+      event.preventDefault();
+      this.host.armAction(event.shiftKey ? 'loop-slide' : 'loop-cut');
       return;
     }
 

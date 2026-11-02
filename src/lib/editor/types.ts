@@ -28,6 +28,7 @@ export interface ModalTransformSnapshot {
   readonly kind: ModalTransformKind;
   readonly axis: 'x' | 'y' | 'z' | null;
   readonly orientation: TransformOrientation;
+  readonly target: string;
   readonly numeric: string;
   readonly value: number;
 }
@@ -45,7 +46,7 @@ export type MeshActionKind = (typeof MESH_ACTIONS)[number];
 /** Armed or dragging state for a one-shot mesh action. */
 export interface MeshActionSnapshot {
   readonly kind: MeshActionKind;
-  readonly phase: 'armed' | 'dragging';
+  readonly phase: 'armed' | 'dragging' | 'adjusting';
   readonly value: number;
 }
 

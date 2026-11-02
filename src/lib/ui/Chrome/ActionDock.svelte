@@ -25,8 +25,9 @@
   ];
 
   const activeKind = $derived(session.snapshot.actionState?.kind ?? null);
-  const dragging = $derived(
-    session.snapshot.actionState?.phase === 'dragging'
+  const busy = $derived(
+    session.snapshot.actionState !== null &&
+      session.snapshot.actionState.phase !== 'armed'
   );
 
   function available(kind: MeshActionKind): boolean {
@@ -55,7 +56,7 @@
         <button
           type="button"
           class:active={activeKind === action.kind}
-          disabled={!available(action.kind) || dragging}
+          disabled={!available(action.kind) || busy}
           aria-label={action.label}
           title={action.label}
           onclick={() => session.armAction(action.kind)}
@@ -121,7 +122,4 @@
     cursor: default;
   }
 
-  :global(:root[data-density='fine']) .action-dock {
-    display: none;
-  }
 </style>
