@@ -18,6 +18,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Five viewport modes.** Wireframe (true topological edges), Solid (flat-shaded clay), Texture (custom GLSL PS1 path), Texture + Wire (front-only topological overlay over the texture surface), and Lit (flat-shaded checker material). The mode selector now sits immediately left of the orientation gizmo, icon-only on touch layouts and labeled on wide desktop layouts.
 - **Local/Global transforms.** Node transforms stay parent-local in the document; the Inspector can display world-space position/rotation and orient translate/rotate gizmos to world axes. Scale remains local to avoid unsupported shear.
 - **Context-sensitive Desktop G/R/S.** If vertices, edges, or faces are selected, Grab/Rotate/Scale transform those elements around their median pivot; with no element selection they transform the active object or group. Mouse preview, X/Y/Z constraints, typed exact values, a transform HUD, Enter/click commit, and Escape/right-click cancel are shared. Element transforms are localized vertex moves with their own undo/autosave patches.
+- **Selection gizmo on iPad and desktop.** With elements selected, the Move/Rotate/Scale tools place their axis gizmo at the selection median. Drag a handle with the Pencil or mouse to move, rotate, or scale the selection; the object/group gizmo returns when the element selection is empty. Selection stays active after commit.
 - **ActionDock.** Bottom-left one-shot actions for Extrude, Inset, Loop Cut, and Loop Slide, available on touch and desktop. Tap/click to arm, then drag for a live amount or type an exact amount; Enter/release commits one undoable mesh replacement. Keyboard shortcuts: E extrude, I inset, L loop cut, Shift+L loop slide. Loop Slide is separate from Loop Cut.
 - **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the collapsed **PS1 look** render-effect module at the bottom of the Inspector:
   - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster.
@@ -102,7 +103,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Group row click | Select the group for numeric or gizmo transforms. Group children stay editable from the indented outliner rows. |
 | X/Y/Z while a vertex is selected | Toggle a world-axis lock for the next vertex drag. 44 px X/Y/Z chips provide the same control for pen/touch. |
 | Grid snap toggle/step | Snap object translation and vertex drags to the selected 0.1–1.0 step. |
-| Move/Rotate/Scale handle | Drag its X/Y/Z handle to transform the active object on that axis. Pen/mouse; finger touch remains camera navigation. |
+| Move/Rotate/Scale handle | With an element selection, the gizmo sits at the selection median and drags the selected elements; otherwise it transforms the active object/group on that axis. Pen/mouse; one-finger touch remains camera navigation. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | ActionDock | Tap/click Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. |
 | E / I | Arm Extrude / Inset for the current face selection. |
@@ -190,6 +191,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - ActionDock: touch tap armed Extrude; a pencil/mouse drag previewed and committed 30 V/56 E/28 F from 26/48/24; touch targets measured 44 px; Inset matched those closed counts; Loop Cut produced 34/64/32 and enabled Loop Slide; Loop Slide produced a valid 34/64/32 mesh; cancel restored mesh and selection; a Grid Array-evaluated base extrude updated 28 base faces to 56 evaluated faces.
   - Desktop action shortcuts: E + typed `0.5` + Enter extruded exactly 0.5; I + `20` produced a 20% inset; L + `30` created a loop at 30%; Shift+L + `65` slid it to 65%; the resulting mesh validated. The ActionDock and ActionHud were visible at 1440 px, and the touch layout still measured 44 px.
   - Element G/R/S: a selected face moved +0.5 local X while the object transform stayed at zero and the face selection remained active; two faces rotated 30° around their combined median; undo restored geometry. With Grid Array active, the same base-face move kept 26/48/24 base counts and 52/96/48 evaluated counts, validated the base mesh, and undid cleanly; the HUD labelled the target `1 face (base)`.
+  - Selection gizmo: on desktop and emulated iPad, a selected face showed the gizmo at `[-0.401, -0.401, 0.935]` (the face median). Dragging X committed Move/Rotate/Scale vertex commands with the object position still zero and the face selection retained; undo restored each. With no selection the same tool dragged the object; with Grid Array active it edited the base median and re-evaluated to 52/96/48. iPad tool targets were 64×52 px.
   - Front-only Texture + Wire: a solid PS1 surface occluded back-wall wire edges on a cylinder while front edges remained visible.
   - Per-copy modifier linear maps round-tripped through their inverses for Radial Array geometry, covering mapped base-vertex editing.
   - Vertex drag through the real DCEL, undo, redo, and teardown without console errors.
@@ -259,6 +261,18 @@ Context-sensitive element transform: face selection, local X constraint, exact 0
 - Rotate and Scale use the median of the affected vertices as the pivot; Translate uses no pivot.
 - Element transforms work on the base DCEL. With an active modifier stack they transform the selected base elements, target the base selection median, label the HUD with `(base)`, and re-evaluate all modifier copies. The operation is base-space, not evaluated-copy-space.
 - Element changes use a localized vertex-transform command with one autosave patch per affected vertex. Selection remains active after commit. Mouse translation preserves the full inverse object-space delta rather than normalizing it.
+
+### Selection gizmo
+
+![Selection gizmo at the median of a selected face on iPad](docs/media/selection-gizmo-ipad.png)
+
+- Select vertices, edges, or faces first.
+- Tap **Move**, **Rotate**, or **Scale** in the tool rail.
+- The axis gizmo is placed at the median of the selected elements.
+- Drag an X/Y/Z handle with the Pencil or mouse. Selection remains active after the commit.
+- Local/Global orientation applies; modifiers operate in base space at the base-selection median.
+- With no element selection, the same tools return to object/group transforms.
+- Current limits: axis handles only (no free-plane or uniform center handle), and one-finger touch still orbits rather than drags the gizmo.
 
 ### ActionDock
 

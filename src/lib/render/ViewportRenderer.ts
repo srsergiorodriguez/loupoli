@@ -94,6 +94,8 @@ export class ViewportRenderer {
   private transformMode: TransformMode = 'select';
   private transformOrientation: TransformOrientation = 'local';
   private actionPreviewLine: Float32Array | null = null;
+  private selectionGizmoOrigin: Vector3 | null = null;
+  private selectionGizmoQuaternion: Quaternion | null = null;
   private activeNodeId: string | null = null;
   private activeGroupId: string | null = null;
   private pixelRatio = 1;
@@ -418,6 +420,15 @@ export class ViewportRenderer {
     this.markCameraChanged();
   }
 
+  /** Place the transform gizmo at a selected-element median instead of a node. */
+  setSelectionGizmoFrame(
+    origin: Vector3 | null,
+    quaternion: Quaternion | null
+  ): void {
+    this.selectionGizmoOrigin = origin ? origin.clone() : null;
+    this.selectionGizmoQuaternion = quaternion ? quaternion.clone() : null;
+  }
+
   /** Current camera-space axis projections for the orientation gizmo. */
   getOrientation(): readonly AxisProjection[] {
     return this.cameraRig.computeOrientation();
@@ -467,6 +478,19 @@ export class ViewportRenderer {
     quaternion: Quaternion;
     size: number;
   } | null {
+    if (
+      this.activeGroupId === null &&
+      this.selectionGizmoOrigin !== null &&
+      this.selectionGizmoQuaternion !== null
+    ) {
+      const origin = this.selectionGizmoOrigin.clone();
+      const quaternion = this.selectionGizmoQuaternion.clone();
+      const size = Math.max(
+        0.05,
+        this.cameraRig.camera.position.distanceTo(origin) * 0.16
+      );
+      return { origin, quaternion, size };
+    }
     const view = this.activeView();
     const group =
       this.activeGroupId !== null

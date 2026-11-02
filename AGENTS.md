@@ -122,7 +122,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - Numeric object transforms (position, rotation, scale) through undoable commands; selection overlays follow the node transform. The orientation gizmo supports drag-to-orbit while retaining axis-click snap and center-frame.
 - Local/Global orientation for node transforms, with world-space position/rotation fields and world-oriented translate/rotate gizmos. Scale stays local to avoid unsupported shear; conversions use the one-level parent group transform.
 - Context-sensitive desktop G/R/S: if elements are selected, transform their unique vertices around the median pivot; otherwise transform the active object/group. Uses mouse previews, X/Y/Z constraints, numeric entry, a target-aware HUD, Enter/left-click commit, Escape/right-click cancel, and localized vertex-transform commands with autosave patches. Element transforms with an active modifier stack operate in base space and are labelled `(base)`; all evaluated copies re-evaluate.
-- Move/Rotate/Scale object gizmos with axis-constrained pen/mouse drags, screen-constant handle size, and undoable transform commits. Finger touch remains camera navigation.
+- Move/Rotate/Scale gizmos are context-sensitive: with selected elements they sit at the selection median and edit only those vertices; with no element selection they transform the object/group. Axis-constrained pen/mouse drags commit localized vertex or transform commands. Enlarged gizmo hit volumes improve Pencil reliability. Finger touch remains camera navigation; free-plane/uniform center handles are not yet present.
 - Destructive deletion of selected faces or all faces incident to selected edges/vertices, with DCEL rebuild, boundary regeneration, undo, and autosave mesh-replacement patches. The PS1 look is a collapsed render-effect module at the Inspector bottom.
 - Vertex merge-to-centroid, collapsed-face cleanup, and bridging of two ordered boundary chains/loops with equal segment counts into a quad strip. Both use validated mesh replacement and autosave patches.
 - Face extrusion (single or multi-face regions, average-normal offset, boundary side walls), single-face inset toward the centroid, and single-segment quad loop cut. All preserve UVs/materials and use validated mesh replacement.
@@ -140,7 +140,7 @@ Phase 2 is implemented; Phase 3 foundations are underway for browser and native 
 - ActionDock at bottom-left on touch and desktop: tap/click or E/I/L/Shift+L to arm one-shot Extrude, Inset, Loop Cut, or Loop Slide. Drag sets a live amount or type an exact amount (units for extrude, percent for inset/loop) and press Enter. Release/Enter commits one validated mesh replacement; Esc cancels and restores mesh/selection. Loop Slide is separate and operates on the most recent loop cut. 44 px targets.
 - Single-segment quad loop cuts accept a 0–1 position; the last cut loop is retained for Loop Slide.
 
-Next planned work: loop-slide history refinements, evaluated-space element pivots, and broader Phase 3 polish before Phase 4 texturing.
+Next planned work: free-plane and uniform-center selection gizmo handles, loop-slide history refinements, evaluated-space element pivots, and broader Phase 3 polish before Phase 4 texturing.
 
 Approved decisions:
 

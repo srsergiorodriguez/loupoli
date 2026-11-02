@@ -134,6 +134,30 @@ interface GizmoDrag {
   readonly startAngle: number;
 }
 
+/** Active selection-median transform gizmo drag. */
+interface SelectionGizmoDrag {
+  readonly pointerId: number;
+  readonly mode: GizmoMode;
+  readonly axis: GizmoAxis;
+  readonly orientation: TransformOrientation;
+  readonly node: MeshNode;
+  readonly vertices: readonly number[];
+  readonly before: readonly Vec3[];
+  readonly pivot: Vec3;
+  readonly worldMatrix: Matrix4;
+  readonly inverseWorld: Matrix4;
+  readonly inverseWorldLinear: Matrix3;
+  readonly selectionMode: SelectionMode;
+  readonly selectionCount: number;
+  readonly origin: Vector3;
+  readonly axisWorld: Vector3;
+  readonly size: number;
+  readonly startParameter: number;
+  readonly plane: Plane | null;
+  readonly basis: { u: Vector3; v: Vector3 } | null;
+  readonly startAngle: number;
+}
+
 /** Selected mesh elements captured for a context-sensitive G/R/S transform. */
 interface ElementTransform {
   readonly node: MeshNode;
@@ -250,6 +274,7 @@ export class EditorRuntime {
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
+  private selectionGizmoDrag: SelectionGizmoDrag | null = null;
   private disposed = false;
   private projectName = 'Untitled';
   private autosaveStatus: AutosaveStatus = 'idle';
@@ -1776,8 +1801,18 @@ export class EditorRuntime {
         sample.clientX,
         sample.clientY
       );
-      if (gizmoHit && this.beginGizmoDrag(gizmoHit, sample, target)) {
-        return true;
+      if (gizmoHit) {
+        if (
+          node &&
+          this.selection.count > 0 &&
+          this.getActiveGroup() === null &&
+          this.beginSelectionGizmoDrag(gizmoHit, sample, node)
+        ) {
+          return true;
+        }
+        if (this.beginGizmoDrag(gizmoHit, sample, target)) {
+          return true;
+        }
       }
     }
 
@@ -1911,6 +1946,14 @@ export class EditorRuntime {
       return;
     }
 
+    if (
+      this.selectionGizmoDrag &&
+      this.selectionGizmoDrag.pointerId === sample.pointerId
+    ) {
+      this.updateSelectionGizmoDrag(sample);
+      return;
+    }
+
     if (this.gizmoDrag && this.gizmoDrag.pointerId === sample.pointerId) {
       this.updateGizmoDrag(sample);
       return;
@@ -2038,6 +2081,14 @@ export class EditorRuntime {
       return;
     }
 
+    if (
+      this.selectionGizmoDrag &&
+      this.selectionGizmoDrag.pointerId === sample.pointerId
+    ) {
+      this.finishSelectionGizmoDrag();
+      return;
+    }
+
     if (this.gizmoDrag && this.gizmoDrag.pointerId === sample.pointerId) {
       this.finishGizmoDrag();
       return;
@@ -2084,6 +2135,11 @@ export class EditorRuntime {
     if (this.armedAction) {
       this.armedAction = null;
       this.publish();
+      return;
+    }
+
+    if (this.selectionGizmoDrag) {
+      this.cancelSelectionGizmoDrag();
       return;
     }
 
@@ -2919,6 +2975,309 @@ export class EditorRuntime {
     this.publish();
   }
 
+  private selectionGizmoLabel(
+    mode: GizmoMode,
+    count: number,
+    selectionMode: SelectionMode
+  ): string {
+    const singular =
+      selectionMode === 'vertex'
+        ? 'vertex'
+        : selectionMode === 'edge'
+          ? 'edge'
+          : 'face';
+    const verb =
+      mode === 'translate' ? 'Move' : mode === 'rotate' ? 'Rotate' : 'Scale';
+    return `${verb} ${count} ${singular}${count === 1 ? '' : 's'}`;
+  }
+
+  private beginSelectionGizmoDrag(
+    hit: GizmoHit,
+    sample: PointerSample,
+    node: MeshNode
+  ): boolean {
+    const selected = this.modalSelectedVertices(node);
+    const frame = this.renderer.getGizmoFrame();
+    const ray = this.renderer.getPointerRay(sample.clientX, sample.clientY);
+    if (!selected || !frame || !ray) {
+      return false;
+    }
+    const parent =
+      node.parentId !== null
+        ? this.document.getGroup(node.parentId)
+        : null;
+    const worldMatrix = parent
+      ? transformMatrix(parent.transform).multiply(
+          transformMatrix(node.transform)
+        )
+      : transformMatrix(node.transform);
+    const inverseWorld = worldMatrix.clone().invert();
+    const inverseWorldLinear = new Matrix3().setFromMatrix4(inverseWorld);
+    const before = selected.vertices.map((vertex) =>
+      node.mesh.getVertexPosition(vertex)
+    );
+    const pivot: Vec3 = [0, 0, 0];
+    for (const position of before) {
+      pivot[0] += position[0] / before.length;
+      pivot[1] += position[1] / before.length;
+      pivot[2] += position[2] / before.length;
+    }
+    const axisWorld = worldAxis(hit.axis, frame.quaternion).normalize();
+    let startParameter = 0;
+    let plane: Plane | null = null;
+    let basis: { u: Vector3; v: Vector3 } | null = null;
+    let startAngle = 0;
+    if (hit.mode === 'rotate') {
+      plane = new Plane().setFromNormalAndCoplanarPoint(
+        axisWorld,
+        frame.origin
+      );
+      const point = ray.intersectPlane(plane, new Vector3());
+      if (!point) {
+        return false;
+      }
+      basis = planeBasis(axisWorld);
+      startAngle = angleAroundAxis(point, frame.origin, basis);
+    } else {
+      const parameter = closestAxisParameter(
+        ray,
+        frame.origin,
+        axisWorld
+      );
+      if (parameter === null) {
+        return false;
+      }
+      startParameter = parameter;
+    }
+    this.selectionGizmoDrag = {
+      pointerId: sample.pointerId,
+      mode: hit.mode,
+      axis: hit.axis,
+      orientation: this.transformOrientation,
+      node,
+      vertices: selected.vertices,
+      before,
+      pivot,
+      worldMatrix,
+      inverseWorld,
+      inverseWorldLinear,
+      selectionMode: selected.mode,
+      selectionCount: selected.count,
+      origin: frame.origin.clone(),
+      axisWorld,
+      size: frame.size,
+      startParameter,
+      plane,
+      basis,
+      startAngle
+    };
+    this.publish();
+    return true;
+  }
+
+  private updateSelectionGizmoDrag(sample: PointerSample): void {
+    const drag = this.selectionGizmoDrag;
+    if (!drag) {
+      return;
+    }
+    const ray = this.renderer.getPointerRay(sample.clientX, sample.clientY);
+    if (!ray) {
+      return;
+    }
+    const positions: Vec3[] = drag.before.map(
+      (position) => [...position] as Vec3
+    );
+    if (drag.mode === 'translate') {
+      const parameter = closestAxisParameter(
+        ray,
+        drag.origin,
+        drag.axisWorld
+      );
+      if (parameter === null) {
+        return;
+      }
+      let delta = parameter - drag.startParameter;
+      if (this.snapEnabled) {
+        delta = snapScalar(delta, this.snapStep);
+      }
+      const localDelta = drag.axisWorld
+        .clone()
+        .multiplyScalar(delta)
+        .applyMatrix3(drag.inverseWorldLinear);
+      for (let index = 0; index < positions.length; index += 1) {
+        positions[index] = [
+          drag.before[index][0] + localDelta.x,
+          drag.before[index][1] + localDelta.y,
+          drag.before[index][2] + localDelta.z
+        ];
+      }
+    } else if (drag.mode === 'scale') {
+      const parameter = closestAxisParameter(
+        ray,
+        drag.origin,
+        drag.axisWorld
+      );
+      if (parameter === null) {
+        return;
+      }
+      const delta = parameter - drag.startParameter;
+      const factor = Math.max(0.001, 1 + delta / (drag.size * 0.9));
+      const axisIndex =
+        drag.axis === 'x' ? 0 : drag.axis === 'y' ? 1 : 2;
+      if (drag.orientation === 'local') {
+        for (let index = 0; index < positions.length; index += 1) {
+          const offset = [
+            drag.before[index][0] - drag.pivot[0],
+            drag.before[index][1] - drag.pivot[1],
+            drag.before[index][2] - drag.pivot[2]
+          ];
+          offset[axisIndex] *= factor;
+          positions[index] = [
+            drag.pivot[0] + offset[0],
+            drag.pivot[1] + offset[1],
+            drag.pivot[2] + offset[2]
+          ];
+        }
+      } else {
+        const pivotWorld = new Vector3(
+          drag.pivot[0],
+          drag.pivot[1],
+          drag.pivot[2]
+        ).applyMatrix4(drag.worldMatrix);
+        for (let index = 0; index < positions.length; index += 1) {
+          const world = new Vector3(
+            drag.before[index][0],
+            drag.before[index][1],
+            drag.before[index][2]
+          ).applyMatrix4(drag.worldMatrix);
+          const offset = world.sub(pivotWorld);
+          offset.setComponent(
+            axisIndex,
+            offset.getComponent(axisIndex) * factor
+          );
+          const result = pivotWorld
+            .clone()
+            .add(offset)
+            .applyMatrix4(drag.inverseWorld);
+          positions[index] = [result.x, result.y, result.z];
+        }
+      }
+    } else {
+      if (!drag.plane || !drag.basis) {
+        return;
+      }
+      const point = ray.intersectPlane(drag.plane, new Vector3());
+      if (!point) {
+        return;
+      }
+      const angle = angleAroundAxis(point, drag.origin, drag.basis);
+      const radians = shortestAngleDelta(drag.startAngle, angle);
+      const axisVector = GIZMO_AXIS_VECTORS[drag.axis];
+      if (drag.orientation === 'local') {
+        const rotation = new Quaternion().setFromAxisAngle(
+          axisVector,
+          radians
+        );
+        for (let index = 0; index < positions.length; index += 1) {
+          const offset = new Vector3(
+            drag.before[index][0] - drag.pivot[0],
+            drag.before[index][1] - drag.pivot[1],
+            drag.before[index][2] - drag.pivot[2]
+          ).applyQuaternion(rotation);
+          positions[index] = [
+            drag.pivot[0] + offset.x,
+            drag.pivot[1] + offset.y,
+            drag.pivot[2] + offset.z
+          ];
+        }
+      } else {
+        const rotation = new Quaternion().setFromAxisAngle(
+          drag.axisWorld,
+          radians
+        );
+        const pivotWorld = new Vector3(
+          drag.pivot[0],
+          drag.pivot[1],
+          drag.pivot[2]
+        ).applyMatrix4(drag.worldMatrix);
+        for (let index = 0; index < positions.length; index += 1) {
+          const world = new Vector3(
+            drag.before[index][0],
+            drag.before[index][1],
+            drag.before[index][2]
+          ).applyMatrix4(drag.worldMatrix);
+          const offset = world.sub(pivotWorld).applyQuaternion(rotation);
+          const result = pivotWorld
+            .clone()
+            .add(offset)
+            .applyMatrix4(drag.inverseWorld);
+          positions[index] = [result.x, result.y, result.z];
+        }
+      }
+    }
+    for (let index = 0; index < drag.vertices.length; index += 1) {
+      drag.node.mesh.setVertexPosition(drag.vertices[index], positions[index]);
+    }
+    if (drag.node.getEvaluatedMesh().modifiersActive) {
+      this.syncScene();
+    } else {
+      this.renderer.refreshNode(drag.node.id);
+    }
+    this.publish();
+  }
+
+  private finishSelectionGizmoDrag(): void {
+    const drag = this.selectionGizmoDrag;
+    if (!drag) {
+      return;
+    }
+    this.selectionGizmoDrag = null;
+    const after = drag.vertices.map((vertex) =>
+      drag.node.mesh.getVertexPosition(vertex)
+    );
+    const changed = after.some((position, index) =>
+      position.some(
+        (value, component) =>
+          Math.abs(value - drag.before[index][component]) > 1e-7
+      )
+    );
+    if (changed) {
+      this.history.execute(
+        new TransformVerticesCommand(
+          drag.node.mesh,
+          drag.vertices,
+          drag.before,
+          after,
+          drag.node.id,
+          this.selectionGizmoLabel(
+            drag.mode,
+            drag.selectionCount,
+            drag.selectionMode
+          )
+        )
+      );
+    } else {
+      this.publish();
+    }
+  }
+
+  private cancelSelectionGizmoDrag(): void {
+    const drag = this.selectionGizmoDrag;
+    if (!drag) {
+      return;
+    }
+    this.selectionGizmoDrag = null;
+    for (let index = 0; index < drag.vertices.length; index += 1) {
+      drag.node.mesh.setVertexPosition(drag.vertices[index], drag.before[index]);
+    }
+    if (drag.node.getEvaluatedMesh().modifiersActive) {
+      this.syncScene();
+    } else {
+      this.renderer.refreshNode(drag.node.id);
+    }
+    this.publish();
+  }
+
   private beginGizmoDrag(
     hit: GizmoHit,
     sample: PointerSample,
@@ -3217,7 +3576,66 @@ export class EditorRuntime {
     this.publish();
   }
 
+  private updateSelectionGizmoFrame(): void {
+    const node = this.getActiveNode();
+    const selected =
+      node && this.getActiveGroup() === null
+        ? this.modalSelectedVertices(node)
+        : null;
+    if (!node || !selected || selected.vertices.length === 0) {
+      this.renderer.setSelectionGizmoFrame(null, null);
+      return;
+    }
+    const pivot: Vec3 = [0, 0, 0];
+    for (const vertex of selected.vertices) {
+      const position = node.mesh.getVertexPosition(vertex);
+      pivot[0] += position[0] / selected.vertices.length;
+      pivot[1] += position[1] / selected.vertices.length;
+      pivot[2] += position[2] / selected.vertices.length;
+    }
+    const parent =
+      node.parentId !== null
+        ? this.document.getGroup(node.parentId)
+        : null;
+    const parentQuaternion = parent
+      ? new Quaternion().setFromEuler(
+          new Euler(
+            parent.transform.rotation[0],
+            parent.transform.rotation[1],
+            parent.transform.rotation[2],
+            'XYZ'
+          )
+        )
+      : new Quaternion();
+    const localQuaternion = new Quaternion().setFromEuler(
+      new Euler(
+        node.transform.rotation[0],
+        node.transform.rotation[1],
+        node.transform.rotation[2],
+        'XYZ'
+      )
+    );
+    const worldQuaternion = parentQuaternion.multiply(localQuaternion);
+    const worldMatrix = parent
+      ? transformMatrix(parent.transform).multiply(
+          transformMatrix(node.transform)
+        )
+      : transformMatrix(node.transform);
+    const origin = new Vector3(
+      pivot[0],
+      pivot[1],
+      pivot[2]
+    ).applyMatrix4(worldMatrix);
+    this.renderer.setSelectionGizmoFrame(
+      origin,
+      this.transformOrientation === 'global'
+        ? new Quaternion()
+        : worldQuaternion
+    );
+  }
+
   private syncScene(): void {
+    this.updateSelectionGizmoFrame();
     this.renderer.syncScene(
       this.document.nodes,
       this.document.groups,

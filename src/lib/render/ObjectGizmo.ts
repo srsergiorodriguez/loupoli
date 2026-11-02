@@ -50,8 +50,8 @@ export class ObjectGizmo {
   private readonly coneGeometry = new ConeGeometry(0.055, 0.16, 10);
   private readonly boxGeometry = new BoxGeometry(0.11, 0.11, 0.11);
   private readonly ringGeometry = new TorusGeometry(0.8, 0.014, 6, 48);
-  private readonly hitCylinderGeometry = new CylinderGeometry(0.09, 0.09, 1, 8);
-  private readonly hitRingGeometry = new TorusGeometry(0.8, 0.08, 6, 32);
+  private readonly hitCylinderGeometry = new CylinderGeometry(0.13, 0.13, 1, 8);
+  private readonly hitRingGeometry = new TorusGeometry(0.8, 0.12, 6, 32);
 
   private mode: TransformMode = 'select';
 

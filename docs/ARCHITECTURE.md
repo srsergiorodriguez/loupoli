@@ -487,7 +487,7 @@ Flat normals mean triangle corners are independent in the render buffer. The GPU
 
 Node transforms are stored parent-local. The Inspector can display and edit world-space position/rotation for a child of a one-level group, converting back through the group transform. Translate/rotate gizmos can use world axes; scale remains local because parent rotation with nonuniform scale can require shear.
 
-Element G/R/S expands the current V/E/F selection to unique vertices, previews position changes directly, and commits a TransformVerticesCommand containing only affected positions and per-vertex move patches. With an active modifier stack, element transforms operate on the selected base vertices and re-evaluate the stack; the HUD marks the base-space target.
+Element G/R/S and the selection gizmo expand the current V/E/F selection to unique vertices, preview position changes directly, and commit a TransformVerticesCommand containing only affected positions and per-vertex move patches. The runtime feeds the selection-median world frame to the renderer so the existing axis gizmo can target elements; enlarged invisible hit meshes preserve Pencil reliability. With an active modifier stack, element transforms operate on the selected base vertices and re-evaluate the stack; the HUD marks the base-space target.
 
 The ActionDock uses a separate one-shot action state. On pointer-down it swaps the node's base DCEL for a preview generated from the preserved source mesh, clears the element selection, and re-evaluates modifiers; pointer movement regenerates the preview, release commits one ReplaceMeshCommand, and cancel restores the source mesh and selection. Loop Slide recuts the retained source loop at a new position.
 
