@@ -365,7 +365,7 @@ export class EditorRuntime {
   private uvTransformMode: UvTransformMode = 'move';
   private uvDragScale: number | null = null;
   private uvSelectionMode: UvSelectionMode = 'vertex';
-  private uvClampMode = true;
+  private uvClampMode = false;
   private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
   private lassoSelectionBefore: SelectionSnapshot | null = null;

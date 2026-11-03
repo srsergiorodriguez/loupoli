@@ -43,7 +43,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvTransformMode: 'move',
   uvDragScale: null,
   uvSelectionMode: 'vertex',
-  uvClampMode: true,
+  uvClampMode: false,
   uvSelectedCorners: [],
   uvPinnedCorners: [],
   uvPaintMode: false,
