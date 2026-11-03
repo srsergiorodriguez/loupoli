@@ -14,6 +14,7 @@ import {
   Scene,
   SRGBColorSpace,
   type Ray,
+  type Texture,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -624,6 +625,20 @@ export class ViewportRenderer {
   }
 
   /** Render count for development diagnostics and idle-loop verification. */
+  /** Use an authored composite map for Unlit and Lit surfaces. */
+  setTextureMap(map: Texture | null): void {
+    const uniforms = this.materials.ps1.uniforms as unknown as Ps1Uniforms;
+    uniforms.uMap.value = map ?? this.materials.ps1Texture;
+    this.materials.lit.map = map ?? this.materials.litTexture;
+    this.materials.lit.needsUpdate = true;
+    this.schedule();
+  }
+
+  /** Schedule a frame after a texture composite or layer change. */
+  refreshTexture(): void {
+    this.schedule();
+  }
+
   getRenderCount(): number {
     return this.renderCount;
   }

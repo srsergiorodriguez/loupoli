@@ -29,6 +29,10 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
+- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. The stack is **session-only** right now: `.lpoly` v2 PNG chunks, texture autosave, blend modes, raster painting, and layer rename are not implemented yet.
+
+![Texture layer stack in the Inspector](docs/media/texture-layers.png)
+
 - **UV unwrap.** **Unwrap** extracts charts across seam edges and open boundaries, runs a dependency-free LSCM solver, aligns each chart, and packs it into a deterministic shelf. Closed charts fail with an explicit "mark a closed seam loop" message; collapsed or flipped UV triangles are rejected instead of applied. The operation replaces per-corner UVs in one undoable command with an autosave patch. Two selected corners can be pinned; otherwise the solver chooses the farthest boundary pair. Collapsed, flipped, and overlapping triangles are rejected. Pins are session-only.
 
 ![Seam-based LSCM unwrap with pinned corners](docs/media/uv-unwrap.png)
@@ -158,7 +162,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **82 passing** tests across eighteen files:
+- `npm test`: **85 passing** tests across nineteen files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

@@ -56,6 +56,11 @@ import { drawUvCanvas } from '../uv/uvCanvas';
 import { extractUvCharts } from '../geometry/uvCharts';
 import { LscmError, unwrapUvCharts } from '../geometry/lscm';
 import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
+import {
+  TextureStack,
+  TextureStackCommand,
+  textureStackStatesEqual
+} from '../texture/TextureStack';
 import { rotateUv, scaleUv, uvMedian } from '../uv/uvTransform';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
@@ -312,6 +317,7 @@ export class EditorRuntime {
   private uvDrag: UvDrag | null = null;
   private uvRevision = 0;
   private uvError: string | null = null;
+  private readonly textureStack: TextureStack;
   private lastUvSourceSignature = '';
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
@@ -338,11 +344,19 @@ export class EditorRuntime {
     }
     this.selection.setContext(this.activeNodeId, 'vertex');
 
-    this.renderer = new ViewportRenderer(canvas, readTheme(), {
+    const theme = readTheme();
+    this.textureStack = new TextureStack(
+      1024,
+      1024,
+      theme.textureA.css,
+      theme.textureB.css
+    );
+    this.renderer = new ViewportRenderer(canvas, theme, {
       onViewChanged: () => {
         this.publish();
       }
     });
+    this.renderer.setTextureMap(this.textureStack.texture);
 
     this.inputHost = {
       orbit: (dx, dy) => this.renderer.orbit(dx, dy),
@@ -432,6 +446,9 @@ export class EditorRuntime {
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvRevision: this.uvRevision,
       uvError: this.uvError,
+      textureLayers: this.textureStack.summaries(),
+      textureActiveId: this.textureStack.activeLayerId,
+      textureSize: this.textureStack.width,
       modifiers: active ? active.modifiers.map((modifier) => ({ ...modifier })) : [],
       modifiersActive: evaluated?.modifiersActive ?? false,
       modifierError: evaluated?.error ?? null,
@@ -488,6 +505,72 @@ export class EditorRuntime {
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
     };
+  }
+
+  /** Activate a texture layer without adding an undo step. */
+  setActiveTextureLayer(id: string): void {
+    this.textureStack.setActive(id);
+    this.publish();
+  }
+
+  /** Add a texture layer at the top, capped at eight layers. */
+  addTextureLayer(): void {
+    this.commitTextureMutation('Add texture layer', () => {
+      this.textureStack.addLayer();
+    });
+  }
+
+  removeTextureLayer(id: string): void {
+    this.commitTextureMutation('Remove texture layer', () => {
+      this.textureStack.removeLayer(id);
+    });
+  }
+
+  toggleTextureLayer(id: string): void {
+    const layer = this.textureStack
+      .summaries()
+      .find((summary) => summary.id === id);
+    if (!layer) {
+      return;
+    }
+    this.commitTextureMutation(
+      layer.visible ? 'Hide texture layer' : 'Show texture layer',
+      () => {
+        this.textureStack.setVisible(id, !layer.visible);
+      }
+    );
+  }
+
+  moveTextureLayer(id: string, direction: -1 | 1): void {
+    this.commitTextureMutation('Reorder texture layer', () => {
+      this.textureStack.moveLayer(id, direction);
+    });
+  }
+
+  setTextureLayerOpacity(id: string, opacity: number): void {
+    this.commitTextureMutation('Change layer opacity', () => {
+      this.textureStack.setOpacity(id, opacity);
+    });
+  }
+
+  setTextureLayerColor(id: string, color: string): void {
+    this.commitTextureMutation('Fill texture layer', () => {
+      this.textureStack.setColor(id, color);
+    });
+  }
+
+  private commitTextureMutation(label: string, mutate: () => void): void {
+    const before = this.textureStack.snapshot();
+    mutate();
+    const after = this.textureStack.snapshot();
+    if (textureStackStatesEqual(before, after)) {
+      return;
+    }
+    this.history.execute(
+      new TextureStackCommand(this.textureStack, before, after, label)
+    );
+    this.renderer.refreshTexture();
+    this.publish();
   }
 
   setShadingMode(mode: ShadingMode): void {
@@ -2217,6 +2300,7 @@ export class EditorRuntime {
     this.history.dispose();
     this.autosave.dispose();
     this.renderer.dispose();
+    this.textureStack.dispose();
   }
 
   private getActiveNode(): MeshNode | null {
@@ -4127,6 +4211,7 @@ export class EditorRuntime {
 
   private afterDocumentChanged(event: HistoryEvent): void {
     this.pruneUvSelection();
+    this.renderer.refreshTexture();
     this.uvRevision += 1;
     const loopContext =
       event.command instanceof ReplaceMeshCommand
@@ -4338,6 +4423,8 @@ export class EditorRuntime {
   }
 
   private applyLoadedDocument(decoded: DecodedProject, name: string): void {
+    this.textureStack.reset();
+    this.renderer.setTextureMap(this.textureStack.texture);
     this.document.replaceNodes(decoded.document.nodes);
     this.document.replaceGroups(decoded.document.groups);
     this.projectName = name;

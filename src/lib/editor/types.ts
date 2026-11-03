@@ -6,6 +6,7 @@ import type {
   ModifierAxis
 } from '../geometry/modifiers';
 import type { AutosaveStatus } from '../project/AutosaveService';
+import type { TextureLayerSummary } from '../texture/TextureStack';
 
 /** The object transform tools exposed by the toolbar. */
 export const TRANSFORM_MODES = ['select', 'translate', 'rotate', 'scale'] as const;
@@ -130,6 +131,9 @@ export interface EditorSnapshot {
   readonly uvPinnedCorners: readonly number[];
   readonly uvRevision: number;
   readonly uvError: string | null;
+  readonly textureLayers: readonly TextureLayerSummary[];
+  readonly textureActiveId: string | null;
+  readonly textureSize: number;
   readonly activeTransform: NodeTransform | null;
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;

@@ -207,7 +207,7 @@ For each node, in order:
 9. `edgeHalfEdge` — `u32`, `edgeCount`
 10. `edgeFlags` — `u8`, `edgeCount`. Bit 0 is the UV seam flag; other bits remain reserved.
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column.
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. The session texture layer stack is not yet part of autosave or `.lpoly`; texture metadata and binary PNG chunks are planned for v2.
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 

@@ -34,6 +34,9 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvPinnedCorners: [],
   uvRevision: 0,
   uvError: null,
+  textureLayers: [],
+  textureActiveId: null,
+  textureSize: 0,
   activeTransform: null,
   globalTransform: null,
   transformOrientation: 'local',
@@ -171,6 +174,34 @@ export class EditorSession {
 
   setUvTransformMode(mode: 'move' | 'rotate' | 'scale'): void {
     this.runtime?.setUvTransformMode(mode);
+  }
+
+  setActiveTextureLayer(id: string): void {
+    this.runtime?.setActiveTextureLayer(id);
+  }
+
+  addTextureLayer(): void {
+    this.runtime?.addTextureLayer();
+  }
+
+  removeTextureLayer(id: string): void {
+    this.runtime?.removeTextureLayer(id);
+  }
+
+  toggleTextureLayer(id: string): void {
+    this.runtime?.toggleTextureLayer(id);
+  }
+
+  moveTextureLayer(id: string, direction: -1 | 1): void {
+    this.runtime?.moveTextureLayer(id, direction);
+  }
+
+  setTextureLayerOpacity(id: string, opacity: number): void {
+    this.runtime?.setTextureLayerOpacity(id, opacity);
+  }
+
+  setTextureLayerColor(id: string, color: string): void {
+    this.runtime?.setTextureLayerColor(id, color);
   }
 
   beginUvDrag(

@@ -59,6 +59,12 @@
   const modifiersActive = $derived(session.snapshot.modifiersActive);
   const modifierError = $derived(session.snapshot.modifierError);
   const boundaryEdges = $derived(session.snapshot.boundaryEdges);
+  const textureLayers = $derived(session.snapshot.textureLayers);
+  const textureLayersTopFirst = $derived(
+    textureLayers
+      .map((layer, index) => ({ layer, index }))
+      .reverse()
+  );
   const modeLabel = $derived(
     session.snapshot.selectionMode === 'vertex'
       ? 'Vertex'
@@ -857,6 +863,113 @@
     <details class="section module-section">
       <summary class="module-summary">
         <span class="module-title">
+          <span class="section-label">Texture</span>
+          <span class="section-meta">
+            {textureLayers.length} layer{textureLayers.length === 1 ? '' : 's'} ·
+            {session.snapshot.textureSize}²
+          </span>
+        </span>
+        <span class="module-chevron" aria-hidden="true"></span>
+      </summary>
+      <div class="module-body texture-body">
+        <div class="texture-toolbar">
+          <button
+            type="button"
+            class="compact-action"
+            aria-label="Add texture layer"
+            disabled={textureLayers.length >= 8}
+            onclick={() => session.addTextureLayer()}
+          >
+            <Icon name="plus" size={13} />
+            <span>Add layer</span>
+          </button>
+          <span class="texture-note">Session texture</span>
+        </div>
+        <div class="texture-list">
+          {#each textureLayersTopFirst as { layer, index } (layer.id)}
+            <div
+              class="texture-layer"
+              class:active={session.snapshot.textureActiveId === layer.id}
+            >
+              <div class="texture-row">
+                <button
+                  type="button"
+                  class="texture-icon"
+                  aria-label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
+                  aria-pressed={layer.visible}
+                  onclick={() => session.toggleTextureLayer(layer.id)}
+                >
+                  <Icon name={layer.visible ? 'eye' : 'eye-off'} size={14} />
+                </button>
+                <button
+                  type="button"
+                  class="texture-name"
+                  aria-pressed={session.snapshot.textureActiveId === layer.id}
+                  onclick={() => session.setActiveTextureLayer(layer.id)}
+                >
+                  {layer.name}
+                  <span>{layer.pattern}</span>
+                </button>
+                <button
+                  type="button"
+                  class="texture-icon"
+                  aria-label={`Delete ${layer.name}`}
+                  disabled={textureLayers.length <= 1}
+                  onclick={() => session.removeTextureLayer(layer.id)}
+                >
+                  <Icon name="trash" size={13} />
+                </button>
+              </div>
+              <div class="texture-row texture-row--controls">
+                <input
+                  type="color"
+                  class="texture-color"
+                  value={layer.color}
+                  aria-label={`${layer.name} color`}
+                  onchange={(event) =>
+                    session.setTextureLayerColor(layer.id, event.currentTarget.value)}
+                />
+                <label class="texture-opacity">
+                  <span>{Math.round(layer.opacity * 100)}%</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={layer.opacity}
+                    aria-label={`${layer.name} opacity`}
+                    onchange={(event) =>
+                      session.setTextureLayerOpacity(layer.id, Number(event.currentTarget.value))}
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="texture-order"
+                  aria-label={`Move ${layer.name} up`}
+                  disabled={index === textureLayers.length - 1}
+                  onclick={() => session.moveTextureLayer(layer.id, 1)}
+                ><Icon name="chevron-up" size={12} /></button>
+                <button
+                  type="button"
+                  class="texture-order"
+                  aria-label={`Move ${layer.name} down`}
+                  disabled={index === 0}
+                  onclick={() => session.moveTextureLayer(layer.id, -1)}
+                ><Icon name="chevron-down" size={12} /></button>
+              </div>
+            </div>
+          {/each}
+        </div>
+        <p class="hint">
+          Composite uploads one GPU texture. Layer colors are deterministic fills;
+          raster painting and `.lpoly` v2 persistence follow.
+        </p>
+      </div>
+    </details>
+
+    <details class="section module-section">
+      <summary class="module-summary">
+        <span class="module-title">
           <span id="ps1-heading" class="section-label">PS1 look</span>
           <span class="section-meta">Render effect · Opt-in</span>
         </span>
@@ -1586,6 +1699,142 @@
 
   .hint {
     margin-top: var(--space-2);
+  }
+
+  .texture-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .texture-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .texture-note {
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+  }
+
+  .texture-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .texture-layer {
+    padding: var(--space-1);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+  }
+
+  .texture-layer.active {
+    border-color: var(--accent-primary);
+    background: var(--bg-selected);
+  }
+
+  .texture-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--hit-min);
+  }
+
+  .texture-row--controls {
+    min-height: var(--control-h);
+    padding: 0 2px;
+  }
+
+  @media (pointer: coarse) {
+    .texture-row--controls {
+      min-height: var(--hit-min);
+    }
+  }
+
+  .texture-icon,
+  .texture-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--hit-min);
+    min-height: var(--hit-min);
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .texture-icon:hover,
+  .texture-order:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .texture-icon:disabled,
+  .texture-order:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .texture-name {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    padding: 0 var(--space-1);
+    border: 0;
+    background: transparent;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .texture-name span {
+    color: var(--text-tertiary);
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .texture-color {
+    width: var(--hit-min);
+    height: var(--control-h);
+    padding: 2px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .texture-opacity {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+  }
+
+  .texture-opacity input {
+    flex: 1;
+    min-width: 48px;
+    accent-color: var(--accent-primary);
+  }
+
+  .texture-order {
+    min-width: 30px;
+    min-height: var(--control-h);
   }
 
   .module-section {

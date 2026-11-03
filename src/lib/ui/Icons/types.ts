@@ -27,4 +27,6 @@ export type IconName =
   | 'inset'
   | 'loop-cut'
   | 'loop-slide'
-  | 'seam';
+  | 'seam'
+  | 'eye'
+  | 'eye-off';

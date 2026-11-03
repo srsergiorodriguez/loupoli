@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, and overlap rejection are implemented; texture layers and projection painting remain.
+**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a session-only texture layer stack are implemented. `.lpoly` v2 texture chunks, texture autosave, blend modes, and projection painting remain.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -82,13 +82,14 @@
 - Surface failures explicitly; never write NaN or silently discard a chart. **Closed charts, non-finite results, zero-area triangles, and mixed winding fail before applying.**
 - Two-corner pins and full triangle-overlap rejection are implemented; broader chart fixtures and pin editing remain open.
 
-### Slice 4 — Texture layer stack and format v2
+### Slice 4 — Texture layer stack and format v2 (stack first pass)
 
-- Layer add/delete/rename/reorder/visibility/opacity/blend.
-- Composite cache: recompute only when a layer or composite changes; mutate the existing GPU texture.
-- `.lpoly` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration.
-- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction.
-- Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery.
+- Layer add/delete/reorder/visibility/opacity. **Implemented. Rename and blend modes pending.**
+- Color fills and active-layer selection. **Implemented as deterministic fill patterns; raster painting pending.**
+- Composite cache: recompute only when a layer or composite changes; one GPU texture. **Implemented. Layer canvases are OffscreenCanvas; the composite is a single HTML canvas wrapped in one CanvasTexture.**
+- `.lpoly` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration. **Pending.**
+- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **Pending; layer commands currently have no journal patch.**
+- Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery. **Dispose path exists; project load resets the session stack.**
 
 ### Slice 5 — 3D projection painting
 

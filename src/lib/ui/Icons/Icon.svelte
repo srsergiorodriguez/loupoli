@@ -111,5 +111,11 @@
   {:else if name === 'seam'}
     <path d="M4 8h4M16 8h4M4 16h4M16 16h4" />
     <path d="M12 3v18" stroke-dasharray="2.5 3" />
+  {:else if name === 'eye'}
+    <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+    <circle cx="12" cy="12" r="2.7" />
+  {:else if name === 'eye-off'}
+    <path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.4 2.9M6.2 7.1C4 8.8 2.5 12 2.5 12s3.5 6 9.5 6c1.5 0 2.8-.4 4-1" />
+    <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
   {/if}
 </svg>
