@@ -139,6 +139,21 @@ describe('destructive element deletion', () => {
     expect(() => result.validate()).not.toThrow();
   });
 
+  it('keeps a cube loop-cut plane coherent while sliding', () => {
+    const cube = createCubeMesh(2);
+    const cut = loopCutFromEdge(cube, 0, 0.3);
+    const cutVertices: number[] = [];
+    for (let vertex = 0; vertex < cut.vertexCount; vertex += 1) {
+      const y = cut.getVertexPosition(vertex)[1];
+      if (Math.abs(y) < 0.999) {
+        cutVertices.push(y);
+      }
+    }
+    expect(cutVertices).toHaveLength(4);
+    expect(cutVertices.every((y) => Math.abs(y + 0.4) < 1e-5)).toBe(true);
+    expect(() => cut.validate()).not.toThrow();
+  });
+
   it('cuts a loop through an open quad grid', () => {
     const grid = createGridMesh(2, 2);
     const result = loopCutFromEdge(grid, 0);

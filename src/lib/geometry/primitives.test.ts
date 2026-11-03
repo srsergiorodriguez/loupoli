@@ -17,6 +17,8 @@ describe('createCubeMesh', () => {
     expect(mesh.halfEdgeCount).toBe(24);
     expect(mesh.triangleCount).toBe(12);
     expect(mesh.triangleVertexCount).toBe(36);
+    expect(mesh.getBounds().min).toEqual([-1, -1, -1]);
+    expect(mesh.getBounds().max).toEqual([1, 1, 1]);
     expect(() => mesh.validate()).not.toThrow();
   });
 

@@ -736,9 +736,85 @@ export function loopCutFromEdge(
     throw new Error('Loop cut needs a closed opposite edge.');
   }
 
+  // Give every crossed edge a stable A→B direction. Adjacent faces must agree
+  // on those labels, otherwise a slide at t != 0.5 moves different sides of
+  // the loop in opposite directions and visibly twists it.
+  const [edgeStart, edgeEnd] = mesh.getEdgeVertices(edge);
+  const edgeLabels = new Map<number, { a: number; b: number }>();
+  edgeLabels.set(edge, { a: edgeStart, b: edgeEnd });
+  const cornerCache = new Map<number, LoopCorner[]>();
+  const cornersOf = (face: number): LoopCorner[] => {
+    let corners = cornerCache.get(face);
+    if (!corners) {
+      corners = faceLoopCorners(mesh, face);
+      cornerCache.set(face, corners);
+    }
+    return corners;
+  };
+  let labelChanged = true;
+  let labelPasses = 0;
+  while (labelChanged && labelPasses < mesh.faceCount * 2) {
+    labelChanged = false;
+    labelPasses += 1;
+    for (let face = 0; face < mesh.faceCount; face += 1) {
+      const corners = cornersOf(face);
+      const selectedIndices: number[] = [];
+      for (let index = 0; index < corners.length; index += 1) {
+        if (loopEdges.has(corners[index].edge)) {
+          selectedIndices.push(index);
+        }
+      }
+      if (selectedIndices.length !== 2) {
+        continue;
+      }
+      const firstIndex = selectedIndices[0];
+      const secondIndex = selectedIndices[1];
+      if ((secondIndex - firstIndex + 4) % 4 !== 2) {
+        continue;
+      }
+      const firstEdge = corners[firstIndex].edge;
+      const secondEdge = corners[secondIndex].edge;
+      const knownFirst = edgeLabels.get(firstEdge);
+      const knownSecond = edgeLabels.get(secondEdge);
+
+      const derive = (
+        known: { a: number; b: number },
+        knownIndex: number,
+        otherEdge: number
+      ): void => {
+        const origin = corners[knownIndex];
+        const next = corners[(knownIndex + 1) % 4];
+        const oppositeOrigin = corners[(knownIndex + 2) % 4];
+        const oppositeNext = corners[(knownIndex + 3) % 4];
+        let oppositeA: number;
+        if (known.a === origin.vertex) {
+          // The A/B rail enters at the edge origin; it exits through the
+          // opposite edge's last corner.
+          oppositeA = oppositeNext.vertex;
+        } else if (known.a === next.vertex) {
+          oppositeA = oppositeOrigin.vertex;
+        } else {
+          throw new Error('Loop cut edge labels do not match their face.');
+        }
+        const oppositeB =
+          oppositeA === oppositeOrigin.vertex
+            ? oppositeNext.vertex
+            : oppositeOrigin.vertex;
+        edgeLabels.set(otherEdge, { a: oppositeA, b: oppositeB });
+        labelChanged = true;
+      };
+
+      if (knownFirst && !knownSecond) {
+        derive(knownFirst, firstIndex, secondEdge);
+      } else if (knownSecond && !knownFirst) {
+        derive(knownSecond, secondIndex, firstEdge);
+      }
+    }
+  }
+
   const faces: MeshFaceSpec[] = [];
   for (let face = 0; face < mesh.faceCount; face += 1) {
-    const corners = faceLoopCorners(mesh, face);
+    const corners = cornersOf(face);
     const selectedIndices: number[] = [];
     for (let index = 0; index < corners.length; index += 1) {
       if (loopEdges.has(corners[index].edge)) {
@@ -762,11 +838,27 @@ export function loopCutFromEdge(
     const ordered = [0, 1, 2, 3].map(
       (offset) => corners[(pivot + offset) % 4]
     );
-    // Measure from the lower-index endpoint so both faces adjacent to an
-    // edge produce the same cut point. At position 0.5 this is the midpoint.
-    const cutPoint = (a: LoopCorner, b: LoopCorner): MeshCornerSpec => {
-      const start = a.vertex < b.vertex ? a : b;
-      const end = start === a ? b : a;
+    // Move from each edge's label-A endpoint toward label B. The labels were
+    // propagated through the ring, so both rails advance together even on a
+    // cube whose vertex numbering is not globally consistent.
+    const cutPoint = (edgeIndex: number): MeshCornerSpec => {
+      const corner = corners[edgeIndex];
+      const next = corners[(edgeIndex + 1) % 4];
+      const label = edgeLabels.get(corner.edge);
+      if (!label) {
+        throw new Error('Loop cut could not orient every crossed edge.');
+      }
+      let start: LoopCorner;
+      let end: LoopCorner;
+      if (label.a === corner.vertex && label.b === next.vertex) {
+        start = corner;
+        end = next;
+      } else if (label.a === next.vertex && label.b === corner.vertex) {
+        start = next;
+        end = corner;
+      } else {
+        throw new Error('Loop cut edge labels do not match their face.');
+      }
       return {
         position: [
           start.position[0] +
@@ -782,8 +874,8 @@ export function loopCutFromEdge(
         ]
       };
     };
-    const midA = cutPoint(ordered[0], ordered[1]);
-    const midB = cutPoint(ordered[2], ordered[3]);
+    const midA = cutPoint(pivot);
+    const midB = cutPoint((pivot + 2) % 4);
     const material = mesh.faceMaterial[face];
 
     faces.push({
