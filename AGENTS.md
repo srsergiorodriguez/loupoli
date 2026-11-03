@@ -115,7 +115,7 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - TopBar Model/UV/Paint workspace switcher: UV opens the split, Paint also enables the raster brush, and Model closes the UV pane. The UV pane supports bottom and side-by-side layouts with a matching resize divider; compact widths force bottom.
 - Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad bottom-sheet inspector, a collapsible persistent desktop sidebar, and a live autosave indicator. The desktop 3D canvas ends at the sidebar, so its aspect and center match the visible modeling area.
 - Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
-- Signed orientation gizmo: positive and negative axis endpoints, center framing, and Blender-Front reset via Home/44 px control.
+- Signed orientation gizmo: positive and negative axis endpoints, center framing, and Blender-Front reset via the toolbar Home control or Home key.
 - Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (front-face-culled topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
 - Generalized half-edge DCEL with open boundary loops, validated column reconstruction, per-corner UVs, seam flags, face materials, and adaptive bilinear rendering for non-planar quads.
 - UV seam authoring: Edge-mode Seam toggles bit 0 of the DCEL edge flags, renders an amber overlay, uses localized undo and per-edge autosave patches, and round-trips through `.lpoly`.

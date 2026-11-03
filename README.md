@@ -179,7 +179,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Escape / right click | Cancel the modal transform and restore the previous pose. |
 | F | Frame the active object. |
 | Escape | Cancel the active drag or modal transform, or close the mobile inspector. |
-| Orientation gizmo | Drag to orbit. Click a bright `+X/+Y/+Z` or darker `−X/−Y/−Z` endpoint to view that side. Click the center to frame the active object. Use the Home control or `Home` to reset to Blender Front (camera on −Y). |
+| Orientation gizmo | Drag to orbit. Click a bright `+X/+Y/+Z` or darker `−X/−Y/−Z` endpoint to view that side. Click the center to frame the active object. Use the toolbar Home button or `Home` to reset to Blender Front (camera on −Y). |
 
 Selection modes are switched with the **Vertex / Edge / Face** control at the top-left of the viewport. The Scene outliner selects the active object; picking always edits that object.
 

@@ -39,6 +39,11 @@
     onFocusViewport();
     session.frameSelection();
   }
+
+  function resetView(): void {
+    onFocusViewport();
+    session.resetView();
+  }
 </script>
 
 <nav class="tool-rail loupoli-panel" aria-label="Modeling tools">
@@ -80,6 +85,7 @@
   <span class="rail-divider" aria-hidden="true"></span>
   <div class="tool-group">
     <ToolButton label="Frame" icon="frame" onActivate={frameMesh} />
+    <ToolButton label="Home" icon="home" onActivate={resetView} />
   </div>
 </nav>
 
