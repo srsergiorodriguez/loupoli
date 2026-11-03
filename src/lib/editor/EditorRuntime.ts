@@ -65,6 +65,11 @@ import {
 import { rotateUv, scaleUv, uvMedian } from '../uv/uvTransform';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
+  paintBounds,
+  paintPointToTexture,
+  paintTextureRadius
+} from '../texture/paintView';
+import {
   buildUvTopology,
   pickUvElement as pickUvEntity,
   selectUvCornersInPolygon,
@@ -390,7 +395,7 @@ export class EditorRuntime {
 
   constructor(canvas: HTMLCanvasElement, options: EditorRuntimeOptions) {
     this.onSnapshot = options.onSnapshot;
-    this.document = SceneDocument.createDefault();
+    this.document = SceneDocument.createDefault('cube');
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     if (this.activeNodeId) {
       this.selectedNodeIds.add(this.activeNodeId);
@@ -413,7 +418,7 @@ export class EditorRuntime {
 
     this.inputHost = {
       activateEditor: (editor) => this.setActiveEditor(editor),
-      isUvActive: () => this.activeEditor === 'uv',
+      isUvActive: () => this.activeEditor !== '3d',
       orbit: (dx, dy) => this.renderer.orbit(dx, dy),
       pan: (dx, dy) => this.renderer.pan(dx, dy),
       zoom: (factor) => this.renderer.zoom(factor),
@@ -959,6 +964,10 @@ export class EditorRuntime {
       this.openUvView();
     }
     const paint = workspace === 'paint';
+    this.activeEditor = paint ? 'paint' : 'uv';
+    if (paint) {
+      this.lassoMode = false;
+    }
     if (this.uvPaintMode !== paint) {
       this.uvPaintMode = paint;
       this.uvRevision += 1;
@@ -1646,6 +1655,146 @@ export class EditorRuntime {
     );
   }
 
+  /** Draw the composited texture as the Paint workspace surface. */
+  drawPaintView(
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number
+  ): void {
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const targetWidth = Math.max(1, Math.round(width * dpr));
+    const targetHeight = Math.max(1, Math.round(height * dpr));
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = getComputedStyle(document.documentElement)
+      .getPropertyValue('--bg-panel-strong')
+      .trim() || '#1a1a1f';
+    context.fillRect(0, 0, width, height);
+    const bounds = paintBounds(width, height);
+    const image = this.textureStack.image;
+    context.imageSmoothingEnabled = false;
+    if (image) {
+      context.drawImage(image, bounds.x, bounds.y, bounds.size, bounds.size);
+    }
+    context.strokeStyle = getComputedStyle(document.documentElement)
+      .getPropertyValue('--border-subtle')
+      .trim() || 'rgba(255,255,255,.12)';
+    context.lineWidth = 1;
+    context.strokeRect(bounds.x, bounds.y, bounds.size, bounds.size);
+  }
+
+  /** Begin painting the active texture layer directly in texture space. */
+  beginTexturePaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): boolean {
+    if (!this.uvOpen || !this.uvPaintMode) {
+      return false;
+    }
+    const layerId = this.textureStack.activeLayerId;
+    const point = paintPointToTexture(
+      x,
+      y,
+      width,
+      height,
+      this.textureStack.width,
+      this.textureStack.height
+    );
+    if (!layerId || !point || !this.textureStack.beginPaint(layerId)) {
+      return false;
+    }
+    const radius =
+      paintTextureRadius(
+        this.uvBrushSize,
+        width,
+        height,
+        this.textureStack.width
+      ) * Math.min(1, Math.max(0.2, pressure || 1));
+    this.textureStack.paintSegment(
+      layerId,
+      point.x,
+      point.y,
+      point.x,
+      point.y,
+      radius,
+      this.uvBrushColor,
+      this.uvBrushOpacity
+    );
+    this.uvPaint = { layerId, lastX: point.x, lastY: point.y };
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+    return true;
+  }
+
+  /** Continue a texture-space paint stroke. */
+  updateTexturePaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): void {
+    if (!this.uvPaint) {
+      return;
+    }
+    const point = paintPointToTexture(
+      x,
+      y,
+      width,
+      height,
+      this.textureStack.width,
+      this.textureStack.height
+    );
+    if (!point) {
+      return;
+    }
+    const radius =
+      paintTextureRadius(
+        this.uvBrushSize,
+        width,
+        height,
+        this.textureStack.width
+      ) * Math.min(1, Math.max(0.2, pressure || 1));
+    this.textureStack.paintSegment(
+      this.uvPaint.layerId,
+      this.uvPaint.lastX,
+      this.uvPaint.lastY,
+      point.x,
+      point.y,
+      radius,
+      this.uvBrushColor,
+      this.uvBrushOpacity
+    );
+    this.uvPaint.lastX = point.x;
+    this.uvPaint.lastY = point.y;
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
+  finishTexturePaint(): void {
+    this.finishUvPaint();
+  }
+
+  cancelTexturePaint(): void {
+    this.cancelUvPaint();
+  }
+
   /**
    * Pick a UV corner in panel-local CSS pixels.
    *
@@ -2105,7 +2254,10 @@ export class EditorRuntime {
 
   /** Mark the pane that owns contextual selection and tool commands. */
   setActiveEditor(editor: EditorPane): void {
-    if (editor === 'uv' && !this.uvOpen) {
+    if (editor === 'uv' && (!this.uvOpen || this.uvPaintMode)) {
+      return;
+    }
+    if (editor === 'paint' && (!this.uvOpen || !this.uvPaintMode)) {
       return;
     }
     if (this.activeEditor === editor) {
@@ -2117,6 +2269,9 @@ export class EditorRuntime {
 
   /** Select all elements in the current mode in the active editor. */
   selectAllActive(): void {
+    if (this.activeEditor === 'paint') {
+      return;
+    }
     if (this.activeEditor === 'uv' && this.uvOpen) {
       this.selectAllUv();
     } else {

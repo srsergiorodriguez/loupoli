@@ -33,9 +33,9 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
-- **UV raster brush.** Enable **Paint** in the UV footer, choose color/size/opacity, and drag on the UV canvas. Strokes draw into the active layer, update the one composite texture live in both the UV and 3D views, and commit as one localized pixel-patch command. Pen pressure scales the brush radius. Undo restores the paint rectangle; autosave captures the painted PNG in the next v2 checkpoint. Tilt shaping and 3D projection painting remain.
+- **Dedicated Paint workspace.** Choose **Paint** in the Workspace Tabs; the 3D stage stays visible while a separate texture-space Paint pane opens. Choose color/size/opacity and drag the texture. Strokes draw into the active layer, update the composite texture live in both the Paint pane and 3D view, and commit as one localized pixel-patch command. Pen pressure scales the brush radius. Undo restores the paint rectangle; autosave captures the painted PNG in the next v2 checkpoint. Tilt shaping and 3D projection painting remain.
 
-![UV raster brush on the active texture layer](docs/media/uv-paint.png)
+![Texture painting in the dedicated Paint workspace](docs/media/uv-paint.png)
 
 - **Numeric drag-scrub.** Position, rotation, and scale fields support horizontal drag: one pointer pixel is half a step, Shift gives 10× finer control, and release commits one undoable transform. Click to type, Enter to commit, Escape to revert. UV numeric fields share the same control.
 - **Brush-size preview.** Paint mode hides the native cursor and draws a circular brush outline at the current texture-pixel size, updated on hover and drag.
@@ -50,18 +50,18 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Seam-based LSCM unwrap with pinned corners](docs/media/uv-unwrap.png)
 
-- **UV workspaces.** Use the TopBar **Model / UV / Paint** switcher. UV opens the bottom split; Paint opens UV with the raster brush active. The UV header switches between bottom and side-by-side layouts, and the divider resizes the active orientation. UV controls are grouped into Selection (All/Lasso/Subtract), UV Operations (U/V, Sync, Pin, Unwrap, Stack), and View (zoom out, Fit, zoom in, Clamp). Move/Rotate/Scale and V/E/F/Island are contextual: the left tool rail and top-left selection control drive both 3D and UV.
+- **UV and Paint workspaces.** Use the TopBar **Model / UV / Paint** switcher. UV opens a side-by-side chart editor; Paint opens a separate side-by-side texture-paint pane. The PaneHost divider resizes either pane. UV operations (U/V, Sync, Pin, Unwrap, Stack) and View (zoom out, Fit, zoom in, Clamp) live in the UV header. Move/Rotate/Scale and V/E/F/Island are contextual: the left tool rail and top-left selection control drive both 3D and UV, and are hidden while Paint owns the active editor.
 
 ![Side-by-side UV and 3D workspace](docs/media/uv-side-workspace.png)
 
-- **UV editing split.** Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius; in Island mode clicking anywhere inside a chart selects and drags the whole island. Mouse wheel zooms around the pointer, right/middle-drag pans, dragging empty UV space pans, and the View group provides 44 px zoom/Fit controls. Direct transforms clamp to the 0–1 texture square while Clamp is enabled. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, and UV raster painting are implemented; projection painting remains. Paint resolves to the UV workspace with the brush enabled.
+- **UV editing split.** Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius; in Island mode clicking anywhere inside a chart selects and drags the whole island. Mouse wheel zooms around the pointer, right/middle-drag pans, dragging empty UV space pans, and the View group provides 44 px zoom/Fit controls. Direct transforms clamp to the 0–1 texture square while Clamp is enabled. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, and a dedicated texture-space Paint workspace are implemented; 3D projection painting remains.
 
 ![UV editing split with selected corners and seams](docs/media/uv-split.png)
 
 ![UV controls grouped with contextual transform state](docs/media/uv-zoom-controls.png)
 
 ![UV transform modes and exact numeric entry](docs/media/uv-transform.png)
-- **Four real primitives.** QuadSphere (all quads), Cube (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
+- **Four real primitives.** QuadSphere (all quads), Cube (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene and New Project both contain an editable Cube.
 - **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed at the world origin and immediately selected; they may overlap existing objects until moved. New Project uses a default Cube and resets document/history/UV state. Outliner rows have a drag handle for pointer/touch reordering and a 44 px eye toggle; both reorder and visibility are undoable and journaled. Multi-select is a compact action beside Group, Join, and Delete.
 
 ![Outliner with drag handles and visibility toggles](docs/media/outliner.png)
@@ -192,7 +192,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **109 passing** tests across twenty-six files:
+- `npm test`: **111 passing** tests across twenty-seven files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

@@ -21,7 +21,6 @@
   let dragStartX = 0;
   let dragStartY = 0;
   let dragMoved = false;
-  let painting = $state(false);
   let lassoing = $state(false);
   let uvLassoPath = $state<[number, number][]>([]);
   let lassoAdditive = false;
@@ -42,15 +41,11 @@
   let angle = $state(0);
   let scaleFactor = $state(1);
   let activePointerId: number | null = null;
-  let brushVisible = $state(false);
-  let brushX = $state(0);
-  let brushY = $state(0);
 
   const selectedCount = $derived(session.snapshot.uvSelectedCorners.length);
   const axisLock = $derived(session.snapshot.uvAxisLock);
   const transformMode = $derived(session.snapshot.uvTransformMode);
   const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
-  const paintMode = $derived(session.snapshot.uvPaintMode);
   const lassoMode = $derived(session.snapshot.lassoMode);
   const activeEditor = $derived(session.snapshot.activeEditor);
   const clampMode = $derived(session.snapshot.uvClampMode);
@@ -101,12 +96,6 @@
   }
 
   $effect(() => {
-    if (!paintMode) {
-      brushVisible = false;
-    }
-  });
-
-  $effect(() => {
     // The runtime owns the DCEL; this effect only asks it to repaint when the
     // UV selection, mesh, or canvas size actually changes.
     session.snapshot.uvRevision;
@@ -126,23 +115,11 @@
     };
   }
 
-  function updateBrushCursor(event: PointerEvent): void {
-    if (!paintMode) {
-      brushVisible = false;
-      return;
-    }
-    const point = localPoint(event);
-    brushX = point.x;
-    brushY = point.y;
-    brushVisible = true;
-  }
-
   function trackPointer(event: PointerEvent): void {
     const point = localPoint(event);
     lastPointerX = point.x;
     lastPointerY = point.y;
     hasLastPointer = true;
-    updateBrushCursor(event);
   }
 
   function startKeyboardTransform(kind: 'move' | 'rotate' | 'scale'): void {
@@ -328,28 +305,7 @@
     event.preventDefault();
     session.setActiveEditor('uv');
     canvas.focus({ preventScroll: true });
-    updateBrushCursor(event);
     const point = localPoint(event);
-    const pressure =
-      event.pointerType === 'pen' ? Math.max(0.2, event.pressure) : 1;
-    if (paintMode) {
-      if (
-        session.beginUvPaint(
-          point.x,
-          point.y,
-          width,
-          height,
-          pressure
-        )
-      ) {
-        painting = true;
-        activePointerId = event.pointerId;
-        window.addEventListener('pointermove', windowPointerMove);
-        window.addEventListener('pointerup', windowPointerUp);
-        window.addEventListener('pointercancel', windowPointerCancel);
-      }
-      return;
-    }
     if (lassoMode) {
       lassoing = true;
       uvLassoPath = [[point.x, point.y]];
@@ -410,12 +366,6 @@
       }
       return;
     }
-    if (painting) {
-      const pressure =
-        event.pointerType === 'pen' ? Math.max(0.2, event.pressure) : 1;
-      session.updateUvPaint(point.x, point.y, width, height, pressure);
-      return;
-    }
     if (!dragging) {
       return;
     }
@@ -451,11 +401,6 @@
       );
       return;
     }
-    if (painting) {
-      painting = false;
-      session.finishUvPaint();
-      return;
-    }
     if (!dragging) {
       return;
     }
@@ -486,10 +431,6 @@
       detachDragListeners();
       lassoing = false;
       uvLassoPath = [];
-    } else if (painting) {
-      detachDragListeners();
-      painting = false;
-      session.cancelUvPaint();
     } else if (dragging) {
       detachDragListeners();
       dragging = false;
@@ -511,11 +452,6 @@
     if (lassoing) {
       lassoing = false;
       uvLassoPath = [];
-      return;
-    }
-    if (painting) {
-      painting = false;
-      session.cancelUvPaint();
       return;
     }
     if (!dragging) {
@@ -642,19 +578,13 @@
     <canvas
       bind:this={canvas}
       class="uv-canvas"
-      class:paint-mode={paintMode}
       class:lasso-mode={lassoMode}
       class:panning={uvPanning}
       tabindex="0"
-      aria-label="UV editor. Drag corners to transform UVs, or enable Paint to brush the active texture layer."
+      aria-label="UV editor. Drag UV vertices, edges, faces, or islands to transform them."
       onpointerdown={pointerDown}
       onpointermove={trackPointer}
       onpointerenter={trackPointer}
-      onpointerleave={() => {
-        if (!painting) {
-          brushVisible = false;
-        }
-      }}
       onkeydown={keyDown}
       oncontextmenu={(event) => event.preventDefault()}
     ></canvas>
@@ -665,14 +595,8 @@
         />
       </svg>
     {/if}
-    {#if paintMode && brushVisible}
-      <div
-        class="uv-brush-cursor"
-        style={`left:${brushX}px;top:${brushY}px;width:${session.snapshot.uvBrushSize}px;height:${session.snapshot.uvBrushSize}px`}
-        aria-hidden="true"
-      ></div>
-    {/if}
-    {#if selectedCount === 0 && !paintMode}
+
+    {#if selectedCount === 0}
       <p class="uv-empty">
         Select UV vertices, edges, faces, or islands. Drag to move; U/V locks
         and grid snap apply.
@@ -684,52 +608,6 @@
   </div>
 
   <footer class="uv-foot">
-    <button
-      type="button"
-      class="uv-paint-toggle"
-      class:active={paintMode}
-      aria-label="Toggle texture paint brush"
-      aria-pressed={paintMode}
-      onclick={() => session.setUvPaintMode(!paintMode)}
-    >Paint</button>
-    {#if paintMode}
-      <div class="uv-brush-controls">
-        <input
-          type="color"
-          class="uv-brush-color"
-          value={session.snapshot.uvBrushColor}
-          aria-label="Brush color"
-          oninput={(event) =>
-            session.setUvBrushColor(event.currentTarget.value)}
-        />
-        <label class="uv-brush-slider">
-          <span>Size {session.snapshot.uvBrushSize}px</span>
-          <input
-            type="range"
-            min="2"
-            max="128"
-            step="1"
-            value={session.snapshot.uvBrushSize}
-            aria-label="Brush size in texture pixels"
-            oninput={(event) =>
-              session.setUvBrushSize(Number(event.currentTarget.value))}
-          />
-        </label>
-        <label class="uv-brush-slider">
-          <span>Opacity {Math.round(session.snapshot.uvBrushOpacity * 100)}%</span>
-          <input
-            type="range"
-            min="0.01"
-            max="1"
-            step="0.01"
-            value={session.snapshot.uvBrushOpacity}
-            aria-label="Brush opacity"
-            oninput={(event) =>
-              session.setUvBrushOpacity(Number(event.currentTarget.value))}
-          />
-        </label>
-      </div>
-    {:else}
     <form
       class="uv-numeric"
       onsubmit={(event) => {
@@ -794,14 +672,11 @@
         disabled={selectedCount === 0}
       >Apply</button>
     </form>
-    {/if}
     <span class="uv-foot-hint">
       {#if keyboardKind}
         {keyboardKind === 'move' ? 'Grab' : keyboardKind === 'rotate' ? 'Rotate' : 'Scale'}
         · {keyboardNumeric ? `${keyboardKind === 'move' ? (session.snapshot.uvAxisLock === 'v' ? 'ΔV' : 'ΔU') : keyboardKind === 'rotate' ? 'Angle' : 'Factor'} ${keyboardNumeric}` : 'move pointer or type a number'}
         · U/V axis · Enter {keyboardNumeric ? 'apply' : 'commit'} · Esc cancel
-      {:else if paintMode}
-        paint active layer · pen pressure · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
       {:else}
         16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
       {/if}
@@ -964,9 +839,6 @@
     outline: none;
   }
 
-  .uv-canvas.paint-mode {
-    cursor: none;
-  }
 
   .uv-canvas.lasso-mode {
     cursor: crosshair;
@@ -991,19 +863,6 @@
     stroke-width: 1.5;
     stroke-dasharray: 5 4;
     vector-effect: non-scaling-stroke;
-  }
-
-  .uv-brush-cursor {
-    position: absolute;
-    z-index: 2;
-    border: var(--hairline) solid var(--accent-primary);
-    border-radius: 50%;
-    box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.55),
-      inset 0 0 0 1px rgba(0, 0, 0, 0.35);
-    background: rgba(201, 244, 92, 0.06);
-    pointer-events: none;
-    transform: translate(-50%, -50%);
   }
 
   .uv-canvas:focus-visible {
@@ -1056,64 +915,6 @@
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
     white-space: nowrap;
-  }
-
-  .uv-paint-toggle {
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: transparent;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-  }
-
-  .uv-paint-toggle.active {
-    border-color: var(--accent-primary);
-    background: var(--bg-selected);
-    color: var(--accent-primary);
-  }
-
-  .uv-paint-toggle:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .uv-brush-controls {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: var(--space-2);
-    min-width: 0;
-  }
-
-  .uv-brush-color {
-    width: var(--hit-min);
-    height: var(--control-h);
-    padding: 2px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .uv-brush-slider {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 1px;
-    min-width: 0;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: 9px;
-    white-space: nowrap;
-  }
-
-  .uv-brush-slider input {
-    width: 100%;
-    accent-color: var(--accent-primary);
   }
 
   .uv-numeric {

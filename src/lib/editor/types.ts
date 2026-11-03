@@ -73,7 +73,7 @@ export type UvLayout = 'bottom' | 'side';
 export type Workspace = 'model' | 'uv' | 'paint';
 
 /** The pane that currently owns contextual selection and tool commands. */
-export type EditorPane = '3d' | 'uv';
+export type EditorPane = '3d' | 'uv' | 'paint';
 
 /** How a selection gesture combines with the current set. */
 export type SelectionCombineMode = 'replace' | 'add' | 'subtract';

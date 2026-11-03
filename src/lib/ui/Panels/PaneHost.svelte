@@ -6,11 +6,18 @@
   interface Props {
     label: string;
     width: number;
+    orientation?: 'side' | 'bottom';
     onResize: (fraction: number) => void;
     children: Snippet;
   }
 
-  let { label, width, onResize, children }: Props = $props();
+  let {
+    label,
+    width,
+    orientation = 'side',
+    onResize,
+    children
+  }: Props = $props();
   let host: HTMLElement;
   let resizing = $state(false);
 
@@ -29,7 +36,17 @@
     }
     const viewport = host.closest('.viewport')?.getBoundingClientRect();
     const pane = host.getBoundingClientRect();
-    if (!viewport || viewport.width <= 0) {
+    if (!viewport) {
+      return;
+    }
+    if (orientation === 'bottom') {
+      if (viewport.height <= 0) {
+        return;
+      }
+      onResize((viewport.bottom - event.clientY) / viewport.height);
+      return;
+    }
+    if (viewport.width <= 0) {
       return;
     }
     onResize(
@@ -54,25 +71,34 @@
   }
 
   function resizeKey(event: KeyboardEvent): void {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+    const decrease =
+      orientation === 'side'
+        ? event.key === 'ArrowLeft'
+        : event.key === 'ArrowDown';
+    const increase =
+      orientation === 'side'
+        ? event.key === 'ArrowRight'
+        : event.key === 'ArrowUp';
+    if (!decrease && !increase) {
       return;
     }
     event.preventDefault();
-    onResize(width + (event.key === 'ArrowLeft' ? 0.03 : -0.03));
+    onResize(width + (decrease ? 0.03 : -0.03));
   }
 </script>
 
 <aside
   class="pane-host"
+  class:pane-host--bottom={orientation === 'bottom'}
   bind:this={host}
-  style={`--pane-width:${width * 100}%`}
+  style={`--pane-width:${width * 100}%; --pane-height:${width * 100}%`}
   aria-label={label}
 >
   <div
     class="pane-resizer"
     role="slider"
     aria-label={`Resize ${label}`}
-    aria-orientation="vertical"
+    aria-orientation={orientation === 'bottom' ? 'horizontal' : 'vertical'}
     aria-valuenow={Math.round(width * 100)}
     aria-valuemin="25"
     aria-valuemax="65"
@@ -102,6 +128,14 @@
     inset: 0;
   }
 
+  .pane-host--bottom {
+    flex: 0 0 clamp(180px, var(--pane-height, 30%), calc(100% - 240px));
+    width: 100%;
+    height: auto;
+    max-width: none;
+    max-height: calc(100% - 240px);
+  }
+
   .pane-resizer {
     position: absolute;
     z-index: var(--z-popover);
@@ -122,6 +156,24 @@
     border-radius: var(--radius-pill);
     background: var(--border-strong);
     content: '';
+    transform: translate(-50%, -50%);
+  }
+
+  .pane-host--bottom .pane-resizer {
+    top: -22px;
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: auto;
+    height: 44px;
+    cursor: ns-resize;
+  }
+
+  .pane-host--bottom .pane-resizer::after {
+    top: 50%;
+    left: 50%;
+    width: 52px;
+    height: 4px;
     transform: translate(-50%, -50%);
   }
 

@@ -11,8 +11,9 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale, Frame, Home |
 | **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), All, Add, Subtract |
 | **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock |
-| **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, UV now; Paint/Animation later |
-| **UV Editor** | UV editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
+| **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, UV and Paint now; Animation later |
+| **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
+| **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas, brush footer |
 | **Inspector** | Properties of the active object/selection/context | Inspector Sections |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
 | **Status Bar** | Persistent status | Selection counts, frame budget, render state |

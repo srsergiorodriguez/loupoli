@@ -12,6 +12,7 @@
   import Inspector from './lib/ui/Panels/Inspector.svelte';
   import ProjectBanner from './lib/ui/Chrome/ProjectBanner.svelte';
   import UvPanel from './lib/ui/Uv/UvPanel.svelte';
+  import PaintPanel from './lib/ui/Paint/PaintPanel.svelte';
   import PaneHost from './lib/ui/Panels/PaneHost.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
@@ -166,9 +167,11 @@
         </span>
       </div>
 
-      <div class="selection-mode-wrap">
-        <SelectionModeControl {session} />
-      </div>
+      {#if session.snapshot.activeEditor !== 'paint'}
+        <div class="selection-mode-wrap">
+          <SelectionModeControl {session} />
+        </div>
+      {/if}
 
       <div class="viewport-hud">
         <ShadingControl {session} />
@@ -186,7 +189,9 @@
       {/if}
 
       <TransformHud modal={session.snapshot.modalTransform} />
-      <ActionDock {session} />
+      {#if session.snapshot.activeEditor !== 'paint'}
+        <ActionDock {session} />
+      {/if}
       <ActionHud state={session.snapshot.actionState} />
     {:else}
       <section class="startup-error loupoli-panel" role="alert">
@@ -203,18 +208,24 @@
 
     {#if !startupError && session.snapshot.uvOpen}
       <PaneHost
-        label="UV editor"
+        label={session.snapshot.uvPaintMode ? 'Paint editor' : 'UV editor'}
         width={session.snapshot.uvSplit}
         onResize={(fraction) => session.setUvSplit(fraction)}
       >
-        <UvPanel {session} />
+        {#if session.snapshot.uvPaintMode}
+          <PaintPanel {session} />
+        {:else}
+          <UvPanel {session} />
+        {/if}
       </PaneHost>
     {/if}
   </main>
 
   <TopBar {session} />
   <ProjectBanner {session} />
-  <ToolRail {session} onFocusViewport={focusViewport} />
+  {#if session.snapshot.activeEditor !== 'paint'}
+    <ToolRail {session} onFocusViewport={focusViewport} />
+  {/if}
   <Inspector {session} />
   <StatusBar {session} />
 </div>

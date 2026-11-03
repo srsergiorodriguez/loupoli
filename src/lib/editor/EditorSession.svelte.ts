@@ -257,6 +257,44 @@ export class EditorSession {
     this.runtime?.syncUvFrom3d();
   }
 
+  drawPaintView(
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number
+  ): void {
+    this.runtime?.drawPaintView(canvas, width, height);
+  }
+
+  beginTexturePaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): boolean {
+    return (
+      this.runtime?.beginTexturePaint(x, y, width, height, pressure) ?? false
+    );
+  }
+
+  updateTexturePaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): void {
+    this.runtime?.updateTexturePaint(x, y, width, height, pressure);
+  }
+
+  finishTexturePaint(): void {
+    this.runtime?.finishTexturePaint();
+  }
+
+  cancelTexturePaint(): void {
+    this.runtime?.cancelTexturePaint();
+  }
+
   drawUvView(
     canvas: HTMLCanvasElement,
     width: number,

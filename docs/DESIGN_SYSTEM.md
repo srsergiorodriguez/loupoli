@@ -460,7 +460,8 @@ Implemented component files and local patterns:
 | Active editor | 2 | Last clicked pane | Title dot and accent; shared commands route to it |
 | UV keyboard transform | 2 | G/R/S, U/V, typed number, Enter/Esc | Footer shows current mode/value and commit hint |
 | Viewport Stage | 1 | 3D canvas and all HUD/lasso overlays | Anchored to available 3D rect |
-| PaneHost | 2 | Workspace side panes | 44px edge divider; resizable; future bottom mode |
+| PaneHost | 2 | UV and Paint panes | 44px edge divider; resizable; future bottom mode |
+| Paint Editor | 2 | Dedicated texture paint pane | Texture canvas + brush footer; no UV chrome |
 | Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; 44px eye; hidden rows dimmed |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
 | Modifier stack | 3 | Ordered cards with enable/order/remove/parameters | Explicit evaluated state and error panel |
