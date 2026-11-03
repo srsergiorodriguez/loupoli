@@ -14,12 +14,24 @@
   function selectTool(): void {
     onFocusViewport();
     session.closeInspector();
+    session.setLassoMode(false);
     session.setTransformMode('select');
+  }
+
+  function toggleLasso(): void {
+    onFocusViewport();
+    session.closeInspector();
+    const next = !session.snapshot.lassoMode;
+    if (next) {
+      session.setTransformMode('select');
+    }
+    session.setLassoMode(next);
   }
 
   function chooseTransform(mode: TransformMode): void {
     onFocusViewport();
     session.closeInspector();
+    session.setLassoMode(false);
     session.setTransformMode(mode);
   }
 
@@ -34,8 +46,14 @@
     <ToolButton
       label="Select"
       icon="cursor"
-      active={session.snapshot.transformMode === 'select'}
+      active={session.snapshot.transformMode === 'select' && !session.snapshot.lassoMode}
       onActivate={selectTool}
+    />
+    <ToolButton
+      label="Lasso"
+      icon="lasso"
+      active={session.snapshot.lassoMode}
+      onActivate={toggleLasso}
     />
   </div>
   <span class="rail-divider" aria-hidden="true"></span>

@@ -29,4 +29,5 @@ export type IconName =
   | 'loop-slide'
   | 'seam'
   | 'eye'
-  | 'eye-off';
+  | 'eye-off'
+  | 'lasso';

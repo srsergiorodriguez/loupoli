@@ -546,6 +546,23 @@ export class ViewportRenderer {
     return this.raycaster.ray.clone();
   }
 
+  /** Select active-node elements inside a screen-space lasso. */
+  lassoSelect(
+    mode: SelectionMode,
+    clientPolygon: readonly { x: number; y: number }[]
+  ): number[] {
+    const view = this.activeView();
+    if (!view) {
+      return [];
+    }
+    return view.lassoSelect(
+      mode,
+      clientPolygon,
+      this.cameraRig.camera,
+      this.canvas
+    );
+  }
+
   /** Pick the nearest vertex on the active node. */
   pickVertex(clientX: number, clientY: number): number | null {
     const view = this.activeView();

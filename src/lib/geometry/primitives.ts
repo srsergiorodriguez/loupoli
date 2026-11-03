@@ -14,20 +14,22 @@ const QUAD_UVS: readonly Vec2[] = [
 ];
 
 /** Primitive types exposed by the Phase 2 editor. */
-export type PrimitiveKind = 'quadsphere' | 'cylinder' | 'grid';
+export type PrimitiveKind = 'quadsphere' | 'cylinder' | 'grid' | 'cube';
 
 /** Human-readable labels for the primitive palette. */
 export const PRIMITIVE_KINDS: readonly PrimitiveKind[] = [
   'quadsphere',
   'cylinder',
-  'grid'
+  'grid',
+  'cube'
 ];
 
 /** Human-readable labels for the primitive palette. */
 export const PRIMITIVE_LABELS: Readonly<Record<PrimitiveKind, string>> = {
   quadsphere: 'QuadSphere',
   cylinder: 'Cylinder',
-  grid: 'Grid'
+  grid: 'Grid',
+  cube: 'Cube'
 };
 
 function validatePositive(value: number, label: string): void {
@@ -286,5 +288,7 @@ export function createPrimitiveMesh(kind: PrimitiveKind): HalfEdgeMesh {
       return createCylinderMesh();
     case 'grid':
       return createGridMesh();
+    case 'cube':
+      return createCubeMesh();
   }
 }

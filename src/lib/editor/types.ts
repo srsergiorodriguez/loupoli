@@ -114,6 +114,8 @@ export interface ModifierPatch {
 export interface EditorSnapshot {
   readonly shading: ShadingMode;
   readonly transformMode: TransformMode;
+  readonly lassoMode: boolean;
+  readonly lassoPath: readonly (readonly [number, number])[];
   readonly snapEnabled: boolean;
   readonly snapStep: number;
   readonly axisLock: AxisLock;

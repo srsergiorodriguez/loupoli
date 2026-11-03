@@ -47,10 +47,15 @@ export interface InputRouterHost {
   hasActiveAction(): boolean;
   isActionAdjusting(): boolean;
   actionKey(key: string): boolean;
+  isLassoMode(): boolean;
+  beginLasso(clientX: number, clientY: number): boolean;
+  moveLasso(clientX: number, clientY: number): void;
+  endLasso(clientX: number, clientY: number): void;
+  cancelLasso(): void;
 }
 
 /** The current phase of a multi-touch recognizer. */
-type TouchMode = 'none' | 'pending' | 'single' | 'pair' | 'blocked';
+type TouchMode = 'none' | 'pending' | 'single' | 'pair' | 'lasso' | 'blocked';
 
 /** Start and latest positions for one active touch pointer. */
 interface TouchRecord {
@@ -62,7 +67,7 @@ interface TouchRecord {
 
 /** Mouse gesture state while a button is held. */
 interface MouseGesture {
-  mode: 'none' | 'orbit' | 'pan' | 'tool';
+  mode: 'none' | 'orbit' | 'pan' | 'tool' | 'lasso';
   pointerId: number | null;
   lastX: number;
   lastY: number;
@@ -108,6 +113,8 @@ export class InputRouter {
 
   private activePenPointers = 0;
   private activePenPointerId: number | null = null;
+  private activePenLasso = false;
+  private touchLasso = false;
   private lastPenUpAt = -Infinity;
   private lastTouchUpAt = -Infinity;
 
@@ -165,7 +172,15 @@ export class InputRouter {
       this.activePenPointerId = sample.pointerId;
       this.invalidateActiveTouchGesture();
       this.host.setPointerReading(sample);
-      this.host.beginToolPointer(sample);
+      this.activePenLasso = this.host.isLassoMode();
+      if (this.activePenLasso) {
+        if (!this.host.beginLasso(sample.clientX, sample.clientY)) {
+          this.activePenLasso = false;
+          this.host.beginToolPointer(sample);
+        }
+      } else {
+        this.host.beginToolPointer(sample);
+      }
       return;
     }
 
@@ -196,10 +211,27 @@ export class InputRouter {
       return;
     }
 
+    if (event.button === 0 && sample.shiftKey) {
+      // Shift-drag is the trackpad-friendly pan gesture. Additive selection is
+      // supplied by the sticky Add toggle while Shift is reserved for camera
+      // movement.
+      this.mouse.mode = 'pan';
+      this.mouse.pointerId = sample.pointerId;
+      this.mouse.lastX = sample.clientX;
+      this.mouse.lastY = sample.clientY;
+      return;
+    }
+
     if (event.button === 0) {
       this.mouse.pointerId = sample.pointerId;
       this.mouse.lastX = sample.clientX;
       this.mouse.lastY = sample.clientY;
+      if (this.host.isLassoMode()) {
+        if (this.host.beginLasso(sample.clientX, sample.clientY)) {
+          this.mouse.mode = 'lasso';
+          return;
+        }
+      }
       const captured = this.host.beginToolPointer(sample);
       // A left-drag that did not land on editable topology rotates the camera.
       // This keeps camera navigation usable on a MacBook trackpad or any
@@ -237,7 +269,11 @@ export class InputRouter {
         return;
       }
       this.host.setPointerReading(sample);
-      this.host.moveToolPointer(sample);
+      if (this.activePenLasso) {
+        this.host.moveLasso(sample.clientX, sample.clientY);
+      } else {
+        this.host.moveToolPointer(sample);
+      }
       return;
     }
 
@@ -246,6 +282,14 @@ export class InputRouter {
         return;
       }
       this.handleTouchMove(sample);
+      return;
+    }
+
+    if (
+      this.mouse.mode === 'lasso' &&
+      this.mouse.pointerId === sample.pointerId
+    ) {
+      this.host.moveLasso(sample.clientX, sample.clientY);
       return;
     }
 
@@ -289,7 +333,12 @@ export class InputRouter {
 
     if (sample.pointerType === 'pen') {
       if (this.activePenPointerId === sample.pointerId) {
-        this.host.endToolPointer(sample);
+        if (this.activePenLasso) {
+          this.host.endLasso(sample.clientX, sample.clientY);
+        } else {
+          this.host.endToolPointer(sample);
+        }
+        this.activePenLasso = false;
         this.host.setPointerReading(null);
         this.activePenPointerId = null;
         this.activePenPointers = Math.max(0, this.activePenPointers - 1);
@@ -308,7 +357,12 @@ export class InputRouter {
       return;
     }
 
-    if (this.mouse.mode === 'tool' && this.mouse.pointerId === sample.pointerId) {
+    if (this.mouse.mode === 'lasso' && this.mouse.pointerId === sample.pointerId) {
+      this.host.endLasso(sample.clientX, sample.clientY);
+    } else if (
+      this.mouse.mode === 'tool' &&
+      this.mouse.pointerId === sample.pointerId
+    ) {
       this.host.endToolPointer(sample);
     }
     this.resetMouseGesture(sample.pointerId);
@@ -321,7 +375,12 @@ export class InputRouter {
     this.releasePointerCapture(event.pointerId);
 
     if (event.pointerType === 'pen') {
-      this.host.cancelToolPointer();
+      if (this.activePenLasso) {
+        this.host.cancelLasso();
+      } else {
+        this.host.cancelToolPointer();
+      }
+      this.activePenLasso = false;
       this.host.setPointerReading(null);
       this.activePenPointerId = null;
       this.activePenPointers = Math.max(0, this.activePenPointers - 1);
@@ -336,7 +395,11 @@ export class InputRouter {
       return;
     }
 
-    this.host.cancelToolPointer();
+    if (this.mouse.mode === 'lasso') {
+      this.host.cancelLasso();
+    } else {
+      this.host.cancelToolPointer();
+    }
     this.resetMouseGesture(event.pointerId);
   };
 
@@ -516,6 +579,21 @@ export class InputRouter {
     });
     this.touchMaxPointers = Math.max(this.touchMaxPointers, this.touches.size);
 
+    if (this.touches.size === 1 && this.host.isLassoMode()) {
+      this.touchMode = 'lasso';
+      this.touchLasso = true;
+      this.host.beginLasso(sample.clientX, sample.clientY);
+      return;
+    }
+
+    if (this.touches.size === 2 && this.touchMode === 'lasso') {
+      this.host.cancelLasso();
+      this.touchLasso = false;
+      this.touchMode = 'pair';
+      this.captureTouchBaseline();
+      return;
+    }
+
     if (this.touches.size >= 3) {
       this.touchMode = 'blocked';
       return;
@@ -546,6 +624,11 @@ export class InputRouter {
       return;
     }
 
+    if (this.touchMode === 'lasso' && this.touches.size === 1) {
+      this.host.moveLasso(sample.clientX, sample.clientY);
+      return;
+    }
+
     if (this.touches.size === 1) {
       if (this.touchMode === 'pending') {
         if (this.touchMaxTravel >= CAMERA_START_TRAVEL_CSS) {
@@ -571,6 +654,17 @@ export class InputRouter {
 
   private handleTouchUp(event: PointerEvent): void {
     this.touches.delete(event.pointerId);
+
+    if (this.touchLasso) {
+      if (this.touches.size > 0) {
+        this.host.cancelLasso();
+      } else {
+        this.host.endLasso(event.clientX, event.clientY);
+      }
+      this.touchLasso = false;
+      this.clearTouchGesture();
+      return;
+    }
 
     if (this.touches.size > 0) {
       if (this.touches.size === 1) {
@@ -680,12 +774,20 @@ export class InputRouter {
 
   private invalidateActiveTouchGesture(): void {
     if (this.touches.size > 0) {
+      if (this.touchLasso) {
+        this.host.cancelLasso();
+        this.touchLasso = false;
+      }
       this.touchMode = 'blocked';
       this.touchInvalidated = true;
     }
   }
 
   private clearTouchGesture(): void {
+    if (this.touchLasso) {
+      this.host.cancelLasso();
+      this.touchLasso = false;
+    }
     this.touches.clear();
     this.ignoredTouches.clear();
     this.touchMode = 'none';

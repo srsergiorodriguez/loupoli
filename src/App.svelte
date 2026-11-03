@@ -165,7 +165,17 @@
       </div>
 
       {#if !session.snapshot.uvOpen}
-        <TransformHud modal={session.snapshot.modalTransform} />
+        {#if session.snapshot.lassoMode && session.snapshot.lassoPath.length > 1}
+        <svg class="lasso-overlay" aria-hidden="true">
+          <polygon
+            points={session.snapshot.lassoPath
+              .map(([x, y]) => `${x},${y}`)
+              .join(' ')}
+          />
+        </svg>
+      {/if}
+
+      <TransformHud modal={session.snapshot.modalTransform} />
         <ActionDock {session} />
         <ActionHud state={session.snapshot.actionState} />
       {:else}
@@ -216,6 +226,23 @@
     touch-action: none;
     cursor: crosshair;
     outline: none;
+  }
+
+  .lasso-overlay {
+    position: fixed;
+    z-index: var(--z-hud);
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    pointer-events: none;
+  }
+
+  .lasso-overlay polygon {
+    fill: rgba(201, 244, 92, 0.08);
+    stroke: var(--accent-primary);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+    vector-effect: non-scaling-stroke;
   }
 
   .viewport.uv-open > canvas {

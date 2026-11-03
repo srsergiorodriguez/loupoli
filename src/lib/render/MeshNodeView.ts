@@ -46,6 +46,49 @@ interface ProjectedPoint {
 const PICK_RADIUS_CSS = 16;
 const Y_AXIS = new Vector3(0, 1, 0);
 
+function pointInPolygon(
+  x: number,
+  y: number,
+  polygon: readonly { x: number; y: number }[]
+): boolean {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const a = polygon[index];
+    const b = polygon[previous];
+    if (
+      (a.y > y) !== (b.y > y) &&
+      x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function orientation(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number
+): number {
+  return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+}
+
+function segmentsIntersect(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number },
+  d: { x: number; y: number }
+): boolean {
+  const o1 = orientation(a.x, a.y, b.x, b.y, c.x, c.y);
+  const o2 = orientation(a.x, a.y, b.x, b.y, d.x, d.y);
+  const o3 = orientation(c.x, c.y, d.x, d.y, a.x, a.y);
+  const o4 = orientation(c.x, c.y, d.x, d.y, b.x, b.y);
+  return (o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0);
+}
+
 function distanceToSegmentSq(
   px: number,
   py: number,
@@ -404,6 +447,97 @@ export class MeshNodeView {
     return new Vector3()
       .fromArray(this.mesh.positions, vertex * 3)
       .applyMatrix4(this.group.matrixWorld);
+  }
+
+  /**
+   * Select topology elements inside or intersecting a screen-space lasso.
+   *
+   * Lasso selection is intentionally view-through for this first pass: it does
+   * not apply the occlusion rejection used by individual 16 px picks. Vertices
+   * use point containment, edges use endpoint containment or segment crossing,
+   * and faces use corner or centroid containment.
+   */
+  lassoSelect(
+    mode: SelectionMode,
+    clientPolygon: readonly { x: number; y: number }[],
+    camera: Camera,
+    canvas: HTMLCanvasElement
+  ): number[] {
+    if (clientPolygon.length < 3) {
+      return [];
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return [];
+    }
+    const polygon = clientPolygon.map((point) => ({
+      x: point.x - rect.left,
+      y: point.y - rect.top
+    }));
+    this.group.updateMatrixWorld(true);
+    camera.updateMatrixWorld();
+    const selected: number[] = [];
+    if (mode === 'vertex') {
+      for (let vertex = 0; vertex < this.mesh.vertexCount; vertex += 1) {
+        const point = this.projectVertex(vertex, camera, rect);
+        if (point && pointInPolygon(point.x, point.y, polygon)) {
+          selected.push(vertex);
+        }
+      }
+      return selected;
+    }
+    if (mode === 'edge') {
+      for (let edge = 0; edge < this.mesh.edgeCount; edge += 1) {
+        const [from, to] = this.mesh.getEdgeVertices(edge);
+        const a = this.projectVertex(from, camera, rect);
+        const b = this.projectVertex(to, camera, rect);
+        if (!a || !b) {
+          continue;
+        }
+        let crosses = false;
+        for (let index = 0; index < polygon.length && !crosses; index += 1) {
+          const next = polygon[(index + 1) % polygon.length];
+          crosses = segmentsIntersect(a, b, polygon[index], next);
+        }
+        if (
+          crosses ||
+          pointInPolygon(a.x, a.y, polygon) ||
+          pointInPolygon(b.x, b.y, polygon)
+        ) {
+          selected.push(edge);
+        }
+      }
+      return selected;
+    }
+    for (let face = 0; face < this.mesh.faceCount; face += 1) {
+      const start = this.mesh.faceHalfEdge[face];
+      let halfEdge = start;
+      let anyCorner = false;
+      let sumX = 0;
+      let sumY = 0;
+      let count = 0;
+      do {
+        const point = this.projectVertex(
+          this.mesh.heOrigin[halfEdge],
+          camera,
+          rect
+        );
+        if (point) {
+          anyCorner ||= pointInPolygon(point.x, point.y, polygon);
+          sumX += point.x;
+          sumY += point.y;
+          count += 1;
+        }
+        halfEdge = this.mesh.heNext[halfEdge];
+      } while (halfEdge !== start);
+      if (
+        anyCorner ||
+        (count > 0 && pointInPolygon(sumX / count, sumY / count, polygon))
+      ) {
+        selected.push(face);
+      }
+    }
+    return selected;
   }
 
   /**

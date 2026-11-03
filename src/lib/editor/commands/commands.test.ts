@@ -410,7 +410,7 @@ describe('scene commands and journal', () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
       return seed / 0x100000000;
     };
-    const kinds = ['quadsphere', 'cylinder', 'grid'] as const;
+    const kinds = ['quadsphere', 'cylinder', 'grid', 'cube'] as const;
 
     for (let step = 0; step < 80; step += 1) {
       const action = Math.floor(random() * 5);

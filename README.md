@@ -46,11 +46,14 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 ![UV editing split with selected corners and seams](docs/media/uv-split.png)
 
 ![UV transform modes and exact numeric entry](docs/media/uv-transform.png)
-- **Three real primitives.** QuadSphere (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
-- **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed beside the existing scene rather than overlapping at the origin.
+- **Four real primitives.** QuadSphere (all quads), Cube (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
+- **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed at the world origin and immediately selected; they may overlap existing objects until moved.
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
 - **Object/group transform gizmos.** With no element selection, Move/Rotate/Scale show object-space handles. Dragging an axis commits one `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation.
-- **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Selected vertices, edges, and faces render distinct overlays. Selection remains session state.
+- **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag is reserved for panning. Selected vertices, edges, and faces render distinct overlays. Selection remains session state.
+- **Lasso selection.** The Lasso tool draws a screen-space polygon and selects vertices inside it, edges inside or crossing it, and faces with a corner or centroid inside. It works in the active V/E/F mode, supports the sticky Add toggle, and is available to mouse, Pencil, and one-finger touch. Lasso selection is view-through; it does not yet reject occluded elements.
+
+![Lasso face selection](docs/media/lasso-select.png)
 - **Draggable view gizmo.** Dragging the orientation gizmo orbits the view; tapping an axis still snaps to that axis and tapping the center frames the active object.
 - **Quad-aware deformation.** A bent quad renders as a 4 × 4 bilinear patch instead of two independent texture panels, avoiding a diagonal texture crease. The DCEL remains one quad, and displayed V/E/F/triangle counts stay topological.
 - **Bounded command history.** Localized vertex deltas and node add/delete snapshots, redo truncation, a 100-command cap, and a 32 MB retained-byte budget.
@@ -131,14 +134,17 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | E / I | Arm Extrude / Inset for the current face selection. |
 | L / Shift+L | Arm Loop Cut for one selected edge / Loop Slide for the most recent loop cut. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
-| Shift/Cmd/Ctrl + click | Add or remove an element from the current selection. |
+| Cmd/Ctrl + click | Add or remove an element from the current selection. |
+| Shift + LMB drag | Pan the view. |
+| Lasso tool + drag | Select a screen-space region in the current element mode. |
 | Add toggle | Sticky additive selection for pen, mouse, and touch taps. |
-| Touch tap / drag | One-finger tap selects the current V/E/F element; drag orbits. With Add on, taps toggle the set. |
+| Touch tap / drag | One-finger tap selects the current V/E/F element; drag orbits unless the Lasso tool is active. With Add on, taps toggle the set. |
 | Mouse LMB on empty canvas or a mesh face away from a handle | Orbit the camera. |
 | Alt/Option + LMB | Orbit. Useful for trackpads and one-button mice. |
 | Alt/Option + Shift + LMB | Pan. |
 | Mouse MMB | Orbit. |
 | Shift + MMB | Pan. |
+| Lasso / touch drag | Lasso works with mouse, Pencil, and one-finger touch when the Lasso tool is active. |
 | Mouse wheel | Zoom. |
 | One-finger touch | Orbit. |
 | Two-finger touch | Pinch to zoom; drag to pan. |
@@ -157,7 +163,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Escape / right click | Cancel the modal transform and restore the previous pose. |
 | F | Frame the active object. |
 | Escape | Cancel the active drag or modal transform, or close the mobile inspector. |
-| Orientation gizmo | Drag to orbit the view; click an axis to align, or click the center to frame the active object. |
+| Orientation gizmo | Drag to orbit the view; click an axis to align, or click the center to frame the active object. Signed-axis inversion and Standard View reset are not implemented yet. |
 
 Selection modes are switched with the **Vertex / Edge / Face** control at the top-left of the viewport. The Scene outliner selects the active object; picking always edits that object.
 

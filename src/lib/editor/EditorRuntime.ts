@@ -301,6 +301,8 @@ export class EditorRuntime {
 
   private shading: ShadingMode = DEFAULT_SHADING;
   private transformMode: TransformMode = 'select';
+  private lassoMode = false;
+  private lassoPath: [number, number][] = [];
   private transformOrientation: TransformOrientation = 'local';
   private modalTransform: ModalTransform | null = null;
   private armedAction: MeshActionKind | null = null;
@@ -397,7 +399,12 @@ export class EditorRuntime {
       hasActiveAction: () => this.hasActiveAction(),
       isActionAdjusting: () =>
         this.actionDrag !== null && this.actionDrag.pointerId === null,
-      actionKey: (key) => this.handleActionKey(key)
+      actionKey: (key) => this.handleActionKey(key),
+      isLassoMode: () => this.lassoMode,
+      beginLasso: (x, y) => this.beginLasso(x, y),
+      moveLasso: (x, y) => this.moveLasso(x, y),
+      endLasso: (x, y) => this.endLasso(x, y),
+      cancelLasso: () => this.cancelLasso()
     };
 
     this.input = new InputRouter(canvas, this.inputHost);
@@ -443,6 +450,8 @@ export class EditorRuntime {
     return {
       shading: this.shading,
       transformMode: this.transformMode,
+      lassoMode: this.lassoMode,
+      lassoPath: this.lassoPath.map((point) => [point[0], point[1]] as const),
       snapEnabled: this.snapEnabled,
       snapStep: this.snapStep,
       axisLock: this.axisLock,
@@ -662,6 +671,76 @@ export class EditorRuntime {
 
   private toggleAxisLock(axis: 'x' | 'y' | 'z'): void {
     this.setAxisLock(this.axisLock === axis ? null : axis);
+  }
+
+  /** Enable the explicit screen-space lasso selection tool. */
+  setLassoMode(enabled: boolean): void {
+    if (this.lassoMode === enabled) {
+      return;
+    }
+    this.lassoMode = enabled;
+    this.lassoPath = [];
+    if (enabled && this.transformMode !== 'select') {
+      this.transformMode = 'select';
+      this.syncScene();
+    }
+    this.publish();
+  }
+
+  private beginLasso(x: number, y: number): boolean {
+    if (!this.lassoMode || !this.getActiveNode()) {
+      return false;
+    }
+    this.lassoPath = [[x, y]];
+    this.publish();
+    return true;
+  }
+
+  private moveLasso(x: number, y: number): void {
+    if (this.lassoPath.length === 0 || this.lassoPath.length > 512) {
+      return;
+    }
+    const previous = this.lassoPath[this.lassoPath.length - 1];
+    if (Math.hypot(x - previous[0], y - previous[1]) >= 1) {
+      this.lassoPath.push([x, y]);
+      this.publish();
+    }
+  }
+
+  private endLasso(x: number, y: number): void {
+    if (this.lassoPath.length === 0) {
+      return;
+    }
+    const path = this.lassoPath;
+    this.lassoPath = [];
+    if (path.length < 3) {
+      this.tapSelect(x, y);
+      this.publish();
+      return;
+    }
+    const selected = this.renderer.lassoSelect(
+      this.selection.mode,
+      path.map(([x, y]) => ({ x, y }))
+    );
+    if (this.additiveSelection) {
+      const union = new Set(this.selection.values());
+      for (const index of selected) {
+        union.add(index);
+      }
+      this.selection.setValues(Array.from(union));
+    } else {
+      this.selection.setValues(selected);
+    }
+    this.syncScene();
+    this.publish();
+  }
+
+  private cancelLasso(): void {
+    if (this.lassoPath.length === 0) {
+      return;
+    }
+    this.lassoPath = [];
+    this.publish();
   }
 
   setTransformMode(mode: TransformMode): void {
@@ -1685,7 +1764,9 @@ export class EditorRuntime {
   /** Create a new primitive, place it beside the scene, and select it. */
   createPrimitive(kind: PrimitiveKind): void {
     const node = this.document.createNode(kind);
-    node.setPosition(this.document.placementFor(node));
+    // New primitives always begin at the world origin; overlapping an existing
+    // object is expected and leaves placement entirely under user control.
+    node.setPosition([0, 0, 0]);
     const index = this.document.nodes.length;
 
     // Set the session target before the command reaches history so the

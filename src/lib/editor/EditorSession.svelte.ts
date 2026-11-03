@@ -17,6 +17,8 @@ import {
 const INITIAL_SNAPSHOT: EditorSnapshot = {
   shading: DEFAULT_SHADING,
   transformMode: 'select',
+  lassoMode: false,
+  lassoPath: [],
   snapEnabled: false,
   snapStep: 0.25,
   axisLock: null,
@@ -112,6 +114,10 @@ export class EditorSession {
 
   setTransformMode(mode: TransformMode): void {
     this.runtime?.setTransformMode(mode);
+  }
+
+  setLassoMode(enabled: boolean): void {
+    this.runtime?.setLassoMode(enabled);
   }
 
   setSnapEnabled(enabled: boolean): void {
