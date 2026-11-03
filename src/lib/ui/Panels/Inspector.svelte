@@ -102,36 +102,15 @@
     }
   });
 
-  function sectionHeadKey(
+  function handleSectionToggle(
     key: 'transform' | 'modifiers',
-    event: KeyboardEvent
+    event: Event
   ): void {
-    if (event.target !== event.currentTarget) {
+    const details = event.currentTarget as HTMLDetailsElement;
+    if (sections[key] === details.open) {
       return;
     }
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return;
-    }
-    event.preventDefault();
-    toggleSection(key);
-  }
-
-  function toggleSectionFromHeader(
-    key: 'transform' | 'modifiers',
-    event: MouseEvent
-  ): void {
-    const target = event.target;
-    if (
-      target instanceof Element &&
-      target.closest('button, input, select, textarea, a, label')
-    ) {
-      return;
-    }
-    toggleSection(key);
-  }
-
-  function toggleSection(key: 'transform' | 'modifiers'): void {
-    sections = { ...sections, [key]: !sections[key] };
+    sections = { ...sections, [key]: details.open };
     try {
       localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(sections));
     } catch {
@@ -405,158 +384,127 @@
       {/if}
     </section>
 
-    <section
-      class="section"
-      class:is-collapsed={!sections.transform}
-      aria-labelledby="transform-heading"
+    <details
+      class="section module-section"
+      open={sections.transform}
+      ontoggle={(event) => handleSectionToggle('transform', event)}
     >
-      <div
-        class="section-head section-head--collapsible"
-        role="button"
-        tabindex="0"
-        aria-expanded={sections.transform}
-        aria-controls="transform-body"
-        title={sections.transform ? 'Collapse Transform' : 'Expand Transform'}
-        onclick={(event) => toggleSectionFromHeader('transform', event)}
-        onkeydown={(event) => sectionHeadKey('transform', event)}
-      >
-        <button
-          type="button"
-          class="section-toggle"
-          class:is-collapsed={!sections.transform}
-          aria-expanded={sections.transform}
-          aria-controls="transform-body"
-          aria-label={sections.transform ? 'Collapse Transform' : 'Expand Transform'}
-          onclick={() => toggleSection('transform')}
-        ><Icon name="chevron-down" size={14} /></button>
-        <h2 id="transform-heading" class="section-label">Transform</h2>
+      <summary class="module-summary">
+        <span class="module-title">
+          <span class="section-label">Transform</span>
+          <span class="section-meta">
+            {activeNodeId === null ? 'Local' : transformOrientation === 'local' ? 'Local' : 'Global'}
+          </span>
+        </span>
+        <span class="module-chevron" aria-hidden="true"></span>
+      </summary>
+      <div id="transform-body" class="module-body">
         {#if activeNodeId !== null}
-          <div class="orientation-toggle" role="group" aria-label="Transform orientation">
+          <div class="transform-orientation">
+            <div class="orientation-toggle" role="group" aria-label="Transform orientation">
+              <button
+                type="button"
+                class:active={transformOrientation === 'local'}
+                aria-pressed={transformOrientation === 'local'}
+                onclick={() => session.setTransformOrientation('local')}
+              >
+                Local
+              </button>
+              <button
+                type="button"
+                class:active={transformOrientation === 'global'}
+                aria-pressed={transformOrientation === 'global'}
+                onclick={() => session.setTransformOrientation('global')}
+              >
+                Global
+              </button>
+            </div>
+          </div>
+        {/if}
+        {#if activeTransform}
+          <div class="transform-stack">
+            <Vector3Field
+              label="Position"
+              values={displayTransform?.position ?? activeTransform.position}
+              step={0.1}
+              precision={3}
+              onCommit={commitPosition}
+            />
+            <Vector3Field
+              label="Rotation"
+              values={rotationDegrees()}
+              step={1}
+              precision={1}
+              unit="°"
+              onCommit={commitRotation}
+            />
+            <Vector3Field
+              label={useGlobalOrientation ? 'Scale (local)' : 'Scale'}
+              values={activeTransform.scale}
+              step={0.05}
+              precision={3}
+              min={0.001}
+              onCommit={commitScale}
+            />
+          </div>
+          {#if useGlobalOrientation}
+            <p class="hint">
+              Position and rotation are world-space. Scale remains object-local.
+            </p>
+          {/if}
+          <div class="snap-line">
             <button
               type="button"
-              class:active={transformOrientation === 'local'}
-              aria-pressed={transformOrientation === 'local'}
-              onclick={() => session.setTransformOrientation('local')}
+              class="snap-toggle"
+              class:is-active={session.snapshot.snapEnabled}
+              aria-pressed={session.snapshot.snapEnabled}
+              onclick={() =>
+                session.setSnapEnabled(!session.snapshot.snapEnabled)}
             >
-              Local
+              <span class="snap-dot" aria-hidden="true"></span>
+              <span>Grid snap</span>
             </button>
-            <button
-              type="button"
-              class:active={transformOrientation === 'global'}
-              aria-pressed={transformOrientation === 'global'}
-              onclick={() => session.setTransformOrientation('global')}
+            <select
+              class="snap-step"
+              aria-label="Grid snap step"
+              value={String(session.snapshot.snapStep)}
+              onchange={setSnapStep}
             >
-              Global
-            </button>
+              {#each GRID_SNAP_STEPS as step (step)}
+                <option value={String(step)}>{step}</option>
+              {/each}
+            </select>
           </div>
         {:else}
-          <span class="section-meta">Local</span>
+          <p class="empty-state">No active object to transform.</p>
         {/if}
       </div>
-      {#if sections.transform}
-      <div id="transform-body">
-      {#if activeTransform}
-        <div class="transform-stack">
-          <Vector3Field
-            label="Position"
-            values={displayTransform?.position ?? activeTransform.position}
-            step={0.1}
-            precision={3}
-            onCommit={commitPosition}
-          />
-          <Vector3Field
-            label="Rotation"
-            values={rotationDegrees()}
-            step={1}
-            precision={1}
-            unit="°"
-            onCommit={commitRotation}
-          />
-          <Vector3Field
-            label={useGlobalOrientation ? 'Scale (local)' : 'Scale'}
-            values={activeTransform.scale}
-            step={0.05}
-            precision={3}
-            min={0.001}
-            onCommit={commitScale}
-          />
-        </div>
-        {#if useGlobalOrientation}
-          <p class="hint">
-            Position and rotation are world-space. Scale remains object-local.
-          </p>
-        {/if}
-        <div class="snap-line">
-          <button
-            type="button"
-            class="snap-toggle"
-            class:is-active={session.snapshot.snapEnabled}
-            aria-pressed={session.snapshot.snapEnabled}
-            onclick={() =>
-              session.setSnapEnabled(!session.snapshot.snapEnabled)}
-          >
-            <span class="snap-dot" aria-hidden="true"></span>
-            <span>Grid snap</span>
-          </button>
-          <select
-            class="snap-step"
-            aria-label="Grid snap step"
-            value={String(session.snapshot.snapStep)}
-            onchange={setSnapStep}
-          >
-            {#each GRID_SNAP_STEPS as step (step)}
-              <option value={String(step)}>{step}</option>
-            {/each}
-          </select>
-        </div>
-      {:else}
-        <p class="empty-state">No active object to transform.</p>
-      {/if}
-      </div>
-      {/if}
-    </section>
+    </details>
 
     {#if activeGroupId === null}
-      <section
-        class="section"
-        class:is-collapsed={!sections.modifiers}
-        aria-labelledby="modifiers-heading"
+      <details
+        class="section module-section"
+        open={sections.modifiers}
+        ontoggle={(event) => handleSectionToggle('modifiers', event)}
       >
-        <div
-          class="section-head section-head--collapsible"
-          role="button"
-          tabindex="0"
-          aria-expanded={sections.modifiers}
-          aria-controls="modifiers-body"
-          title={sections.modifiers ? 'Collapse Modifiers' : 'Expand Modifiers'}
-          onclick={(event) => toggleSectionFromHeader('modifiers', event)}
-          onkeydown={(event) => sectionHeadKey('modifiers', event)}
-        >
-          <button
-            type="button"
-            class="section-toggle"
-            class:is-collapsed={!sections.modifiers}
-            aria-expanded={sections.modifiers}
-            aria-controls="modifiers-body"
-            aria-label={sections.modifiers ? 'Collapse Modifiers' : 'Expand Modifiers'}
-            onclick={() => toggleSection('modifiers')}
-          ><Icon name="chevron-down" size={14} /></button>
-          <h2 id="modifiers-heading" class="section-label">Modifiers</h2>
-          <span class="section-meta">
-            {#if activeNodeId === null}
-              No object
-            {:else if modifiers.length === 0}
-              None
-            {:else if modifiersActive}
-              Evaluated
-            {:else}
-              Disabled
-            {/if}
+        <summary class="module-summary">
+          <span class="module-title">
+            <span class="section-label">Modifiers</span>
+            <span class="section-meta">
+              {#if activeNodeId === null}
+                No object
+              {:else if modifiers.length === 0}
+                None
+              {:else if modifiersActive}
+                Evaluated
+              {:else}
+                Disabled
+              {/if}
+            </span>
           </span>
-        </div>
-
-        {#if sections.modifiers}
-        <div id="modifiers-body">
+          <span class="module-chevron" aria-hidden="true"></span>
+        </summary>
+        <div id="modifiers-body" class="module-body">
         {#if activeNodeId === null}
           <p class="empty-state">Select a mesh object to edit its stack.</p>
         {:else}
@@ -755,8 +703,7 @@
           {/if}
         {/if}
         </div>
-        {/if}
-      </section>
+      </details>
     {/if}
 
     <section class="section" aria-labelledby="stats-heading">
@@ -1223,63 +1170,6 @@
     flex: 1;
   }
 
-  .section.is-collapsed .section-head {
-    margin-bottom: 0;
-  }
-
-  .section-head--collapsible {
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .section-head--collapsible:hover .section-label {
-    color: var(--text-primary);
-  }
-
-  .section-head--collapsible button {
-    cursor: pointer;
-  }
-
-  .section-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-xs);
-    background: transparent;
-    color: var(--text-tertiary);
-    cursor: pointer;
-  }
-
-  .section-toggle:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .section-toggle:focus-visible {
-    outline: var(--focus-ring-width) solid var(--border-focus);
-    outline-offset: 1px;
-  }
-
-  .section-toggle :global(svg) {
-    transition: transform var(--motion-fast) var(--ease-out);
-  }
-
-  .section-toggle.is-collapsed :global(svg) {
-    transform: rotate(-90deg);
-  }
-
-  @media (pointer: coarse) {
-    .section-toggle {
-      width: var(--hit-min);
-      height: var(--hit-min);
-    }
-  }
-
   .section-meta {
     color: var(--text-tertiary);
     font-family: var(--font-mono);
@@ -1618,6 +1508,12 @@
     min-width: var(--hit-min);
     min-height: var(--hit-min);
     padding: 0 var(--space-2);
+  }
+
+  .transform-orientation {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--space-2);
   }
 
   .snap-line {
