@@ -18,12 +18,10 @@ export class SceneDocument {
   readonly groups: SceneGroup[] = [];
 
   /** Construct the default first-run scene from the real primitive path. */
-  static createDefault(): SceneDocument {
+  static createDefault(kind: PrimitiveKind = 'quadsphere'): SceneDocument {
     const document = new SceneDocument();
-    const mesh = createPrimitiveMesh('quadsphere');
-    document.insertNode(
-      new MeshNode(mesh, 'quadsphere', PRIMITIVE_LABELS.quadsphere)
-    );
+    const mesh = createPrimitiveMesh(kind);
+    document.insertNode(new MeshNode(mesh, kind, PRIMITIVE_LABELS[kind]));
     return document;
   }
 

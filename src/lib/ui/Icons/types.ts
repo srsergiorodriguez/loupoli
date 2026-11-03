@@ -15,6 +15,7 @@ export type IconName =
   | 'minus'
   | 'trash'
   | 'open'
+  | 'new-file'
   | 'save'
   | 'move'
   | 'rotate'

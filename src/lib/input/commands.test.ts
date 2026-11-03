@@ -64,6 +64,7 @@ describe('command registry', () => {
       'edit.undo',
       'edit.redo',
       'edit.delete',
+      'file.new',
       'file.open',
       'file.save',
       'view.sidebar',

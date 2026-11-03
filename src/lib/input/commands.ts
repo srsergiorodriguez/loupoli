@@ -8,6 +8,7 @@ export type CommandId =
   | 'edit.undo'
   | 'edit.redo'
   | 'edit.delete'
+  | 'file.new'
   | 'file.open'
   | 'file.save'
   | 'view.sidebar'
@@ -60,6 +61,7 @@ export interface CommandDefinition {
 const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'edit.undo': { label: 'Undo', scope: 'global', shortcut: 'undo', presentation: 'icon', bindings: [{ key: 'z', mod: true, shift: false }] },
   'edit.redo': { label: 'Redo', scope: 'global', shortcut: 'redo', presentation: 'icon', bindings: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
+  'file.new': { label: 'New project', scope: 'global', shortcut: 'newProject', presentation: 'icon', bindings: [{ key: 'n', mod: true }] },
   'file.open': { label: 'Open project', scope: 'global', shortcut: 'open', presentation: 'icon', bindings: [{ key: 'o', mod: true }] },
   'file.save': { label: 'Save project', scope: 'global', shortcut: 'save', presentation: 'icon', bindings: [{ key: 's', mod: true }] },
   'view.sidebar': { label: 'Toggle sidebar', scope: 'shell', presentation: 'icon' },

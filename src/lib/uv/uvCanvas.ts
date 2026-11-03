@@ -1,4 +1,5 @@
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
+import { buildUvTopology, type UvSelectionMode } from './uvElements';
 import { computeUvProjection, uvToCanvas, type UvViewState } from './uvView';
 
 function cssToken(name: string, fallback: string): string {
@@ -34,7 +35,8 @@ export function drawUvCanvas(
   width: number,
   height: number,
   backgroundImage: CanvasImageSource | null = null,
-  view?: UvViewState
+  view?: UvViewState,
+  selectionMode: UvSelectionMode = 'vertex'
 ): void {
   if (width <= 0 || height <= 0) {
     return;
@@ -155,6 +157,29 @@ export function drawUvCanvas(
     context.beginPath();
     context.arc(x, y, 1.4, 0, Math.PI * 2);
     context.fill();
+  }
+
+  // In edge mode, draw selected UV edges before the point handles. A UV edge
+  // is identified by its two UV points, not by the underlying mesh edge.
+  if (selectionMode === 'edge') {
+    const topology = buildUvTopology(mesh);
+    context.strokeStyle = accent;
+    context.lineWidth = 2.5;
+    context.lineCap = 'round';
+    for (const edge of topology.edges) {
+      if (
+        !edge.aCorners.every((corner) => selected.has(corner)) ||
+        !edge.bCorners.every((corner) => selected.has(corner))
+      ) {
+        continue;
+      }
+      const a = toPoint(edge.uvA[0], edge.uvA[1]);
+      const b = toPoint(edge.uvB[0], edge.uvB[1]);
+      context.beginPath();
+      context.moveTo(a[0], a[1]);
+      context.lineTo(b[0], b[1]);
+      context.stroke();
+    }
   }
 
   // Selected corners are the editable units and must remain distinct.

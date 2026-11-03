@@ -78,6 +78,9 @@ interface MouseGesture {
   pointerId: number | null;
   lastX: number;
   lastY: number;
+  startX: number;
+  startY: number;
+  moved: boolean;
 }
 
 /** Centroid and spread of the active touch pointers. */
@@ -130,7 +133,10 @@ export class InputRouter {
     mode: 'none',
     pointerId: null,
     lastX: 0,
-    lastY: 0
+    lastY: 0,
+    startX: 0,
+    startY: 0,
+    moved: false
   };
   private lastMouseX = 0;
   private lastMouseY = 0;
@@ -224,6 +230,9 @@ export class InputRouter {
       this.mouse.pointerId = sample.pointerId;
       this.mouse.lastX = sample.clientX;
       this.mouse.lastY = sample.clientY;
+      this.mouse.startX = sample.clientX;
+      this.mouse.startY = sample.clientY;
+      this.mouse.moved = false;
       if (this.host.isLassoMode()) {
         if (this.host.beginLasso(sample.clientX, sample.clientY)) {
           this.mouse.mode = 'lasso';
@@ -309,6 +318,13 @@ export class InputRouter {
     ) {
       const dx = sample.clientX - this.mouse.lastX;
       const dy = sample.clientY - this.mouse.lastY;
+      if (!this.mouse.moved) {
+        this.mouse.moved =
+          Math.hypot(
+            sample.clientX - this.mouse.startX,
+            sample.clientY - this.mouse.startY
+          ) > 4;
+      }
       this.mouse.lastX = sample.clientX;
       this.mouse.lastY = sample.clientY;
       if (this.mouse.mode === 'orbit') {
@@ -369,6 +385,16 @@ export class InputRouter {
       this.mouse.pointerId === sample.pointerId
     ) {
       this.host.endToolPointer(sample);
+    } else if (
+      this.mouse.mode === 'orbit' &&
+      this.mouse.pointerId === sample.pointerId &&
+      !this.mouse.moved
+    ) {
+      this.host.tapSelect(
+        sample.clientX,
+        sample.clientY,
+        sample.shiftKey || sample.metaKey || sample.ctrlKey
+      );
     }
     this.resetMouseGesture(sample.pointerId);
   };
@@ -547,6 +573,7 @@ export class InputRouter {
     this.touchMode = 'none';
     this.mouse.mode = 'none';
     this.mouse.pointerId = null;
+    this.mouse.moved = false;
     this.host.setPointerReading(null);
   };
 

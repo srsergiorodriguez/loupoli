@@ -878,6 +878,62 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Reset to a new Untitled document with a default cube. */
+  newProject(): void {
+    if (this.fileBusy) {
+      return;
+    }
+    if (this.modalTransform) {
+      this.cancelModalTransform();
+    }
+    this.cancelToolPointer();
+    this.cancelUvPaint();
+    this.armedAction = null;
+    this.renderer.setActionPreviewLine(null);
+    this.cancelLasso();
+    this.lassoMode = false;
+    this.transformMode = 'select';
+    this.axisLock = null;
+    const fresh = SceneDocument.createDefault('cube');
+    this.document.replaceNodes(fresh.nodes);
+    this.document.replaceGroups([]);
+    this.textureStack.reset();
+    this.renderer.setTextureMap(this.textureStack.texture);
+    this.projectName = 'Untitled';
+    this.activeGroupId = null;
+    this.activeNodeId = this.document.nodes[0]?.id ?? null;
+    this.selectedNodeIds.clear();
+    if (this.activeNodeId) {
+      this.selectedNodeIds.add(this.activeNodeId);
+    }
+    this.selection.clear();
+    this.selection.setContext(this.activeNodeId, 'vertex');
+    this.uvOpen = false;
+    this.uvPaintMode = false;
+    this.activeEditor = '3d';
+    this.uvSelection.clear();
+    this.uvPins.clear();
+    this.uvActiveChart = null;
+    this.uvSelectionMode = 'vertex';
+    this.uvTransformMode = 'move';
+    this.uvZoom = 1;
+    this.uvPanX = 0;
+    this.uvPanY = 0;
+    this.uvError = null;
+    this.uvRevision += 1;
+    this.pendingRecovery = null;
+    this.recoveryAvailable = false;
+    this.recoveryUpdatedAt = null;
+    this.recovered = false;
+    this.projectError = null;
+    this.history.clear();
+    this.syncScene();
+    this.renderer.refreshTexture();
+    this.renderer.frameActiveNode();
+    this.publish();
+    void this.autosave.clear().then(() => this.initializePersistence());
+  }
+
   /** Open or close the UV editing split. */
   toggleUvView(): void {
     if (this.uvOpen) {
@@ -1167,11 +1223,6 @@ export class EditorRuntime {
     );
     if (!hit) {
       this.uvPendingClick = null;
-      if (!additive && this.uvSelection.size > 0) {
-        this.uvSelection.clear();
-        this.uvRevision += 1;
-        this.publish();
-      }
       return false;
     }
     this.uvActiveChart = hit.chart;
@@ -1259,6 +1310,19 @@ export class EditorRuntime {
     this.syncScene();
     this.publish();
     this.recordSelection(before, 'Select all elements');
+  }
+
+  /** Clear UV selection for a crisp empty-space click, not a pan. */
+  clearUvSelectionOnClick(): void {
+    if (this.uvSelection.size === 0) {
+      return;
+    }
+    const before = this.captureSelection();
+    this.uvSelection.clear();
+    this.uvActiveChart = null;
+    this.uvRevision += 1;
+    this.publish();
+    this.recordSelection(before, 'Clear UV selection');
   }
 
   /** Select every UV corner on the active node. */
@@ -1577,7 +1641,8 @@ export class EditorRuntime {
       width,
       height,
       this.textureStack.image,
-      this.uvViewState()
+      this.uvViewState(),
+      this.uvSelectionMode
     );
   }
 
@@ -3501,10 +3566,9 @@ export class EditorRuntime {
     if (this.selection.mode === 'edge') {
       const edge = this.renderer.pickEdge(sample.clientX, sample.clientY);
       if (edge === null) {
-        if (combine === 'replace') {
-          this.selection.clear();
-        }
-      } else if (subtract) {
+        return false;
+      }
+      if (subtract) {
         this.selection.remove(edge);
       } else {
         this.selection.pick(edge, additive);
@@ -3517,10 +3581,9 @@ export class EditorRuntime {
     if (this.selection.mode === 'face') {
       const face = this.renderer.pickFace(sample.clientX, sample.clientY);
       if (face === null) {
-        if (combine === 'replace') {
-          this.selection.clear();
-        }
-      } else if (subtract) {
+        return false;
+      }
+      if (subtract) {
         this.selection.remove(face);
       } else {
         this.selection.pick(face, additive);
@@ -3532,11 +3595,6 @@ export class EditorRuntime {
 
     const vertex = this.renderer.pickVertex(sample.clientX, sample.clientY);
     if (vertex === null) {
-      if (combine === 'replace') {
-        this.selection.clear();
-      }
-      this.syncScene();
-      this.publish();
       return false;
     }
 

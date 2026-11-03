@@ -12,7 +12,7 @@ export interface UvElementHit {
   readonly corners: readonly number[];
 }
 
-/** One UV vertex within a chart. */
+/** One distinct UV point within a chart. */
 export interface UvVertexGroup {
   readonly chart: number;
   readonly vertex: number;
@@ -20,12 +20,14 @@ export interface UvVertexGroup {
   readonly uv: Vec2;
 }
 
-/** One undirected UV edge within a chart. */
+/** One undirected UV edge between two distinct UV points in a chart. */
 export interface UvEdgeGroup {
   readonly chart: number;
   readonly a: number;
   readonly b: number;
   readonly corners: readonly number[];
+  readonly aCorners: readonly number[];
+  readonly bCorners: readonly number[];
   readonly uvA: Vec2;
   readonly uvB: Vec2;
 }
@@ -46,7 +48,14 @@ export interface UvTopology {
   readonly chartCorners: readonly (readonly number[])[];
 }
 
-/** Build chart, vertex, edge, and face groups for the current UV layout. */
+/** UV coordinates are compared at this precision when building point groups. */
+const UV_POINT_PRECISION = 5;
+
+function uvPointKey(chart: number, u: number, v: number): string {
+  return `${chart}:${u.toFixed(UV_POINT_PRECISION)}:${v.toFixed(UV_POINT_PRECISION)}`;
+}
+
+/** Build chart, UV-point, UV-edge, and face groups for the current UV layout. */
 export function buildUvTopology(mesh: HalfEdgeMesh): UvTopology {
   const charts = extractUvCharts(mesh);
   const faceChart = new Int32Array(mesh.faceCount).fill(-1);
@@ -64,12 +73,12 @@ export function buildUvTopology(mesh: HalfEdgeMesh): UvTopology {
     chartCorners[chart].sort((a, b) => a - b);
   }
 
-  interface VertexBuilder {
+  interface PointBuilder {
     chart: number;
-    vertex: number;
     corners: number[];
+    uv: Vec2;
   }
-  const vertexMap = new Map<string, VertexBuilder>();
+  const pointMap = new Map<string, PointBuilder>();
   const faceGroups: UvFaceGroup[] = [];
   for (let face = 0; face < mesh.faceCount; face += 1) {
     const chart = faceChart[face];
@@ -81,15 +90,16 @@ export function buildUvTopology(mesh: HalfEdgeMesh): UvTopology {
     let halfEdge = start;
     do {
       corners.push(halfEdge);
-      const key = `${chart}:${mesh.heOrigin[halfEdge]}`;
-      const existing = vertexMap.get(key);
+      const uv = mesh.getCornerUv(halfEdge);
+      const key = uvPointKey(chart, uv[0], uv[1]);
+      const existing = pointMap.get(key);
       if (existing) {
         existing.corners.push(halfEdge);
       } else {
-        vertexMap.set(key, {
+        pointMap.set(key, {
           chart,
-          vertex: mesh.heOrigin[halfEdge],
-          corners: [halfEdge]
+          corners: [halfEdge],
+          uv
         });
       }
       halfEdge = mesh.heNext[halfEdge];
@@ -97,20 +107,29 @@ export function buildUvTopology(mesh: HalfEdgeMesh): UvTopology {
     faceGroups.push({ face, chart, corners });
   }
 
-  const vertexGroups: UvVertexGroup[] = [...vertexMap.values()].map(
-    (builder) => {
-      const corner = builder.corners[0];
-      return {
-        chart: builder.chart,
-        vertex: builder.vertex,
-        corners: builder.corners.sort((a, b) => a - b),
-        uv: mesh.getCornerUv(corner)
-      };
-    }
+  const pointGroups: UvVertexGroup[] = [...pointMap.values()].map(
+    (builder) => ({
+      chart: builder.chart,
+      vertex: 0,
+      corners: builder.corners.sort((a, b) => a - b),
+      uv: builder.uv
+    })
   );
-  const vertexKey = new Map<string, UvVertexGroup>();
-  for (const group of vertexGroups) {
-    vertexKey.set(`${group.chart}:${group.vertex}`, group);
+  const pointByKey = new Map<string, UvVertexGroup>();
+  for (const group of pointGroups) {
+    pointByKey.set(
+      uvPointKey(group.chart, group.uv[0], group.uv[1]),
+      group
+    );
+  }
+  const pointId = new Map<UvVertexGroup, number>();
+  for (let index = 0; index < pointGroups.length; index += 1) {
+    pointId.set(pointGroups[index], index);
+    pointGroups[index] = { ...pointGroups[index], vertex: index };
+  }
+  const pointsById = new Map<number, UvVertexGroup>();
+  for (const group of pointGroups) {
+    pointsById.set(group.vertex, group);
   }
 
   interface EdgeBuilder {
@@ -118,6 +137,8 @@ export function buildUvTopology(mesh: HalfEdgeMesh): UvTopology {
     a: number;
     b: number;
     corners: Set<number>;
+    aCorners: readonly number[];
+    bCorners: readonly number[];
   }
   const edgeMap = new Map<string, EdgeBuilder>();
   for (let halfEdge = 0; halfEdge < mesh.halfEdgeCount; halfEdge += 1) {
@@ -126,14 +147,30 @@ export function buildUvTopology(mesh: HalfEdgeMesh): UvTopology {
       continue;
     }
     const next = mesh.heNext[halfEdge];
-    const a = mesh.heOrigin[halfEdge];
-    const b = mesh.heOrigin[next];
+    const cornerUv = mesh.getCornerUv(halfEdge);
+    const nextUv = mesh.getCornerUv(next);
+    const aGroup = pointByKey.get(uvPointKey(chart, cornerUv[0], cornerUv[1]));
+    const bGroup = pointByKey.get(uvPointKey(chart, nextUv[0], nextUv[1]));
+    if (!aGroup || !bGroup || aGroup === bGroup) {
+      continue;
+    }
+    const a = pointId.get(aGroup) ?? 0;
+    const b = pointId.get(bGroup) ?? 0;
     const low = Math.min(a, b);
     const high = Math.max(a, b);
     const key = `${chart}:${low}:${high}`;
     let builder = edgeMap.get(key);
     if (!builder) {
-      builder = { chart, a: low, b: high, corners: new Set() };
+      const first = pointsById.get(low);
+      const second = pointsById.get(high);
+      builder = {
+        chart,
+        a: low,
+        b: high,
+        corners: new Set(),
+        aCorners: first?.corners ?? [],
+        bCorners: second?.corners ?? []
+      };
       edgeMap.set(key, builder);
     }
     builder.corners.add(halfEdge);
@@ -142,27 +179,29 @@ export function buildUvTopology(mesh: HalfEdgeMesh): UvTopology {
 
   const edgeGroups: UvEdgeGroup[] = [];
   for (const builder of edgeMap.values()) {
-    const groupA = vertexKey.get(`${builder.chart}:${builder.a}`);
-    const groupB = vertexKey.get(`${builder.chart}:${builder.b}`);
-    if (!groupA || !groupB) {
+    const aGroup = pointsById.get(builder.a);
+    const bGroup = pointsById.get(builder.b);
+    if (!aGroup || !bGroup) {
       continue;
     }
     const corners = new Set(builder.corners);
-    for (const corner of groupA.corners) corners.add(corner);
-    for (const corner of groupB.corners) corners.add(corner);
+    for (const corner of aGroup.corners) corners.add(corner);
+    for (const corner of bGroup.corners) corners.add(corner);
     edgeGroups.push({
       chart: builder.chart,
       a: builder.a,
       b: builder.b,
       corners: [...corners].sort((a, b) => a - b),
-      uvA: groupA.uv,
-      uvB: groupB.uv
+      aCorners: [...aGroup.corners].sort((a, b) => a - b),
+      bCorners: [...bGroup.corners].sort((a, b) => a - b),
+      uvA: aGroup.uv,
+      uvB: bGroup.uv
     });
   }
 
   return {
     charts,
-    vertices: vertexGroups,
+    vertices: pointGroups,
     edges: edgeGroups,
     faces: faceGroups,
     chartCorners

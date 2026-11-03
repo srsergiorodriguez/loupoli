@@ -12,12 +12,21 @@ const topology = buildUvTopology(mesh);
 const projection = computeUvProjection(mesh, 400, 400);
 
 describe('UV element topology', () => {
-  it('derives one chart, eight vertices, twelve edges, and six faces', () => {
+  it('derives one chart, four UV points, four overlapping UV edges, and six faces', () => {
     expect(topology.charts).toHaveLength(1);
-    expect(topology.vertices).toHaveLength(8);
-    expect(topology.edges).toHaveLength(12);
+    expect(topology.vertices).toHaveLength(4);
+    expect(topology.edges).toHaveLength(4);
     expect(topology.faces).toHaveLength(6);
     expect(topology.chartCorners[0]).toHaveLength(24);
+  });
+
+  it('keeps split UV points distinct within one chart', () => {
+    const split = createCubeMesh(2);
+    split.setCornerUv(split.faceHalfEdge[0], [2, 2]);
+    const splitTopology = buildUvTopology(split);
+    expect(splitTopology.charts).toHaveLength(1);
+    expect(splitTopology.vertices).toHaveLength(5);
+    expect(splitTopology.vertices.some((group) => group.uv[0] === 2)).toBe(true);
   });
 
   it('selects all corners inside a full-canvas lasso', () => {

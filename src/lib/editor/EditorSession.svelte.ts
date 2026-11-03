@@ -363,6 +363,10 @@ export class EditorSession {
     this.runtime?.selectAllUv();
   }
 
+  clearUvSelectionOnClick(): void {
+    this.runtime?.clearUvSelectionOnClick();
+  }
+
   stackUvIslands(): void {
     this.runtime?.stackUvIslands();
   }
@@ -612,6 +616,10 @@ export class EditorSession {
 
   armAction(kind: MeshActionKind): void {
     this.runtime?.armAction(kind);
+  }
+
+  newProject(): void {
+    this.runtime?.newProject();
   }
 
   async saveProject(): Promise<void> {

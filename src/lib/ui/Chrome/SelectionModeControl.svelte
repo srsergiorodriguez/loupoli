@@ -88,7 +88,6 @@
       onclick={() => chooseMode(mode.id)}
     >
       <span class="mode-key" aria-hidden="true">{mode.short}</span>
-      <span class="mode-label">{mode.label}</span>
     </button>
   {/each}
   <span class="mode-divider" aria-hidden="true"></span>
@@ -99,7 +98,7 @@
     title={commandTooltipFor('selection.all')}
     onclick={() => session.selectAllActive()}
   >
-    <span class="mode-label">{command('selection.all').label}</span>
+    <span class="mode-label mode-label--all">{command('selection.all').label}</span>
   </button>
   <button
     type="button"
@@ -140,10 +139,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    width: 44px;
     min-width: 44px;
     min-height: 44px;
-    gap: 6px;
-    padding: 0 10px;
+    gap: 4px;
+    padding: 0;
     border: 0;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -180,20 +180,9 @@
     opacity: 1;
   }
 
-  .mode-label {
+  .mode-label--all {
     font-family: var(--font-body);
     font-size: var(--text-2xs);
     font-weight: var(--weight-medium);
-  }
-
-  @media (max-width: 620px) {
-    .mode-label {
-      display: none;
-    }
-
-    .mode-button {
-      min-width: 44px;
-      padding: 0;
-    }
   }
 </style>

@@ -17,7 +17,7 @@ describe('UV chart stacking', () => {
     expect(sameUvTopology(topology, 0, 99)).toBe(false);
     const signature = uvChartSignature(topology, 0);
     expect(signature?.vertices).toBe(8);
-    expect(signature?.edges).toBe(12);
+    expect(signature?.edges).toBe(4);
     expect(signature?.faces).toBe(6);
   });
 

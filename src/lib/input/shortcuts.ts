@@ -18,6 +18,7 @@ export type ShortcutId =
   | 'redo'
   | 'save'
   | 'open'
+  | 'newProject'
   | 'selectAll'
   | 'delete'
   | 'frame'
@@ -35,6 +36,7 @@ const definitions: Record<ShortcutId, Omit<ShortcutDefinition, 'id'>> = {
   redo: { label: 'Redo', display: `⇧${MOD_KEY}Z` },
   save: { label: 'Save project', display: `${MOD_KEY}S` },
   open: { label: 'Open project', display: `${MOD_KEY}O` },
+  newProject: { label: 'New project', display: `${MOD_KEY}N` },
   selectAll: { label: 'Select all', display: `${MOD_KEY}A` },
   delete: { label: 'Delete selection', display: 'Delete' },
   frame: { label: 'Frame selection', display: 'F' },

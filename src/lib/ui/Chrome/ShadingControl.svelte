@@ -37,8 +37,7 @@
       title={choice.label}
       onclick={() => session.setShading(choice.mode)}
     >
-      <Icon name={choice.icon} size={14} />
-      <span class="shading-label">{choice.label}</span>
+      <Icon name={choice.icon} size={16} />
     </button>
   {/each}
 </div>
@@ -58,8 +57,9 @@
     justify-content: center;
     gap: 5px;
     height: var(--control-h-sm);
-    min-width: 48px;
-    padding: 0 8px;
+    width: var(--hit-min);
+    min-width: var(--hit-min);
+    padding: 0;
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     font-family: var(--font-ui);
@@ -85,16 +85,6 @@
     color: var(--accent-primary-hover);
   }
 
-  @media (max-width: 1199px) {
-    button {
-      min-width: 40px;
-      padding: 0 7px;
-    }
-
-    .shading-label {
-      display: none;
-    }
-  }
 
   :global(:root[data-density='touch']) .shading-control {
     padding: 4px;
@@ -105,9 +95,5 @@
     min-width: var(--hit-min);
     height: var(--hit-min);
     padding: 0;
-  }
-
-  :global(:root[data-density='touch']) .shading-label {
-    display: none;
   }
 </style>

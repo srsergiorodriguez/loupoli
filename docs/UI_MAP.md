@@ -10,8 +10,9 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Workspace Tabs** | Switch the working context | Model, UV, Paint. Reserved IDs: Light, Animation, Export |
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale, Frame, Home |
 | **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), All, Add, Subtract |
-| **Viewport** | 3D editing surface | Viewport context strip, Shading Bar, View Gizmo |
-| **UV Editor** | UV editing surface | UV Toolbar, UV Canvas, UV Footer |
+| **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock |
+| **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, UV now; Paint/Animation later |
+| **UV Editor** | UV editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
 | **Inspector** | Properties of the active object/selection/context | Inspector Sections |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
 | **Status Bar** | Persistent status | Selection counts, frame budget, render state |
@@ -32,10 +33,12 @@ This is the authoritative map of the application shell. New controls must be ass
 1. A cross-editor action lives in shared chrome.
 2. A UV-only action lives in the UV Editor.
 3. The Inspector never owns global tool state.
+The Viewport Stage owns overlays so they adapt to the visible 3D rectangle, not the window.
 4. The Selection Bar owns every selection mode and combination modifier.
 5. The Tool Rail owns pointer tools, not selection combination.
 6. The Action Dock owns one-shot topology commands.
-7. The Application Bar owns document-level actions only.
+7. The Application Bar owns document-level actions only, including New Project.
+8. A workspace owns its PaneHost placement; the UV pane is side-by-side and resizable.
 
 ## Active editor
 

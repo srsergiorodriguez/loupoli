@@ -12,6 +12,7 @@
   import Inspector from './lib/ui/Panels/Inspector.svelte';
   import ProjectBanner from './lib/ui/Chrome/ProjectBanner.svelte';
   import UvPanel from './lib/ui/Uv/UvPanel.svelte';
+  import PaneHost from './lib/ui/Panels/PaneHost.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
@@ -77,7 +78,16 @@
         return;
       }
       const matched = commandForKeyboardEvent(event);
-      if (matched === 'file.save') {
+      if (matched === 'file.new') {
+        event.preventDefault();
+        if (
+          session.snapshot.canUndo &&
+          !window.confirm('Start a new project? Unsaved changes will be discarded.')
+        ) {
+          return;
+        }
+        session.newProject();
+      } else if (matched === 'file.save') {
         event.preventDefault();
         void session.saveProject();
       } else if (matched === 'file.open') {
@@ -110,10 +120,11 @@
   <main
     class="viewport"
     class:uv-open={session.snapshot.uvOpen}
-    class:uv-side={session.snapshot.uvOpen && session.snapshot.uvLayout === 'side' && !session.compactLayout}
-    style={`--uv-height:${session.snapshot.uvSplit * 100}%; --uv-side-width:${session.snapshot.uvSplit * 100}%`}
+    class:pane-open={session.snapshot.uvOpen}
+    style={`--pane-width:${session.snapshot.uvSplit * 100}%`}
     aria-label="3D viewport"
   >
+    <section class="viewport-stage" aria-label="3D viewport stage">
     <p id="viewport-help" class="visually-hidden">
       Z-up 3D viewport. Choose vertex, edge, or face selection. With a pen or the
       primary mouse button, select elements; use Add mode or Shift/Cmd-click to
@@ -164,8 +175,7 @@
         <OrientationGizmo {session} />
       </div>
 
-      {#if !session.snapshot.uvOpen}
-        {#if session.snapshot.lassoMode && session.snapshot.lassoPath.length > 1}
+      {#if session.snapshot.lassoMode && session.snapshot.lassoPath.length > 1}
         <svg class="lasso-overlay" aria-hidden="true">
           <polygon
             points={session.snapshot.lassoPath
@@ -176,11 +186,8 @@
       {/if}
 
       <TransformHud modal={session.snapshot.modalTransform} />
-        <ActionDock {session} />
-        <ActionHud state={session.snapshot.actionState} />
-      {:else}
-        <UvPanel {session} />
-      {/if}
+      <ActionDock {session} />
+      <ActionHud state={session.snapshot.actionState} />
     {:else}
       <section class="startup-error loupoli-panel" role="alert">
         <p class="error-kicker">Graphics unavailable</p>
@@ -191,6 +198,17 @@
           enabled. On desktop, update the graphics driver or try a WebGL2 browser.
         </p>
       </section>
+    {/if}
+    </section>
+
+    {#if !startupError && session.snapshot.uvOpen}
+      <PaneHost
+        label="UV editor"
+        width={session.snapshot.uvSplit}
+        onResize={(fraction) => session.setUvSplit(fraction)}
+      >
+        <UvPanel {session} />
+      </PaneHost>
     {/if}
   </main>
 
@@ -215,6 +233,16 @@
   .viewport {
     position: absolute;
     inset: 0;
+    display: flex;
+    overflow: hidden;
+    background: var(--bg-canvas);
+  }
+
+  .viewport-stage {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
     overflow: hidden;
     background: var(--bg-canvas);
   }
@@ -237,11 +265,11 @@
   }
 
   .lasso-overlay {
-    position: fixed;
+    position: absolute;
     z-index: var(--z-hud);
     inset: 0;
-    width: 100vw;
-    height: 100dvh;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
   }
 
@@ -253,26 +281,13 @@
     vector-effect: non-scaling-stroke;
   }
 
-  .viewport.uv-open > canvas {
-    height: calc(100% - var(--uv-height));
-  }
-
-  .viewport.uv-open.uv-side > canvas {
-    width: calc(100% - var(--uv-side-width) - var(--space-3));
-    height: 100%;
-  }
-
-  .viewport.uv-side .viewport-hud {
-    display: none;
-  }
-
   canvas:focus-visible {
     outline: none;
     box-shadow: inset 0 2px 0 var(--accent-primary);
   }
 
   .viewport-context {
-    position: fixed;
+    position: absolute;
     z-index: var(--z-hud);
     top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
     left: calc(
@@ -333,7 +348,7 @@
   }
 
   .selection-mode-wrap {
-    position: fixed;
+    position: absolute;
     z-index: var(--z-hud);
     top: calc(
       var(--safe-top) + var(--topbar-h) + var(--space-3) * 2 + 25px
@@ -345,16 +360,13 @@
   }
 
   .viewport-hud {
-    position: fixed;
+    position: absolute;
     z-index: var(--z-hud);
-    top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-    right: calc(
-      var(--safe-right) + var(--inspector-w) + var(--space-3) * 2
-    );
+    right: var(--space-3);
+    bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
     gap: var(--space-2);
     pointer-events: none;
   }
@@ -411,21 +423,8 @@
     }
 
     .selection-mode-wrap {
-    position: fixed;
-    z-index: var(--z-hud);
-    top: calc(
-      var(--safe-top) + var(--topbar-h) + var(--space-3) * 2 + 25px
-    );
-    left: calc(
-      var(--safe-left) + var(--toolrail-w) + var(--space-3) * 2 + 4px
-    );
-    pointer-events: auto;
-  }
-
-  .viewport-hud {
-      top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-      right: calc(var(--safe-right) + var(--space-3));
-      gap: var(--space-2);
+      top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2 + 25px);
+      left: calc(var(--safe-left) + var(--space-3));
     }
   }
 
@@ -441,27 +440,6 @@
   @media (max-width: 640px) {
     .viewport-context {
       display: none;
-    }
-
-    .selection-mode-wrap {
-    position: fixed;
-    z-index: var(--z-hud);
-    top: calc(
-      var(--safe-top) + var(--topbar-h) + var(--space-3) * 2 + 25px
-    );
-    left: calc(
-      var(--safe-left) + var(--toolrail-w) + var(--space-3) * 2 + 4px
-    );
-    pointer-events: auto;
-  }
-
-  .viewport-hud {
-      top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-      left: calc(var(--safe-left) + var(--space-3));
-      right: calc(var(--safe-right) + var(--space-3));
-      flex-wrap: wrap;
-      align-items: flex-start;
-      justify-content: flex-end;
     }
   }
 </style>

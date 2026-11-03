@@ -75,6 +75,9 @@
     <path d="M5 12h14" />
   {:else if name === 'trash'}
     <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v6M14 11v6" />
+  {:else if name === 'new-file'}
+    <path d="M5 3.5h9l4 4V20H5V3.5Z" />
+    <path d="M14 3.5V8h4M9 13h5M11.5 10.5v5" />
   {:else if name === 'open'}
     <path d="M3 7.5V6a1.5 1.5 0 0 1 1.5-1.5H9l2 2h7.5A1.5 1.5 0 0 1 20 8v1.5" />
     <path d="M3 9h18l-2.3 9H5.3L3 9Z" />

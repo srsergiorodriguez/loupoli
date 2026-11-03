@@ -92,12 +92,16 @@ Before adding a control, answer all of these:
 
 If any answer is missing, do not add the control.
 
-## 12. Layout and resize
+## 12. Layout, camera, and resize
 
 - Pane resize handles straddle the actual pane boundary, with a 44 px hit area centered on the visible divider.
 - Resize math uses the pane boundary, not an unrelated viewport offset.
 - Breakpoints are shared tokens or a small documented set; do not invent per-component breakpoints.
 - A collapsed sidebar is controlled by the Application Bar toggle only. No duplicate X.
+- The Viewport Stage owns HUD and lasso overlays; HUD anchors to the visible 3D rectangle, not the window.
+- Camera pan/orbit/zoom never mutate selection. Only a no-move click/tap on empty viewport space clears it.
+- Workspace panes use the shared PaneHost; the divider hit area straddles the pane edge.
+- New Project is a command-owned document reset and defaults to a Cube.
 
 ## 13. UV interaction
 

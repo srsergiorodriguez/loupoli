@@ -854,6 +854,16 @@ export class ViewportRenderer {
     this.vertexMaterial.size = 7 * this.pixelRatio;
     this.selectedVertexMaterial.size = 13 * this.pixelRatio;
 
+    // setSize clears the drawing buffer. Render synchronously so a pointer-move
+    // resize never leaves a blank frame before the next animation-frame paint.
+    this.updateGizmo();
+    if (this.currentMode === 'texture-wire') {
+      for (const view of this.nodeViews.values()) {
+        view.updateFrontWire(this.cameraRig.camera);
+      }
+    }
+    this.renderer.render(this.scene, this.cameraRig.camera);
+    this.renderCount += 1;
     this.schedule();
   }
 

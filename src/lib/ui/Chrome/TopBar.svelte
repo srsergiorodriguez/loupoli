@@ -101,6 +101,22 @@
 
   <div class="actions">
     <IconButton
+      label="New project"
+      icon="new-file"
+      disabled={session.snapshot.fileBusy}
+      onActivate={() => {
+        if (
+          session.snapshot.canUndo &&
+          !window.confirm('Start a new project? Unsaved changes will be discarded.')
+        ) {
+          return;
+        }
+        session.newProject();
+      }}
+      tooltip="New project"
+      shortcut={shortcut('newProject').display}
+    />
+    <IconButton
       label="Open project"
       icon="open"
       disabled={session.snapshot.fileBusy || session.snapshot.recoveryAvailable}

@@ -62,7 +62,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV transform modes and exact numeric entry](docs/media/uv-transform.png)
 - **Four real primitives.** QuadSphere (all quads), Cube (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
-- **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed at the world origin and immediately selected; they may overlap existing objects until moved. Outliner rows have a drag handle for pointer/touch reordering and a 44 px eye toggle; both reorder and visibility are undoable and journaled. Multi-select is a compact action beside Group, Join, and Delete.
+- **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed at the world origin and immediately selected; they may overlap existing objects until moved. New Project uses a default Cube and resets document/history/UV state. Outliner rows have a drag handle for pointer/touch reordering and a 44 px eye toggle; both reorder and visibility are undoable and journaled. Multi-select is a compact action beside Group, Join, and Delete.
 
 ![Outliner with drag handles and visibility toggles](docs/media/outliner.png)
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
@@ -192,7 +192,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **108 passing** tests across twenty-six files:
+- `npm test`: **109 passing** tests across twenty-six files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.
