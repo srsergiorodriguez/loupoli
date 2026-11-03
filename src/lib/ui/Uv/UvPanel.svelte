@@ -18,6 +18,9 @@
   let height = $state(0);
   let resizing = $state(false);
   let dragging = $state(false);
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragMoved = false;
   let painting = $state(false);
   let lassoing = $state(false);
   let uvLassoPath = $state<[number, number][]>([]);
@@ -364,6 +367,9 @@
       return;
     }
     dragging = true;
+    dragMoved = false;
+    dragStartX = point.x;
+    dragStartY = point.y;
     activePointerId = event.pointerId;
     window.addEventListener('pointermove', windowPointerMove);
     window.addEventListener('pointerup', windowPointerUp);
@@ -402,6 +408,12 @@
     if (!dragging) {
       return;
     }
+    if (
+      !dragMoved &&
+      Math.hypot(point.x - dragStartX, point.y - dragStartY) > 4
+    ) {
+      dragMoved = true;
+    }
     session.updateUvDrag(point.x, point.y, width, height, event.shiftKey);
   }
 
@@ -434,8 +446,15 @@
     if (!dragging) {
       return;
     }
+    const moved = dragMoved;
     dragging = false;
-    session.finishUvDrag();
+    dragMoved = false;
+    if (moved) {
+      session.finishUvDrag();
+    } else {
+      session.finishUvClick();
+      session.cancelUvDrag();
+    }
   }
 
   function keyDown(event: KeyboardEvent): void {

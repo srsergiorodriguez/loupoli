@@ -495,6 +495,10 @@ export class EditorSession {
     this.runtime?.finishUvDrag();
   }
 
+  finishUvClick(): void {
+    this.runtime?.finishUvClick();
+  }
+
   cancelUvDrag(): void {
     this.runtime?.cancelUvDrag();
   }

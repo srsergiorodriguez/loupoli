@@ -394,6 +394,7 @@
             class="object-visibility"
             aria-label={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
             aria-pressed={node.visible}
+            title={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
             onclick={(event) => toggleNodeVisibility(event, node.id, node.visible)}
           >
             <Icon name={node.visible ? 'eye' : 'eye-off'} size={14} />
@@ -447,6 +448,7 @@
               class="object-visibility"
               aria-label={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
               aria-pressed={group.visible}
+              title={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
               onclick={(event) => toggleGroupVisibility(event, group.id, group.visible)}
             >
               <Icon name={group.visible ? 'eye' : 'eye-off'} size={14} />
@@ -890,20 +892,27 @@
                       <IconButton
                         label="Move modifier up"
                         icon="chevron-up"
+                        tooltip="Move modifier up"
                         disabled={index === 0}
                         onActivate={() => session.moveModifier(modifier.id, -1)}
                       />
                       <IconButton
                         label="Move modifier down"
                         icon="chevron-down"
+                        tooltip="Move modifier down"
                         disabled={index === modifiers.length - 1}
                         onActivate={() => session.moveModifier(modifier.id, 1)}
                       />
-                      <IconButton
-                        label="Remove modifier"
-                        icon="trash"
-                        onActivate={() => session.removeModifier(modifier.id)}
-                      />
+                      <button
+                        type="button"
+                        class="modifier-remove"
+                        aria-label="Remove modifier"
+                        title="Remove modifier"
+                        onclick={() => session.removeModifier(modifier.id)}
+                      >
+                        <Icon name="trash" size={13} />
+                        <span>Remove</span>
+                      </button>
                     </span>
                   </div>
 
@@ -1054,6 +1063,7 @@
                   class="texture-icon"
                   aria-label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
                   aria-pressed={layer.visible}
+                  title={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
                   onclick={() => session.toggleTextureLayer(layer.id)}
                 >
                   <Icon name={layer.visible ? 'eye' : 'eye-off'} size={14} />
@@ -1072,12 +1082,14 @@
                 </div>
                 <button
                   type="button"
-                  class="texture-icon"
+                  class="texture-icon texture-delete"
                   aria-label={`Delete ${layer.name}`}
+                  title={`Delete ${layer.name}`}
                   disabled={textureLayers.length <= 1}
                   onclick={() => session.removeTextureLayer(layer.id)}
                 >
                   <Icon name="trash" size={13} />
+                  <span>Delete</span>
                 </button>
               </div>
               <div class="texture-row texture-row--controls">
@@ -1106,6 +1118,7 @@
                   type="button"
                   class="texture-order"
                   aria-label={`Move ${layer.name} up`}
+                  title={`Move ${layer.name} up`}
                   disabled={index === textureLayers.length - 1}
                   onclick={() => session.moveTextureLayer(layer.id, 1)}
                 ><Icon name="chevron-up" size={12} /></button>
@@ -1113,6 +1126,7 @@
                   type="button"
                   class="texture-order"
                   aria-label={`Move ${layer.name} down`}
+                  title={`Move ${layer.name} down`}
                   disabled={index === 0}
                   onclick={() => session.moveTextureLayer(layer.id, -1)}
                 ><Icon name="chevron-down" size={12} /></button>
@@ -1779,6 +1793,26 @@
     height: var(--control-h);
   }
 
+  .modifier-remove {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: var(--control-h);
+    padding: 0 var(--space-1);
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .modifier-remove:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
   .modifier-controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1925,6 +1959,14 @@
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
+  }
+
+  .texture-delete {
+    gap: 4px;
+    width: auto;
+    padding: 0 var(--space-1);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
   }
 
   .texture-icon:hover,

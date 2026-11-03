@@ -2,7 +2,7 @@
   import Icon from '../Icons/Icon.svelte';
   import type { SelectionMode } from '../../scene/MeshNode';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
-  import { shortcut } from '../../input/shortcuts';
+  import { command, commandTooltipFor, type CommandId } from '../../input/commands';
 
   /** Session projection for the viewport selection-mode switch. */
   interface Props {
@@ -17,12 +17,33 @@
     id: ContextMode;
     short: string;
     label: string;
+    command: CommandId;
   }>>([
-    { id: 'vertex', short: 'V', label: 'Vertex' },
-    { id: 'edge', short: 'E', label: 'Edge' },
-    { id: 'face', short: 'F', label: 'Face' },
+    {
+      id: 'vertex',
+      short: 'V',
+      label: command('selection.vertex').label,
+      command: 'selection.vertex'
+    },
+    {
+      id: 'edge',
+      short: 'E',
+      label: command('selection.edge').label,
+      command: 'selection.edge'
+    },
+    {
+      id: 'face',
+      short: 'F',
+      label: command('selection.face').label,
+      command: 'selection.face'
+    },
     ...(session.snapshot.activeEditor === 'uv'
-      ? [{ id: 'island' as const, short: 'I', label: 'Island' }]
+      ? [{
+          id: 'island' as const,
+          short: 'I',
+          label: command('selection.island').label,
+          command: 'selection.island' as const
+        }]
       : [])
   ]);
 
@@ -75,10 +96,10 @@
     type="button"
     class="mode-button"
     aria-label="Select all elements in the current mode in the active editor"
-    title={`Select all elements in the active editor — ${shortcut('selectAll').display}`}
+    title={commandTooltipFor('selection.all')}
     onclick={() => session.selectAllActive()}
   >
-    <span class="mode-label">All</span>
+    <span class="mode-label">{command('selection.all').label}</span>
   </button>
   <button
     type="button"
@@ -90,7 +111,7 @@
     onclick={() => toggleCombine('add')}
   >
     <Icon name="plus" size={13} />
-    <span class="mode-label">Add</span>
+    <span class="mode-label">{command('selection.add').label}</span>
   </button>
   <button
     type="button"
@@ -102,7 +123,7 @@
     onclick={() => toggleCombine('subtract')}
   >
     <Icon name="minus" size={13} />
-    <span class="mode-label">Subtract</span>
+    <span class="mode-label">{command('selection.subtract').label}</span>
   </button>
 </div>
 

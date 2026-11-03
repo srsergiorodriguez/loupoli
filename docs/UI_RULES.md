@@ -73,7 +73,7 @@ Every command entry defines:
 - undo behavior;
 - touch-visible control location.
 
-The registry is the source for tooltips, shortcut help, and keyboard dispatch.
+The command registry is the source for labels, scopes, tooltips, shortcut help, and presentation mode. The ShortcutBus is the single keyboard dispatch entry point.
 
 ## 11. New-control checklist
 

@@ -360,6 +360,13 @@ export class EditorRuntime {
   private uvBrushSize = 36;
   private uvBrushOpacity = 0.9;
   private uvDrag: UvDrag | null = null;
+  private uvPendingClick: {
+    corners: number[];
+    before: SelectionSnapshot | null;
+    startX: number;
+    startY: number;
+    chart: number;
+  } | null = null;
   private uvRevision = 0;
   private uvError: string | null = null;
   private readonly textureStack: TextureStack;
@@ -1046,6 +1053,7 @@ export class EditorRuntime {
 
   /** Change the UV selection granularity without discarding selected corners. */
   setUvSelectionMode(mode: UvSelectionMode): void {
+    this.uvPendingClick = null;
     if (this.uvSelectionMode === mode) {
       return;
     }
@@ -1121,12 +1129,14 @@ export class EditorRuntime {
     additive: boolean
   ): boolean {
     const before = this.captureSelection();
+    this.uvPendingClick = null;
     const result = this.pickUvElementInternal(
       x,
       y,
       width,
       height,
-      additive
+      additive,
+      before
     );
     this.recordSelection(before, 'Select UV element');
     return result;
@@ -1137,7 +1147,8 @@ export class EditorRuntime {
     y: number,
     width: number,
     height: number,
-    additive: boolean
+    additive: boolean,
+    before: SelectionSnapshot | null
   ): boolean {
     const node = this.getActiveNode();
     if (!node) {
@@ -1154,6 +1165,7 @@ export class EditorRuntime {
       projection
     );
     if (!hit) {
+      this.uvPendingClick = null;
       if (!additive && this.uvSelection.size > 0) {
         this.uvSelection.clear();
         this.uvRevision += 1;
@@ -1189,6 +1201,14 @@ export class EditorRuntime {
       for (const corner of hit.corners) {
         this.uvSelection.add(corner);
       }
+    } else if (this.uvSelection.size > hit.corners.length) {
+      this.uvPendingClick = {
+        corners: [...hit.corners],
+        before,
+        startX: x,
+        startY: y,
+        chart: hit.chart
+      };
     }
     this.uvRevision += 1;
     this.linkUvSelectionTo3d();
@@ -1242,6 +1262,7 @@ export class EditorRuntime {
 
   /** Select every UV corner on the active node. */
   selectAllUv(): void {
+    this.uvPendingClick = null;
     const before = this.captureSelection();
     const node = this.getActiveNode();
     if (!node || !this.uvOpen) {
@@ -1728,6 +1749,12 @@ export class EditorRuntime {
     if (!drag) {
       return;
     }
+    if (
+      this.uvPendingClick &&
+      Math.hypot(x - this.uvPendingClick.startX, y - this.uvPendingClick.startY) > 4
+    ) {
+      this.uvPendingClick = null;
+    }
     const projection = this.uvProjection(drag.node.mesh, width, height);
     const current: Vec2 = [
       (x - projection.offsetX) / projection.scale,
@@ -1819,8 +1846,27 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Resolve a no-move UV click that preserved a larger selection. */
+  finishUvClick(): void {
+    const pending = this.uvPendingClick;
+    this.uvPendingClick = null;
+    if (!pending) {
+      return;
+    }
+    this.uvSelection.clear();
+    for (const corner of pending.corners) {
+      this.uvSelection.add(corner);
+    }
+    this.uvActiveChart = pending.chart;
+    this.uvRevision += 1;
+    this.linkUvSelectionTo3d();
+    this.publish();
+    this.recordSelection(pending.before, 'Select UV element');
+  }
+
   /** Commit the current UV drag as one localized command. */
   finishUvDrag(): void {
+    this.uvPendingClick = null;
     const drag = this.uvDrag;
     if (!drag) {
       return;
@@ -1948,6 +1994,7 @@ export class EditorRuntime {
 
   /** Restore the UVs captured at drag start. */
   cancelUvDrag(): void {
+    this.uvPendingClick = null;
     const drag = this.uvDrag;
     if (!drag) {
       return;

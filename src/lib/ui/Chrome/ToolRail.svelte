@@ -52,13 +52,13 @@
 <nav class="tool-rail loupoli-panel" aria-label="Modeling tools">
   <div class="tool-group">
     <ToolButton
-      label="Select"
+      command="tool.select"
       icon="cursor"
       active={session.snapshot.transformMode === 'select' && !session.snapshot.lassoMode}
       onActivate={selectTool}
     />
     <ToolButton
-      label="Lasso"
+      command="tool.lasso"
       icon="lasso"
       active={session.snapshot.lassoMode}
       onActivate={toggleLasso}
@@ -67,31 +67,28 @@
   <span class="rail-divider" aria-hidden="true"></span>
   <div class="tool-group">
     <ToolButton
-      label="Move"
+      command="tool.move"
       icon="move"
-      shortcut="G"
       active={session.snapshot.transformMode === 'translate'}
       onActivate={() => chooseTransform('translate')}
     />
     <ToolButton
-      label="Rotate"
+      command="tool.rotate"
       icon="rotate"
-      shortcut="R"
       active={session.snapshot.transformMode === 'rotate'}
       onActivate={() => chooseTransform('rotate')}
     />
     <ToolButton
-      label="Scale"
+      command="tool.scale"
       icon="scale"
-      shortcut="S"
       active={session.snapshot.transformMode === 'scale'}
       onActivate={() => chooseTransform('scale')}
     />
   </div>
   <span class="rail-divider" aria-hidden="true"></span>
   <div class="tool-group">
-    <ToolButton label="Frame" icon="frame" shortcut="F" onActivate={frameMesh} />
-    <ToolButton label="Home" icon="home" shortcut="Home" onActivate={resetView} />
+    <ToolButton command="view.frame" icon="frame" onActivate={frameMesh} />
+    <ToolButton command="view.home" icon="home" onActivate={resetView} />
   </div>
 </nav>
 

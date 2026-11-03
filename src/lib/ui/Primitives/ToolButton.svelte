@@ -1,11 +1,18 @@
 <script lang="ts">
   import Icon from '../Icons/Icon.svelte';
   import type { IconName } from '../Icons/types';
+  import {
+    command as commandDefinition,
+    commandTooltipFor,
+    type CommandId
+  } from '../../input/commands';
+  import { shortcut as shortcutDefinition } from '../../input/shortcuts';
 
   /** Props for a tool-rail action with an optional pressed state. */
   interface Props {
-    label: string;
+    label?: string;
     icon: IconName;
+    command?: CommandId;
     shortcut?: string;
     onActivate: () => void;
     active?: boolean;
@@ -13,28 +20,45 @@
   }
 
   let {
-    label,
+    label = '',
     icon,
+    command: commandId = undefined,
     shortcut = '',
     onActivate,
     active = undefined,
     tooltipPlacement = 'right'
   }: Props = $props();
+
+  const definition = $derived(commandId ? commandDefinition(commandId) : null);
+  const resolvedLabel = $derived(label || definition?.label || '');
+  const resolvedShortcut = $derived(
+    shortcut ||
+      (definition?.shortcut
+        ? shortcutDefinition(definition.shortcut).display
+        : '')
+  );
+  const tooltip = $derived(
+    commandId
+      ? commandTooltipFor(commandId)
+      : resolvedShortcut
+        ? `${resolvedLabel} — ${resolvedShortcut}`
+        : resolvedLabel
+  );
 </script>
 
 <button
   type="button"
   class="tool-button"
   class:is-active={active === true}
-  aria-label={label}
+  aria-label={resolvedLabel}
   aria-pressed={active === undefined ? undefined : active}
-  aria-keyshortcuts={shortcut || undefined}
-  data-tooltip={shortcut ? `${label} — ${shortcut}` : label}
+  aria-keyshortcuts={resolvedShortcut || undefined}
+  data-tooltip={tooltip}
   data-tooltip-placement={tooltipPlacement}
   onclick={onActivate}
 >
   <span class="tool-icon"><Icon name={icon} size={19} /></span>
-  <span class="tool-label">{label}</span>
+  <span class="tool-label">{resolvedLabel}</span>
 </button>
 
 <style>
