@@ -12,7 +12,7 @@ Every command has exactly one visible home. Contextual behavior changes the targ
 - Document actions: Application Bar.
 - Topology one-shots: Action Dock.
 
-Do not add a duplicate button to a pane because it is convenient.
+Do not add a duplicate button to a pane because it is convenient. Shared primitives (`InspectorSection`, `SegmentedControl`, `NumberField`, `Vector3Field`, `ToolButton`, `IconButton`) cover repeated structures.
 
 ## 2. Context is explicit
 

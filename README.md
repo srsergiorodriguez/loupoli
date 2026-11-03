@@ -192,7 +192,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **106 passing** tests across twenty-six files:
+- `npm test`: **108 passing** tests across twenty-six files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

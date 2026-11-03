@@ -1,6 +1,7 @@
 <script lang="ts">
   import BrandMark from '../Brand/BrandMark.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
+  import SegmentedControl from '../Primitives/SegmentedControl.svelte';
   import { shortcut } from '../../input/shortcuts';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
 
@@ -47,8 +48,16 @@
         : 'uv'
   );
 
-  function chooseWorkspace(next: 'model' | 'uv' | 'paint'): void {
-    session.setWorkspace(next);
+  const workspaceOptions = [
+    { id: 'model', label: 'Model' },
+    { id: 'uv', label: 'UV' },
+    { id: 'paint', label: 'Paint' }
+  ] as const;
+
+  function chooseWorkspace(next: string): void {
+    if (next === 'model' || next === 'uv' || next === 'paint') {
+      session.setWorkspace(next);
+    }
   }
 
   const autosaveTitle = $derived(
@@ -80,29 +89,15 @@
     {/if}
   </div>
 
-  <nav class="workspaces" aria-label="Workspace">
-    <button
-      type="button"
-      class="workspace"
-      class:active={workspace === 'model'}
-      aria-pressed={workspace === 'model'}
-      onclick={() => chooseWorkspace('model')}
-    >Model</button>
-    <button
-      type="button"
-      class="workspace"
-      class:active={workspace === 'uv'}
-      aria-pressed={workspace === 'uv'}
-      onclick={() => chooseWorkspace('uv')}
-    >UV</button>
-    <button
-      type="button"
-      class="workspace"
-      class:active={workspace === 'paint'}
-      aria-pressed={workspace === 'paint'}
-      onclick={() => chooseWorkspace('paint')}
-    >Paint</button>
-  </nav>
+  <div class="workspace-tabs">
+    <SegmentedControl
+      label="Workspace"
+      options={workspaceOptions}
+      value={workspace}
+      variant="workspace"
+      onSelect={chooseWorkspace}
+    />
+  </div>
 
   <div class="actions">
     <IconButton
@@ -228,52 +223,21 @@
     border-color: var(--accent-primary);
   }
 
+  .workspace-tabs {
+    display: flex;
+    align-items: center;
+  }
+
   .actions {
     display: flex;
     align-items: center;
     gap: 2px;
   }
 
-  .workspaces {
-    display: flex;
-    align-items: center;
-    gap: 1px;
-    padding: 2px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background: rgba(0, 0, 0, 0.18);
-  }
 
-  .workspace {
-    min-width: 52px;
-    height: calc(var(--control-h) - 4px);
-    padding: 0 var(--space-2);
-    border: 0;
-    border-radius: var(--radius-xs);
-    background: transparent;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-medium);
-    letter-spacing: var(--tracking-label);
-    cursor: pointer;
-  }
 
-  .workspace:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
 
-  .workspace.active {
-    background: var(--bg-selected);
-    color: var(--accent-primary);
-    box-shadow: inset 0 0 0 var(--hairline) var(--accent-primary);
-  }
 
-  .workspace:focus-visible {
-    outline: var(--focus-ring-width) solid var(--border-focus);
-    outline-offset: 1px;
-  }
 
   .divider--actions {
     margin: 0 var(--space-1);
@@ -298,13 +262,8 @@
       max-width: 16vw;
     }
 
-    .workspaces {
+    .workspace-tabs {
       margin-left: auto;
-    }
-
-    .workspace {
-      min-width: var(--hit-min);
-      padding: 0 var(--space-1);
     }
 
     .inspector-toggle {
@@ -319,11 +278,6 @@
   }
 
   @media (max-width: 720px) {
-    .workspace {
-      min-width: 44px;
-      font-size: 9px;
-    }
-
     .wordmark {
       display: none;
     }

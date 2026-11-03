@@ -13,6 +13,7 @@
   import ProjectBanner from './lib/ui/Chrome/ProjectBanner.svelte';
   import UvPanel from './lib/ui/Uv/UvPanel.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
+  import { commandForKeyboardEvent } from './lib/input/commands';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
   import { EditorRuntime } from './lib/editor/EditorRuntime';
 
@@ -75,13 +76,11 @@
       ) {
         return;
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      const matched = commandForKeyboardEvent(event);
+      if (matched === 'file.save') {
         event.preventDefault();
         void session.saveProject();
-      } else if (
-        (event.metaKey || event.ctrlKey) &&
-        event.key.toLowerCase() === 'o'
-      ) {
+      } else if (matched === 'file.open') {
         event.preventDefault();
         void session.openProject();
       }
@@ -268,8 +267,8 @@
   }
 
   canvas:focus-visible {
-    outline: var(--focus-ring-width) solid var(--border-focus);
-    outline-offset: -4px;
+    outline: none;
+    box-shadow: inset 0 2px 0 var(--accent-primary);
   }
 
   .viewport-context {

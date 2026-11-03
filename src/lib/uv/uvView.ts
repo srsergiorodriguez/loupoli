@@ -122,3 +122,32 @@ export function pickUvCorner(
   }
   return best;
 }
+
+/**
+ * Convert a side-pane pointer X into the viewport split fraction.
+ *
+ * The pane's right gutter is accounted for so grabbing the divider does not
+ * jump the pane on the first move.
+ */
+export function uvSideSplitForPointer(
+  viewportRight: number,
+  rightGutter: number,
+  pointerX: number,
+  viewportWidth: number
+): number {
+  if (viewportWidth <= 0) {
+    return 0.38;
+  }
+  return (viewportRight - rightGutter - pointerX) / viewportWidth;
+}
+
+/** Whether a pointer moved far enough to stop being a click. */
+export function uvClickMoved(
+  startX: number,
+  startY: number,
+  x: number,
+  y: number,
+  threshold = 4
+): boolean {
+  return Math.hypot(x - startX, y - startY) > threshold;
+}

@@ -2,8 +2,13 @@
   import { onDestroy, onMount } from 'svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import { shortcutBus } from '../../input/ShortcutBus';
+  import { commandForKeyboardEvent } from '../../input/commands';
   import Icon from '../Icons/Icon.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
+  import {
+    uvClickMoved,
+    uvSideSplitForPointer
+  } from '../../uv/uvView';
 
   /** Props for the UV editing pane. */
   interface Props {
@@ -271,24 +276,29 @@
         return;
       }
     }
+    const matched = commandForKeyboardEvent(event);
     if (
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.altKey &&
-      (key === 'g' || key === 'r' || key === 's')
+      matched === 'tool.move' ||
+      matched === 'tool.rotate' ||
+      matched === 'tool.scale'
     ) {
-      const kind = key === 'g' ? 'move' : key === 'r' ? 'rotate' : 'scale';
       event.preventDefault();
       event.stopPropagation();
       if (session.snapshot.uvSelectedCorners.length > 0) {
+        const kind =
+          matched === 'tool.move'
+            ? 'move'
+            : matched === 'tool.rotate'
+              ? 'rotate'
+              : 'scale';
         startKeyboardTransform(kind);
       }
       return;
     }
-    if (!event.metaKey && !event.ctrlKey && !event.altKey && (key === 'u' || key === 'v')) {
+    if (matched === 'uv.axisU' || matched === 'uv.axisV') {
       event.preventDefault();
       event.stopPropagation();
-      session.setUvAxisLock(key);
+      session.setUvAxisLock(matched === 'uv.axisU' ? 'u' : 'v');
     }
   }
 
@@ -408,10 +418,7 @@
     if (!dragging) {
       return;
     }
-    if (
-      !dragMoved &&
-      Math.hypot(point.x - dragStartX, point.y - dragStartY) > 4
-    ) {
+    if (!dragMoved && uvClickMoved(dragStartX, dragStartY, point.x, point.y)) {
       dragMoved = true;
     }
     session.updateUvDrag(point.x, point.y, width, height, event.shiftKey);
@@ -533,7 +540,12 @@
       }
       const rightGutter = Number.parseFloat(getComputedStyle(pane).right) || 0;
       session.setUvSplit(
-        (viewport.right - rightGutter - event.clientX) / viewport.width
+        uvSideSplitForPointer(
+          viewport.right,
+          rightGutter,
+          event.clientX,
+          viewport.width
+        )
       );
       return;
     }
@@ -1139,8 +1151,8 @@
   }
 
   .uv-canvas:focus-visible {
-    outline: var(--focus-ring-width) solid var(--border-focus);
-    outline-offset: -3px;
+    outline: none;
+    box-shadow: inset 0 2px 0 var(--accent-primary);
   }
 
   .uv-error {

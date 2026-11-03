@@ -1,4 +1,5 @@
 import { shortcutBus } from './ShortcutBus';
+import { commandForKeyboardEvent } from './commands';
 
 /** Normalized pointer data handed to the editor, independent of DOM quirks. */
 export interface PointerSample {
@@ -432,18 +433,6 @@ export class InputRouter {
       return;
     }
 
-    const key = event.key.toLowerCase();
-    const command = event.metaKey || event.ctrlKey;
-
-    if (
-      this.host.isUvActive() &&
-      !command &&
-      !event.altKey &&
-      (key === 'g' || key === 'r' || key === 's')
-    ) {
-      return;
-    }
-
     if (this.host.isModalTransformActive()) {
       event.preventDefault();
       this.host.modalTransformKey(event.key);
@@ -457,81 +446,94 @@ export class InputRouter {
       }
     }
 
-    if (command && key === 'z') {
-      event.preventDefault();
-      if (event.shiftKey) {
-        this.host.redo();
-      } else {
-        this.host.undo();
-      }
+    const matched = commandForKeyboardEvent(event);
+    if (!matched) {
       return;
-    }
-
-    if (command && key === 'y') {
-      event.preventDefault();
-      this.host.redo();
-      return;
-    }
-
-    if (command && key === 'a') {
-      event.preventDefault();
-      this.host.selectAll();
-      return;
-    }
-
-    if (key === 'escape') {
-      this.host.cancelToolPointer();
-      return;
-    }
-
-    if (!command && !event.altKey && (key === 'e' || key === 'i')) {
-      event.preventDefault();
-      this.host.armAction(key === 'e' ? 'extrude' : 'inset');
-      return;
-    }
-
-    if (!command && !event.altKey && key === 'l') {
-      event.preventDefault();
-      this.host.armAction(event.shiftKey ? 'loop-slide' : 'loop-cut');
-      return;
-    }
-
-    if (!command && (key === 'delete' || key === 'backspace')) {
-      event.preventDefault();
-      this.host.deleteSelection();
-      return;
-    }
-
-    if (!command && !event.altKey && (key === 'g' || key === 'r' || key === 's')) {
-      const position = this.mousePosition();
-      const kind =
-        key === 'g' ? 'translate' : key === 'r' ? 'rotate' : 'scale';
-      if (
-        this.host.beginModalTransform(kind, position.x, position.y)
-      ) {
-        event.preventDefault();
-        return;
-      }
     }
 
     if (
-      !command &&
-      !event.altKey &&
-      (key === 'x' || key === 'y' || key === 'z')
+      this.host.isUvActive() &&
+      (matched === 'tool.move' ||
+        matched === 'tool.rotate' ||
+        matched === 'tool.scale' ||
+        matched === 'transform.axisX' ||
+        matched === 'transform.axisY' ||
+        matched === 'transform.axisZ' ||
+        matched === 'mesh.extrude' ||
+        matched === 'mesh.inset' ||
+        matched === 'mesh.loopCut' ||
+        matched === 'mesh.loopSlide' ||
+        matched === 'edit.delete' ||
+        matched === 'view.frame')
     ) {
-      event.preventDefault();
-      this.host.toggleAxisLock(key);
       return;
     }
 
-    if (!command && !event.altKey && key === 'f') {
-      this.host.frameSelection();
-    }
-
-    if (!command && key === 'home') {
-      event.preventDefault();
-      this.host.resetView();
-      return;
+    switch (matched) {
+      case 'edit.undo':
+        event.preventDefault();
+        this.host.undo();
+        return;
+      case 'edit.redo':
+        event.preventDefault();
+        this.host.redo();
+        return;
+      case 'selection.all':
+        event.preventDefault();
+        this.host.selectAll();
+        return;
+      case 'edit.delete':
+        event.preventDefault();
+        this.host.deleteSelection();
+        return;
+      case 'mesh.extrude':
+      case 'mesh.inset':
+      case 'mesh.loopCut':
+      case 'mesh.loopSlide': {
+        event.preventDefault();
+        const kind =
+          matched === 'mesh.extrude'
+            ? 'extrude'
+            : matched === 'mesh.inset'
+              ? 'inset'
+              : matched === 'mesh.loopCut'
+                ? 'loop-cut'
+                : 'loop-slide';
+        this.host.armAction(kind);
+        return;
+      }
+      case 'tool.move':
+      case 'tool.rotate':
+      case 'tool.scale': {
+        const position = this.mousePosition();
+        const kind =
+          matched === 'tool.move'
+            ? 'translate'
+            : matched === 'tool.rotate'
+              ? 'rotate'
+              : 'scale';
+        if (this.host.beginModalTransform(kind, position.x, position.y)) {
+          event.preventDefault();
+        }
+        return;
+      }
+      case 'transform.axisX':
+      case 'transform.axisY':
+      case 'transform.axisZ':
+        event.preventDefault();
+        this.host.toggleAxisLock(matched.slice(-1).toLowerCase() as 'x' | 'y' | 'z');
+        return;
+      case 'view.frame':
+        event.preventDefault();
+        this.host.frameSelection();
+        return;
+      case 'view.home':
+        event.preventDefault();
+        this.host.resetView();
+        return;
+      default:
+        // File, UV-only, and shell commands are owned by other handlers.
+        return;
     }
   };
 

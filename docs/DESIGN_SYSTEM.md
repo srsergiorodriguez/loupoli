@@ -455,7 +455,8 @@ Implemented component files and local patterns:
 | `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | Compact action beside Group/Delete; 44px rows/actions |
 | Selection history | 2 | 3D and UV element sets | Lightweight undo command; never serialized or journaled |
 | Inspector sections | 2 | One `InspectorSection`; Scene open, others closed | Native details; no sidebar X |
-| Command registry | 1 | All UI commands | Stable id, scope, label, shortcut, presentation |
+| Command registry | 1 | All UI commands | Stable id, scope, label, key binding, shortcut, presentation |
+| Segmented control | 2 | Workspace Tabs; future shared groups | One `SegmentedControl` primitive with variants |
 | Active editor | 2 | Last clicked pane | Title dot and accent; shared commands route to it |
 | UV keyboard transform | 2 | G/R/S, U/V, typed number, Enter/Esc | Footer shows current mode/value and commit hint |
 | Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; 44px eye; hidden rows dimmed |

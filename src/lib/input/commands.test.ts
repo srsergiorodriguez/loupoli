@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { command, commandTooltipFor, type CommandId } from './commands';
+import {
+  command,
+  commandForKeyboardEvent,
+  commandTooltipFor,
+  type CommandId
+} from './commands';
 
 describe('command registry', () => {
   it('assigns labels, scopes, and shortcuts', () => {
@@ -17,10 +22,48 @@ describe('command registry', () => {
     expect(commandTooltipFor('selection.vertex')).toBe('Vertex');
   });
 
+  it('resolves keyboard events through command bindings', () => {
+    const key = (
+      value: string,
+      options: Partial<KeyboardEvent> = {}
+    ): KeyboardEvent =>
+      ({
+        key: value,
+        metaKey: false,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+        ...options
+      }) as KeyboardEvent;
+    expect(commandForKeyboardEvent(key('g'))).toBe('tool.move');
+    expect(commandForKeyboardEvent(key('R'))).toBe('tool.rotate');
+    expect(commandForKeyboardEvent(key('s'))).toBe('tool.scale');
+    expect(commandForKeyboardEvent(key('l'))).toBe('mesh.loopCut');
+    expect(commandForKeyboardEvent(key('L', { shiftKey: true }))).toBe(
+      'mesh.loopSlide'
+    );
+    expect(commandForKeyboardEvent(key('u'))).toBe('uv.axisU');
+    expect(commandForKeyboardEvent(key('v'))).toBe('uv.axisV');
+    expect(commandForKeyboardEvent(key('x'))).toBe('transform.axisX');
+    expect(commandForKeyboardEvent(key('z', { metaKey: true }))).toBe(
+      'edit.undo'
+    );
+    expect(
+      commandForKeyboardEvent(key('z', { metaKey: true, shiftKey: true }))
+    ).toBe('edit.redo');
+    expect(commandForKeyboardEvent(key('s', { ctrlKey: true }))).toBe(
+      'file.save'
+    );
+    expect(commandForKeyboardEvent(key('a', { metaKey: true }))).toBe(
+      'selection.all'
+    );
+  });
+
   it('has a definition for every command id', () => {
     const ids: CommandId[] = [
       'edit.undo',
       'edit.redo',
+      'edit.delete',
       'file.open',
       'file.save',
       'view.sidebar',
@@ -38,6 +81,15 @@ describe('command registry', () => {
       'tool.scale',
       'view.frame',
       'view.home',
+      'transform.axisX',
+      'transform.axisY',
+      'transform.axisZ',
+      'mesh.extrude',
+      'mesh.inset',
+      'mesh.loopCut',
+      'mesh.loopSlide',
+      'uv.axisU',
+      'uv.axisV',
       'uv.fine',
       'uv.fit',
       'uv.clamp'

@@ -4,6 +4,8 @@ import {
   canvasDeltaToUv,
   computeUvProjection,
   pickUvCorner,
+  uvClickMoved,
+  uvSideSplitForPointer,
   uvToCanvas
 } from './uvView';
 
@@ -43,6 +45,13 @@ describe('UV view math', () => {
     expect(view.scale).toBeCloseTo(base.scale * 2);
     expect(view.offsetX).toBeCloseTo(base.offsetX + 30);
     expect(view.offsetY).toBeCloseTo(base.offsetY - 12);
+  });
+
+  it('computes side split and click/drag thresholds from the pane edge', () => {
+    expect(uvSideSplitForPointer(1000, 12, 500, 1000)).toBeCloseTo(0.488);
+    expect(uvSideSplitForPointer(1000, 12, 500, 0)).toBe(0.38);
+    expect(uvClickMoved(10, 10, 12, 12)).toBe(false);
+    expect(uvClickMoved(10, 10, 20, 10)).toBe(true);
   });
 
   it('converts pixel deltas back into UV units', () => {

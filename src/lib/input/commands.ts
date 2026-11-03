@@ -7,6 +7,7 @@ export type CommandScope = 'global' | 'active' | '3d' | 'uv' | 'shell';
 export type CommandId =
   | 'edit.undo'
   | 'edit.redo'
+  | 'edit.delete'
   | 'file.open'
   | 'file.save'
   | 'view.sidebar'
@@ -24,39 +25,68 @@ export type CommandId =
   | 'tool.scale'
   | 'view.frame'
   | 'view.home'
+  | 'transform.axisX'
+  | 'transform.axisY'
+  | 'transform.axisZ'
+  | 'mesh.extrude'
+  | 'mesh.inset'
+  | 'mesh.loopCut'
+  | 'mesh.loopSlide'
+  | 'uv.axisU'
+  | 'uv.axisV'
   | 'uv.fine'
   | 'uv.fit'
   | 'uv.clamp';
 
 /** One command's presentation and ownership metadata. */
+/** One keyboard binding attached to a command. */
+export interface KeyBinding {
+  readonly key: string;
+  readonly mod?: boolean;
+  readonly shift?: boolean;
+  readonly alt?: boolean;
+}
+
+/** One command's presentation, ownership, and keyboard metadata. */
 export interface CommandDefinition {
   readonly id: CommandId;
   readonly label: string;
   readonly scope: CommandScope;
   readonly shortcut?: ShortcutId;
   readonly presentation: 'icon' | 'text' | 'icon-text';
+  readonly bindings?: readonly KeyBinding[];
 }
 
 const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
-  'edit.undo': { label: 'Undo', scope: 'global', shortcut: 'undo', presentation: 'icon' },
-  'edit.redo': { label: 'Redo', scope: 'global', shortcut: 'redo', presentation: 'icon' },
-  'file.open': { label: 'Open project', scope: 'global', shortcut: 'open', presentation: 'icon' },
-  'file.save': { label: 'Save project', scope: 'global', shortcut: 'save', presentation: 'icon' },
+  'edit.undo': { label: 'Undo', scope: 'global', shortcut: 'undo', presentation: 'icon', bindings: [{ key: 'z', mod: true, shift: false }] },
+  'edit.redo': { label: 'Redo', scope: 'global', shortcut: 'redo', presentation: 'icon', bindings: [{ key: 'z', mod: true, shift: true }, { key: 'y', mod: true }] },
+  'file.open': { label: 'Open project', scope: 'global', shortcut: 'open', presentation: 'icon', bindings: [{ key: 'o', mod: true }] },
+  'file.save': { label: 'Save project', scope: 'global', shortcut: 'save', presentation: 'icon', bindings: [{ key: 's', mod: true }] },
   'view.sidebar': { label: 'Toggle sidebar', scope: 'shell', presentation: 'icon' },
   'selection.vertex': { label: 'Vertex', scope: 'active', presentation: 'text' },
   'selection.edge': { label: 'Edge', scope: 'active', presentation: 'text' },
   'selection.face': { label: 'Face', scope: 'active', presentation: 'text' },
   'selection.island': { label: 'Island', scope: 'uv', presentation: 'text' },
-  'selection.all': { label: 'All', scope: 'active', shortcut: 'selectAll', presentation: 'text' },
+  'selection.all': { label: 'All', scope: 'active', shortcut: 'selectAll', presentation: 'text', bindings: [{ key: 'a', mod: true }] },
   'selection.add': { label: 'Add', scope: 'active', presentation: 'text' },
   'selection.subtract': { label: 'Subtract', scope: 'active', presentation: 'text' },
   'tool.select': { label: 'Select', scope: 'active', presentation: 'icon' },
   'tool.lasso': { label: 'Lasso', scope: 'active', presentation: 'icon' },
-  'tool.move': { label: 'Move', scope: 'active', shortcut: 'move', presentation: 'icon' },
-  'tool.rotate': { label: 'Rotate', scope: 'active', shortcut: 'rotate', presentation: 'icon' },
-  'tool.scale': { label: 'Scale', scope: 'active', shortcut: 'scale', presentation: 'icon' },
-  'view.frame': { label: 'Frame', scope: 'active', shortcut: 'frame', presentation: 'icon' },
-  'view.home': { label: 'Home', scope: 'active', shortcut: 'home', presentation: 'icon' },
+  'tool.move': { label: 'Move', scope: 'active', shortcut: 'move', presentation: 'icon', bindings: [{ key: 'g' }] },
+  'tool.rotate': { label: 'Rotate', scope: 'active', shortcut: 'rotate', presentation: 'icon', bindings: [{ key: 'r' }] },
+  'tool.scale': { label: 'Scale', scope: 'active', shortcut: 'scale', presentation: 'icon', bindings: [{ key: 's' }] },
+  'view.frame': { label: 'Frame', scope: 'active', shortcut: 'frame', presentation: 'icon', bindings: [{ key: 'f' }] },
+  'view.home': { label: 'Home', scope: 'active', shortcut: 'home', presentation: 'icon', bindings: [{ key: 'home' }] },
+  'edit.delete': { label: 'Delete selection', scope: 'active', shortcut: 'delete', presentation: 'text', bindings: [{ key: 'delete' }, { key: 'backspace' }] },
+  'transform.axisX': { label: 'X axis lock', scope: '3d', presentation: 'text', bindings: [{ key: 'x' }] },
+  'transform.axisY': { label: 'Y axis lock', scope: '3d', presentation: 'text', bindings: [{ key: 'y' }] },
+  'transform.axisZ': { label: 'Z axis lock', scope: '3d', presentation: 'text', bindings: [{ key: 'z' }] },
+  'mesh.extrude': { label: 'Extrude', scope: '3d', shortcut: 'extrude', presentation: 'icon-text', bindings: [{ key: 'e' }] },
+  'mesh.inset': { label: 'Inset', scope: '3d', shortcut: 'inset', presentation: 'icon-text', bindings: [{ key: 'i' }] },
+  'mesh.loopCut': { label: 'Loop cut', scope: '3d', shortcut: 'loopCut', presentation: 'icon-text', bindings: [{ key: 'l', shift: false }] },
+  'mesh.loopSlide': { label: 'Loop slide', scope: '3d', shortcut: 'loopSlide', presentation: 'icon-text', bindings: [{ key: 'l', shift: true }] },
+  'uv.axisU': { label: 'U axis lock', scope: 'uv', presentation: 'text', bindings: [{ key: 'u' }] },
+  'uv.axisV': { label: 'V axis lock', scope: 'uv', presentation: 'text', bindings: [{ key: 'v' }] },
   'uv.fine': { label: 'Fine', scope: 'uv', presentation: 'text' },
   'uv.fit': { label: 'Fit', scope: 'uv', presentation: 'text' },
   'uv.clamp': { label: 'Clamp', scope: 'uv', presentation: 'text' }
@@ -73,4 +103,30 @@ export function commandTooltipFor(id: CommandId): string {
   return definition.shortcut
     ? `${definition.label} — ${shortcut(definition.shortcut).display}`
     : definition.label;
+}
+
+
+function bindingMatches(binding: KeyBinding, event: KeyboardEvent): boolean {
+  const key = event.key.toLowerCase();
+  if (key !== binding.key) {
+    return false;
+  }
+  const mod = event.metaKey || event.ctrlKey;
+  if (Boolean(binding.mod) !== mod) {
+    return false;
+  }
+  if (binding.shift !== undefined && binding.shift !== event.shiftKey) {
+    return false;
+  }
+  return binding.alt === undefined ? !event.altKey : binding.alt === event.altKey;
+}
+
+/** Resolve a keyboard event to a registered command, if one matches. */
+export function commandForKeyboardEvent(event: KeyboardEvent): CommandId | null {
+  for (const [id, definition] of Object.entries(definitions)) {
+    if (definition.bindings?.some((binding) => bindingMatches(binding, event))) {
+      return id as CommandId;
+    }
+  }
+  return null;
 }

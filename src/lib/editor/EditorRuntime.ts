@@ -50,7 +50,8 @@ import { SceneDocument } from '../scene/SceneDocument';
 import {
   computeUvProjection,
   pickUvCorner as pickNearestUvCorner,
-  uvToCanvas
+  uvToCanvas,
+  uvClickMoved
 } from '../uv/uvView';
 import { drawUvCanvas } from '../uv/uvCanvas';
 import { extractUvCharts } from '../geometry/uvCharts';
@@ -1751,7 +1752,12 @@ export class EditorRuntime {
     }
     if (
       this.uvPendingClick &&
-      Math.hypot(x - this.uvPendingClick.startX, y - this.uvPendingClick.startY) > 4
+      uvClickMoved(
+        this.uvPendingClick.startX,
+        this.uvPendingClick.startY,
+        x,
+        y
+      )
     ) {
       this.uvPendingClick = null;
     }
