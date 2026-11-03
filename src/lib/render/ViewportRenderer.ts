@@ -565,7 +565,8 @@ export class ViewportRenderer {
       mode,
       clientPolygon,
       this.cameraRig.camera,
-      this.canvas
+      this.canvas,
+      this.currentMode !== 'wireframe'
     );
   }
 

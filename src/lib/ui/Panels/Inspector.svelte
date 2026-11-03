@@ -102,6 +102,34 @@
     }
   });
 
+  function sectionHeadKey(
+    key: 'transform' | 'modifiers',
+    event: KeyboardEvent
+  ): void {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+    event.preventDefault();
+    toggleSection(key);
+  }
+
+  function toggleSectionFromHeader(
+    key: 'transform' | 'modifiers',
+    event: MouseEvent
+  ): void {
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest('button, input, select, textarea, a, label')
+    ) {
+      return;
+    }
+    toggleSection(key);
+  }
+
   function toggleSection(key: 'transform' | 'modifiers'): void {
     sections = { ...sections, [key]: !sections[key] };
     try {
@@ -382,7 +410,16 @@
       class:is-collapsed={!sections.transform}
       aria-labelledby="transform-heading"
     >
-      <div class="section-head">
+      <div
+        class="section-head section-head--collapsible"
+        role="button"
+        tabindex="0"
+        aria-expanded={sections.transform}
+        aria-controls="transform-body"
+        title={sections.transform ? 'Collapse Transform' : 'Expand Transform'}
+        onclick={(event) => toggleSectionFromHeader('transform', event)}
+        onkeydown={(event) => sectionHeadKey('transform', event)}
+      >
         <button
           type="button"
           class="section-toggle"
@@ -485,7 +522,16 @@
         class:is-collapsed={!sections.modifiers}
         aria-labelledby="modifiers-heading"
       >
-        <div class="section-head">
+        <div
+          class="section-head section-head--collapsible"
+          role="button"
+          tabindex="0"
+          aria-expanded={sections.modifiers}
+          aria-controls="modifiers-body"
+          title={sections.modifiers ? 'Collapse Modifiers' : 'Expand Modifiers'}
+          onclick={(event) => toggleSectionFromHeader('modifiers', event)}
+          onkeydown={(event) => sectionHeadKey('modifiers', event)}
+        >
           <button
             type="button"
             class="section-toggle"
@@ -1179,6 +1225,19 @@
 
   .section.is-collapsed .section-head {
     margin-bottom: 0;
+  }
+
+  .section-head--collapsible {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .section-head--collapsible:hover .section-label {
+    color: var(--text-primary);
+  }
+
+  .section-head--collapsible button {
+    cursor: pointer;
   }
 
   .section-toggle {

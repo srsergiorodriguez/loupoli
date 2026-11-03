@@ -39,10 +39,11 @@
   <div class="axis-grid">
     {#each axes as axis, index (axis)}
       <label class="axis-field axis-field--{axis}">
-        <span class="axis-label" aria-hidden="true">{axis.toUpperCase()}</span>
         <NumberField
           value={values[index]}
           label={`${label} ${axis.toUpperCase()}`}
+          prefix={axis.toUpperCase()}
+          accent={`var(--axis-${axis})`}
           {step}
           {precision}
           {min}
@@ -89,26 +90,7 @@
     gap: 5px;
     padding: 0 7px;
     background: var(--bg-input);
-  }
-
-  .axis-label {
-    flex: 0 0 auto;
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-semibold);
-    line-height: 1;
-  }
-
-  .axis-field--x .axis-label {
-    color: var(--axis-x);
-  }
-
-  .axis-field--y .axis-label {
-    color: var(--axis-y);
-  }
-
-  .axis-field--z .axis-label {
-    color: var(--axis-z);
+    cursor: ew-resize;
   }
 
 </style>

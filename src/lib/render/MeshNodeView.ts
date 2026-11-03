@@ -452,16 +452,17 @@ export class MeshNodeView {
   /**
    * Select topology elements inside or intersecting a screen-space lasso.
    *
-   * Lasso selection is intentionally view-through for this first pass: it does
-   * not apply the occlusion rejection used by individual 16 px picks. Vertices
-   * use point containment, edges use endpoint containment or segment crossing,
-   * and faces use corner or centroid containment.
+   * Lasso selection is view-through only in Wireframe. In shaded modes,
+   * vertices, edge samples, and face centroids use the same occlusion test as
+   * individual picks. Vertices use point containment, edges use endpoint
+   * containment or segment crossing, and faces use corner/centroid containment.
    */
   lassoSelect(
     mode: SelectionMode,
     clientPolygon: readonly { x: number; y: number }[],
     camera: Camera,
-    canvas: HTMLCanvasElement
+    canvas: HTMLCanvasElement,
+    visibleOnly = false
   ): number[] {
     if (clientPolygon.length < 3) {
       return [];
@@ -480,9 +481,16 @@ export class MeshNodeView {
     if (mode === 'vertex') {
       for (let vertex = 0; vertex < this.mesh.vertexCount; vertex += 1) {
         const point = this.projectVertex(vertex, camera, rect);
-        if (point && pointInPolygon(point.x, point.y, polygon)) {
-          selected.push(vertex);
+        if (!point || !pointInPolygon(point.x, point.y, polygon)) {
+          continue;
         }
+        if (
+          visibleOnly &&
+          this.isOccluded(this.getVertexWorldPosition(vertex), camera)
+        ) {
+          continue;
+        }
+        selected.push(vertex);
       }
       return selected;
     }
@@ -499,13 +507,30 @@ export class MeshNodeView {
           const next = polygon[(index + 1) % polygon.length];
           crosses = segmentsIntersect(a, b, polygon[index], next);
         }
-        if (
+        const inLasso =
           crosses ||
           pointInPolygon(a.x, a.y, polygon) ||
-          pointInPolygon(b.x, b.y, polygon)
-        ) {
-          selected.push(edge);
+          pointInPolygon(b.x, b.y, polygon);
+        if (!inLasso) {
+          continue;
         }
+        if (visibleOnly) {
+          const worldA = this.getVertexWorldPosition(from);
+          const worldB = this.getVertexWorldPosition(to);
+          const sample = new Vector3();
+          let visible = false;
+          for (const t of [0.25, 0.5, 0.75]) {
+            sample.lerpVectors(worldA, worldB, t);
+            if (!this.isOccluded(sample, camera)) {
+              visible = true;
+              break;
+            }
+          }
+          if (!visible) {
+            continue;
+          }
+        }
+        selected.push(edge);
       }
       return selected;
     }
@@ -531,11 +556,27 @@ export class MeshNodeView {
         halfEdge = this.mesh.heNext[halfEdge];
       } while (halfEdge !== start);
       if (
-        anyCorner ||
-        (count > 0 && pointInPolygon(sumX / count, sumY / count, polygon))
+        !anyCorner &&
+        !(count > 0 && pointInPolygon(sumX / count, sumY / count, polygon))
       ) {
-        selected.push(face);
+        continue;
       }
+      if (visibleOnly && count > 0) {
+        const startHalfEdge = this.mesh.faceHalfEdge[face];
+        let halfEdge = startHalfEdge;
+        const center = new Vector3();
+        let samples = 0;
+        do {
+          center.add(this.getVertexWorldPosition(this.mesh.heOrigin[halfEdge]));
+          samples += 1;
+          halfEdge = this.mesh.heNext[halfEdge];
+        } while (halfEdge !== startHalfEdge);
+        center.multiplyScalar(1 / Math.max(samples, 1));
+        if (this.isOccluded(center, camera)) {
+          continue;
+        }
+      }
+      selected.push(face);
     }
     return selected;
   }

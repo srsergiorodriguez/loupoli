@@ -11,6 +11,8 @@
     max?: number;
     unit?: string;
     framed?: boolean;
+    prefix?: string;
+    accent?: string;
     onCommit: (value: number) => void;
   }
 
@@ -23,6 +25,8 @@
     max,
     unit = '',
     framed = false,
+    prefix = '',
+    accent,
     onCommit
   }: Props = $props();
 
@@ -155,7 +159,18 @@
   $effect(() => () => removeListeners());
 </script>
 
-<div class="number-field" class:framed>
+<div
+  class="number-field"
+  class:framed
+  role="group"
+  aria-label={label}
+  style:--number-accent={accent}
+  title={`${label}: drag horizontally to adjust, click to type`}
+  onpointerdown={beginDrag}
+>
+  {#if prefix}
+    <span class="prefix" aria-hidden="true">{prefix}</span>
+  {/if}
   <input
     bind:this={input}
     type="text"
@@ -165,7 +180,6 @@
     oninput={(event) => (draft = event.currentTarget.value)}
     onchange={commitDraft}
     onkeydown={keyDown}
-    onpointerdown={beginDrag}
   />
   {#if unit}
     <span class="unit" aria-hidden="true">{unit}</span>
@@ -178,7 +192,20 @@
     align-items: center;
     min-width: 0;
     width: 100%;
-    gap: 4px;
+    gap: 5px;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+
+  .prefix {
+    flex: 0 0 auto;
+    color: var(--number-accent, var(--text-tertiary));
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+    line-height: 1;
+    cursor: ew-resize;
+    user-select: none;
   }
 
   .number-field.framed {
@@ -203,6 +230,8 @@
     line-height: 1;
     cursor: ew-resize;
     touch-action: none;
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   input:focus-visible {
