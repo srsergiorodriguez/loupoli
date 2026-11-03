@@ -19,6 +19,10 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Local/Global transforms.** Node transforms stay parent-local in the document; the Inspector can display world-space position/rotation and orient translate/rotate gizmos to world axes. Scale remains local to avoid unsupported shear.
 - **Context-sensitive Desktop G/R/S.** If vertices, edges, or faces are selected, Grab/Rotate/Scale transform those elements around their median pivot; with no element selection they transform the active object or group. Mouse preview, X/Y/Z constraints, typed exact values, a transform HUD, Enter/click commit, and Escape/right-click cancel are shared. Element transforms are localized vertex moves with their own undo/autosave patches.
 - **Selection gizmo on iPad and desktop.** With elements selected, the Move/Rotate/Scale tools place a gizmo at the selection median. Move has X/Y/Z axes plus a free view-plane center handle; Scale has axes plus a uniform center handle; Rotate uses axis rings. Drag with the Pencil or mouse; the object/group gizmo returns when the element selection is empty. Selection stays active after commit.
+- **Collapsible sidebar and centered viewport.** On desktop the 3D canvas ends at the inspector's left edge, so the camera, picking, UV split, and HUD center inside the visible modeling area rather than behind the sidebar. The inspector header and top-bar control collapse it; canvas width and camera aspect expand immediately. Transform and Modifiers are independently collapsible. Sidebar and section open/closed state persists in `localStorage`.
+
+![Collapsed Transform section with a viewport-centered sidebar](docs/media/sidebar-collapse.png)
+
 - **ActionDock.** Bottom-left one-shot actions for Extrude, Inset, Loop Cut, and Loop Slide, available on touch and desktop. Tap/click to arm, then drag for a live amount or type an exact amount; Enter/release commits one undoable mesh replacement. Keyboard shortcuts: E extrude, I inset, L loop cut, Shift+L loop slide. Loop Slide is separate from Loop Cut.
 - **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the collapsed **PS1 look** render-effect module at the bottom of the Inspector:
   - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster.
@@ -335,7 +339,7 @@ The same shell in iPad landscape, with the inspector docked:
 
 ![loupoli Phase 2 iPad landscape layout](docs/media/phase2-ipad-landscape.png)
 
-The iPad inspector is non-modal: one-finger orbit still works above the sheet, and the scene/primitive controls stay reachable.
+The iPad inspector is a non-modal bottom sheet: one-finger orbit still works above it, and the scene/primitive controls stay reachable. On desktop the inspector is a true right column, not an overlay.
 
 ![loupoli Phase 2 iPad inspector](docs/media/phase2-ipad-inspector.png)
 

@@ -100,10 +100,10 @@
     <span class="divider divider--actions" aria-hidden="true"></span>
     <span class="inspector-toggle">
       <IconButton
-        label={session.inspectorOpen ? 'Close inspector' : 'Open inspector'}
-        icon={session.inspectorOpen ? 'close' : 'sliders'}
+        label={session.sidebarVisible ? 'Collapse sidebar' : 'Open sidebar'}
+        icon={session.sidebarVisible ? 'close' : 'sliders'}
         onActivate={() => session.toggleInspector()}
-        tooltip={session.inspectorOpen ? 'Close inspector' : 'Open inspector'}
+        tooltip={session.sidebarVisible ? 'Collapse sidebar' : 'Open sidebar'}
       />
     </span>
   </div>
@@ -198,7 +198,7 @@
   }
 
   .inspector-toggle {
-    display: none;
+    display: inline-flex;
   }
 
   @media (max-width: 899px) {

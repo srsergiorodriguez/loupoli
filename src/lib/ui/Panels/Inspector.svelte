@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Icon from '../Icons/Icon.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
   import Switch from '../Primitives/Switch.svelte';
@@ -82,6 +83,33 @@
 
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
+
+  const SECTION_STORAGE_KEY = 'loupoli:inspector:sections';
+  let sections = $state({ transform: true, modifiers: true });
+
+  onMount(() => {
+    try {
+      const stored = localStorage.getItem(SECTION_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<typeof sections>;
+        sections = {
+          transform: parsed.transform ?? true,
+          modifiers: parsed.modifiers ?? true
+        };
+      }
+    } catch {
+      // Corrupt or unavailable storage falls back to open sections.
+    }
+  });
+
+  function toggleSection(key: 'transform' | 'modifiers'): void {
+    sections = { ...sections, [key]: !sections[key] };
+    try {
+      localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(sections));
+    } catch {
+      // Persistence is best-effort.
+    }
+  }
 
   function addPrimitive(): void {
     session.createPrimitive(primitive);
@@ -180,7 +208,7 @@
   }
 
   function close(): void {
-    session.closeInspector();
+    session.closeSidebar();
   }
 </script>
 
@@ -188,6 +216,7 @@
   id="inspector-panel"
   class="inspector loupoli-panel"
   data-open={session.inspectorOpen}
+  data-sidebar-open={session.sidebarOpen}
   aria-label="Inspector"
 >
   <header class="panel-head">
@@ -348,8 +377,21 @@
       {/if}
     </section>
 
-    <section class="section" aria-labelledby="transform-heading">
+    <section
+      class="section"
+      class:is-collapsed={!sections.transform}
+      aria-labelledby="transform-heading"
+    >
       <div class="section-head">
+        <button
+          type="button"
+          class="section-toggle"
+          class:is-collapsed={!sections.transform}
+          aria-expanded={sections.transform}
+          aria-controls="transform-body"
+          aria-label={sections.transform ? 'Collapse Transform' : 'Expand Transform'}
+          onclick={() => toggleSection('transform')}
+        ><Icon name="chevron-down" size={14} /></button>
         <h2 id="transform-heading" class="section-label">Transform</h2>
         {#if activeNodeId !== null}
           <div class="orientation-toggle" role="group" aria-label="Transform orientation">
@@ -374,6 +416,8 @@
           <span class="section-meta">Local</span>
         {/if}
       </div>
+      {#if sections.transform}
+      <div id="transform-body">
       {#if activeTransform}
         <div class="transform-stack">
           <Vector3Field
@@ -431,11 +475,26 @@
       {:else}
         <p class="empty-state">No active object to transform.</p>
       {/if}
+      </div>
+      {/if}
     </section>
 
     {#if activeGroupId === null}
-      <section class="section" aria-labelledby="modifiers-heading">
+      <section
+        class="section"
+        class:is-collapsed={!sections.modifiers}
+        aria-labelledby="modifiers-heading"
+      >
         <div class="section-head">
+          <button
+            type="button"
+            class="section-toggle"
+            class:is-collapsed={!sections.modifiers}
+            aria-expanded={sections.modifiers}
+            aria-controls="modifiers-body"
+            aria-label={sections.modifiers ? 'Collapse Modifiers' : 'Expand Modifiers'}
+            onclick={() => toggleSection('modifiers')}
+          ><Icon name="chevron-down" size={14} /></button>
           <h2 id="modifiers-heading" class="section-label">Modifiers</h2>
           <span class="section-meta">
             {#if activeNodeId === null}
@@ -450,6 +509,8 @@
           </span>
         </div>
 
+        {#if sections.modifiers}
+        <div id="modifiers-body">
         {#if activeNodeId === null}
           <p class="empty-state">Select a mesh object to edit its stack.</p>
         {:else}
@@ -646,6 +707,8 @@
               mesh and re-evaluates the stack.
             </p>
           {/if}
+        {/if}
+        </div>
         {/if}
       </section>
     {/if}
@@ -1075,7 +1138,13 @@
   }
 
   .close-button {
-    display: none;
+    display: inline-flex;
+  }
+
+  @media (min-width: 900px) {
+    .inspector[data-sidebar-open='false'] {
+      display: none;
+    }
   }
 
   .panel-body {
@@ -1100,8 +1169,56 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-3);
+    gap: var(--space-2);
     margin-bottom: var(--space-3);
+  }
+
+  .section-head .section-label {
+    flex: 1;
+  }
+
+  .section.is-collapsed .section-head {
+    margin-bottom: 0;
+  }
+
+  .section-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+  }
+
+  .section-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .section-toggle:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 1px;
+  }
+
+  .section-toggle :global(svg) {
+    transition: transform var(--motion-fast) var(--ease-out);
+  }
+
+  .section-toggle.is-collapsed :global(svg) {
+    transform: rotate(-90deg);
+  }
+
+  @media (pointer: coarse) {
+    .section-toggle {
+      width: var(--hit-min);
+      height: var(--hit-min);
+    }
   }
 
   .section-meta {

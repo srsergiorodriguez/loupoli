@@ -112,7 +112,7 @@ See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the full protocol and format.
 
 Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 began with UV seam authoring:
 
-- Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad inspector, and a live autosave indicator.
+- Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad bottom-sheet inspector, a collapsible persistent desktop sidebar, and a live autosave indicator. The desktop 3D canvas ends at the sidebar, so its aspect and center match the visible modeling area.
 - Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
 - Signed orientation gizmo: positive and negative axis endpoints, center framing, and Blender-Front reset via Home/44 px control.
 - Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (front-face-culled topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
@@ -124,6 +124,7 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - QuadSphere, Cube, Cylinder (n-gon caps), and Grid primitives; the first-run scene is an editable QuadSphere. New primitives are created at the origin and selected.
 - Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.
 - Additive multi-element selection: Cmd/Ctrl-click, a sticky 44 px Add mode for pen/mouse, and one-finger touch taps; selected sets render multi-vertex points, instanced edge tubes, and merged face fills. The Lasso tool selects vertices inside a screen polygon, edges inside/crossing it, and faces with a corner/centroid inside; lasso selection is currently view-through without occlusion rejection.
+- Transform and Modifiers sections are collapsible with persisted disclosure state. Sidebar open/closed state persists in `localStorage`; no UI state enters the project file.
 - Numeric object transforms (position, rotation, scale) through undoable commands; selection overlays follow the node transform. The orientation gizmo supports drag-to-orbit while retaining axis-click snap and center-frame.
 - Local/Global orientation for node transforms, with world-space position/rotation fields and world-oriented translate/rotate gizmos. Scale stays local to avoid unsupported shear; conversions use the one-level parent group transform.
 - Context-sensitive desktop G/R/S: if elements are selected, transform their unique vertices around the median pivot; otherwise transform the active object/group. Uses mouse previews, X/Y/Z constraints, numeric entry, a target-aware HUD, Enter/left-click commit, Escape/right-click cancel, and localized vertex-transform commands with autosave patches. Element transforms with an active modifier stack operate in base space and are labelled `(base)`; all evaluated copies re-evaluate.

@@ -85,6 +85,19 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   renderCount: 0
 };
 
+const SIDEBAR_STORAGE_KEY = 'loupoli:sidebar:open';
+
+function readSidebarPreference(): boolean {
+  if (typeof localStorage === 'undefined') {
+    return true;
+  }
+  try {
+    return localStorage.getItem(SIDEBAR_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
 /**
  * Reactive UI projection of the plain editor runtime.
  *
@@ -94,6 +107,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
 export class EditorSession {
   snapshot = $state<EditorSnapshot>(INITIAL_SNAPSHOT);
   inspectorOpen = $state(false);
+  sidebarOpen = $state(readSidebarPreference());
+  compactLayout = $state(false);
 
   private runtime: EditorRuntime | null = null;
 
@@ -456,12 +471,46 @@ export class EditorSession {
     this.runtime?.resetView();
   }
 
+  setCompactLayout(compact: boolean): void {
+    this.compactLayout = compact;
+  }
+
+  get sidebarVisible(): boolean {
+    return this.compactLayout ? this.inspectorOpen : this.sidebarOpen;
+  }
+
   toggleInspector(): void {
-    this.inspectorOpen = !this.inspectorOpen;
+    if (this.compactLayout) {
+      this.inspectorOpen = !this.inspectorOpen;
+      return;
+    }
+    this.sidebarOpen = !this.sidebarOpen;
+    this.persistSidebar();
+  }
+
+  closeSidebar(): void {
+    if (this.compactLayout) {
+      this.inspectorOpen = false;
+      return;
+    }
+    this.sidebarOpen = false;
+    this.persistSidebar();
   }
 
   closeInspector(): void {
-    this.inspectorOpen = false;
+    // Tool selection only dismisses the compact sheet. The desktop sidebar is
+    // deliberately persistent until the user collapses it.
+    if (this.compactLayout) {
+      this.inspectorOpen = false;
+    }
+  }
+
+  private persistSidebar(): void {
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(this.sidebarOpen));
+    } catch {
+      // Storage can be unavailable in private/embedded contexts.
+    }
   }
 
   /** Dispose the runtime and release GPU resources. */

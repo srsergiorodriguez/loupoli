@@ -36,6 +36,13 @@
       return;
     }
 
+    const compactQuery = window.matchMedia('(max-width: 899px)');
+    const syncCompact = (): void => {
+      session.setCompactLayout(compactQuery.matches);
+    };
+    syncCompact();
+    compactQuery.addEventListener('change', syncCompact);
+
     const pointerQuery = window.matchMedia('(pointer: coarse)');
     const syncDensity = (): void => {
       document.documentElement.dataset.density = pointerQuery.matches
@@ -88,6 +95,7 @@
     window.addEventListener('keydown', onKeyDown);
 
     return () => {
+      compactQuery.removeEventListener('change', syncCompact);
       pointerQuery.removeEventListener('change', syncDensity);
       window.removeEventListener('keydown', onKeyDown);
       if (
@@ -105,7 +113,7 @@
   <title>loupoli</title>
 </svelte:head>
 
-<div class="app-shell">
+<div class="app-shell" data-sidebar-open={session.sidebarOpen}>
   <main
     class="viewport"
     class:uv-open={session.snapshot.uvOpen}
@@ -217,6 +225,14 @@
     inset: 0;
     overflow: hidden;
     background: var(--bg-canvas);
+  }
+
+  @media (min-width: 900px) {
+    .app-shell[data-sidebar-open='true'] .viewport {
+      right: calc(
+        var(--safe-right) + var(--inspector-w) + var(--space-3) * 2
+      );
+    }
   }
 
   canvas {
