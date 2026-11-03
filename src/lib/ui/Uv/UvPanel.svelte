@@ -22,6 +22,11 @@
   let uvLassoPath = $state<[number, number][]>([]);
   let lassoAdditive = false;
   let uvPanning = $state(false);
+  let keyboardKind = $state<'move' | 'rotate' | 'scale' | null>(null);
+  let keyboardNumeric = $state('');
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+  let hasLastPointer = false;
   let panLastX = 0;
   let panLastY = 0;
   let deltaU = $state(0);
@@ -73,9 +78,12 @@
       );
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('keydown', windowKeyDown, true);
     return () => {
       observer.disconnect();
       canvas.removeEventListener('wheel', onWheel);
+      window.removeEventListener('keydown', windowKeyDown, true);
+      detachKeyboardTransform(false);
     };
   });
 
@@ -125,6 +133,157 @@
     brushVisible = true;
   }
 
+  function trackPointer(event: PointerEvent): void {
+    const point = localPoint(event);
+    lastPointerX = point.x;
+    lastPointerY = point.y;
+    hasLastPointer = true;
+    updateBrushCursor(event);
+  }
+
+  function startKeyboardTransform(kind: 'move' | 'rotate' | 'scale'): void {
+    const point = hasLastPointer
+      ? { x: lastPointerX, y: lastPointerY }
+      : { x: width / 2, y: height / 2 };
+    if (
+      !session.beginUvKeyboardTransform(
+        kind,
+        width,
+        height,
+        point.x,
+        point.y
+      )
+    ) {
+      return;
+    }
+    keyboardKind = kind;
+    keyboardNumeric = '';
+    window.addEventListener('pointermove', keyboardPointerMove);
+  }
+
+  function keyboardPointerMove(event: PointerEvent): void {
+    if (!keyboardKind) {
+      return;
+    }
+    event.preventDefault();
+    const point = localPoint(event);
+    lastPointerX = point.x;
+    lastPointerY = point.y;
+    hasLastPointer = true;
+    session.updateUvKeyboardTransform(point.x, point.y, width, height);
+  }
+
+  function finishKeyboardTransform(): void {
+    if (!keyboardKind) {
+      return;
+    }
+    keyboardKind = null;
+    keyboardNumeric = '';
+    window.removeEventListener('pointermove', keyboardPointerMove);
+    session.finishUvKeyboardTransform();
+  }
+
+  function cancelKeyboardTransform(): void {
+    if (!keyboardKind) {
+      return;
+    }
+    keyboardKind = null;
+    keyboardNumeric = '';
+    window.removeEventListener('pointermove', keyboardPointerMove);
+    session.cancelUvKeyboardTransform();
+  }
+
+  function detachKeyboardTransform(cancel: boolean): void {
+    window.removeEventListener('pointermove', keyboardPointerMove);
+    if (keyboardKind && cancel) {
+      session.cancelUvKeyboardTransform();
+    }
+    keyboardKind = null;
+    keyboardNumeric = '';
+  }
+
+  function windowKeyDown(event: KeyboardEvent): void {
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable)
+    ) {
+      return;
+    }
+    const key = event.key.toLowerCase();
+    if (keyboardKind) {
+      if (key === 'enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        const number = Number(keyboardNumeric);
+        if (keyboardNumeric.trim().length > 0 && Number.isFinite(number)) {
+          const kind = keyboardKind;
+          const lock = session.snapshot.uvAxisLock;
+          cancelKeyboardTransform();
+          if (kind === 'move') {
+            session.applyUvMove(
+              lock === 'v' ? 0 : number,
+              lock === 'v' ? number : 0
+            );
+          } else if (kind === 'rotate') {
+            session.applyUvRotate(number);
+          } else {
+            session.applyUvScale(number);
+          }
+        } else {
+          finishKeyboardTransform();
+        }
+        return;
+      }
+      if (key === 'escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        cancelKeyboardTransform();
+        return;
+      }
+      if (key === 'u' || key === 'v') {
+        event.preventDefault();
+        event.stopPropagation();
+        session.setUvAxisLock(key);
+        return;
+      }
+      if (key === 'backspace') {
+        event.preventDefault();
+        event.stopPropagation();
+        keyboardNumeric = keyboardNumeric.slice(0, -1);
+        return;
+      }
+      if (/^[0-9.-]$/.test(key)) {
+        event.preventDefault();
+        event.stopPropagation();
+        keyboardNumeric += key;
+        return;
+      }
+    }
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      (key === 'g' || key === 'r' || key === 's')
+    ) {
+      const kind = key === 'g' ? 'move' : key === 'r' ? 'rotate' : 'scale';
+      if (session.snapshot.uvSelectedCorners.length > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        startKeyboardTransform(kind);
+      }
+      return;
+    }
+    if (!event.metaKey && !event.ctrlKey && !event.altKey && (key === 'u' || key === 'v')) {
+      event.preventDefault();
+      event.stopPropagation();
+      session.setUvAxisLock(key);
+    }
+  }
+
   function toggleLasso(): void {
     const next = !lassoMode;
     if (next && paintMode) {
@@ -145,6 +304,11 @@
   }
 
   function pointerDown(event: PointerEvent): void {
+    if (keyboardKind) {
+      finishKeyboardTransform();
+      event.preventDefault();
+      return;
+    }
     if (event.button === 1 || event.button === 2) {
       event.preventDefault();
       beginPan(event);
@@ -220,7 +384,7 @@
     }
     event.preventDefault();
     const point = localPoint(event);
-    updateBrushCursor(event);
+    trackPointer(event);
     if (uvPanning) {
       session.panUv(point.x - panLastX, point.y - panLastY);
       panLastX = point.x;
@@ -287,6 +451,10 @@
       return;
     }
     event.preventDefault();
+    if (keyboardKind) {
+      cancelKeyboardTransform();
+      return;
+    }
     if (uvPanning) {
       detachDragListeners();
       uvPanning = false;
@@ -556,8 +724,8 @@
       tabindex="0"
       aria-label="UV editor. Drag corners to transform UVs, or enable Paint to brush the active texture layer."
       onpointerdown={pointerDown}
-      onpointermove={updateBrushCursor}
-      onpointerenter={updateBrushCursor}
+      onpointermove={trackPointer}
+      onpointerenter={trackPointer}
       onpointerleave={() => {
         if (!painting) {
           brushVisible = false;
@@ -704,7 +872,11 @@
     </form>
     {/if}
     <span class="uv-foot-hint">
-      {#if paintMode}
+      {#if keyboardKind}
+        {keyboardKind === 'move' ? 'Grab' : keyboardKind === 'rotate' ? 'Rotate' : 'Scale'}
+        · {keyboardNumeric ? `${keyboardKind === 'move' ? (session.snapshot.uvAxisLock === 'v' ? 'ΔV' : 'ΔU') : keyboardKind === 'rotate' ? 'Angle' : 'Factor'} ${keyboardNumeric}` : 'move pointer or type a number'}
+        · U/V axis · Enter {keyboardNumeric ? 'apply' : 'commit'} · Esc cancel
+      {:else if paintMode}
         paint active layer · pen pressure · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
       {:else}
         16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}

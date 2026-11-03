@@ -285,6 +285,41 @@ export class EditorSession {
     this.runtime?.setUvClampMode(enabled);
   }
 
+  beginUvKeyboardTransform(
+    kind: 'move' | 'rotate' | 'scale',
+    width: number,
+    height: number,
+    anchorX: number,
+    anchorY: number
+  ): boolean {
+    return (
+      this.runtime?.beginUvKeyboardTransform(
+        kind,
+        width,
+        height,
+        anchorX,
+        anchorY
+      ) ?? false
+    );
+  }
+
+  updateUvKeyboardTransform(
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): void {
+    this.runtime?.updateUvKeyboardTransform(x, y, width, height);
+  }
+
+  finishUvKeyboardTransform(): void {
+    this.runtime?.finishUvKeyboardTransform();
+  }
+
+  cancelUvKeyboardTransform(): void {
+    this.runtime?.cancelUvKeyboardTransform();
+  }
+
   selectUvLasso(
     points: readonly { x: number; y: number }[],
     additive: boolean,

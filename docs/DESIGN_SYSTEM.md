@@ -453,6 +453,8 @@ Implemented component files and local patterns:
 | Disclosure sections | 2 | Transform, Modifiers, Texture, PS1 look | One native `<details>/<summary>` pattern; chevron rotation; persisted Transform/Modifiers state |
 | Selection actions | 3–4 | Extrude, inset, loop cut, seam, merge, bridge, delete | Compact chips; destructive action separated; seam uses `--accent-warning` |
 | `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | Compact action beside Group/Delete; 44px rows/actions |
+| Selection history | 2 | 3D and UV element sets | Lightweight undo command; never serialized or journaled |
+| UV keyboard transform | 2 | G/R/S, U/V, typed number, Enter/Esc | Footer shows current mode/value and commit hint |
 | Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; 44px eye; hidden rows dimmed |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
 | Modifier stack | 3 | Ordered cards with enable/order/remove/parameters | Explicit evaluated state and error panel |

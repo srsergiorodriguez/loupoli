@@ -71,6 +71,11 @@ import {
 } from '../uv/uvElements';
 import { copyUvChart, sameUvTopology } from '../uv/uvStack';
 import { PaintTextureCommand } from './commands/PaintTextureCommand';
+import {
+  SelectionCommand,
+  selectionSnapshotsEqual,
+  type SelectionSnapshot
+} from './commands/SelectionCommand';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
@@ -345,6 +350,7 @@ export class EditorRuntime {
   private uvClampMode = true;
   private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
+  private lassoSelectionBefore: SelectionSnapshot | null = null;
   private readonly uvPins = new Set<number>();
   private uvPaint: UvPaintStroke | null = null;
   private uvPaintMode = false;
@@ -722,6 +728,7 @@ export class EditorRuntime {
     if (!this.lassoMode || !this.getActiveNode()) {
       return false;
     }
+    this.lassoSelectionBefore = this.captureSelection();
     this.lassoPath = [[x, y]];
     this.publish();
     return true;
@@ -745,7 +752,17 @@ export class EditorRuntime {
     const path = this.lassoPath;
     this.lassoPath = [];
     if (path.length < 3) {
-      this.tapSelect(x, y);
+      const node = this.getActiveNode();
+      if (node) {
+        this.selectEvaluatedElementAt(
+          x,
+          y,
+          this.additiveSelection,
+          node
+        );
+      }
+      this.recordSelection(this.lassoSelectionBefore, 'Select element');
+      this.lassoSelectionBefore = null;
       this.publish();
       return;
     }
@@ -764,6 +781,8 @@ export class EditorRuntime {
     }
     this.syncScene();
     this.publish();
+    this.recordSelection(this.lassoSelectionBefore, 'Select lasso');
+    this.lassoSelectionBefore = null;
   }
 
   private cancelLasso(): void {
@@ -771,6 +790,61 @@ export class EditorRuntime {
       return;
     }
     this.lassoPath = [];
+    this.lassoSelectionBefore = null;
+    this.publish();
+  }
+
+  private captureSelection(): SelectionSnapshot | null {
+    const node = this.getActiveNode();
+    if (!node) {
+      return null;
+    }
+    return {
+      nodeId: node.id,
+      mode: this.selection.mode,
+      values: [...this.selection.values()],
+      uvMode: this.uvSelectionMode,
+      uvValues: [...this.uvSelection].sort((a, b) => a - b)
+    };
+  }
+
+  private recordSelection(
+    before: SelectionSnapshot | null,
+    label: string
+  ): void {
+    const after = this.captureSelection();
+    if (!before || !after || selectionSnapshotsEqual(before, after)) {
+      return;
+    }
+    this.history.execute(
+      new SelectionCommand(
+        (snapshot) => this.restoreSelection(snapshot),
+        before,
+        after,
+        label
+      )
+    );
+  }
+
+  private restoreSelection(snapshot: SelectionSnapshot): void {
+    const node = this.document.getNode(snapshot.nodeId);
+    if (!node) {
+      return;
+    }
+    this.activeGroupId = null;
+    this.activeNodeId = node.id;
+    this.selectedNodeIds.clear();
+    this.selectedNodeIds.add(node.id);
+    this.selection.setContext(node.id, snapshot.mode);
+    this.selection.setValues(snapshot.values);
+    this.uvSelectionMode = snapshot.uvMode;
+    this.uvSelection.clear();
+    for (const corner of snapshot.uvValues) {
+      this.uvSelection.add(corner);
+    }
+    this.uvActiveChart = null;
+    this.lastUvSourceSignature = this.uvSourceSignature();
+    this.syncScene();
     this.publish();
   }
 
@@ -992,6 +1066,7 @@ export class EditorRuntime {
     width: number,
     height: number
   ): void {
+    const before = this.captureSelection();
     const node = this.getActiveNode();
     if (!node || !this.uvOpen || points.length < 3 || width <= 0 || height <= 0) {
       return;
@@ -1022,6 +1097,7 @@ export class EditorRuntime {
     this.uvRevision += 1;
     this.linkUvSelectionTo3d();
     this.publish();
+    this.recordSelection(before, 'Select UV lasso');
   }
 
   /**
@@ -1031,6 +1107,25 @@ export class EditorRuntime {
    * pointer gesture can begin a move. Additive picks toggle the whole entity.
    */
   pickUvElement(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    additive: boolean
+  ): boolean {
+    const before = this.captureSelection();
+    const result = this.pickUvElementInternal(
+      x,
+      y,
+      width,
+      height,
+      additive
+    );
+    this.recordSelection(before, 'Select UV element');
+    return result;
+  }
+
+  private pickUvElementInternal(
     x: number,
     y: number,
     width: number,
@@ -1091,6 +1186,7 @@ export class EditorRuntime {
 
   /** Select every element in the current 3D mode on the active node. */
   selectAll3d(): void {
+    const before = this.captureSelection();
     const node = this.getActiveNode();
     if (!node) {
       return;
@@ -1105,10 +1201,12 @@ export class EditorRuntime {
     this.selection.setValues(values);
     this.syncScene();
     this.publish();
+    this.recordSelection(before, 'Select all elements');
   }
 
   /** Select every UV corner on the active node. */
   selectAllUv(): void {
+    const before = this.captureSelection();
     const node = this.getActiveNode();
     if (!node || !this.uvOpen) {
       return;
@@ -1119,6 +1217,7 @@ export class EditorRuntime {
     this.uvRevision += 1;
     this.linkUvSelectionTo3d();
     this.publish();
+    this.recordSelection(before, 'Select all UV corners');
   }
 
   /** Cmd/Ctrl+A selects in the active workspace. */
@@ -1533,6 +1632,56 @@ export class EditorRuntime {
       startDistance
     };
     return true;
+  }
+
+  /** Start a keyboard-driven live UV transform. */
+  beginUvKeyboardTransform(
+    kind: 'move' | 'rotate' | 'scale',
+    width: number,
+    height: number,
+    anchorX: number,
+    anchorY: number
+  ): boolean {
+    const node = this.getActiveNode();
+    if (!node || !this.uvOpen || this.uvSelection.size === 0) {
+      return false;
+    }
+    this.uvTransformMode = kind;
+    const projection = this.uvProjection(node.mesh, width, height);
+    const corners = [...this.uvSelection];
+    const pivot = uvMedian(corners.map((corner) => node.mesh.getCornerUv(corner)));
+    const pivotPoint = uvToCanvas(pivot, projection);
+    let startX = anchorX;
+    let startY = anchorY;
+    if (kind !== 'move') {
+      const distance = Math.hypot(anchorX - pivotPoint.x, anchorY - pivotPoint.y);
+      if (distance < 24) {
+        startX = pivotPoint.x + 80;
+        startY = pivotPoint.y;
+      }
+    }
+    if (!this.beginUvDrag(startX, startY, width, height)) {
+      return false;
+    }
+    this.publish();
+    return true;
+  }
+
+  updateUvKeyboardTransform(
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): void {
+    this.updateUvDrag(x, y, width, height);
+  }
+
+  finishUvKeyboardTransform(): void {
+    this.finishUvDrag();
+  }
+
+  cancelUvKeyboardTransform(): void {
+    this.cancelUvDrag();
   }
 
   /** Apply an absolute UV-space pointer position to the active UV drag. */
@@ -3047,11 +3196,13 @@ export class EditorRuntime {
     clientY: number,
     additive = this.additiveSelection
   ): void {
+    const before = this.captureSelection();
     const node = this.getActiveNode();
     if (!node) {
       return;
     }
     this.selectEvaluatedElementAt(clientX, clientY, additive, node);
+    this.recordSelection(before, 'Select element');
   }
 
   private selectEvaluatedElementAt(
@@ -3123,6 +3274,13 @@ export class EditorRuntime {
   }
 
   private beginToolPointer(sample: PointerSample): boolean {
+    const before = this.captureSelection();
+    const result = this.beginToolPointerInternal(sample);
+    this.recordSelection(before, 'Select element');
+    return result;
+  }
+
+  private beginToolPointerInternal(sample: PointerSample): boolean {
     if (this.drag || this.gizmoDrag) {
       this.cancelToolPointer();
     }
