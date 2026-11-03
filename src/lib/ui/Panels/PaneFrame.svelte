@@ -5,19 +5,34 @@
   interface Props {
     label: string;
     header?: Snippet;
+    toolbar?: Snippet;
     footer?: Snippet;
     children: Snippet;
   }
 
-  let { label, header = undefined, footer = undefined, children }: Props =
-    $props();
+  let {
+    label,
+    header = undefined,
+    toolbar = undefined,
+    footer = undefined,
+    children
+  }: Props = $props();
 </script>
 
-<section class="pane-frame loupoli-panel" aria-label={label}>
+<section
+  class="pane-frame loupoli-panel"
+  class:has-toolbar={toolbar !== undefined}
+  aria-label={label}
+>
   {#if header}
     <header class="pane-frame-head">
       {@render header()}
     </header>
+  {/if}
+  {#if toolbar}
+    <div class="pane-frame-toolbar">
+      {@render toolbar()}
+    </div>
   {/if}
   <div class="pane-frame-body">
     {@render children()}
@@ -44,9 +59,28 @@
   }
 
   .pane-frame-head,
+  .pane-frame-toolbar,
   .pane-frame-foot {
     flex: 0 0 auto;
     background: var(--bg-panel-strong);
+  }
+
+  .pane-frame-head {
+    border-bottom: var(--hairline) solid var(--border-subtle);
+  }
+
+  .pane-frame.has-toolbar .pane-frame-head {
+    border-bottom: 0;
+  }
+
+  .pane-frame-toolbar {
+    min-height: var(--hit-min);
+    padding: 0 var(--space-2);
+    border-bottom: var(--hairline) solid var(--border-subtle);
+  }
+
+  .pane-frame-foot {
+    border-top: var(--hairline) solid var(--border-subtle);
   }
 
   .pane-frame-body {

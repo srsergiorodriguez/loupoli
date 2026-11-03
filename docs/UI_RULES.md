@@ -99,7 +99,10 @@ If any answer is missing, do not add the control.
 - Breakpoints are shared tokens or a small documented set; do not invent per-component breakpoints.
 - A collapsed sidebar is controlled by the Application Bar toggle only. No duplicate X.
 - The Viewport Stage owns HUD and lasso overlays; HUD anchors to the visible 3D rectangle, not the window.
+- Transparent HUD wrappers are `pointer-events: none`; only visible controls opt back in. No invisible rectangle may block viewport picking.
+- Pane dividers are constrained to the pane frame bounds and must never extend over the Application Bar or Workspace Tabs.
 - Camera pan/orbit/zoom never mutate selection. Only a no-move click/tap on empty viewport space clears it.
+- A selection gesture applies its pick exactly once. Pointer-up resolves only the deferred empty-click case; it must never re-run additive selection or toggle the pick back off.
 - Workspace panes use the shared PaneHost and PaneFrame; the divider hit area straddles the pane edge, and the canvas/overlay body has one positioning context.
 - New Project is a command-owned document reset and defaults to a Cube.
 

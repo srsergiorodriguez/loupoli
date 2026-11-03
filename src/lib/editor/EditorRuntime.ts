@@ -366,6 +366,7 @@ export class EditorRuntime {
   private uvBrushSize = 36;
   private uvBrushOpacity = 0.9;
   private uvDrag: UvDrag | null = null;
+  private pointerSelectionHit = false;
   private uvPendingClick: {
     corners: number[];
     before: SelectionSnapshot | null;
@@ -432,6 +433,7 @@ export class EditorRuntime {
       deleteSelection: () => this.deleteSelection(),
       toggleAxisLock: (axis) => this.toggleAxisLock(axis),
       tapSelect: (x, y, additive) => this.tapSelect(x, y, additive),
+      finishOrbitClick: (moved, additive) => this.finishOrbitClick(moved, additive),
       setPointerReading: (sample) => this.setPointerReading(sample),
       isModalTransformActive: () => this.modalTransform !== null,
       beginModalTransform: (kind, clientX, clientY) =>
@@ -3546,6 +3548,21 @@ export class EditorRuntime {
     this.recordSelection(before, 'Select element');
   }
 
+  /** Resolve a mouse/release gesture that fell back to orbit/pan. */
+  finishOrbitClick(moved: boolean, additive: boolean): void {
+    if (moved || additive || this.pointerSelectionHit) {
+      return;
+    }
+    if (this.selectionCombineMode !== 'replace' || this.selection.count === 0) {
+      return;
+    }
+    const before = this.captureSelection();
+    this.selection.clear();
+    this.syncScene();
+    this.publish();
+    this.recordSelection(before, 'Clear selection');
+  }
+
   private selectEvaluatedElementAt(
     clientX: number,
     clientY: number,
@@ -3582,6 +3599,7 @@ export class EditorRuntime {
         this.selection.clear();
       }
     } else if (baseIndex >= 0) {
+      this.pointerSelectionHit = true;
       if (combine === 'subtract') {
         this.selection.remove(baseIndex);
       } else {
@@ -3619,6 +3637,7 @@ export class EditorRuntime {
   }
 
   private beginToolPointer(sample: PointerSample): boolean {
+    this.pointerSelectionHit = false;
     const before = this.captureSelection();
     const result = this.beginToolPointerInternal(sample);
     this.recordSelection(before, 'Select element');
@@ -3693,6 +3712,7 @@ export class EditorRuntime {
           const baseVertex =
             evaluated.provenance.vertexBase[evaluatedVertex] ?? -1;
           if (baseVertex >= 0) {
+            this.pointerSelectionHit = true;
             this.selection.pick(baseVertex, false);
             this.syncScene();
             this.publish();
@@ -3723,6 +3743,7 @@ export class EditorRuntime {
       if (edge === null) {
         return false;
       }
+      this.pointerSelectionHit = true;
       if (subtract) {
         this.selection.remove(edge);
       } else {
@@ -3738,6 +3759,7 @@ export class EditorRuntime {
       if (face === null) {
         return false;
       }
+      this.pointerSelectionHit = true;
       if (subtract) {
         this.selection.remove(face);
       } else {
@@ -3754,6 +3776,7 @@ export class EditorRuntime {
     }
 
     if (combine !== 'replace') {
+      this.pointerSelectionHit = true;
       if (subtract) {
         this.selection.remove(vertex);
       } else {
@@ -3764,6 +3787,7 @@ export class EditorRuntime {
       return false;
     }
 
+    this.pointerSelectionHit = true;
     this.selection.pick(vertex, false);
     const original = node.mesh.getVertexPosition(vertex);
     const world = this.renderer.getVertexWorldPosition(vertex);

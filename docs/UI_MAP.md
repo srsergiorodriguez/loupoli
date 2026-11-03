@@ -12,7 +12,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), All, Add, Sub |
 | **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock |
 | **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, UV and Paint now; Animation later |
-| **PaneFrame** | Shared pane interior | Header, flexible canvas body, optional footer; used by UV and Paint |
+| **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV and Paint |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas, brush footer |
 | **Inspector** | Properties of the active object/selection/context | Inspector Sections |
@@ -23,6 +23,8 @@ This is the authoritative map of the application shell. New controls must be ass
 
 - **Viewport context strip** — object/group name, element mode, active-editor marker.
 - **Shading Bar** — icon-only Wireframe, Solid, Texture, Texture + Wire, Lit, below the Selection Bar.
+- **PaneHeader** — one 44 px title row with active dot, detail, meta, and optional actions.
+- **PaneToolbar** — optional second row for pane-specific commands, such as UV operations.
 - **View Actions** — Frame and Home in a vertical cluster left of the View Gizmo.
 - **View Gizmo** — signed axis endpoints and center frame.
 - **UV Toolbar** — UV-only operations: U/V locks, Sync 3D, Pin, Unpin, Unwrap, Stack, Fit, Clamp.

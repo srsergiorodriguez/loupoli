@@ -38,6 +38,7 @@ export interface InputRouterHost {
   deleteSelection(): void;
   toggleAxisLock(axis: 'x' | 'y' | 'z'): void;
   tapSelect(clientX: number, clientY: number, additive?: boolean): void;
+  finishOrbitClick(moved: boolean, additive: boolean): void;
   setPointerReading(sample: PointerSample | null): void;
   isModalTransformActive(): boolean;
   beginModalTransform(
@@ -387,12 +388,10 @@ export class InputRouter {
       this.host.endToolPointer(sample);
     } else if (
       this.mouse.mode === 'orbit' &&
-      this.mouse.pointerId === sample.pointerId &&
-      !this.mouse.moved
+      this.mouse.pointerId === sample.pointerId
     ) {
-      this.host.tapSelect(
-        sample.clientX,
-        sample.clientY,
+      this.host.finishOrbitClick(
+        this.mouse.moved,
         sample.shiftKey || sample.metaKey || sample.ctrlKey
       );
     }

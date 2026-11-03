@@ -390,6 +390,11 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-2);
+    pointer-events: none;
+  }
+
+  .selection-mode-wrap :global(.selection-mode),
+  .selection-mode-wrap :global(.shading-control) {
     pointer-events: auto;
   }
 

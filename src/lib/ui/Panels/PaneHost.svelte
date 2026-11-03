@@ -149,8 +149,8 @@
   .pane-resizer {
     position: absolute;
     z-index: var(--z-popover);
-    top: 0;
-    bottom: 0;
+    top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
+    bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
     left: -22px;
     width: 44px;
     touch-action: none;

@@ -3,6 +3,7 @@
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
   import PaneFrame from '../Panels/PaneFrame.svelte';
+  import PaneHeader from '../Panels/PaneHeader.svelte';
 
   /** Session projection for the dedicated texture-paint workspace. */
   interface Props {
@@ -168,15 +169,12 @@
 </script>
 
 {#snippet paintHeader()}
-  <div class="paint-head">
-    <div class="paint-title">
-      <span class="paint-kicker" class:active={activeEditor === 'paint'}>
-        Paint<span class="active-dot"></span>
-      </span>
-      <span class="paint-layer">{activeLayer?.name ?? 'No layer'}</span>
-    </div>
-    <span class="paint-meta">{textureSize}² · {activeLayer?.pattern ?? '—'}</span>
-  </div>
+  <PaneHeader
+    label="Paint"
+    active={activeEditor === 'paint'}
+    detail={activeLayer?.name ?? 'No layer'}
+    meta={`${textureSize}² · ${activeLayer?.pattern ?? '—'}`}
+  />
 {/snippet}
 
 {#snippet paintFooter()}
@@ -256,64 +254,13 @@
 </PaneFrame>
 
 <style>
-  .paint-head,
-  .paint-foot {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    min-height: var(--hit-min);
-    padding: var(--space-2) var(--space-3);
-  }
 
-  .paint-head {
-    justify-content: space-between;
-    border-bottom: var(--hairline) solid var(--border-subtle);
-  }
 
-  .paint-title {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    min-width: 0;
-  }
 
-  .paint-kicker {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-medium);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-  }
 
-  .active-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    opacity: 0;
-  }
 
-  .paint-kicker.active .active-dot {
-    opacity: 1;
-  }
 
-  .paint-layer,
-  .paint-meta {
-    overflow: hidden;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 
-  .paint-layer {
-    color: var(--text-secondary);
-  }
 
   .paint-stage {
     position: absolute;
@@ -344,7 +291,6 @@
 
   .paint-foot {
     flex-wrap: wrap;
-    border-top: var(--hairline) solid var(--border-subtle);
   }
 
   .paint-field {
@@ -355,6 +301,10 @@
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
+  }
+
+  .paint-field :global(.number-field) {
+    width: 96px;
   }
 
   .paint-color input {
@@ -372,11 +322,5 @@
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
     line-height: 1.3;
-  }
-
-  @media (max-width: 720px) {
-    .paint-meta {
-      display: none;
-    }
   }
 </style>

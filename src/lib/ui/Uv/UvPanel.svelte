@@ -5,6 +5,7 @@
   import { commandForKeyboardEvent } from '../../input/commands';
   import NumberField from '../Primitives/NumberField.svelte';
   import PaneFrame from '../Panels/PaneFrame.svelte';
+  import PaneHeader from '../Panels/PaneHeader.svelte';
   import { uvClickMoved } from '../../uv/uvView';
 
   /** Props for the UV editing pane. */
@@ -483,12 +484,15 @@
 </script>
 
 {#snippet uvHeader()}
-  <div class="uv-head">
-    <div class="uv-title-group">
-      <span class="uv-kicker" class:active={activeEditor === 'uv'}>UV<span class="active-dot"></span></span>
-      <span class="uv-count">{selectedCount} corner{selectedCount === 1 ? '' : 's'} · {Math.round(uvZoom * 100)}%</span>
-    </div>
-    <div class="uv-actions">
+  <PaneHeader
+    label="UV"
+    active={activeEditor === 'uv'}
+    meta={`${selectedCount} corner${selectedCount === 1 ? '' : 's'} · ${Math.round(uvZoom * 100)}%`}
+  />
+{/snippet}
+
+{#snippet uvToolbar()}
+  <div class="uv-actions">
       <div class="uv-group" role="group" aria-label="UV operations">
         <button
           type="button"
@@ -572,7 +576,6 @@
         >Clamp</button>
       </div>
       
-    </div>
   </div>
 {/snippet}
 
@@ -654,7 +657,12 @@
   </div>
 {/snippet}
 
-<PaneFrame label="UV editor" header={uvHeader} footer={uvFooter}>
+<PaneFrame
+  label="UV editor"
+  header={uvHeader}
+  toolbar={uvToolbar}
+  footer={uvFooter}
+>
   <div class="uv-canvas-wrap" bind:this={host}>
     <canvas
       bind:this={canvas}
@@ -694,16 +702,7 @@
 
 
 
-  .uv-head {
-    flex-wrap: wrap;
-    align-items: flex-start;
-    padding: var(--space-2);
-  }
 
-  .uv-title-group {
-    flex: 1 1 auto;
-    min-height: var(--hit-min);
-  }
 
   .uv-actions {
     flex: 1 1 100%;
@@ -730,53 +729,11 @@
 
 
 
-  .uv-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    min-height: var(--hit-min);
-    padding: 0 var(--space-3);
-    border-bottom: var(--hairline) solid var(--border-subtle);
-  }
 
-  .uv-title-group {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-2);
-    min-width: 0;
-  }
 
-  .uv-kicker {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-medium);
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
-  }
 
-  .active-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-    opacity: 0;
-  }
 
-  .uv-kicker.active .active-dot {
-    opacity: 1;
-  }
 
-  .uv-count {
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    white-space: nowrap;
-  }
 
   .uv-group {
     display: flex;
@@ -788,8 +745,10 @@
 
   .uv-actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-1);
+    padding: var(--space-1) 0;
   }
 
   .uv-chip,
@@ -886,7 +845,6 @@
     gap: var(--space-2);
     min-height: var(--hit-min);
     padding: 0 var(--space-3);
-    border-top: var(--hairline) solid var(--border-subtle);
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
@@ -943,10 +901,6 @@
   @media (max-width: 720px) {
     .uv-foot-hint {
       display: none;
-    }
-
-    .uv-head {
-      gap: var(--space-1);
     }
 
     .uv-action {
