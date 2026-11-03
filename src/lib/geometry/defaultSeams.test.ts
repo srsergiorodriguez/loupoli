@@ -2,24 +2,31 @@ import { describe, expect, it } from 'vitest';
 import { applyDefaultSeams } from './defaultSeams';
 import { createCubeMesh, createCylinderMesh, createGridMesh, createQuadSphereMesh } from './primitives';
 import { extractUvCharts } from './uvCharts';
+import { unwrapUvCharts } from './lscm';
 
 describe('default primitive seams', () => {
-  it('cuts a cube into one unfold net', () => {
+  it('cuts a cube into three two-face charts', () => {
     const cube = createCubeMesh(2);
     applyDefaultSeams(cube, 'cube');
-    expect(extractUvCharts(cube)).toHaveLength(1);
+    const charts = extractUvCharts(cube);
+    expect(charts).toHaveLength(3);
+    expect(() => unwrapUvCharts(cube, charts)).not.toThrow();
   });
 
-  it('cuts a quadsphere into one unfold net', () => {
+  it('cuts a quadsphere into six patch charts', () => {
     const sphere = createQuadSphereMesh(1.25, 2);
     applyDefaultSeams(sphere, 'quadsphere');
-    expect(extractUvCharts(sphere)).toHaveLength(1);
+    const charts = extractUvCharts(sphere);
+    expect(charts).toHaveLength(6);
+    expect(() => unwrapUvCharts(sphere, charts)).not.toThrow();
   });
 
-  it('splits cylinder caps from the side and adds a side seam', () => {
+  it('splits cylinder caps and cuts the side into two strips', () => {
     const cylinder = createCylinderMesh(1, 2, 12);
     applyDefaultSeams(cylinder, 'cylinder');
-    expect(extractUvCharts(cylinder)).toHaveLength(3);
+    const charts = extractUvCharts(cylinder);
+    expect(charts).toHaveLength(4);
+    expect(() => unwrapUvCharts(cylinder, charts)).not.toThrow();
   });
 
   it('leaves open grids unseamed', () => {

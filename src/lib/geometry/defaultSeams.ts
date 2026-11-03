@@ -67,7 +67,11 @@ export function applyDefaultSeams(
         a < sideFaces &&
         b < sideFaces &&
         ((a === 0 && b === sideFaces - 1) ||
-          (b === 0 && a === sideFaces - 1))
+          (b === 0 && a === sideFaces - 1) ||
+          (a === Math.floor(sideFaces / 2) &&
+            b === Math.floor(sideFaces / 2) - 1) ||
+          (b === Math.floor(sideFaces / 2) &&
+            a === Math.floor(sideFaces / 2) - 1))
       ) {
         mesh.setEdgeSeam(edge, true);
       }
@@ -85,26 +89,17 @@ export function applyDefaultSeams(
       mesh.setEdgeSeam(edge, true);
     }
   }
-  // Keep enough face connections to unfold each closed volume into one net.
-  const net =
+  // Keep each default chart simple enough for the vertex-indexed LSCM chart
+  // model: two-face cube strips and one grid patch per QuadSphere side.
+  const connectedPairs =
     kind === 'cube'
       ? [
           [0, 2],
-          [1, 2],
-          [2, 3],
-          [2, 5],
+          [1, 3],
           [4, 5]
         ]
-      : kind === 'quadsphere'
-        ? [
-            [0, 2],
-            [0, 3],
-            [0, 4],
-            [2, 5],
-            [1, 2]
-          ]
-        : [];
-  for (const [first, second] of net) {
+      : [];
+  for (const [first, second] of connectedPairs) {
     setSeamBetweenPatches(mesh, patchByFace, first, second, false);
   }
 }
