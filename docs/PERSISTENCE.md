@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 3 persistence baseline. Autosave, `.lpoly` v1, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, and seam flags round-trip. Texture persistence will use a versioned v2 with binary PNG chunks; shape keys remain later-phase work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).  
+**Status:** Phase 4 persistence. Autosave, `.lpoly` v1/v2, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, and texture layers round-trip. v2 adds binary PNG texture chunks and retains v1 decode. Texture autosave and shape keys remain later work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).  
 **Related:** [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
@@ -120,7 +120,7 @@ This is explicit recovery, never a silent replacement of the user's current scen
 
 ---
 
-## 3. `.lpoly` project format v1
+## 3. `.lpoly` project format v1/v2
 
 Implementation: `src/lib/project/lpoly.ts`. Rust validates the envelope and checksum but never parses document semantics.
 
@@ -133,7 +133,7 @@ The header is **28 bytes**:
 | Offset | Size | Type | Field |
 |---:|---:|---|---|
 | 0 | 8 | bytes | Magic `4C 50 4F 4C 59 00 00 00` (`LPOLY\0\0\0`) |
-| 8 | 2 | u16 | Container version (`1`) |
+| 8 | 2 | u16 | Container version (`1` or `2`) |
 | 10 | 2 | u16 | Flags (reserved, `0`) |
 | 12 | 4 | u32 | Manifest JSON byte length |
 | 16 | 4 | u32 | Payload byte length |
@@ -143,7 +143,7 @@ The header is **28 bytes**:
 | pad | … | bytes | Zero padding to a 4-byte payload start |
 | … | … | bytes | Fixed-order typed-array columns |
 
-`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`.
+`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`. v2 appends aligned texture PNG chunks after the mesh columns.
 
 Validation occurs before geometry allocation:
 
@@ -162,11 +162,27 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
 ```json
 {
   "format": "lpoly",
-  "version": 1,
+  "version": 2,
   "settings": {
     "shading": "unlit",
     "ps1Snap": false,
     "ps1Affine": false
+  },
+  "textures": {
+    "width": 1024,
+    "height": 1024,
+    "activeId": "texlayer-1",
+    "layers": [
+      {
+        "id": "texlayer-1",
+        "name": "Base",
+        "visible": true,
+        "opacity": 1,
+        "color": "#c8c2ad",
+        "pattern": "checker",
+        "pngLength": 24692
+      }
+    ]
   },
   "nodes": [
     {
@@ -211,22 +227,29 @@ UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `r
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
-Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip. UV unwrapping and authored texture layers are Phase 4 work.
+Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip.
 
-### 3.4 Not yet serialized
+### 3.4 v2 texture chunks
+
+After all mesh columns, v2 writes each texture layer's binary PNG in manifest order. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
+
+- v1 files open with no texture set.
+- v2 files with `textures` restore layers on open; v2 without textures resets to the checker base.
+- Texture autosave is **not** implemented yet: autosave checkpoints remain v1 and therefore reset textures after recovery.
+- Layer PNGs are never base64 or JSON strings.
+
+### 3.5 Not yet serialized
 
 - Nested object groups and group reparenting beyond the current one-level groups
-- Modifiers (Phase 3)
 - Shape keys, lights, material definitions
 - Camera position/target
 - Active object and selection
-- Texture layers (approved binary PNG chunks, Phase 4)
 
-Unknown/absent later fields must be added with a schema migration or optional fields while keeping the v1 envelope readable where safe. Unknown container versions are rejected with a clear message.
+v1 remains readable. Unknown container versions are rejected with a clear message. New v2 texture fields are validated before allocation.
 
-### 3.5 Save protocol
+### 3.6 Save protocol
 
-1. TypeScript encodes and validates the current scene into a `.lpoly` byte array.
+1. TypeScript encodes and validates the current scene and texture layers into a v2 `.lpoly` byte array.
 2. Tauri save dialog chooses a path; browser mode triggers a download.
 3. For Tauri, Rust re-checks size, magic, header lengths, and CRC.
 4. Rust writes a same-directory temporary file with `create_new`, `write_all`, and `sync_all`.
@@ -234,12 +257,12 @@ Unknown/absent later fields must be added with a schema migration or optional fi
 6. Failure leaves the old destination intact and removes the temporary file.
 7. Browser fallback creates a `Blob` download; it does not claim native durability.
 
-### 3.6 Open protocol
+### 3.7 Open protocol
 
 1. Native dialog selects a path; browser uses a file input.
 2. Rust enforces 128 MB and validates the envelope/CRC before returning bytes.
 3. TypeScript decodes manifest and columns and rebuilds/validates every DCEL.
-4. Only after success does the runtime replace the document and reset history/autosave.
+4. Only after success does the runtime replace the document, import v2 texture PNGs, and reset history/autosave.
 5. Errors are shown as project errors without mutating the current scene.
 
 ---

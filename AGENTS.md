@@ -133,12 +133,12 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - Ordered non-destructive Mirror / Grid Array / Radial Array stacks with base-DCEL preservation, evaluated rendering/counts, Inspector add/toggle/reorder/edit/remove controls, undo, autosave patches, `.lpoly` serialization, and evaluated-to-base vertex/edge/face provenance. Picking selects base elements and overlays highlight every evaluated copy. Destructive topology actions and direct vertex dragging edit the base mesh while the stack re-evaluates. Per-vertex linear provenance maps the dragged evaluated copy back to its base vertex; axis locks and snapping are not yet applied to mapped drags.
 - Localized vertex moves and scene-node commands; redo truncation, a 100-command cap, and a 32 MB history budget.
 - IndexedDB autosave checkpoint plus localized deltas every 30 seconds and on visibility loss, with explicit Recover/Discard.
-- `.lpoly` v1 binary codec with a CRC-checked manifest, aligned typed-array columns, file-size limits, and multi-node round-trip tests.
+- `.lpoly` v1/v2 binary codec with a CRC-checked manifest, aligned typed-array columns, optional binary PNG texture chunks, file-size limits, v1 migration, and multi-node round-trip tests.
 - Tauri native open/save dialogs and Rust atomic byte-level file I/O; browser download/file-picker fallbacks.
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: `.lpoly` v2 texture chunks, texture autosave, blend modes/rename, and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
+Next planned work: texture autosave, blend modes/rename, and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
 
 Approved decisions:
 
@@ -148,7 +148,7 @@ Approved decisions:
 4. Bundle identifier is `com.loupoli.studio` (no `.app` suffix).
 5. Correct perspective mapping with no vertex snapping is the Unlit default. PS1 vertex snapping and affine UVs are opt-in.
 6. Non-planar quads use render-only bilinear tessellation. The editable DCEL remains quads, and topological counts do not change.
-7. `.lpoly` v1 uses a binary CRC-checked container; autosave uses an IndexedDB checkpoint plus localized command deltas, never a full-scene clone per edit.
+7. `.lpoly` v1/v2 use a binary CRC-checked container; v2 adds binary PNG texture chunks. Autosave uses an IndexedDB checkpoint plus localized command deltas, never a full-scene clone per edit.
 
 ---
 

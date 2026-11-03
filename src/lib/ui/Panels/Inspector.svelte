@@ -883,7 +883,7 @@
             <Icon name="plus" size={13} />
             <span>Add layer</span>
           </button>
-          <span class="texture-note">Session texture</span>
+          <span class="texture-note">PNG v2 · autosave pending</span>
         </div>
         <div class="texture-list">
           {#each textureLayersTopFirst as { layer, index } (layer.id)}
@@ -961,8 +961,8 @@
           {/each}
         </div>
         <p class="hint">
-          Composite uploads one GPU texture. Layer colors are deterministic fills;
-          raster painting and `.lpoly` v2 persistence follow.
+          Composite uploads one GPU texture. PNG chunks save in `.lpoly` v2;
+          texture autosave and raster painting follow.
         </p>
       </div>
     </details>

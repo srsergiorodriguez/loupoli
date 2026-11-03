@@ -15,9 +15,14 @@ import {
 import { MeshNode, type NodeTransform } from '../scene/MeshNode';
 import { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
+import type {
+  TextureLayerRecord,
+  TextureProjectData
+} from '../texture/TextureStack';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 1;
+const FORMAT_VERSION = 2;
+const MIN_SUPPORTED_VERSION = 1;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
 const MAX_NODES = 1024;
@@ -27,6 +32,9 @@ const MAX_HALF_EDGES = 4_000_000;
 const MAX_EDGES = 2_000_000;
 const MAX_FACES = 2_000_000;
 const MAX_NAME_LENGTH = 200;
+const MAX_TEXTURE_LAYERS = 8;
+const MAX_TEXTURE_DIMENSION = 2048;
+const MAX_TEXTURE_PNG_BYTES = 32 * 1024 * 1024;
 
 /** Project-level settings saved with a document but not part of its DCEL. */
 export interface ProjectSettings {
@@ -35,10 +43,11 @@ export interface ProjectSettings {
   readonly ps1Affine: boolean;
 }
 
-/** Decoded scene and its saved viewport settings. */
+/** Decoded scene, viewport settings, and optional v2 texture data. */
 export interface DecodedProject {
   readonly document: SceneDocument;
   readonly settings: ProjectSettings;
+  readonly textures?: TextureProjectData;
 }
 
 /** Counts and typed columns that fully describe one serialized mesh. */
@@ -106,12 +115,30 @@ interface GroupManifest {
   readonly transform: NodeTransform;
 }
 
+interface TextureLayerManifest {
+  readonly id: string;
+  readonly name: string;
+  readonly visible: boolean;
+  readonly opacity: number;
+  readonly color: string;
+  readonly pattern: 'checker' | 'solid';
+  readonly pngLength: number;
+}
+
+interface TextureManifest {
+  readonly width: number;
+  readonly height: number;
+  readonly activeId: string | null;
+  readonly layers: readonly TextureLayerManifest[];
+}
+
 interface Manifest {
   readonly format: 'lpoly';
   readonly version: number;
   readonly settings: ProjectSettings;
   readonly nodes: readonly NodeManifest[];
   readonly groups?: readonly GroupManifest[];
+  readonly textures?: TextureManifest;
 }
 
 const TYPED_COLUMNS = [
@@ -332,9 +359,103 @@ export function restoreNode(snapshot: NodeSnapshot): MeshNode {
  * node. The manifest carries metadata and counts; the CRC covers everything
  * after the fixed header.
  */
+/**
+ * Validate and normalize v2 texture data for the manifest.
+ *
+ * PNG bytes are copied into aligned payload chunks; layer metadata is bounded
+ * before allocation so malformed projects cannot exhaust memory.
+ */
+function buildTextureManifest(
+  textures: TextureProjectData
+): { manifest: TextureManifest; totalPngBytes: number } {
+  if (
+    !Number.isInteger(textures.width) ||
+    !Number.isInteger(textures.height) ||
+    textures.width < 1 ||
+    textures.height < 1 ||
+    textures.width > MAX_TEXTURE_DIMENSION ||
+    textures.height > MAX_TEXTURE_DIMENSION
+  ) {
+    throw new Error('Texture dimensions are outside the supported limits.');
+  }
+  if (
+    textures.layers.length < 1 ||
+    textures.layers.length > MAX_TEXTURE_LAYERS
+  ) {
+    throw new Error('Texture layer count is outside the supported limits.');
+  }
+  const ids = new Set<string>();
+  let totalPngBytes = 0;
+  const layers: TextureLayerManifest[] = textures.layers.map((layer) => {
+    if (
+      typeof layer.id !== 'string' ||
+      layer.id.length === 0 ||
+      ids.has(layer.id) ||
+      typeof layer.name !== 'string' ||
+      layer.name.length === 0 ||
+      layer.name.length > MAX_NAME_LENGTH ||
+      typeof layer.visible !== 'boolean' ||
+      typeof layer.opacity !== 'number' ||
+      !Number.isFinite(layer.opacity) ||
+      layer.opacity < 0 ||
+      layer.opacity > 1 ||
+      typeof layer.color !== 'string' ||
+      layer.color.length > 32 ||
+      (layer.pattern !== 'checker' && layer.pattern !== 'solid') ||
+      !(layer.png instanceof Uint8Array) ||
+      layer.png.byteLength < 1 ||
+      layer.png.byteLength > MAX_TEXTURE_PNG_BYTES
+    ) {
+      throw new Error('Texture layer metadata is invalid.');
+    }
+    ids.add(layer.id);
+    totalPngBytes += layer.png.byteLength;
+    return {
+      id: layer.id,
+      name: layer.name,
+      visible: layer.visible,
+      opacity: layer.opacity,
+      color: layer.color,
+      pattern: layer.pattern,
+      pngLength: layer.png.byteLength
+    };
+  });
+  if (totalPngBytes > MAX_TEXTURE_PNG_BYTES * MAX_TEXTURE_LAYERS) {
+    throw new Error('Texture PNG payload is too large.');
+  }
+  return {
+    manifest: {
+      width: textures.width,
+      height: textures.height,
+      activeId: textures.activeId,
+      layers
+    },
+    totalPngBytes
+  };
+}
+
+/** Encode a v1 project without texture layers. */
 export function encodeLpoly(
   document: SceneDocument,
   settings: ProjectSettings
+): Uint8Array {
+  return encodeInternal(document, settings, 1, null);
+}
+
+/** Encode a v2 project with per-layer binary PNG chunks. */
+export function encodeLpolyV2(
+  document: SceneDocument,
+  settings: ProjectSettings,
+  textures: TextureProjectData
+): Uint8Array {
+  return encodeInternal(document, settings, 2, textures);
+}
+
+function encodeInternal(
+  document: SceneDocument,
+  settings: ProjectSettings,
+  version: number,
+  textures: TextureProjectData | null
 ): Uint8Array {
   const manifestNodes: NodeManifest[] = document.nodes.map((node) => ({
     id: node.id,
@@ -367,12 +488,16 @@ export function encodeLpoly(
     }
   }));
 
+  const textureManifest = textures
+    ? buildTextureManifest(textures)
+    : null;
   const manifest: Manifest = {
     format: 'lpoly',
-    version: FORMAT_VERSION,
+    version,
     settings,
     nodes: manifestNodes,
-    groups: manifestGroups
+    groups: manifestGroups,
+    ...(textureManifest ? { textures: textureManifest.manifest } : {})
   };
   const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
   if (manifestBytes.length > 16 * 1024 * 1024) {
@@ -394,6 +519,17 @@ export function encodeLpoly(
       payloadLength += bytes.byteLength;
     }
   }
+  if (textures) {
+    for (const layer of textures.layers) {
+      const padding = (4 - (payloadLength % 4)) % 4;
+      if (padding > 0) {
+        chunks.push(new Uint8Array(padding));
+        payloadLength += padding;
+      }
+      chunks.push(layer.png);
+      payloadLength += layer.png.byteLength;
+    }
+  }
 
   const payloadStart = align4(HEADER_BYTES + manifestBytes.length);
   const totalLength = payloadStart + payloadLength;
@@ -404,7 +540,7 @@ export function encodeLpoly(
   const file = new Uint8Array(totalLength);
   file.set(MAGIC, 0);
   const view = new DataView(file.buffer);
-  view.setUint16(8, FORMAT_VERSION, true);
+  view.setUint16(8, version, true);
   view.setUint16(10, 0, true);
   view.setUint32(12, manifestBytes.length, true);
   view.setUint32(16, payloadLength, true);
@@ -419,6 +555,77 @@ export function encodeLpoly(
 
   view.setUint32(20, crc32(file.subarray(HEADER_BYTES)), true);
   return file;
+}
+
+function validateTextureManifest(value: unknown): TextureManifest {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('The .lpoly texture manifest is invalid.');
+  }
+  const texture = value as Partial<TextureManifest>;
+  if (
+    !Number.isInteger(texture.width) ||
+    !Number.isInteger(texture.height) ||
+    (texture.width as number) < 1 ||
+    (texture.height as number) < 1 ||
+    (texture.width as number) > MAX_TEXTURE_DIMENSION ||
+    (texture.height as number) > MAX_TEXTURE_DIMENSION ||
+    !Array.isArray(texture.layers) ||
+    texture.layers.length < 1 ||
+    texture.layers.length > MAX_TEXTURE_LAYERS
+  ) {
+    throw new Error('The .lpoly texture dimensions or layer count are invalid.');
+  }
+  const ids = new Set<string>();
+  const layers: TextureLayerManifest[] = texture.layers.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoly contains an invalid texture layer.');
+    }
+    const layer = raw as Partial<TextureLayerManifest>;
+    if (
+      typeof layer.id !== 'string' ||
+      layer.id.length === 0 ||
+      ids.has(layer.id) ||
+      typeof layer.name !== 'string' ||
+      layer.name.length === 0 ||
+      layer.name.length > MAX_NAME_LENGTH ||
+      typeof layer.visible !== 'boolean' ||
+      typeof layer.opacity !== 'number' ||
+      !Number.isFinite(layer.opacity) ||
+      layer.opacity < 0 ||
+      layer.opacity > 1 ||
+      typeof layer.color !== 'string' ||
+      layer.color.length > 32 ||
+      (layer.pattern !== 'checker' && layer.pattern !== 'solid') ||
+      !Number.isInteger(layer.pngLength) ||
+      (layer.pngLength as number) < 1 ||
+      (layer.pngLength as number) > MAX_TEXTURE_PNG_BYTES
+    ) {
+      throw new Error('The .lpoly texture layer metadata is invalid.');
+    }
+    ids.add(layer.id);
+    return {
+      id: layer.id,
+      name: layer.name,
+      visible: layer.visible,
+      opacity: layer.opacity,
+      color: layer.color,
+      pattern: layer.pattern,
+      pngLength: layer.pngLength as number
+    };
+  });
+  const activeId = texture.activeId;
+  if (
+    activeId !== null &&
+    (typeof activeId !== 'string' || !ids.has(activeId))
+  ) {
+    throw new Error('The .lpoly active texture layer is invalid.');
+  }
+  return {
+    width: texture.width as number,
+    height: texture.height as number,
+    activeId,
+    layers
+  };
 }
 
 /** Decode and fully validate a versioned `.lpoly` container. */
@@ -437,8 +644,10 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
 
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const version = view.getUint16(8, true);
-  if (version !== FORMAT_VERSION) {
-    throw new Error(`Unsupported .lpoly version ${version}; expected ${FORMAT_VERSION}.`);
+  if (version < MIN_SUPPORTED_VERSION || version > FORMAT_VERSION) {
+    throw new Error(
+      `Unsupported .lpoly version ${version}; expected ${MIN_SUPPORTED_VERSION}–${FORMAT_VERSION}.`
+    );
   }
   const manifestLength = view.getUint32(12, true);
   const payloadLength = view.getUint32(16, true);
@@ -466,7 +675,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   const manifest = parsed as Partial<Manifest>;
   if (
     manifest.format !== 'lpoly' ||
-    manifest.version !== FORMAT_VERSION ||
+    manifest.version !== version ||
     !Array.isArray(manifest.nodes) ||
     manifest.nodes.length > MAX_NODES ||
     (manifest.groups !== undefined &&
@@ -477,6 +686,13 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   ) {
     throw new Error('The .lpoly manifest has an unsupported structure.');
   }
+  if (version === 1 && manifest.textures !== undefined) {
+    throw new Error('A v1 .lpoly cannot contain texture data.');
+  }
+  const textureManifest =
+    version === 2 && manifest.textures !== undefined
+      ? validateTextureManifest(manifest.textures)
+      : null;
   const settings = manifest.settings as Partial<ProjectSettings>;
   if (
     !isShadingMode(settings.shading) ||
@@ -573,6 +789,37 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     document.insertGroup(group);
   }
 
+  let textures: TextureProjectData | undefined;
+  if (textureManifest) {
+    const textureLayers: TextureLayerRecord[] = [];
+    for (const layer of textureManifest.layers) {
+      const padding = (4 - (cursor % 4)) % 4;
+      cursor += padding;
+      if (
+        cursor + layer.pngLength > bytes.byteLength ||
+        cursor + layer.pngLength > payloadStart + payloadLength
+      ) {
+        throw new Error('The .lpoly payload ended inside a texture PNG chunk.');
+      }
+      textureLayers.push({
+        id: layer.id,
+        name: layer.name,
+        visible: layer.visible,
+        opacity: layer.opacity,
+        color: layer.color,
+        pattern: layer.pattern,
+        png: bytes.slice(cursor, cursor + layer.pngLength)
+      });
+      cursor += layer.pngLength;
+    }
+    textures = {
+      width: textureManifest.width,
+      height: textureManifest.height,
+      activeId: textureManifest.activeId,
+      layers: textureLayers
+    };
+  }
+
   const alignedEnd = align4(cursor);
   if (alignedEnd !== bytes.byteLength) {
     throw new Error('The .lpoly payload has trailing or missing bytes.');
@@ -584,6 +831,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
       shading: settings.shading,
       ps1Snap: settings.ps1Snap,
       ps1Affine: settings.ps1Affine
-    }
+    },
+    ...(textures ? { textures } : {})
   };
 }

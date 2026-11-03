@@ -24,6 +24,19 @@ export interface TextureStackState {
   readonly activeId: string | null;
 }
 
+/** One layer and its binary PNG payload for project persistence. */
+export interface TextureLayerRecord extends TextureLayerSummary {
+  readonly png: Uint8Array;
+}
+
+/** Project-level texture set with binary PNG chunks, never base64. */
+export interface TextureProjectData {
+  readonly width: number;
+  readonly height: number;
+  readonly activeId: string | null;
+  readonly layers: readonly TextureLayerRecord[];
+}
+
 interface TextureLayer {
   readonly id: string;
   readonly name: string;
@@ -188,6 +201,81 @@ export class TextureStack {
     }
     this.layers.splice(0, this.layers.length, ...next);
     this.activeId = state.activeId;
+    this.compositeLayers();
+  }
+
+  /** Encode every layer as a binary PNG project payload. */
+  async exportProject(): Promise<TextureProjectData> {
+    const layers: TextureLayerRecord[] = [];
+    for (const layer of this.layers) {
+      const blob = await layer.canvas.convertToBlob({ type: 'image/png' });
+      layers.push({
+        id: layer.id,
+        name: layer.name,
+        visible: layer.visible,
+        opacity: layer.opacity,
+        color: layer.color,
+        pattern: layer.pattern,
+        png: new Uint8Array(await blob.arrayBuffer())
+      });
+    }
+    return {
+      width: this.width,
+      height: this.height,
+      activeId: this.activeId,
+      layers
+    };
+  }
+
+  /** Replace the session stack from decoded PNG project data. */
+  async importProject(data: TextureProjectData): Promise<void> {
+    if (data.width !== this.width || data.height !== this.height) {
+      throw new Error(
+        `Texture size ${data.width}×${data.height} does not match this project.`
+      );
+    }
+    const imported: TextureLayer[] = [];
+    for (const record of data.layers) {
+      const canvas = createLayerCanvas(this.width, this.height);
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Unable to create a texture layer context.');
+      }
+      const pngBuffer = record.png.buffer.slice(
+        record.png.byteOffset,
+        record.png.byteOffset + record.png.byteLength
+      ) as ArrayBuffer;
+      const bitmap = await createImageBitmap(
+        new Blob([pngBuffer], { type: 'image/png' })
+      );
+      context.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      imported.push({
+        id: record.id,
+        name: record.name,
+        visible: record.visible,
+        opacity: record.opacity,
+        color: record.color,
+        pattern: record.pattern,
+        canvas,
+        context
+      });
+    }
+    if (imported.length === 0) {
+      this.reset();
+      return;
+    }
+    this.layers.splice(0, this.layers.length, ...imported);
+    for (const layer of imported) {
+      const match = /^texlayer-(\d+)$/.exec(layer.id);
+      if (match) {
+        nextLayerNumber = Math.max(nextLayerNumber, Number(match[1]) + 1);
+      }
+    }
+    this.activeId =
+      data.activeId && imported.some((layer) => layer.id === data.activeId)
+        ? data.activeId
+        : imported[imported.length - 1].id;
     this.compositeLayers();
   }
 

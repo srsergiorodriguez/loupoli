@@ -5,6 +5,7 @@ import { createCylinderMesh, createGridMesh } from '../geometry/primitives';
 import {
   decodeLpoly,
   encodeLpoly,
+  encodeLpolyV2,
   restoreNode,
   snapshotGroup,
   snapshotNode,
@@ -64,6 +65,33 @@ describe('.lpoly v1', () => {
     expect(Array.from(second)).toEqual(Array.from(bytes));
   });
 
+
+  it('round-trips v2 texture metadata and PNG chunks', () => {
+    const document = makeDocument();
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
+    const bytes = encodeLpolyV2(document, SETTINGS, {
+      width: 64,
+      height: 64,
+      activeId: 'texlayer-1',
+      layers: [
+        {
+          id: 'texlayer-1',
+          name: 'Base',
+          visible: true,
+          opacity: 1,
+          color: '#c8c2ad',
+          pattern: 'checker',
+          png
+        }
+      ]
+    });
+    const decoded = decodeLpoly(bytes);
+    expect(decoded.textures?.width).toBe(64);
+    expect(decoded.textures?.layers).toHaveLength(1);
+    expect(decoded.textures?.layers[0].png).toEqual(png);
+    expect(decoded.textures?.activeId).toBe('texlayer-1');
+    expect(decoded.document.nodes[0].name).toBe('QuadSphere');
+  });
 
   it('round-trips a modifier stack', () => {
     const document = makeDocument();

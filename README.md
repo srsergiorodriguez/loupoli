@@ -29,7 +29,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
-- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. The stack is **session-only** right now: `.lpoly` v2 PNG chunks, texture autosave, blend modes, raster painting, and layer rename are not implemented yet.
+- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture autosave, blend modes, raster painting, and layer rename are not implemented yet.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
 
@@ -51,7 +51,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Quad-aware deformation.** A bent quad renders as a 4 × 4 bilinear patch instead of two independent texture panels, avoiding a diagonal texture crease. The DCEL remains one quad, and displayed V/E/F/triangle counts stay topological.
 - **Bounded command history.** Localized vertex deltas and node add/delete snapshots, redo truncation, a 100-command cap, and a 32 MB retained-byte budget.
 - **Local-first autosave.** A checkpoint plus localized command deltas is written to IndexedDB every 30 seconds while dirty and on visibility loss. Cold start offers **Recover** or **Discard**; recovered work is labelled until saved.
-- **Versioned `.lpoly` v1.** Binary container with a CRC-checked manifest and aligned typed-array columns. It round-trips multiple nodes, quads, n-gons, boundary loops, per-corner UVs, seam flags, face materials, transforms, and viewport settings.
+- **Versioned `.lpoly` v1/v2.** Binary container with a CRC-checked manifest and aligned typed-array columns. v1 round-trips nodes, quads, n-gons, boundary loops, per-corner UVs, seam flags, face materials, transforms, and viewport settings. v2 adds texture-set metadata and per-layer binary PNG chunks; v1 files still open.
 - **Native and browser file I/O.** Tauri uses the native dialog plugin plus Rust byte-level read/write commands with size checks, same-directory temporary files, `fsync`, and rename. Browser mode uses download and file-picker fallbacks. `Cmd/Ctrl+S` and `Cmd/Ctrl+O` are wired.
 - **Pointer routing.** Pen never moves the camera; it selects, drags selection/action gizmos, and edits vertices. Touch remains the camera/gesture surface, with taps selecting and one-finger drag orbiting. Mouse supports the documented DCC orbit mappings.
 - **Design system.** Vanilla CSS tokens, local icon registry, floating glass panels, responsive iPad portrait/touch layouts, 44 px touch targets, documented action-size tiers and bottom-HUD offsets, focus states, safe-area handling, and reduced-motion/reduced-transparency fallbacks.
@@ -162,7 +162,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **85 passing** tests across nineteen files:
+- `npm test`: **86 passing** tests across nineteen files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.
@@ -341,7 +341,7 @@ Target baseline: **iPadOS 16.4+**. The Tauri app is structured for iOS, but the 
 | [Master Plan](docs/PLAN.md) | Product constraints, approved decisions, phase exits, risks, toolchain audit |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, DCEL, multi-node rendering, picking, autosave, file I/O |
 | [Design System](docs/DESIGN_SYSTEM.md) | Tokens, visual direction, responsive editor layout, component inventory |
-| [Persistence](docs/PERSISTENCE.md) | Implemented autosave journal and `.lpoly` v1 binary format |
+| [Persistence](docs/PERSISTENCE.md) | Implemented autosave journal and `.lpoly` v1/v2 binary format |
 
 ## Project layout
 
@@ -369,4 +369,4 @@ docs/                Planning, architecture, persistence, design system, media
 4. Bundle identifier is `com.loupoli.studio`.
 5. Correct perspective Unlit mapping with no vertex snapping is the default; PS1 effects are opt-in.
 6. Non-planar quads use render-only bilinear tessellation; the editable DCEL remains quads.
-7. Phase 2 uses a versioned binary `.lpoly` v1 container with CRC validation, and an IndexedDB checkpoint-plus-deltas autosave journal.
+7. Phase 2 uses a versioned binary `.lpoly` v1 container; Phase 4 adds v2 texture PNG chunks while retaining v1 decode. Autosave uses an IndexedDB checkpoint-plus-deltas journal.

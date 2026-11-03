@@ -101,6 +101,7 @@ import { applyJournalPatch } from '../project/journal';
 import {
   decodeLpoly,
   encodeLpoly,
+  encodeLpolyV2,
   type DecodedProject,
   type ProjectSettings
 } from '../project/lpoly';
@@ -2173,6 +2174,7 @@ export class EditorRuntime {
         applyJournalPatch(decoded.document, patch);
       }
       this.applyLoadedDocument(decoded, 'Recovered project');
+      await this.applyProjectTextures(decoded);
       this.recovered = true;
       this.recoveryAvailable = false;
       this.recoveryUpdatedAt = null;
@@ -2225,7 +2227,12 @@ export class EditorRuntime {
     this.projectError = null;
     this.publish();
     try {
-      const bytes = encodeLpoly(this.document, this.getSettings());
+      const textures = await this.textureStack.exportProject();
+      const bytes = encodeLpolyV2(
+        this.document,
+        this.getSettings(),
+        textures
+      );
       const saved = await saveProjectFile(bytes, `${this.projectName}.lpoly`);
       if (saved) {
         this.recovered = false;
@@ -2263,6 +2270,7 @@ export class EditorRuntime {
       const decoded = decodeLpoly(file.bytes);
       const name = file.name.replace(/\.lpoly$/i, '') || 'Untitled';
       this.applyLoadedDocument(decoded, name);
+      await this.applyProjectTextures(decoded);
       this.recovered = false;
       this.recoveryAvailable = false;
       this.recoveryUpdatedAt = null;
@@ -4419,6 +4427,15 @@ export class EditorRuntime {
     this.autosaveStatus = state.status;
     this.lastAutosavedAt = state.lastSavedAt;
     this.autosaveError = state.error;
+    this.publish();
+  }
+
+  private async applyProjectTextures(decoded: DecodedProject): Promise<void> {
+    if (decoded.textures) {
+      await this.textureStack.importProject(decoded.textures);
+    }
+    this.renderer.setTextureMap(this.textureStack.texture);
+    this.renderer.refreshTexture();
     this.publish();
   }
 
