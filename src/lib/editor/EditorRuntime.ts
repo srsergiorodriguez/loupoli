@@ -24,6 +24,7 @@ import {
   deleteSelectedElements,
   deletionLabel,
   extrudeSelectedFaces,
+  collectEdgeLoop,
   insetSelectedFace,
   loopCutFromEdge,
   mergeSelectedVertices
@@ -48,10 +49,13 @@ import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import {
-  computeUvProjection,
+  applyUvView,
+  fitUvProjection,
   pickUvCorner as pickNearestUvCorner,
   uvToCanvas,
-  uvClickMoved
+  uvClickMoved,
+  type UvProjection,
+  type UvProjectionBase
 } from '../uv/uvView';
 import { drawUvCanvas } from '../uv/uvCanvas';
 import { extractUvCharts } from '../geometry/uvCharts';
@@ -62,7 +66,7 @@ import {
   TextureStackCommand,
   textureStackStatesEqual
 } from '../texture/TextureStack';
-import { rotateUv, scaleUv, uvMedian } from '../uv/uvTransform';
+import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
   paintBounds,
@@ -344,6 +348,7 @@ export class EditorRuntime {
   private additiveNodeSelection = false;
   private readonly selection = new ElementSelection('vertex');
   private selectionCombineMode: SelectionCombineMode = 'replace';
+  private loopSelect = false;
   private activeEditor: EditorPane = '3d';
   private uvOpen = false;
   private uvSplit = 0.38;
@@ -351,9 +356,14 @@ export class EditorRuntime {
   private uvZoom = 1;
   private uvPanX = 0;
   private uvPanY = 0;
+  private uvBaseProjection: UvProjectionBase | null = null;
+  private uvBaseNodeId: string | null = null;
+  private uvCanvasWidth = 0;
+  private uvCanvasHeight = 0;
   private uvAxisLock: UvAxisLock = null;
   private uvFineMode = false;
   private uvTransformMode: UvTransformMode = 'move';
+  private uvDragScale: number | null = null;
   private uvSelectionMode: UvSelectionMode = 'vertex';
   private uvClampMode = true;
   private uvActiveChart: number | null = null;
@@ -487,6 +497,14 @@ export class EditorRuntime {
         ? worldTransformForNode(active.transform, parentTransform)
         : null;
     const selectedElements = this.selection.values();
+    let seamCount = 0;
+    if (mesh) {
+      for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+        if (mesh.isEdgeSeam(edge)) {
+          seamCount += 1;
+        }
+      }
+    }
     const selectedPosition =
       this.selection.mode === 'vertex' &&
       mesh !== null &&
@@ -509,6 +527,7 @@ export class EditorRuntime {
       selectionCombineMode: this.selectionCombineMode,
       activeEditor: this.activeEditor,
       selectionMode: this.selection.mode,
+      loopSelect: this.loopSelect,
       selectedPosition,
       uvOpen: this.uvOpen,
       uvSplit: this.uvSplit,
@@ -519,6 +538,7 @@ export class EditorRuntime {
       uvAxisLock: this.uvAxisLock,
       uvFineMode: this.uvFineMode,
       uvTransformMode: this.uvTransformMode,
+      uvDragScale: this.uvDragScale,
       uvSelectionMode: this.uvSelectionMode,
       uvClampMode: this.uvClampMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
@@ -556,6 +576,7 @@ export class EditorRuntime {
         this.lastLoopCut !== null &&
         this.lastLoopCut.node === this.getActiveNode(),
       boundaryEdges: mesh?.boundaryEdgeCount ?? 0,
+      seamCount,
       counts: mesh
         ? {
             vertices: mesh.vertexCount,
@@ -992,6 +1013,8 @@ export class EditorRuntime {
     this.uvZoom = 1;
     this.uvPanX = 0;
     this.uvPanY = 0;
+    this.uvBaseProjection = null;
+    this.uvBaseNodeId = null;
     this.uvError = null;
     this.uvSelection.clear();
     this.uvPins.clear();
@@ -1008,6 +1031,8 @@ export class EditorRuntime {
     this.activeEditor = '3d';
     this.uvPaintMode = false;
     this.uvActiveChart = null;
+    this.uvBaseProjection = null;
+    this.uvBaseNodeId = null;
     this.uvRevision += 1;
     this.publish();
   }
@@ -1040,10 +1065,10 @@ export class EditorRuntime {
     }
     const nextZoom = Math.min(16, Math.max(0.25, this.uvZoom * factor));
     const current = this.uvProjection(node.mesh, width, height);
+    const base = this.ensureUvProjectionBase(node.mesh, width, height);
     const u = (anchorX - current.offsetX) / current.scale;
     const v =
       (height - current.offsetY - anchorY) / current.scale;
-    const base = computeUvProjection(node.mesh, width, height);
     const nextScale = base.scale * nextZoom;
     this.uvZoom = nextZoom;
     this.uvPanX = anchorX - u * nextScale - base.offsetX;
@@ -1065,9 +1090,20 @@ export class EditorRuntime {
 
   /** Fit the complete UV layout again. */
   resetUvView(): void {
+    const node = this.getActiveNode();
     this.uvZoom = 1;
     this.uvPanX = 0;
     this.uvPanY = 0;
+    this.uvBaseProjection =
+      node && this.uvCanvasWidth > 0 && this.uvCanvasHeight > 0
+        ? fitUvProjection(
+            node.mesh,
+            this.uvCanvasWidth,
+            this.uvCanvasHeight,
+            24
+          )
+        : null;
+    this.uvBaseNodeId = node?.id ?? null;
     this.uvRevision += 1;
     this.publish();
   }
@@ -1080,12 +1116,37 @@ export class EditorRuntime {
     };
   }
 
+  private ensureUvProjectionBase(
+    mesh: HalfEdgeMesh,
+    width: number,
+    height: number
+  ): UvProjectionBase {
+    const nodeId = this.getActiveNode()?.id ?? null;
+    let base = this.uvBaseProjection;
+    if (
+      !base ||
+      base.width !== width ||
+      base.height !== height ||
+      this.uvBaseNodeId !== nodeId
+    ) {
+      base = fitUvProjection(mesh, width, height, 24);
+      this.uvBaseProjection = base;
+      this.uvBaseNodeId = nodeId;
+    }
+    this.uvCanvasWidth = width;
+    this.uvCanvasHeight = height;
+    return base;
+  }
+
   private uvProjection(
     mesh: HalfEdgeMesh,
     width: number,
     height: number
-  ): ReturnType<typeof computeUvProjection> {
-    return computeUvProjection(mesh, width, height, 24, this.uvViewState());
+  ): UvProjection {
+    return applyUvView(
+      this.ensureUvProjectionBase(mesh, width, height),
+      this.uvViewState()
+    );
   }
 
   /** Set the fraction of the viewport occupied by the UV pane. */
@@ -1624,6 +1685,7 @@ export class EditorRuntime {
       );
       this.uvError = null;
       this.history.execute(command);
+      this.uvBaseProjection = null;
       this.uvRevision += 1;
       this.publish();
     } catch (error) {
@@ -1641,6 +1703,7 @@ export class EditorRuntime {
     if (!node) {
       return;
     }
+    const projection = this.uvProjection(node.mesh, width, height);
     drawUvCanvas(
       canvas,
       node.mesh,
@@ -1650,7 +1713,8 @@ export class EditorRuntime {
       height,
       this.textureStack.image,
       this.uvViewState(),
-      this.uvSelectionMode
+      this.uvSelectionMode,
+      projection
     );
   }
 
@@ -1888,6 +1952,7 @@ export class EditorRuntime {
       1e-6,
       Math.hypot(startUv[0] - pivot[0], startUv[1] - pivot[1])
     );
+    this.uvDragScale = this.uvTransformMode === 'scale' ? 1 : null;
     this.uvDrag = {
       node,
       mode: this.uvTransformMode,
@@ -2017,7 +2082,11 @@ export class EditorRuntime {
         current[0] - drag.pivot[0],
         current[1] - drag.pivot[1]
       );
-      let factor = 1 + (distance / drag.startDistance - 1) * precision * pivotSensitivity;
+      // Scale from pointer displacement, not an unbounded distance ratio.
+      // Starting near the pivot therefore cannot cause an explosive factor.
+      const radius = distance * projection.scale;
+      let factor = uvScaleFactor(startRadius, radius, precision);
+      this.uvDragScale = factor;
       if (this.snapEnabled) {
         factor = Math.max(
           1e-3,
@@ -2091,6 +2160,7 @@ export class EditorRuntime {
       return;
     }
     this.uvDrag = null;
+    this.uvDragScale = null;
     const after = drag.corners.map((corner) => drag.node.mesh.getCornerUv(corner));
     const changed = after.some((uv, index) =>
       uv.some(
@@ -2214,6 +2284,7 @@ export class EditorRuntime {
   /** Restore the UVs captured at drag start. */
   cancelUvDrag(): void {
     this.uvPendingClick = null;
+    this.uvDragScale = null;
     const drag = this.uvDrag;
     if (!drag) {
       return;
@@ -2235,6 +2306,9 @@ export class EditorRuntime {
       this.cancelToolPointer();
     }
     this.selection.setMode(mode);
+    if (mode !== 'edge') {
+      this.loopSelect = false;
+    }
     if (mode !== 'vertex') {
       this.axisLock = null;
     }
@@ -2248,6 +2322,15 @@ export class EditorRuntime {
       return;
     }
     this.selectionCombineMode = mode;
+    this.publish();
+  }
+
+  /** Toggle edge-loop expansion for the next edge pick. */
+  setLoopSelect(enabled: boolean): void {
+    if (this.loopSelect === enabled) {
+      return;
+    }
+    this.loopSelect = enabled && this.selection.mode === 'edge';
     this.publish();
   }
 
@@ -2899,6 +2982,27 @@ export class EditorRuntime {
     const edges = this.selection.values();
     const mark = edges.some((edge) => !node.mesh.isEdgeSeam(edge));
     const command = new SetEdgeSeamsCommand(node.mesh, node.id, edges, mark);
+    if (!command.noop) {
+      this.history.execute(command);
+    }
+  }
+
+  /** Clear every UV seam on the active mesh as one undoable command. */
+  clearAllSeams(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const seams: number[] = [];
+    for (let edge = 0; edge < node.mesh.edgeCount; edge += 1) {
+      if (node.mesh.isEdgeSeam(edge)) {
+        seams.push(edge);
+      }
+    }
+    if (seams.length === 0) {
+      return;
+    }
+    const command = new SetEdgeSeamsCommand(node.mesh, node.id, seams, false);
     if (!command.noop) {
       this.history.execute(command);
     }
@@ -3597,7 +3701,16 @@ export class EditorRuntime {
       }
     } else if (baseIndex >= 0) {
       this.pointerSelectionHit = true;
-      if (combine === 'subtract') {
+      if (this.selection.mode === 'edge' && this.loopSelect) {
+        const loop = collectEdgeLoop(evaluated.mesh, evaluatedIndex);
+        const provenance = evaluated.provenance;
+        const edges = [
+          ...new Set(
+            loop.edges.map((edge) => provenance?.edgeBase[edge] ?? edge)
+          )
+        ];
+        this.applyEdgeSelection(edges, combine);
+      } else if (combine === 'subtract') {
         this.selection.remove(baseIndex);
       } else {
         this.selection.pick(baseIndex, combine === 'add');
@@ -3631,6 +3744,31 @@ export class EditorRuntime {
       }
     }
     return result;
+  }
+
+  /** Apply one or more edge picks under Replace, Add, or Sub. */
+  private applyEdgeSelection(
+    edges: readonly number[],
+    combine: SelectionCombineMode
+  ): void {
+    if (edges.length === 0) {
+      return;
+    }
+    if (combine === 'subtract') {
+      for (const edge of edges) {
+        this.selection.remove(edge);
+      }
+      return;
+    }
+    if (combine === 'add') {
+      const next = new Set(this.selection.values());
+      for (const edge of edges) {
+        next.add(edge);
+      }
+      this.selection.setValues([...next]);
+      return;
+    }
+    this.selection.setValues(edges);
   }
 
   private beginToolPointer(sample: PointerSample): boolean {
@@ -3741,11 +3879,10 @@ export class EditorRuntime {
         return false;
       }
       this.pointerSelectionHit = true;
-      if (subtract) {
-        this.selection.remove(edge);
-      } else {
-        this.selection.pick(edge, additive);
-      }
+      const edges = this.loopSelect
+        ? collectEdgeLoop(node.mesh, edge).edges
+        : [edge];
+      this.applyEdgeSelection(edges, combine);
       this.syncScene();
       this.publish();
       return false;

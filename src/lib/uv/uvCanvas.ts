@@ -1,6 +1,11 @@
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import { buildUvTopology, type UvSelectionMode } from './uvElements';
-import { computeUvProjection, uvToCanvas, type UvViewState } from './uvView';
+import {
+  computeUvProjection,
+  uvToCanvas,
+  type UvProjection,
+  type UvViewState
+} from './uvView';
 
 function cssToken(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement)
@@ -36,7 +41,8 @@ export function drawUvCanvas(
   height: number,
   backgroundImage: CanvasImageSource | null = null,
   view?: UvViewState,
-  selectionMode: UvSelectionMode = 'vertex'
+  selectionMode: UvSelectionMode = 'vertex',
+  projectionOverride?: UvProjection
 ): void {
   if (width <= 0 || height <= 0) {
     return;
@@ -62,7 +68,8 @@ export function drawUvCanvas(
   context.fillStyle = background;
   context.fillRect(0, 0, width, height);
 
-  const projection = computeUvProjection(mesh, width, height, 26, view);
+  const projection =
+    projectionOverride ?? computeUvProjection(mesh, width, height, 26, view);
   if (backgroundImage) {
     const imageOrigin = uvToCanvas([0, 1], projection);
     context.save();

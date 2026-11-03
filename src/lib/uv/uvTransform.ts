@@ -25,6 +25,19 @@ export function rotateUv(uv: Vec2, pivot: Vec2, radians: number): Vec2 {
   ];
 }
 
+/** Exponential scale factor from screen-space pointer radius change. */
+export function uvScaleFactor(
+  startRadius: number,
+  currentRadius: number,
+  precision = 1
+): number {
+  const reference = Math.max(80, startRadius);
+  const factor = Math.exp(
+    ((currentRadius - startRadius) / reference) * precision
+  );
+  return Math.min(100, Math.max(0.01, factor));
+}
+
 /** Scale one UV around a pivot, optionally only along U or V. */
 export function scaleUv(
   uv: Vec2,

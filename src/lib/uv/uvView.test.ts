@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createCubeMesh } from '../geometry/primitives';
 import {
+  applyUvView,
   canvasDeltaToUv,
   computeUvProjection,
+  fitUvProjection,
   pickUvCorner,
   uvClickMoved,
   uvSideSplitForPointer,
@@ -45,6 +47,18 @@ describe('UV view math', () => {
     expect(view.scale).toBeCloseTo(base.scale * 2);
     expect(view.offsetX).toBeCloseTo(base.offsetX + 30);
     expect(view.offsetY).toBeCloseTo(base.offsetY - 12);
+  });
+
+  it('keeps the cached fit stable while the UV layout changes', () => {
+    const mesh = createCubeMesh(1);
+    const base = fitUvProjection(mesh, 400, 320, 24);
+    const view = { zoom: 1.5, panX: 12, panY: -8 };
+    const first = applyUvView(base, view);
+    mesh.setCornerUv(0, [0.1, 0.1]);
+    const second = applyUvView(base, view);
+    expect(second.scale).toBe(first.scale);
+    expect(second.offsetX).toBe(first.offsetX);
+    expect(second.offsetY).toBe(first.offsetY);
   });
 
   it('computes side split and click/drag thresholds from the pane edge', () => {

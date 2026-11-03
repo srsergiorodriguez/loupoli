@@ -53,6 +53,7 @@
   const clampMode = $derived(session.snapshot.uvClampMode);
   const fineMode = $derived(session.snapshot.uvFineMode);
   const uvZoom = $derived(session.snapshot.uvZoom);
+  const uvDragScale = $derived(session.snapshot.uvDragScale);
 
   onMount(() => {
     const observer = new ResizeObserver((entries) => {
@@ -487,7 +488,7 @@
   <PaneHeader
     label="UV"
     active={activeEditor === 'uv'}
-    meta={`${selectedCount} corner${selectedCount === 1 ? '' : 's'} · ${Math.round(uvZoom * 100)}%`}
+    meta={`${selectedCount} corner${selectedCount === 1 ? '' : 's'} · ${Math.round(uvZoom * 100)}%${uvDragScale !== null ? ` · ×${uvDragScale.toFixed(2)}` : ''}`}
   />
 {/snippet}
 

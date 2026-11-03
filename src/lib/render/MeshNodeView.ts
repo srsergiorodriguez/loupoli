@@ -47,7 +47,7 @@ const PICK_RADIUS_CSS = 16;
 const WIRE_TUBE_RADIUS = 0.012;
 const FRONT_WIRE_TUBE_RADIUS = 0.014;
 const SELECTED_EDGE_RADIUS = 0.025;
-const SEAM_TUBE_RADIUS = 0.008;
+const SEAM_TUBE_RADIUS = 0.019;
 const Y_AXIS = new Vector3(0, 1, 0);
 
 function pointInPolygon(

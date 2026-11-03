@@ -734,6 +734,21 @@
           </button>
         </div>
       {/if}
+
+      {#if activeNodeId !== null && session.snapshot.seamCount > 0}
+        <div class="selection-actions">
+          <button
+            type="button"
+            class="topology-action"
+            aria-label="Remove all UV seams from the active mesh"
+            title={`Clear ${session.snapshot.seamCount} UV seam${session.snapshot.seamCount === 1 ? '' : 's'}`}
+            onclick={() => session.clearAllSeams()}
+          >
+            <Icon name="seam" size={14} />
+            <span>Clear seams</span>
+          </button>
+        </div>
+      {/if}
     </InspectorSection>
 
     <InspectorSection

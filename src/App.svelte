@@ -208,7 +208,7 @@
       {/if}
 
       <TransformHud modal={session.snapshot.modalTransform} />
-      {#if session.snapshot.activeEditor !== 'paint'}
+      {#if !session.snapshot.uvOpen}
         <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />

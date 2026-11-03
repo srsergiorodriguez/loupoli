@@ -210,6 +210,8 @@ export class ViewportRenderer {
     this.seamEdgeMaterial = new MeshBasicMaterial({
       name: 'loupoli-seam-tube',
       color: theme.seam.color,
+      transparent: true,
+      opacity: 1,
       depthTest: true,
       depthWrite: false,
       polygonOffset: true,

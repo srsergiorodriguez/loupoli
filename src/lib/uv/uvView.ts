@@ -7,14 +7,17 @@ export interface UvViewState {
   readonly panY: number;
 }
 
-/** Maps UV space to a canvas pixel rectangle while preserving aspect ratio. */
-export interface UvProjection {
+/** Cached fit of the UV bounds at a fixed canvas size. */
+export interface UvProjectionBase {
   readonly scale: number;
   readonly offsetX: number;
   readonly offsetY: number;
   readonly width: number;
   readonly height: number;
 }
+
+/** Maps UV space to a canvas pixel rectangle while preserving aspect ratio. */
+export interface UvProjection extends UvProjectionBase {}
 
 /** Convert UV coordinates to canvas pixels. */
 export function uvToCanvas(
@@ -39,16 +42,15 @@ export function canvasDeltaToUv(
 /**
  * Fit the mesh UV bounds into the available canvas with padding.
  *
- * The projection is uniform so UV squares stay square. UVs outside [0,1] are
- * supported because tiled materials legitimately repeat coordinates.
+ * The result is a stable base projection. Callers that must avoid visual jumps
+ * during an edit cache this and apply only zoom/pan while the gesture runs.
  */
-export function computeUvProjection(
+export function fitUvProjection(
   mesh: HalfEdgeMesh,
   width: number,
   height: number,
-  padding = 24,
-  view?: UvViewState
-): UvProjection {
+  padding = 24
+): UvProjectionBase {
   let minU = Infinity;
   let minV = Infinity;
   let maxU = -Infinity;
@@ -80,16 +82,44 @@ export function computeUvProjection(
       Math.max(height - padding * 2, 1) / spanV
     )
   );
-  const baseOffsetX = (width - spanU * scale) / 2 - minU * scale;
-  const baseOffsetY = (height - spanV * scale) / 2 - minV * scale;
-  const zoom = Math.max(0.01, view?.zoom ?? 1);
   return {
-    scale: scale * zoom,
-    offsetX: baseOffsetX + (view?.panX ?? 0),
-    offsetY: baseOffsetY + (view?.panY ?? 0),
+    scale,
+    offsetX: (width - spanU * scale) / 2 - minU * scale,
+    offsetY: (height - spanV * scale) / 2 - minV * scale,
     width,
     height
   };
+}
+
+/** Apply user zoom and pan to a cached fit without re-fitting the UV bounds. */
+export function applyUvView(
+  base: UvProjectionBase,
+  view?: UvViewState
+): UvProjection {
+  const zoom = Math.max(0.01, view?.zoom ?? 1);
+  return {
+    scale: base.scale * zoom,
+    offsetX: base.offsetX + (view?.panX ?? 0),
+    offsetY: base.offsetY + (view?.panY ?? 0),
+    width: base.width,
+    height: base.height
+  };
+}
+
+/**
+ * Fit the mesh UV bounds and apply the current zoom/pan in one step.
+ *
+ * The editor caches `fitUvProjection` during transforms; this convenience
+ * wrapper remains for tests and one-shot callers.
+ */
+export function computeUvProjection(
+  mesh: HalfEdgeMesh,
+  width: number,
+  height: number,
+  padding = 24,
+  view?: UvViewState
+): UvProjection {
+  return applyUvView(fitUvProjection(mesh, width, height, padding), view);
 }
 
 /**

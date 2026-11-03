@@ -16,6 +16,7 @@ export type CommandId =
   | 'selection.edge'
   | 'selection.face'
   | 'selection.island'
+  | 'selection.loop'
   | 'selection.all'
   | 'selection.add'
   | 'selection.subtract'
@@ -69,6 +70,7 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'selection.edge': { label: 'Edge', scope: 'active', presentation: 'text' },
   'selection.face': { label: 'Face', scope: 'active', presentation: 'text' },
   'selection.island': { label: 'Island', scope: 'uv', presentation: 'text' },
+  'selection.loop': { label: 'Loop', scope: 'active', presentation: 'text' },
   'selection.all': { label: 'All', scope: 'active', shortcut: 'selectAll', presentation: 'text', bindings: [{ key: 'a', mod: true }] },
   'selection.add': { label: 'Add', scope: 'active', presentation: 'text' },
   'selection.subtract': { label: 'Sub', scope: 'active', presentation: 'text' },

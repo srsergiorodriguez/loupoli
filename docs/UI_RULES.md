@@ -7,7 +7,8 @@ These are implementation constraints, not style suggestions. A change that viola
 Every command has exactly one visible home. Contextual behavior changes the target, not the location of the control.
 
 - Selection modes and combination: Selection Bar.
-- Pointer tools: Tool Rail.
+- Pointer tools: Tool Rail. ActionDock is 3D-only and is hidden while the UV split is open.
+- Edge-loop selection is a sticky toggle shown only in 3D Edge mode; it expands an edge pick across the quad loop.
 - UV-only operations: UV Toolbar.
 - Document actions: Application Bar.
 - Topology one-shots: Action Dock.
@@ -101,6 +102,7 @@ If any answer is missing, do not add the control.
 - The Viewport Stage owns HUD and lasso overlays; HUD anchors to the visible 3D rectangle, not the window.
 - Transparent HUD wrappers are `pointer-events: none`; only visible controls opt back in. No invisible rectangle may block viewport picking.
 - Pane dividers are constrained to the pane frame bounds and must never extend over the Application Bar or Workspace Tabs.
+- UV transforms use the fitted projection cached at the start of the gesture; auto-fit is not allowed to move the view mid-transform.
 - Camera pan/orbit/zoom never mutate selection. Only a no-move click/tap on empty viewport space clears it.
 - A selection gesture applies its pick exactly once. Pointer-up resolves only the deferred empty-click case; it must never re-run additive selection or toggle the pick back off.
 - Workspace panes use the shared PaneHost and PaneFrame; the divider hit area straddles the pane edge, and the canvas/overlay body has one positioning context.

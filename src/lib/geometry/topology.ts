@@ -658,6 +658,71 @@ function otherFace(
   return null;
 }
 
+/** Edges collected by walking one quad edge loop. */
+export interface EdgeLoop {
+  /** Edge indices in deterministic order. */
+  readonly edges: readonly number[];
+  /** Whether the walk returned to an edge already in the loop. */
+  readonly closed: boolean;
+}
+
+/**
+ * Collect the edge loop seeded by one edge across opposite quad edges.
+ *
+ * Walks both directions and stops at open boundaries or non-quad faces, so the
+ * result is a usable partial loop instead of a topology error.
+ */
+export function collectEdgeLoop(mesh: HalfEdgeMesh, edge: number): EdgeLoop {
+  if (!Number.isInteger(edge) || edge < 0 || edge >= mesh.edgeCount) {
+    throw new RangeError(`Edge ${edge} is outside the mesh.`);
+  }
+  const halfEdge = mesh.edgeHalfEdge[edge];
+  const firstFace = mesh.heFace[halfEdge];
+  const secondFace = mesh.heFace[mesh.heTwin[halfEdge]];
+  const loopEdges = new Set<number>([edge]);
+  const visitedFaces = new Set<number>();
+  let closed = false;
+  const maxFaces = mesh.faceCount * 2 + 4;
+
+  const walk = (startFace: number, startEdge: number): void => {
+    let face = startFace;
+    let currentEdge = startEdge;
+    while (face >= 0 && !visitedFaces.has(face)) {
+      if (visitedFaces.size > maxFaces) {
+        return;
+      }
+      const corners = faceLoopCorners(mesh, face);
+      if (corners.length !== 4) {
+        return;
+      }
+      visitedFaces.add(face);
+      const index = corners.findIndex((corner) => corner.edge === currentEdge);
+      if (index < 0) {
+        return;
+      }
+      const opposite = corners[(index + 2) % 4].edge;
+      if (loopEdges.has(opposite)) {
+        closed = true;
+        return;
+      }
+      loopEdges.add(opposite);
+      const next = otherFace(mesh, opposite, face);
+      if (next === null) {
+        return;
+      }
+      currentEdge = opposite;
+      face = next;
+    }
+  };
+
+  walk(firstFace, edge);
+  walk(secondFace, edge);
+  return {
+    edges: [...loopEdges].sort((a, b) => a - b),
+    closed
+  };
+}
+
 /**
  * Cut one quad edge loop at a position along its crossing edges.
  *

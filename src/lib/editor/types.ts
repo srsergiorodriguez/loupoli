@@ -140,6 +140,7 @@ export interface EditorSnapshot {
   readonly selectionCombineMode: SelectionCombineMode;
   readonly activeEditor: EditorPane;
   readonly selectionMode: SelectionMode;
+  readonly loopSelect: boolean;
   readonly selectedPosition: [number, number, number] | null;
   readonly uvOpen: boolean;
   readonly uvSplit: number;
@@ -150,6 +151,7 @@ export interface EditorSnapshot {
   readonly uvAxisLock: UvAxisLock;
   readonly uvFineMode: boolean;
   readonly uvTransformMode: UvTransformMode;
+  readonly uvDragScale: number | null;
   readonly uvSelectionMode: UvSelectionMode;
   readonly uvClampMode: boolean;
   readonly uvSelectedCorners: readonly number[];
@@ -175,6 +177,7 @@ export interface EditorSnapshot {
   readonly evaluatedCounts: MeshCounts;
   readonly counts: MeshCounts;
   readonly boundaryEdges: number;
+  readonly seamCount: number;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly undoLabel: string | null;

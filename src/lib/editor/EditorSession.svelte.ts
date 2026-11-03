@@ -30,6 +30,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   selectionCombineMode: 'replace',
   activeEditor: '3d',
   selectionMode: 'vertex',
+  loopSelect: false,
   selectedPosition: null,
   uvOpen: false,
   uvSplit: 0.38,
@@ -40,6 +41,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvAxisLock: null,
   uvFineMode: false,
   uvTransformMode: 'move',
+  uvDragScale: null,
   uvSelectionMode: 'vertex',
   uvClampMode: true,
   uvSelectedCorners: [],
@@ -64,6 +66,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   modifierError: null,
   evaluatedCounts: { vertices: 0, edges: 0, faces: 0, triangles: 0 },
   boundaryEdges: 0,
+  seamCount: 0,
   counts: {
     vertices: 0,
     edges: 0,
@@ -194,6 +197,10 @@ export class EditorSession {
 
   setSelectionMode(mode: SelectionMode): void {
     this.runtime?.setSelectionMode(mode);
+  }
+
+  setLoopSelect(enabled: boolean): void {
+    this.runtime?.setLoopSelect(enabled);
   }
 
   setSelectionCombineMode(mode: SelectionCombineMode): void {
@@ -650,6 +657,10 @@ export class EditorSession {
 
   toggleSelectedSeams(): void {
     this.runtime?.toggleSelectedSeams();
+  }
+
+  clearAllSeams(): void {
+    this.runtime?.clearAllSeams();
   }
 
   armAction(kind: MeshActionKind): void {

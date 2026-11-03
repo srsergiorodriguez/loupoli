@@ -89,6 +89,20 @@
       <span class="mode-key" aria-hidden="true">{mode.short}</span>
     </button>
   {/each}
+  {#if session.snapshot.activeEditor !== 'uv' && session.snapshot.selectionMode === 'edge'}
+    <span class="mode-divider" aria-hidden="true"></span>
+    <button
+      type="button"
+      class="mode-button"
+      class:active={session.snapshot.loopSelect}
+      aria-pressed={session.snapshot.loopSelect}
+      aria-label="Toggle edge loop selection"
+      title="Select the full edge loop when clicking an edge"
+      onclick={() => session.setLoopSelect(!session.snapshot.loopSelect)}
+    >
+      <span class="mode-label mode-label--all">{command('selection.loop').label}</span>
+    </button>
+  {/if}
   <span class="mode-divider" aria-hidden="true"></span>
   <button
     type="button"
