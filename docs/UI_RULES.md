@@ -20,7 +20,7 @@ Do not add a duplicate button to a pane because it is convenient. Shared primiti
 
 ## 3. Selection combination is one model
 
-Replace / Add / Subtract are mutually exclusive, sticky modes in the Selection Bar. Neither Add nor Subtract active means Replace. They apply to clicks and lasso in both editors. Shift/Cmd remains a temporary Add modifier. UV must not own a second Add/Subtract pair.
+Replace / Add / Sub are mutually exclusive, sticky modes in the Selection Bar (UI labels: Add and Sub). Neither Add nor Subtract active means Replace. They apply to clicks and lasso in both editors. Shift/Cmd remains a temporary Add modifier. UV must not own a second Add/Subtract pair.
 
 ## 4. One disclosure
 
@@ -48,7 +48,7 @@ All tooltips come from the command registry. Format: `Label — Shortcut` when a
 
 - **Icon only:** universally understood document/UI actions: undo, redo, open, save, sidebar, close, visibility.
 - **Icon + short text:** domain actions: Group, Join, Ungroup, Delete, Add Layer, Extrude, Inset, Loop Cut, Loop Slide.
-- **Text only:** modes and stateful UV operations: V/E/F, Island, All, Add, Subtract, Fit, Clamp, Sync 3D, Pin, Unpin, Unwrap, Stack.
+- **Text only:** modes and stateful UV operations: V/E/F, Island, All, Add, Sub, Fit, Clamp, Sync 3D, Pin, Unpin, Unwrap, Stack.
 - **Never icon-only for a destructive action.**
 - Every icon-only control has an accessible label and a tooltip.
 - Hover is supplemental. Touch users must be able to identify every control without hover.
@@ -100,7 +100,7 @@ If any answer is missing, do not add the control.
 - A collapsed sidebar is controlled by the Application Bar toggle only. No duplicate X.
 - The Viewport Stage owns HUD and lasso overlays; HUD anchors to the visible 3D rectangle, not the window.
 - Camera pan/orbit/zoom never mutate selection. Only a no-move click/tap on empty viewport space clears it.
-- Workspace panes use the shared PaneHost; the divider hit area straddles the pane edge.
+- Workspace panes use the shared PaneHost and PaneFrame; the divider hit area straddles the pane edge, and the canvas/overlay body has one positioning context.
 - New Project is a command-owned document reset and defaults to a Cube.
 
 ## 13. UV interaction

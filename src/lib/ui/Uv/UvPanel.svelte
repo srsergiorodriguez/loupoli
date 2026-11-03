@@ -4,6 +4,7 @@
   import { shortcutBus } from '../../input/ShortcutBus';
   import { commandForKeyboardEvent } from '../../input/commands';
   import NumberField from '../Primitives/NumberField.svelte';
+  import PaneFrame from '../Panels/PaneFrame.svelte';
   import { uvClickMoved } from '../../uv/uvView';
 
   /** Props for the UV editing pane. */
@@ -80,7 +81,9 @@
     const unregisterShortcuts = shortcutBus.register(windowKeyDown);
     return () => {
       observer.disconnect();
-      canvas.removeEventListener('wheel', onWheel);
+      if (canvas) {
+        canvas.removeEventListener('wheel', onWheel);
+      }
       unregisterShortcuts();
       detachKeyboardTransform(false);
     };
@@ -108,6 +111,9 @@
   });
 
   function localPoint(event: { clientX: number; clientY: number }): { x: number; y: number } {
+    if (!canvas) {
+      return { x: 0, y: 0 };
+    }
     const rect = canvas.getBoundingClientRect();
     return {
       x: event.clientX - rect.left,
@@ -476,13 +482,8 @@
 
 </script>
 
-<section
-  class="uv-pane side loupoli-panel"
-  aria-label="UV editor"
->
-
-
-  <header class="uv-head">
+{#snippet uvHeader()}
+  <div class="uv-head">
     <div class="uv-title-group">
       <span class="uv-kicker" class:active={activeEditor === 'uv'}>UV<span class="active-dot"></span></span>
       <span class="uv-count">{selectedCount} corner{selectedCount === 1 ? '' : 's'} · {Math.round(uvZoom * 100)}%</span>
@@ -572,42 +573,11 @@
       </div>
       
     </div>
-  </header>
-
-  <div class="uv-canvas-wrap" bind:this={host}>
-    <canvas
-      bind:this={canvas}
-      class="uv-canvas"
-      class:lasso-mode={lassoMode}
-      class:panning={uvPanning}
-      tabindex="0"
-      aria-label="UV editor. Drag UV vertices, edges, faces, or islands to transform them."
-      onpointerdown={pointerDown}
-      onpointermove={trackPointer}
-      onpointerenter={trackPointer}
-      onkeydown={keyDown}
-      oncontextmenu={(event) => event.preventDefault()}
-    ></canvas>
-    {#if lassoing && uvLassoPath.length > 1}
-      <svg class="uv-lasso-overlay" aria-hidden="true">
-        <polygon
-          points={uvLassoPath.map(([x, y]) => `${x},${y}`).join(' ')}
-        />
-      </svg>
-    {/if}
-
-    {#if selectedCount === 0}
-      <p class="uv-empty">
-        Select UV vertices, edges, faces, or islands. Drag to move; U/V locks
-        and grid snap apply.
-      </p>
-    {/if}
-    {#if session.snapshot.uvError}
-      <p class="uv-error" role="status">{session.snapshot.uvError}</p>
-    {/if}
   </div>
+{/snippet}
 
-  <footer class="uv-foot">
+{#snippet uvFooter()}
+  <div class="uv-foot">
     <form
       class="uv-numeric"
       onsubmit={(event) => {
@@ -681,59 +651,79 @@
         16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
       {/if}
     </span>
-  </footer>
-</section>
+  </div>
+{/snippet}
+
+<PaneFrame label="UV editor" header={uvHeader} footer={uvFooter}>
+  <div class="uv-canvas-wrap" bind:this={host}>
+    <canvas
+      bind:this={canvas}
+      class="uv-canvas"
+      class:lasso-mode={lassoMode}
+      class:panning={uvPanning}
+      tabindex="0"
+      aria-label="UV editor. Drag UV vertices, edges, faces, or islands to transform them."
+      onpointerdown={pointerDown}
+      onpointermove={trackPointer}
+      onpointerenter={trackPointer}
+      onkeydown={keyDown}
+      oncontextmenu={(event) => event.preventDefault()}
+    ></canvas>
+    {#if lassoing && uvLassoPath.length > 1}
+      <svg class="uv-lasso-overlay" aria-hidden="true">
+        <polygon
+          points={uvLassoPath.map(([x, y]) => `${x},${y}`).join(' ')}
+        />
+      </svg>
+    {/if}
+
+    {#if session.snapshot.uvError}
+      <p class="uv-error" role="status">{session.snapshot.uvError}</p>
+    {/if}
+  </div>
+
+
+</PaneFrame>
 
 <style>
-  .uv-pane {
+  .uv-canvas-wrap {
     position: absolute;
-    top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-    right: var(--space-3);
-    bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
-    left: 0;
-    z-index: var(--z-hud);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-    border-radius: var(--radius-md);
-    background: var(--bg-panel-strong);
-    box-shadow: var(--shadow-panel);
+    inset: 0;
   }
 
 
 
 
-  .uv-pane.side .uv-head {
+  .uv-head {
     flex-wrap: wrap;
     align-items: flex-start;
     padding: var(--space-2);
   }
 
-  .uv-pane.side .uv-title-group {
+  .uv-title-group {
     flex: 1 1 auto;
     min-height: var(--hit-min);
   }
 
-  .uv-pane.side .uv-actions {
+  .uv-actions {
     flex: 1 1 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
   }
 
-  .uv-pane.side .uv-foot {
+  .uv-foot {
     flex-wrap: wrap;
     align-items: center;
     padding: var(--space-2);
     white-space: normal;
   }
 
-  .uv-pane.side .uv-numeric {
+  .uv-numeric {
     flex: 1 1 100%;
     flex-wrap: wrap;
   }
 
-  .uv-pane.side .uv-foot-hint {
+  .uv-foot-hint {
     flex: 1 1 100%;
     display: none;
   }
@@ -888,20 +878,6 @@
     transform: translateX(-50%);
   }
 
-  .uv-empty {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: min(340px, calc(100% - 32px));
-    margin: 0;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    line-height: 1.6;
-    text-align: center;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-  }
 
   .uv-foot {
     display: flex;
@@ -962,13 +938,6 @@
   .uv-foot-hint {
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  @media (max-width: 1100px) {
-    .uv-pane {
-      left: calc(var(--safe-left) + var(--space-3));
-      right: calc(var(--safe-right) + var(--space-3));
-    }
   }
 
   @media (max-width: 720px) {

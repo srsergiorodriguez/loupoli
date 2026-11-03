@@ -37,16 +37,6 @@
       mode === 'translate' ? 'move' : mode === 'rotate' ? 'rotate' : 'scale'
     );
   }
-
-  function frameMesh(): void {
-    onFocusViewport();
-    session.frameSelection();
-  }
-
-  function resetView(): void {
-    onFocusViewport();
-    session.resetView();
-  }
 </script>
 
 <nav class="tool-rail loupoli-panel" aria-label="Modeling tools">
@@ -85,11 +75,7 @@
       onActivate={() => chooseTransform('scale')}
     />
   </div>
-  <span class="rail-divider" aria-hidden="true"></span>
-  <div class="tool-group">
-    <ToolButton command="view.frame" icon="frame" onActivate={frameMesh} />
-    <ToolButton command="view.home" icon="home" onActivate={resetView} />
-  </div>
+
 </nav>
 
 <style>

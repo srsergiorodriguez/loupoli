@@ -117,15 +117,25 @@
 <style>
   .pane-host {
     position: relative;
+    display: flex;
     flex: 0 0 clamp(300px, var(--pane-width, 38%), calc(100% - 360px));
+    flex-direction: column;
     min-width: 0;
     max-width: calc(100% - 360px);
     height: 100%;
+    box-sizing: border-box;
+    padding:
+      calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2)
+      var(--space-3)
+      calc(var(--safe-bottom) + var(--status-h) + var(--space-3))
+      0;
   }
 
   .pane-content {
-    position: absolute;
-    inset: 0;
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
   }
 
   .pane-host--bottom {

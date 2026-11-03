@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Icon from '../Icons/Icon.svelte';
   import type { SelectionMode } from '../../scene/MeshNode';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import { command, commandTooltipFor, type CommandId } from '../../input/commands';
@@ -109,8 +108,7 @@
     title="Add to selection"
     onclick={() => toggleCombine('add')}
   >
-    <Icon name="plus" size={13} />
-    <span class="mode-label">{command('selection.add').label}</span>
+    <span class="mode-label mode-label--combine">{command('selection.add').label}</span>
   </button>
   <button
     type="button"
@@ -121,8 +119,7 @@
     title="Subtract from selection"
     onclick={() => toggleCombine('subtract')}
   >
-    <Icon name="minus" size={13} />
-    <span class="mode-label">{command('selection.subtract').label}</span>
+    <span class="mode-label mode-label--combine">{command('selection.subtract').label}</span>
   </button>
 </div>
 
@@ -130,9 +127,9 @@
   .selection-mode {
     display: inline-flex;
     width: fit-content;
-    padding: 3px;
+    padding: 2px;
     border-radius: var(--radius-md);
-    gap: 2px;
+    gap: 1px;
   }
 
   .mode-button {
@@ -166,7 +163,7 @@
   .mode-divider {
     width: 1px;
     align-self: stretch;
-    margin: 5px 2px;
+    margin: 4px 1px;
     background: var(--border-subtle);
   }
 
@@ -180,7 +177,8 @@
     opacity: 1;
   }
 
-  .mode-label--all {
+  .mode-label--all,
+  .mode-label--combine {
     font-family: var(--font-body);
     font-size: var(--text-2xs);
     font-weight: var(--weight-medium);

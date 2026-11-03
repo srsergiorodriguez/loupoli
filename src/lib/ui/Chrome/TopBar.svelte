@@ -153,7 +153,7 @@
     <span class="inspector-toggle">
       <IconButton
         label={session.sidebarVisible ? 'Collapse sidebar' : 'Open sidebar'}
-        icon={session.sidebarVisible ? 'close' : 'sliders'}
+        icon="sliders"
         onActivate={() => session.toggleInspector()}
         tooltip={session.sidebarVisible ? 'Collapse sidebar' : 'Open sidebar'}
       />

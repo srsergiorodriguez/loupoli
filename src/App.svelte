@@ -14,6 +14,7 @@
   import UvPanel from './lib/ui/Uv/UvPanel.svelte';
   import PaintPanel from './lib/ui/Paint/PaintPanel.svelte';
   import PaneHost from './lib/ui/Panels/PaneHost.svelte';
+  import IconButton from './lib/ui/Primitives/IconButton.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
@@ -170,11 +171,29 @@
       {#if session.snapshot.activeEditor !== 'paint'}
         <div class="selection-mode-wrap">
           <SelectionModeControl {session} />
+          <ShadingControl {session} />
         </div>
       {/if}
 
       <div class="viewport-hud">
-        <ShadingControl {session} />
+        <div class="view-actions">
+          <IconButton
+            label="Frame selection"
+            icon="frame"
+            tooltip="Frame selection"
+            shortcut="F"
+            tooltipPlacement="bottom"
+            onActivate={() => session.frameSelection()}
+          />
+          <IconButton
+            label="Reset view"
+            icon="home"
+            tooltip="Reset view"
+            shortcut="Home"
+            tooltipPlacement="bottom"
+            onActivate={() => session.resetView()}
+          />
+        </div>
         <OrientationGizmo {session} />
       </div>
 
@@ -367,6 +386,10 @@
     left: calc(
       var(--safe-left) + var(--toolrail-w) + var(--space-3) * 2 + 4px
     );
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
     pointer-events: auto;
   }
 
@@ -376,10 +399,17 @@
     right: var(--space-3);
     bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-direction: row;
+    align-items: center;
     gap: var(--space-2);
     pointer-events: none;
+  }
+
+  .view-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    pointer-events: auto;
   }
 
   .viewport-hud > :global(*) {

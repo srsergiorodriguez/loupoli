@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
+  import PaneFrame from '../Panels/PaneFrame.svelte';
 
   /** Session projection for the dedicated texture-paint workspace. */
   interface Props {
@@ -55,6 +56,9 @@
   });
 
   function localPoint(event: PointerEvent): { x: number; y: number } {
+    if (!canvas) {
+      return { x: 0, y: 0 };
+    }
     const rect = canvas.getBoundingClientRect();
     return {
       x: event.clientX - rect.left,
@@ -163,8 +167,8 @@
   }
 </script>
 
-<section class="paint-pane loupoli-panel" aria-label="Paint editor">
-  <header class="paint-head">
+{#snippet paintHeader()}
+  <div class="paint-head">
     <div class="paint-title">
       <span class="paint-kicker" class:active={activeEditor === 'paint'}>
         Paint<span class="active-dot"></span>
@@ -172,35 +176,11 @@
       <span class="paint-layer">{activeLayer?.name ?? 'No layer'}</span>
     </div>
     <span class="paint-meta">{textureSize}² · {activeLayer?.pattern ?? '—'}</span>
-  </header>
-
-  <div class="paint-stage" bind:this={host}>
-    <canvas
-      bind:this={canvas}
-      class="paint-canvas"
-      tabindex="0"
-      aria-label="Texture paint surface"
-      onpointerdown={pointerDown}
-      onpointermove={pointerTrack}
-      onpointerenter={pointerTrack}
-      onpointerleave={() => {
-        if (!painting) {
-          brushVisible = false;
-        }
-      }}
-      onkeydown={keyDown}
-      oncontextmenu={(event) => event.preventDefault()}
-    ></canvas>
-    {#if brushVisible}
-      <span
-        class="brush-cursor"
-        style={`left:${brushX}px;top:${brushY}px;width:${brushSize}px;height:${brushSize}px`}
-        aria-hidden="true"
-      ></span>
-    {/if}
   </div>
+{/snippet}
 
-  <footer class="paint-foot">
+{#snippet paintFooter()}
+  <div class="paint-foot">
     <label class="paint-field paint-color">
       <span>Color</span>
       <input
@@ -241,26 +221,41 @@
         ? 'Paint the active layer · pen pressure · ⌘/Ctrl+Z undoes a stroke'
         : 'Add a texture layer in the Inspector'}
     </span>
-  </footer>
-</section>
+  </div>
+{/snippet}
+
+<PaneFrame label="Paint editor" header={paintHeader} footer={paintFooter}>
+
+  <div class="paint-stage" bind:this={host}>
+    <canvas
+      bind:this={canvas}
+      class="paint-canvas"
+      tabindex="0"
+      aria-label="Texture paint surface"
+      onpointerdown={pointerDown}
+      onpointermove={pointerTrack}
+      onpointerenter={pointerTrack}
+      onpointerleave={() => {
+        if (!painting) {
+          brushVisible = false;
+        }
+      }}
+      onkeydown={keyDown}
+      oncontextmenu={(event) => event.preventDefault()}
+    ></canvas>
+    {#if brushVisible}
+      <span
+        class="brush-cursor"
+        style={`left:${brushX}px;top:${brushY}px;width:${brushSize}px;height:${brushSize}px`}
+        aria-hidden="true"
+      ></span>
+    {/if}
+  </div>
+
+
+</PaneFrame>
 
 <style>
-  .paint-pane {
-    position: absolute;
-    top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-    right: var(--space-3);
-    bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
-    left: 0;
-    z-index: var(--z-hud);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-    border-radius: var(--radius-md);
-    background: var(--bg-panel-strong);
-    box-shadow: var(--shadow-panel);
-  }
-
   .paint-head,
   .paint-foot {
     display: flex;
@@ -321,9 +316,8 @@
   }
 
   .paint-stage {
-    position: relative;
-    flex: 1;
-    min-height: 0;
+    position: absolute;
+    inset: 0;
   }
 
   .paint-canvas {

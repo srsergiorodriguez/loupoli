@@ -8,10 +8,11 @@ This is the authoritative map of the application shell. New controls must be ass
 | --- | --- | --- |
 | **Application Bar** | Identity, project file state, global document actions | Brand, project name, save state, open, save, undo, redo, sidebar toggle |
 | **Workspace Tabs** | Switch the working context | Model, UV, Paint. Reserved IDs: Light, Animation, Export |
-| **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale, Frame, Home |
-| **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), All, Add, Subtract |
+| **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale |
+| **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), All, Add, Sub |
 | **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock |
 | **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, UV and Paint now; Animation later |
+| **PaneFrame** | Shared pane interior | Header, flexible canvas body, optional footer; used by UV and Paint |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas, brush footer |
 | **Inspector** | Properties of the active object/selection/context | Inspector Sections |
@@ -21,7 +22,8 @@ This is the authoritative map of the application shell. New controls must be ass
 ## Subregions
 
 - **Viewport context strip** — object/group name, element mode, active-editor marker.
-- **Shading Bar** — Wireframe, Solid, Texture, Texture + Wire, Lit.
+- **Shading Bar** — icon-only Wireframe, Solid, Texture, Texture + Wire, Lit, below the Selection Bar.
+- **View Actions** — Frame and Home in a vertical cluster left of the View Gizmo.
 - **View Gizmo** — signed axis endpoints and center frame.
 - **UV Toolbar** — UV-only operations: U/V locks, Sync 3D, Pin, Unpin, Unwrap, Stack, Fit, Clamp.
 - **UV Canvas** — charts, texture, picking, lasso, paint.
