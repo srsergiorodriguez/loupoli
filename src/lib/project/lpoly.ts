@@ -16,6 +16,7 @@ import { MeshNode, type NodeTransform } from '../scene/MeshNode';
 import { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import type {
+  TextureBlendMode,
   TextureLayerRecord,
   TextureProjectData
 } from '../texture/TextureStack';
@@ -122,6 +123,7 @@ interface TextureLayerManifest {
   readonly opacity: number;
   readonly color: string;
   readonly pattern: 'checker' | 'solid';
+  readonly blendMode?: TextureBlendMode;
   readonly pngLength: number;
 }
 
@@ -417,6 +419,7 @@ function buildTextureManifest(
       opacity: layer.opacity,
       color: layer.color,
       pattern: layer.pattern,
+      blendMode: layer.blendMode,
       pngLength: layer.png.byteLength
     };
   });
@@ -596,6 +599,10 @@ function validateTextureManifest(value: unknown): TextureManifest {
       typeof layer.color !== 'string' ||
       layer.color.length > 32 ||
       (layer.pattern !== 'checker' && layer.pattern !== 'solid') ||
+      (layer.blendMode !== undefined &&
+        layer.blendMode !== 'normal' &&
+        layer.blendMode !== 'multiply' &&
+        layer.blendMode !== 'screen') ||
       !Number.isInteger(layer.pngLength) ||
       (layer.pngLength as number) < 1 ||
       (layer.pngLength as number) > MAX_TEXTURE_PNG_BYTES
@@ -610,6 +617,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
       opacity: layer.opacity,
       color: layer.color,
       pattern: layer.pattern,
+      blendMode: layer.blendMode ?? 'normal',
       pngLength: layer.pngLength as number
     };
   });
@@ -808,6 +816,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
         opacity: layer.opacity,
         color: layer.color,
         pattern: layer.pattern,
+        blendMode: layer.blendMode ?? 'normal',
         png: bytes.slice(cursor, cursor + layer.pngLength)
       });
       cursor += layer.pngLength;

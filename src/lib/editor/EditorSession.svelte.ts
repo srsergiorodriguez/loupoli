@@ -184,6 +184,17 @@ export class EditorSession {
     this.runtime?.addTextureLayer();
   }
 
+  renameTextureLayer(id: string, name: string): void {
+    this.runtime?.renameTextureLayer(id, name);
+  }
+
+  setTextureLayerBlendMode(
+    id: string,
+    mode: 'normal' | 'multiply' | 'screen'
+  ): void {
+    this.runtime?.setTextureLayerBlendMode(id, mode);
+  }
+
   removeTextureLayer(id: string): void {
     this.runtime?.removeTextureLayer(id);
   }

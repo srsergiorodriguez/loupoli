@@ -81,6 +81,7 @@ describe('.lpoly v1', () => {
           opacity: 1,
           color: '#c8c2ad',
           pattern: 'checker',
+          blendMode: 'normal',
           png
         }
       ]
@@ -89,6 +90,7 @@ describe('.lpoly v1', () => {
     expect(decoded.textures?.width).toBe(64);
     expect(decoded.textures?.layers).toHaveLength(1);
     expect(decoded.textures?.layers[0].png).toEqual(png);
+    expect(decoded.textures?.layers[0].blendMode).toBe('normal');
     expect(decoded.textures?.activeId).toBe('texlayer-1');
     expect(decoded.document.nodes[0].name).toBe('QuadSphere');
   });

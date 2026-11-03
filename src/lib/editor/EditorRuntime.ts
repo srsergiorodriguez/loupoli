@@ -520,6 +520,18 @@ export class EditorRuntime {
     });
   }
 
+  renameTextureLayer(id: string, name: string): void {
+    this.commitTextureMutation('Rename texture layer', () => {
+      this.textureStack.setName(id, name);
+    });
+  }
+
+  setTextureLayerBlendMode(id: string, mode: 'normal' | 'multiply' | 'screen'): void {
+    this.commitTextureMutation('Change layer blend mode', () => {
+      this.textureStack.setBlendMode(id, mode);
+    });
+  }
+
   removeTextureLayer(id: string): void {
     this.commitTextureMutation('Remove texture layer', () => {
       this.textureStack.removeLayer(id);

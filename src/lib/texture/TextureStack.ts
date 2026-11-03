@@ -8,14 +8,18 @@ import {
 /** A deterministic fill pattern for a texture layer. */
 export type TextureLayerPattern = 'checker' | 'solid';
 
+/** Supported layer compositing modes. */
+export type TextureBlendMode = 'normal' | 'multiply' | 'screen';
+
 /** Small, rune-safe summary of one texture layer. */
 export interface TextureLayerSummary {
   readonly id: string;
-  readonly name: string;
+  name: string;
   readonly visible: boolean;
   readonly opacity: number;
   readonly color: string;
   readonly pattern: TextureLayerPattern;
+  readonly blendMode: TextureBlendMode;
 }
 
 /** Serializable metadata for the complete layer stack. */
@@ -39,11 +43,12 @@ export interface TextureProjectData {
 
 interface TextureLayer {
   readonly id: string;
-  readonly name: string;
+  name: string;
   visible: boolean;
   opacity: number;
   color: string;
   pattern: TextureLayerPattern;
+  blendMode: TextureBlendMode;
   readonly canvas: OffscreenCanvas;
   readonly context: OffscreenCanvasRenderingContext2D;
 }
@@ -75,7 +80,8 @@ function sameState(a: TextureStackState, b: TextureStackState): boolean {
       layer.visible === other.visible &&
       layer.opacity === other.opacity &&
       layer.color === other.color &&
-      layer.pattern === other.pattern
+      layer.pattern === other.pattern &&
+      layer.blendMode === other.blendMode
     );
   });
 }
@@ -158,7 +164,8 @@ export class TextureStack {
         visible: layer.visible,
         opacity: layer.opacity,
         color: layer.color,
-        pattern: layer.pattern
+        pattern: layer.pattern,
+        blendMode: layer.blendMode
       })),
       activeId: this.activeId
     };
@@ -172,7 +179,8 @@ export class TextureStack {
       visible: layer.visible,
       opacity: layer.opacity,
       color: layer.color,
-      pattern: layer.pattern
+      pattern: layer.pattern,
+      blendMode: layer.blendMode
     }));
   }
 
@@ -195,6 +203,7 @@ export class TextureStack {
       layer.opacity = summary.opacity;
       layer.color = summary.color;
       layer.pattern = summary.pattern;
+      layer.blendMode = summary.blendMode;
       this.drawLayer(layer);
       next.push(layer);
       byId.delete(summary.id);
@@ -216,6 +225,7 @@ export class TextureStack {
         opacity: layer.opacity,
         color: layer.color,
         pattern: layer.pattern,
+        blendMode: layer.blendMode,
         png: new Uint8Array(await blob.arrayBuffer())
       });
     }
@@ -257,6 +267,7 @@ export class TextureStack {
         opacity: record.opacity,
         color: record.color,
         pattern: record.pattern,
+        blendMode: record.blendMode ?? 'normal',
         canvas,
         context
       });
@@ -310,6 +321,29 @@ export class TextureStack {
     this.layers.push(layer);
     this.activeId = layer.id;
     this.drawLayer(layer);
+    this.compositeLayers();
+    return true;
+  }
+
+  /** Rename a layer with a bounded, non-empty label. */
+  setName(id: string, name: string): boolean {
+    const layer = this.layers.find((item) => item.id === id);
+    const trimmed = name.trim();
+    if (!layer || trimmed.length === 0 || trimmed.length > 64 || layer.name === trimmed) {
+      return false;
+    }
+    layer.name = trimmed;
+    this.compositeLayers();
+    return true;
+  }
+
+  /** Set the layer blend mode. */
+  setBlendMode(id: string, blendMode: TextureBlendMode): boolean {
+    const layer = this.layers.find((item) => item.id === id);
+    if (!layer || layer.blendMode === blendMode) {
+      return false;
+    }
+    layer.blendMode = blendMode;
     this.compositeLayers();
     return true;
   }
@@ -394,7 +428,8 @@ export class TextureStack {
     pattern: TextureLayerPattern,
     color: string,
     opacity: number,
-    id = layerId()
+    id = layerId(),
+    blendMode: TextureBlendMode = 'normal'
   ): TextureLayer {
     const canvas = createLayerCanvas(this.width, this.height);
     const context = canvas.getContext('2d');
@@ -408,6 +443,7 @@ export class TextureStack {
       opacity,
       color,
       pattern,
+      blendMode,
       canvas,
       context
     };
@@ -440,9 +476,16 @@ export class TextureStack {
         continue;
       }
       this.compositeContext.globalAlpha = layer.opacity;
+      this.compositeContext.globalCompositeOperation =
+        layer.blendMode === 'multiply'
+          ? 'multiply'
+          : layer.blendMode === 'screen'
+            ? 'screen'
+            : 'source-over';
       this.compositeContext.drawImage(layer.canvas, 0, 0);
     }
     this.compositeContext.globalAlpha = 1;
+    this.compositeContext.globalCompositeOperation = 'source-over';
     this.texture.needsUpdate = true;
     this.revision += 1;
   }

@@ -29,7 +29,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
-- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture edits are captured by a v2 autosave checkpoint and survive recovery. Blend modes, raster painting, and layer rename are not implemented yet.
+- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture edits are captured by a v2 autosave checkpoint and survive recovery. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted; raster painting remains.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
 
@@ -162,7 +162,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **86 passing** tests across nineteen files:
+- `npm test`: **87 passing** tests across nineteen files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

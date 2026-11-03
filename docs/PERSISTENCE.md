@@ -180,6 +180,7 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
         "opacity": 1,
         "color": "#c8c2ad",
         "pattern": "checker",
+        "blendMode": "normal",
         "pngLength": 24692
       }
     ]
@@ -234,7 +235,7 @@ Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edg
 After all mesh columns, v2 writes each texture layer's binary PNG in manifest order. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
 
 - v1 files open with no texture set.
-- v2 files with `textures` restore layers on open; v2 without textures resets to the checker base.
+- v2 files with `textures` restore layers on open; v2 without textures resets to the checker base. `blendMode` is optional for earlier v2 files and defaults to `normal`.
 - Texture edits mark autosave dirty and force a fresh v2 checkpoint; recovery restores texture PNGs.
 - Layer PNGs are never base64 or JSON strings.
 

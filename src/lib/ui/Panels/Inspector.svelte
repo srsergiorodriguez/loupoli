@@ -901,15 +901,18 @@
                 >
                   <Icon name={layer.visible ? 'eye' : 'eye-off'} size={14} />
                 </button>
-                <button
-                  type="button"
-                  class="texture-name"
-                  aria-pressed={session.snapshot.textureActiveId === layer.id}
-                  onclick={() => session.setActiveTextureLayer(layer.id)}
-                >
-                  {layer.name}
-                  <span>{layer.pattern}</span>
-                </button>
+                <div class="texture-name-group">
+                  <input
+                    class="texture-name-input"
+                    value={layer.name}
+                    maxlength="64"
+                    aria-label={`${layer.name} layer name`}
+                    onfocus={() => session.setActiveTextureLayer(layer.id)}
+                    onchange={(event) =>
+                      session.renameTextureLayer(layer.id, event.currentTarget.value)}
+                  />
+                  <span class="texture-pattern">{layer.pattern} · {layer.blendMode}</span>
+                </div>
                 <button
                   type="button"
                   class="texture-icon"
@@ -956,6 +959,24 @@
                   disabled={index === 0}
                   onclick={() => session.moveTextureLayer(layer.id, -1)}
                 ><Icon name="chevron-down" size={12} /></button>
+              </div>
+              <div class="texture-row texture-row--blend">
+                <label class="texture-blend">
+                  <span>Blend</span>
+                  <select
+                    value={layer.blendMode}
+                    aria-label={`${layer.name} blend mode`}
+                    onchange={(event) =>
+                      session.setTextureLayerBlendMode(
+                        layer.id,
+                        event.currentTarget.value as 'normal' | 'multiply' | 'screen'
+                      )}
+                  >
+                    <option value="normal">Normal</option>
+                    <option value="multiply">Multiply</option>
+                    <option value="screen">Screen</option>
+                  </select>
+                </label>
               </div>
             </div>
           {/each}
@@ -1782,25 +1803,37 @@
     cursor: default;
   }
 
-  .texture-name {
+  .texture-name-group {
     display: flex;
     flex: 1;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     min-width: 0;
+    gap: 1px;
+  }
+
+  .texture-name-input {
+    width: 100%;
+    min-width: 0;
+    height: 24px;
     padding: 0 var(--space-1);
     border: 0;
     background: transparent;
     color: var(--text-primary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
-    line-height: 1.4;
-    text-align: left;
-    cursor: pointer;
+    line-height: 1.2;
   }
 
-  .texture-name span {
+  .texture-name-input:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 1px;
+  }
+
+  .texture-pattern {
+    padding: 0 var(--space-1);
     color: var(--text-tertiary);
+    font-family: var(--font-mono);
     font-size: 9px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -1835,6 +1868,32 @@
   .texture-order {
     min-width: 30px;
     min-height: var(--control-h);
+  }
+
+  .texture-row--blend {
+    min-height: var(--control-h);
+  }
+
+  .texture-blend {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+  }
+
+  .texture-blend select {
+    flex: 1;
+    min-height: var(--control-h);
+    padding: 0 var(--space-1);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
   }
 
   .module-section {

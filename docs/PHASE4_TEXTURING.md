@@ -84,7 +84,8 @@
 
 ### Slice 4 — Texture layer stack and format v2 (stack first pass)
 
-- Layer add/delete/reorder/visibility/opacity. **Implemented. Rename and blend modes pending.**
+- Layer add/delete/reorder/visibility/opacity/rename. **Implemented.**
+- Normal/Multiply/Screen blend modes. **Implemented and persisted in v2.**
 - Color fills and active-layer selection. **Implemented as deterministic fill patterns; raster painting pending.**
 - Composite cache: recompute only when a layer or composite changes; one GPU texture. **Implemented. Layer canvases are OffscreenCanvas; the composite is a single HTML canvas wrapped in one CanvasTexture.**
 - `.lpoly` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration. **Implemented for manual save/open; v1 decode retained.**

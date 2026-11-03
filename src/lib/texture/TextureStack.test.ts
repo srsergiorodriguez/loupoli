@@ -66,6 +66,25 @@ describe('TextureStack', () => {
     stack.dispose();
   });
 
+  it('renames and changes a blend mode with undo', () => {
+    const stack = new TextureStack(64, 64, '#000000', '#ffffff');
+    const before = stack.snapshot();
+    stack.addLayer();
+    const id = stack.activeLayerId as string;
+    expect(stack.setName(id, 'Ink')).toBe(true);
+    expect(stack.setBlendMode(id, 'multiply')).toBe(true);
+    expect(stack.summaries()[1].name).toBe('Ink');
+    expect(stack.summaries()[1].blendMode).toBe('multiply');
+    const after = stack.snapshot();
+    const command = new TextureStackCommand(stack, before, after, 'Layer edit');
+    command.undo();
+    expect(stack.layerCount).toBe(1);
+    command.execute();
+    expect(stack.activeLayerId).toBe(id);
+    expect(stack.summaries()[1].name).toBe('Ink');
+    stack.dispose();
+  });
+
   it('reorders, hides, and caps layers', () => {
     const stack = new TextureStack(64, 64, '#000000', '#ffffff');
     const base = stack.summaries()[0];
