@@ -63,6 +63,9 @@ export type UvAxisLock = 'u' | 'v' | null;
 /** The direct UV transform tool. */
 export type UvTransformMode = 'move' | 'rotate' | 'scale';
 
+/** UV entity selection granularity. */
+export type UvSelectionMode = 'vertex' | 'edge' | 'face' | 'island';
+
 /** The UV pane arrangement relative to the 3D viewport. */
 export type UvLayout = 'bottom' | 'side';
 
@@ -136,6 +139,7 @@ export interface EditorSnapshot {
   readonly uvLayout: UvLayout;
   readonly uvAxisLock: UvAxisLock;
   readonly uvTransformMode: UvTransformMode;
+  readonly uvSelectionMode: UvSelectionMode;
   readonly uvSelectedCorners: readonly number[];
   readonly uvPinnedCorners: readonly number[];
   readonly uvPaintMode: boolean;

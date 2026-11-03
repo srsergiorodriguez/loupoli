@@ -33,6 +33,7 @@
   const transformMode = $derived(session.snapshot.uvTransformMode);
   const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
   const paintMode = $derived(session.snapshot.uvPaintMode);
+  const selectionMode = $derived(session.snapshot.uvSelectionMode);
   const layout = $derived(session.snapshot.uvLayout);
   const effectiveLayout = $derived(
     session.compactLayout ? 'bottom' : layout
@@ -130,7 +131,7 @@
       event.metaKey ||
       event.ctrlKey ||
       session.snapshot.additiveSelection;
-    const hit = session.pickUvCorner(
+    const hit = session.pickUvElement(
       point.x,
       point.y,
       width,
@@ -316,6 +317,46 @@
       <span class="uv-count">{selectedCount} corner{selectedCount === 1 ? '' : 's'}</span>
     </div>
     <div class="uv-actions">
+      <div class="uv-element-modes" role="group" aria-label="UV selection mode">
+        <button
+          type="button"
+          class="uv-element"
+          class:active={selectionMode === 'vertex'}
+          aria-pressed={selectionMode === 'vertex'}
+          aria-label="UV vertex selection"
+          onclick={() => session.setUvSelectionMode('vertex')}
+        >V</button>
+        <button
+          type="button"
+          class="uv-element"
+          class:active={selectionMode === 'edge'}
+          aria-pressed={selectionMode === 'edge'}
+          aria-label="UV edge selection"
+          onclick={() => session.setUvSelectionMode('edge')}
+        >E</button>
+        <button
+          type="button"
+          class="uv-element"
+          class:active={selectionMode === 'face'}
+          aria-pressed={selectionMode === 'face'}
+          aria-label="UV face selection"
+          onclick={() => session.setUvSelectionMode('face')}
+        >F</button>
+        <button
+          type="button"
+          class="uv-element uv-element--island"
+          class:active={selectionMode === 'island'}
+          aria-pressed={selectionMode === 'island'}
+          aria-label="UV island selection"
+          onclick={() => session.setUvSelectionMode('island')}
+        >Island</button>
+      </div>
+      <button
+        type="button"
+        class="uv-action"
+        aria-label="Select all UV corners"
+        onclick={() => session.selectAllUv()}
+      >All</button>
       <div class="uv-modes" role="group" aria-label="UV transform mode">
         <button
           type="button"
@@ -381,6 +422,12 @@
       >Unwrap</button>
       <button
         type="button"
+        class="uv-action"
+        aria-label="Stack selected UV islands onto the active island"
+        onclick={() => session.stackUvIslands()}
+      >Stack</button>
+      <button
+        type="button"
         class="uv-layout"
         aria-label={effectiveLayout === 'side' ? 'Use bottom UV layout' : 'Use side-by-side UV layout'}
         title={session.compactLayout
@@ -426,8 +473,8 @@
     {/if}
     {#if selectedCount === 0 && !paintMode && effectiveLayout !== 'side'}
       <p class="uv-empty">
-        Select 3D faces or click UV corners. Drag to move; U/V locks and grid
-        snap apply.
+        Select UV vertices, edges, faces, or islands. Drag to move; U/V locks
+        and grid snap apply.
       </p>
     {/if}
     {#if session.snapshot.uvError}
@@ -701,6 +748,7 @@
     gap: var(--space-1);
   }
 
+  .uv-element,
   .uv-chip,
   .uv-action,
   .uv-layout,
@@ -718,6 +766,7 @@
     cursor: pointer;
   }
 
+  .uv-element:hover,
   .uv-chip:hover,
   .uv-action:hover,
   .uv-layout:hover,
@@ -727,6 +776,7 @@
     color: var(--text-primary);
   }
 
+  .uv-element.active,
   .uv-chip.active,
   .uv-mode.active {
     border-color: var(--accent-primary);
@@ -734,11 +784,37 @@
     color: var(--accent-primary);
   }
 
+  .uv-element,
   .uv-chip:disabled,
   .uv-layout:disabled,
   .uv-mode:disabled {
     opacity: 0.35;
     cursor: default;
+  }
+
+  .uv-element-modes {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding-right: var(--space-1);
+    border-right: var(--hairline) solid var(--border-subtle);
+  }
+
+  .uv-element {
+    min-width: var(--hit-min);
+    min-height: var(--hit-min);
+    padding: 0 var(--space-1);
+    border: var(--hairline) solid transparent;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .uv-element--island {
+    min-width: 52px;
   }
 
   .uv-modes {

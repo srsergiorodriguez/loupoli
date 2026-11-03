@@ -33,6 +33,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvLayout: 'bottom',
   uvAxisLock: null,
   uvTransformMode: 'move',
+  uvSelectionMode: 'vertex',
   uvSelectedCorners: [],
   uvPinnedCorners: [],
   uvPaintMode: false,
@@ -212,6 +213,38 @@ export class EditorSession {
 
   setUvTransformMode(mode: 'move' | 'rotate' | 'scale'): void {
     this.runtime?.setUvTransformMode(mode);
+  }
+
+  setUvSelectionMode(mode: 'vertex' | 'edge' | 'face' | 'island'): void {
+    this.runtime?.setUvSelectionMode(mode);
+  }
+
+  pickUvElement(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    additive: boolean
+  ): boolean {
+    return (
+      this.runtime?.pickUvElement(x, y, width, height, additive) ?? false
+    );
+  }
+
+  selectAll(): void {
+    this.runtime?.selectAll();
+  }
+
+  selectAll3d(): void {
+    this.runtime?.selectAll3d();
+  }
+
+  selectAllUv(): void {
+    this.runtime?.selectAllUv();
+  }
+
+  stackUvIslands(): void {
+    this.runtime?.stackUvIslands();
   }
 
   setUvPaintMode(enabled: boolean): void {

@@ -43,6 +43,15 @@
   <span class="mode-divider" aria-hidden="true"></span>
   <button
     type="button"
+    class="mode-button"
+    aria-label="Select all elements in the current mode"
+    title="Select all elements"
+    onclick={() => session.selectAll3d()}
+  >
+    <span class="mode-label">All</span>
+  </button>
+  <button
+    type="button"
     class="mode-button add-button"
     class:active={session.snapshot.additiveSelection}
     aria-pressed={session.snapshot.additiveSelection}

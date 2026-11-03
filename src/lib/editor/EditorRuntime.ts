@@ -63,6 +63,12 @@ import {
 } from '../texture/TextureStack';
 import { rotateUv, scaleUv, uvMedian } from '../uv/uvTransform';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
+import {
+  buildUvTopology,
+  pickUvElement as pickUvEntity,
+  type UvSelectionMode
+} from '../uv/uvElements';
+import { alignUvChart, sameUvTopology } from '../uv/uvStack';
 import { PaintTextureCommand } from './commands/PaintTextureCommand';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
@@ -324,6 +330,8 @@ export class EditorRuntime {
   private uvLayout: 'bottom' | 'side' = 'bottom';
   private uvAxisLock: UvAxisLock = null;
   private uvTransformMode: UvTransformMode = 'move';
+  private uvSelectionMode: UvSelectionMode = 'vertex';
+  private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
   private readonly uvPins = new Set<number>();
   private uvPaint: UvPaintStroke | null = null;
@@ -403,6 +411,7 @@ export class EditorRuntime {
       actionKey: (key) => this.handleActionKey(key),
       isLassoMode: () => this.lassoMode,
       resetView: () => this.resetView(),
+      selectAll: () => this.selectAll(),
       beginLasso: (x, y) => this.beginLasso(x, y),
       moveLasso: (x, y) => this.moveLasso(x, y),
       endLasso: (x, y) => this.endLasso(x, y),
@@ -468,6 +477,7 @@ export class EditorRuntime {
       uvLayout: this.uvLayout,
       uvAxisLock: this.uvAxisLock,
       uvTransformMode: this.uvTransformMode,
+      uvSelectionMode: this.uvSelectionMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvPaintMode: this.uvPaintMode,
@@ -803,6 +813,7 @@ export class EditorRuntime {
     this.uvError = null;
     this.uvSelection.clear();
     this.uvPins.clear();
+    this.uvActiveChart = null;
     this.lastUvSourceSignature = '';
     this.uvRevision += 1;
     this.syncUvSelectionIfChanged();
@@ -813,6 +824,7 @@ export class EditorRuntime {
     this.cancelUvDrag();
     this.uvOpen = false;
     this.uvPaintMode = false;
+    this.uvActiveChart = null;
     this.uvRevision += 1;
     this.publish();
   }
@@ -850,6 +862,190 @@ export class EditorRuntime {
   /** Switch direct UV transforms between move, rotate, and scale. */
   setUvTransformMode(mode: UvTransformMode): void {
     this.uvTransformMode = mode;
+    this.publish();
+  }
+
+  /** Change the UV selection granularity without discarding selected corners. */
+  setUvSelectionMode(mode: UvSelectionMode): void {
+    if (this.uvSelectionMode === mode) {
+      return;
+    }
+    this.uvSelectionMode = mode;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /**
+   * Pick the current UV entity mode at panel-local coordinates.
+   *
+   * A click on an already-selected entity preserves that selection so the same
+   * pointer gesture can begin a move. Additive picks toggle the whole entity.
+   */
+  pickUvElement(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    additive: boolean
+  ): boolean {
+    const node = this.getActiveNode();
+    if (!node) {
+      return false;
+    }
+    const projection = computeUvProjection(node.mesh, width, height);
+    const topology = buildUvTopology(node.mesh);
+    const hit = pickUvEntity(
+      node.mesh,
+      topology,
+      this.uvSelectionMode,
+      x,
+      y,
+      projection
+    );
+    if (!hit) {
+      if (!additive && this.uvSelection.size > 0) {
+        this.uvSelection.clear();
+        this.uvRevision += 1;
+        this.publish();
+      }
+      return false;
+    }
+    this.uvActiveChart = hit.chart;
+    const allSelected = hit.corners.every((corner) =>
+      this.uvSelection.has(corner)
+    );
+    if (additive) {
+      if (allSelected) {
+        for (const corner of hit.corners) {
+          this.uvSelection.delete(corner);
+        }
+      } else {
+        for (const corner of hit.corners) {
+          this.uvSelection.add(corner);
+        }
+      }
+    } else if (!allSelected) {
+      this.uvSelection.clear();
+      for (const corner of hit.corners) {
+        this.uvSelection.add(corner);
+      }
+    }
+    this.uvRevision += 1;
+    this.linkUvSelectionTo3d();
+    this.publish();
+    return true;
+  }
+
+  /** Select every element in the current 3D mode on the active node. */
+  selectAll3d(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const count =
+      this.selection.mode === 'vertex'
+        ? node.mesh.vertexCount
+        : this.selection.mode === 'edge'
+          ? node.mesh.edgeCount
+          : node.mesh.faceCount;
+    const values = Array.from({ length: count }, (_, index) => index);
+    this.selection.setValues(values);
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Select every UV corner on the active node. */
+  selectAllUv(): void {
+    const node = this.getActiveNode();
+    if (!node || !this.uvOpen) {
+      return;
+    }
+    for (let corner = 0; corner < node.mesh.halfEdgeCount; corner += 1) {
+      this.uvSelection.add(corner);
+    }
+    this.uvRevision += 1;
+    this.linkUvSelectionTo3d();
+    this.publish();
+  }
+
+  /** Cmd/Ctrl+A selects in the active workspace. */
+  selectAll(): void {
+    if (this.uvOpen) {
+      this.selectAllUv();
+    } else {
+      this.selectAll3d();
+    }
+  }
+
+  /**
+   * Similarity-stack two fully selected UV islands.
+   *
+   * The active (last picked) island is the reference and stays put; the other
+   * island is translated, rotated, and uniformly scaled onto it. Both charts
+   * must pass the topology signature check first.
+   */
+  stackUvIslands(): void {
+    const node = this.getActiveNode();
+    if (!node || !this.uvOpen) {
+      return;
+    }
+    const topology = buildUvTopology(node.mesh);
+    const selectedCharts = topology.charts
+      .map((_, index) => index)
+      .filter((index) => {
+        const corners = topology.chartCorners[index];
+        return (
+          corners.length > 0 &&
+          corners.every((corner) => this.uvSelection.has(corner))
+        );
+      });
+    if (selectedCharts.length !== 2) {
+      this.uvError =
+        'Select exactly two complete UV islands with Island mode and Add.';
+      this.uvRevision += 1;
+      this.publish();
+      return;
+    }
+    const reference =
+      this.uvActiveChart !== null &&
+      selectedCharts.includes(this.uvActiveChart)
+        ? this.uvActiveChart
+        : selectedCharts[1];
+    const moving =
+      selectedCharts[0] === reference
+        ? selectedCharts[1]
+        : selectedCharts[0];
+    if (!sameUvTopology(topology, reference, moving)) {
+      this.uvError =
+        'The selected UV islands do not share the same topology.';
+      this.uvRevision += 1;
+      this.publish();
+      return;
+    }
+    const alignment = alignUvChart(
+      node.mesh,
+      topology,
+      reference,
+      moving
+    );
+    if (!alignment) {
+      this.uvError = 'The selected UV islands could not be aligned.';
+      this.uvRevision += 1;
+      this.publish();
+      return;
+    }
+    this.history.execute(
+      new MoveUvCornersCommand(
+        node.mesh,
+        node.id,
+        alignment.corners,
+        alignment.before,
+        alignment.after,
+        'Stack UV island'
+      )
+    );
+    this.uvError = null;
+    this.uvRevision += 1;
     this.publish();
   }
 
