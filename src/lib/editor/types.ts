@@ -63,6 +63,12 @@ export type UvAxisLock = 'u' | 'v' | null;
 /** The direct UV transform tool. */
 export type UvTransformMode = 'move' | 'rotate' | 'scale';
 
+/** The UV pane arrangement relative to the 3D viewport. */
+export type UvLayout = 'bottom' | 'side';
+
+/** The top-level modeling workspace. */
+export type Workspace = 'model' | 'uv' | 'paint';
+
 /** The four required viewport shading modes. */
 export const SHADING_MODES = [
   'wireframe',
@@ -127,6 +133,7 @@ export interface EditorSnapshot {
   readonly selectedPosition: [number, number, number] | null;
   readonly uvOpen: boolean;
   readonly uvSplit: number;
+  readonly uvLayout: UvLayout;
   readonly uvAxisLock: UvAxisLock;
   readonly uvTransformMode: UvTransformMode;
   readonly uvSelectedCorners: readonly number[];

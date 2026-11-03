@@ -321,6 +321,7 @@ export class EditorRuntime {
   private additiveSelection = false;
   private uvOpen = false;
   private uvSplit = 0.38;
+  private uvLayout: 'bottom' | 'side' = 'bottom';
   private uvAxisLock: UvAxisLock = null;
   private uvTransformMode: UvTransformMode = 'move';
   private readonly uvSelection = new Set<number>();
@@ -464,6 +465,7 @@ export class EditorRuntime {
       selectedPosition,
       uvOpen: this.uvOpen,
       uvSplit: this.uvSplit,
+      uvLayout: this.uvLayout,
       uvAxisLock: this.uvAxisLock,
       uvTransformMode: this.uvTransformMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
@@ -759,12 +761,35 @@ export class EditorRuntime {
   /** Open or close the UV editing split. */
   toggleUvView(): void {
     if (this.uvOpen) {
-      this.cancelUvDrag();
-      this.uvOpen = false;
-      this.uvRevision += 1;
-      this.publish();
+      this.closeUvView();
+    } else {
+      this.openUvView();
+    }
+  }
+
+  /** Switch Model, UV, and Paint without duplicating open/close logic. */
+  setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
+    if (workspace === 'model') {
+      if (this.uvOpen) {
+        this.closeUvView();
+      } else if (this.uvPaintMode) {
+        this.uvPaintMode = false;
+        this.publish();
+      }
       return;
     }
+    if (!this.uvOpen) {
+      this.openUvView();
+    }
+    const paint = workspace === 'paint';
+    if (this.uvPaintMode !== paint) {
+      this.uvPaintMode = paint;
+      this.uvRevision += 1;
+      this.publish();
+    }
+  }
+
+  private openUvView(): void {
     if (this.modalTransform) {
       this.cancelModalTransform();
     }
@@ -782,6 +807,28 @@ export class EditorRuntime {
     this.uvRevision += 1;
     this.syncUvSelectionIfChanged();
     this.publish();
+  }
+
+  private closeUvView(): void {
+    this.cancelUvDrag();
+    this.uvOpen = false;
+    this.uvPaintMode = false;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Change the UV pane between the bottom split and the side-by-side layout. */
+  setUvLayout(layout: 'bottom' | 'side'): void {
+    if (this.uvLayout === layout) {
+      return;
+    }
+    this.uvLayout = layout;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  toggleUvLayout(): void {
+    this.setUvLayout(this.uvLayout === 'bottom' ? 'side' : 'bottom');
   }
 
   /** Set the fraction of the viewport occupied by the UV pane. */

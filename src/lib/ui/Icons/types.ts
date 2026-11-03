@@ -31,4 +31,6 @@ export type IconName =
   | 'eye'
   | 'eye-off'
   | 'lasso'
-  | 'home';
+  | 'home'
+  | 'columns'
+  | 'rows';

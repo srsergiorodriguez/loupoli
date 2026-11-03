@@ -30,6 +30,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   selectedPosition: null,
   uvOpen: false,
   uvSplit: 0.38,
+  uvLayout: 'bottom',
   uvAxisLock: null,
   uvTransformMode: 'move',
   uvSelectedCorners: [],
@@ -165,6 +166,18 @@ export class EditorSession {
 
   setUvSplit(fraction: number): void {
     this.runtime?.setUvSplit(fraction);
+  }
+
+  setUvLayout(layout: 'bottom' | 'side'): void {
+    this.runtime?.setUvLayout(layout);
+  }
+
+  toggleUvLayout(): void {
+    this.runtime?.toggleUvLayout();
+  }
+
+  setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
+    this.runtime?.setWorkspace(workspace);
   }
 
   setUvAxisLock(axis: 'u' | 'v'): void {

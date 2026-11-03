@@ -29,6 +29,10 @@
   const transformMode = $derived(session.snapshot.uvTransformMode);
   const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
   const paintMode = $derived(session.snapshot.uvPaintMode);
+  const layout = $derived(session.snapshot.uvLayout);
+  const effectiveLayout = $derived(
+    session.compactLayout ? 'bottom' : layout
+  );
 
   onMount(() => {
     const observer = new ResizeObserver((entries) => {
@@ -207,6 +211,14 @@
     if (!resizing) {
       return;
     }
+    if (effectiveLayout === 'side') {
+      const viewport = host.closest('.viewport')?.getBoundingClientRect();
+      if (!viewport || viewport.width <= 0) {
+        return;
+      }
+      session.setUvSplit((viewport.right - event.clientX) / viewport.width);
+      return;
+    }
     const fraction = 1 - event.clientY / Math.max(window.innerHeight, 1);
     session.setUvSplit(fraction);
   }
@@ -241,6 +253,16 @@
   }
 
   function resizeKey(event: KeyboardEvent): void {
+    if (effectiveLayout === 'side') {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+        return;
+      }
+      event.preventDefault();
+      session.setUvSplit(
+        uvSplit + (event.key === 'ArrowLeft' ? 0.03 : -0.03)
+      );
+      return;
+    }
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
       return;
     }
@@ -249,12 +271,16 @@
   }
 </script>
 
-<section class="uv-pane loupoli-panel" aria-label="UV editor">
+<section
+  class="uv-pane loupoli-panel"
+  class:side={effectiveLayout === 'side'}
+  aria-label="UV editor"
+>
   <div
     class="uv-resize"
     role="slider"
     aria-label="Resize UV view"
-    aria-orientation="horizontal"
+    aria-orientation={effectiveLayout === 'side' ? 'vertical' : 'horizontal'}
     aria-valuenow={Math.round(uvSplit * 100)}
     aria-valuemin="25"
     aria-valuemax="65"
@@ -337,6 +363,18 @@
       >Unwrap</button>
       <button
         type="button"
+        class="uv-layout"
+        aria-label={effectiveLayout === 'side' ? 'Use bottom UV layout' : 'Use side-by-side UV layout'}
+        title={session.compactLayout
+          ? 'Side layout needs a wider window'
+          : effectiveLayout === 'side'
+            ? 'Switch to bottom layout'
+            : 'Switch to side-by-side layout'}
+        disabled={session.compactLayout}
+        onclick={() => session.toggleUvLayout()}
+      ><Icon name={effectiveLayout === 'side' ? 'rows' : 'columns'} size={15} /></button>
+      <button
+        type="button"
         class="uv-close"
         aria-label="Close UV editor"
         onclick={() => session.toggleUvView()}
@@ -353,7 +391,7 @@
       onpointerdown={pointerDown}
       onkeydown={keyDown}
     ></canvas>
-    {#if selectedCount === 0 && !paintMode}
+    {#if selectedCount === 0 && !paintMode && effectiveLayout !== 'side'}
       <p class="uv-empty">
         Select 3D faces or click UV corners. Drag to move; U/V locks and grid
         snap apply.
@@ -483,10 +521,10 @@
 
 <style>
   .uv-pane {
-    position: fixed;
+    position: absolute;
     z-index: var(--z-hud);
     left: calc(var(--safe-left) + var(--toolrail-w) + var(--space-3));
-    right: calc(var(--safe-right) + var(--inspector-w) + var(--space-3) * 2);
+    right: var(--space-3);
     top: calc(100% - var(--uv-height, 38%));
     bottom: calc(var(--safe-bottom) + var(--status-h));
     display: flex;
@@ -496,6 +534,14 @@
     border-radius: var(--radius-md);
     background: var(--bg-panel-strong);
     box-shadow: var(--shadow-panel);
+  }
+
+  .uv-pane.side {
+    top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
+    right: var(--space-3);
+    bottom: calc(var(--safe-bottom) + var(--status-h));
+    left: auto;
+    width: var(--uv-side-width);
   }
 
   .uv-resize {
@@ -524,6 +570,58 @@
   .uv-resize:focus-visible {
     outline: var(--focus-ring-width) solid var(--border-focus);
     outline-offset: 2px;
+  }
+
+  .uv-pane.side .uv-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    padding: var(--space-2);
+  }
+
+  .uv-pane.side .uv-title-group {
+    flex: 1 1 auto;
+    min-height: var(--hit-min);
+  }
+
+  .uv-pane.side .uv-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .uv-pane.side .uv-foot {
+    flex-wrap: wrap;
+    align-items: center;
+    padding: var(--space-2);
+    white-space: normal;
+  }
+
+  .uv-pane.side .uv-numeric {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .uv-pane.side .uv-foot-hint {
+    flex: 1 1 100%;
+    display: none;
+  }
+
+  .uv-pane.side .uv-resize {
+    top: 0;
+    bottom: 0;
+    left: -44px;
+    width: 44px;
+    height: auto;
+    cursor: ew-resize;
+  }
+
+  .uv-pane.side .uv-resize::after {
+    top: 50%;
+    bottom: auto;
+    left: 0;
+    width: 4px;
+    height: 52px;
+    transform: translateY(-50%);
   }
 
   .uv-head {
@@ -567,6 +665,7 @@
 
   .uv-chip,
   .uv-action,
+  .uv-layout,
   .uv-close,
   .uv-mode {
     min-width: var(--hit-min);
@@ -583,6 +682,7 @@
 
   .uv-chip:hover,
   .uv-action:hover,
+  .uv-layout:hover,
   .uv-close:hover,
   .uv-mode:hover {
     background: var(--bg-hover);
@@ -597,6 +697,7 @@
   }
 
   .uv-chip:disabled,
+  .uv-layout:disabled,
   .uv-mode:disabled {
     opacity: 0.35;
     cursor: default;
@@ -620,6 +721,7 @@
     white-space: nowrap;
   }
 
+  .uv-layout,
   .uv-close {
     padding: 0;
     font-size: var(--text-md);

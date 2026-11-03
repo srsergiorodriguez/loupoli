@@ -24,13 +24,6 @@
     canvas?.focus({ preventScroll: true });
   }
 
-  function toggleUvView(): void {
-    if (!session.snapshot.uvOpen) {
-      session.closeInspector();
-    }
-    session.toggleUvView();
-  }
-
   onMount(() => {
     if (!canvas) {
       return;
@@ -117,13 +110,14 @@
   <main
     class="viewport"
     class:uv-open={session.snapshot.uvOpen}
-    style={`--uv-height:${session.snapshot.uvSplit * 100}%`}
+    class:uv-side={session.snapshot.uvOpen && session.snapshot.uvLayout === 'side' && !session.compactLayout}
+    style={`--uv-height:${session.snapshot.uvSplit * 100}%; --uv-side-width:${session.snapshot.uvSplit * 100}%`}
     aria-label="3D viewport"
   >
     <p id="viewport-help" class="visually-hidden">
       Z-up 3D viewport. Choose vertex, edge, or face selection. With a pen or the
-      primary mouse button, select elements; use Add mode or Shift/Cmd-click to
-      select multiple. With elements selected, Move, Rotate, and Scale place a
+      primary mouse button, select elements; use Add mode or Cmd-click to select
+      multiple; Shift-drag pans. With elements selected, Move, Rotate, and Scale place a
       gizmo at their median; drag its axes with the pen or mouse. The ActionDock
       provides E/I/L/Shift+L actions with drag or exact amounts. Desktop G/R/S
       transforms selections or the active object. Use one finger to orbit, two
@@ -160,14 +154,6 @@
       </div>
 
       <div class="viewport-hud">
-        <button
-          type="button"
-          class="uv-toggle"
-          class:active={session.snapshot.uvOpen}
-          aria-label="Toggle UV editor"
-          aria-pressed={session.snapshot.uvOpen}
-          onclick={toggleUvView}
-        >UV</button>
         <ShadingControl {session} />
         <OrientationGizmo {session} />
       </div>
@@ -265,41 +251,18 @@
     height: calc(100% - var(--uv-height));
   }
 
+  .viewport.uv-open.uv-side > canvas {
+    width: calc(100% - var(--uv-side-width) - var(--space-3));
+    height: 100%;
+  }
+
+  .viewport.uv-side .viewport-hud {
+    display: none;
+  }
+
   canvas:focus-visible {
     outline: var(--focus-ring-width) solid var(--border-focus);
     outline-offset: -4px;
-  }
-
-  .uv-toggle {
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background: var(--bg-panel);
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-medium);
-    letter-spacing: var(--tracking-label);
-    cursor: pointer;
-    -webkit-backdrop-filter: blur(var(--blur-panel));
-    backdrop-filter: blur(var(--blur-panel));
-  }
-
-  .uv-toggle:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .uv-toggle.active {
-    border-color: var(--accent-primary);
-    background: var(--bg-selected);
-    color: var(--accent-primary);
-  }
-
-  .uv-toggle:focus-visible {
-    outline: var(--focus-ring-width) solid var(--border-focus);
-    outline-offset: 2px;
   }
 
   .viewport-context {

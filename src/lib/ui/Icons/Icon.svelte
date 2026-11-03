@@ -114,6 +114,12 @@
   {:else if name === 'eye'}
     <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
     <circle cx="12" cy="12" r="2.7" />
+  {:else if name === 'columns'}
+    <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+    <path d="M12 4.5v15" />
+  {:else if name === 'rows'}
+    <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+    <path d="M3.5 12h17" />
   {:else if name === 'home'}
     <path d="m3.5 11 8.5-7 8.5 7" />
     <path d="M5.5 9.5V20h5v-5.5h3V20h5V9.5" />

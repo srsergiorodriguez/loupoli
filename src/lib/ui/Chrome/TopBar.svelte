@@ -38,6 +38,18 @@
         return '';
     }
   });
+  const workspace = $derived(
+    !session.snapshot.uvOpen
+      ? 'model'
+      : session.snapshot.uvPaintMode
+        ? 'paint'
+        : 'uv'
+  );
+
+  function chooseWorkspace(next: 'model' | 'uv' | 'paint'): void {
+    session.setWorkspace(next);
+  }
+
   const autosaveTitle = $derived(
     session.snapshot.autosaveError ??
       (session.snapshot.lastAutosavedAt
@@ -66,6 +78,30 @@
       </span>
     {/if}
   </div>
+
+  <nav class="workspaces" aria-label="Workspace">
+    <button
+      type="button"
+      class="workspace"
+      class:active={workspace === 'model'}
+      aria-pressed={workspace === 'model'}
+      onclick={() => chooseWorkspace('model')}
+    >Model</button>
+    <button
+      type="button"
+      class="workspace"
+      class:active={workspace === 'uv'}
+      aria-pressed={workspace === 'uv'}
+      onclick={() => chooseWorkspace('uv')}
+    >UV</button>
+    <button
+      type="button"
+      class="workspace"
+      class:active={workspace === 'paint'}
+      aria-pressed={workspace === 'paint'}
+      onclick={() => chooseWorkspace('paint')}
+    >Paint</button>
+  </nav>
 
   <div class="actions">
     <IconButton
@@ -193,6 +229,47 @@
     gap: 2px;
   }
 
+  .workspaces {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 2px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.18);
+  }
+
+  .workspace {
+    min-width: 52px;
+    height: calc(var(--control-h) - 4px);
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-label);
+    cursor: pointer;
+  }
+
+  .workspace:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .workspace.active {
+    background: var(--bg-selected);
+    color: var(--accent-primary);
+    box-shadow: inset 0 0 0 var(--hairline) var(--accent-primary);
+  }
+
+  .workspace:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 1px;
+  }
+
   .divider--actions {
     margin: 0 var(--space-1);
   }
@@ -213,7 +290,16 @@
     }
 
     .project {
-      max-width: 22vw;
+      max-width: 16vw;
+    }
+
+    .workspaces {
+      margin-left: auto;
+    }
+
+    .workspace {
+      min-width: var(--hit-min);
+      padding: 0 var(--space-1);
     }
 
     .inspector-toggle {
@@ -227,10 +313,25 @@
     }
   }
 
+  @media (max-width: 720px) {
+    .workspace {
+      min-width: 44px;
+      font-size: 9px;
+    }
+
+    .wordmark {
+      display: none;
+    }
+  }
+
   @media (max-width: 520px) {
     .project,
     .divider:not(.divider--actions) {
       display: none;
+    }
+
+    .topbar {
+      gap: var(--space-1);
     }
   }
 </style>

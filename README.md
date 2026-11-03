@@ -45,7 +45,11 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Seam-based LSCM unwrap with pinned corners](docs/media/uv-unwrap.png)
 
-- **UV editing split.** Toggle **UV** in the viewport HUD to split the workspace. Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move, rotate around the median, or scale around the median. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, and UV raster painting are implemented; projection painting remains.
+- **UV workspaces.** Use the TopBar **Model / UV / Paint** switcher. UV opens the bottom split; Paint opens UV with the raster brush active. The UV header switches between bottom and side-by-side layouts, and the divider resizes the active orientation.
+
+![Side-by-side UV and 3D workspace](docs/media/uv-side-workspace.png)
+
+- **UV editing split.** Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move, rotate around the median, or scale around the median. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, and UV raster painting are implemented; projection painting remains. Paint resolves to the UV workspace with the brush enabled.
 
 ![UV editing split with selected corners and seams](docs/media/uv-split.png)
 
