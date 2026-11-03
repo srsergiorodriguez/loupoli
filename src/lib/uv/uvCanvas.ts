@@ -1,5 +1,5 @@
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
-import { computeUvProjection, uvToCanvas } from './uvView';
+import { computeUvProjection, uvToCanvas, type UvViewState } from './uvView';
 
 function cssToken(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement)
@@ -33,7 +33,8 @@ export function drawUvCanvas(
   pinned: ReadonlySet<number>,
   width: number,
   height: number,
-  backgroundImage: CanvasImageSource | null = null
+  backgroundImage: CanvasImageSource | null = null,
+  view?: UvViewState
 ): void {
   if (width <= 0 || height <= 0) {
     return;
@@ -59,7 +60,7 @@ export function drawUvCanvas(
   context.fillStyle = background;
   context.fillRect(0, 0, width, height);
 
-  const projection = computeUvProjection(mesh, width, height, 26);
+  const projection = computeUvProjection(mesh, width, height, 26, view);
   if (backgroundImage) {
     const imageOrigin = uvToCanvas([0, 1], projection);
     context.save();

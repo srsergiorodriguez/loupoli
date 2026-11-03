@@ -32,6 +32,19 @@ describe('UV view math', () => {
     expect(pickUvCorner(mesh, point.x + 40, point.y + 40, projection)).toBeNull();
   });
 
+  it('applies zoom and pan after fitting', () => {
+    const mesh = createCubeMesh(1);
+    const base = computeUvProjection(mesh, 400, 320, 24);
+    const view = computeUvProjection(mesh, 400, 320, 24, {
+      zoom: 2,
+      panX: 30,
+      panY: -12
+    });
+    expect(view.scale).toBeCloseTo(base.scale * 2);
+    expect(view.offsetX).toBeCloseTo(base.offsetX + 30);
+    expect(view.offsetY).toBeCloseTo(base.offsetY - 12);
+  });
+
   it('converts pixel deltas back into UV units', () => {
     const projection = { scale: 200, offsetX: 0, offsetY: 0, width: 400, height: 400 };
     expect(canvasDeltaToUv(100, -50, projection)).toEqual([0.5, 0.25]);

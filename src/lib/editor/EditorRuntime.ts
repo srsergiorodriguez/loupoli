@@ -329,11 +329,15 @@ export class EditorRuntime {
   private uvOpen = false;
   private uvSplit = 0.38;
   private uvLayout: 'bottom' | 'side' = 'bottom';
+  private uvZoom = 1;
+  private uvPanX = 0;
+  private uvPanY = 0;
   private uvAxisLock: UvAxisLock = null;
   private uvTransformMode: UvTransformMode = 'move';
   private uvSelectionMode: UvSelectionMode = 'vertex';
   private uvLassoMode = false;
   private uvSubtractMode = false;
+  private uvClampMode = true;
   private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
   private readonly uvPins = new Set<number>();
@@ -478,11 +482,15 @@ export class EditorRuntime {
       uvOpen: this.uvOpen,
       uvSplit: this.uvSplit,
       uvLayout: this.uvLayout,
+      uvZoom: this.uvZoom,
+      uvPanX: this.uvPanX,
+      uvPanY: this.uvPanY,
       uvAxisLock: this.uvAxisLock,
       uvTransformMode: this.uvTransformMode,
       uvSelectionMode: this.uvSelectionMode,
       uvLassoMode: this.uvLassoMode,
       uvSubtractMode: this.uvSubtractMode,
+      uvClampMode: this.uvClampMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvPaintMode: this.uvPaintMode,
@@ -815,6 +823,9 @@ export class EditorRuntime {
       this.renderer.setActionPreviewLine(null);
     }
     this.uvOpen = true;
+    this.uvZoom = 1;
+    this.uvPanX = 0;
+    this.uvPanY = 0;
     this.uvError = null;
     this.uvSelection.clear();
     this.uvPins.clear();
@@ -846,6 +857,68 @@ export class EditorRuntime {
 
   toggleUvLayout(): void {
     this.setUvLayout(this.uvLayout === 'bottom' ? 'side' : 'bottom');
+  }
+
+  /** Zoom the UV canvas around a canvas-local anchor. */
+  zoomUv(
+    factor: number,
+    width: number,
+    height: number,
+    anchorX = width / 2,
+    anchorY = height / 2
+  ): void {
+    const node = this.getActiveNode();
+    if (!node || !this.uvOpen || width <= 0 || height <= 0) {
+      return;
+    }
+    const nextZoom = Math.min(16, Math.max(0.25, this.uvZoom * factor));
+    const current = this.uvProjection(node.mesh, width, height);
+    const u = (anchorX - current.offsetX) / current.scale;
+    const v =
+      (height - current.offsetY - anchorY) / current.scale;
+    const base = computeUvProjection(node.mesh, width, height);
+    const nextScale = base.scale * nextZoom;
+    this.uvZoom = nextZoom;
+    this.uvPanX = anchorX - u * nextScale - base.offsetX;
+    this.uvPanY = height - anchorY - v * nextScale - base.offsetY;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Pan the UV view in canvas pixels. */
+  panUv(dx: number, dy: number): void {
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+      return;
+    }
+    this.uvPanX += dx;
+    this.uvPanY -= dy;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Fit the complete UV layout again. */
+  resetUvView(): void {
+    this.uvZoom = 1;
+    this.uvPanX = 0;
+    this.uvPanY = 0;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  private uvViewState(): { zoom: number; panX: number; panY: number } {
+    return {
+      zoom: this.uvZoom,
+      panX: this.uvPanX,
+      panY: this.uvPanY
+    };
+  }
+
+  private uvProjection(
+    mesh: HalfEdgeMesh,
+    width: number,
+    height: number
+  ): ReturnType<typeof computeUvProjection> {
+    return computeUvProjection(mesh, width, height, 24, this.uvViewState());
   }
 
   /** Set the fraction of the viewport occupied by the UV pane. */
@@ -889,6 +962,15 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Keep direct UV transforms inside the 0–1 texture square. */
+  setUvClampMode(enabled: boolean): void {
+    if (this.uvClampMode === enabled) {
+      return;
+    }
+    this.uvClampMode = enabled;
+    this.publish();
+  }
+
   /** Toggle subtract semantics for UV clicks and lasso selection. */
   setUvSubtractMode(enabled: boolean): void {
     if (this.uvSubtractMode === enabled) {
@@ -909,7 +991,7 @@ export class EditorRuntime {
     if (!node || !this.uvOpen || points.length < 3 || width <= 0 || height <= 0) {
       return;
     }
-    const actualProjection = computeUvProjection(node.mesh, width, height);
+    const actualProjection = this.uvProjection(node.mesh, width, height);
     const topology = buildUvTopology(node.mesh);
     const selected = selectUvCornersInPolygon(
       node.mesh,
@@ -954,7 +1036,7 @@ export class EditorRuntime {
     if (!node) {
       return false;
     }
-    const projection = computeUvProjection(node.mesh, width, height);
+    const projection = this.uvProjection(node.mesh, width, height);
     const topology = buildUvTopology(node.mesh);
     const hit = pickUvEntity(
       node.mesh,
@@ -1172,7 +1254,7 @@ export class EditorRuntime {
     if (!node || !layerId || !this.textureStack.beginPaint(layerId)) {
       return false;
     }
-    const projection = computeUvProjection(node.mesh, width, height);
+    const projection = this.uvProjection(node.mesh, width, height);
     const [tx, ty] = uvCanvasToTexture(
       x,
       y,
@@ -1218,7 +1300,7 @@ export class EditorRuntime {
     if (!node) {
       return;
     }
-    const projection = computeUvProjection(node.mesh, width, height);
+    const projection = this.uvProjection(node.mesh, width, height);
     const [tx, ty] = uvCanvasToTexture(
       x,
       y,
@@ -1336,7 +1418,8 @@ export class EditorRuntime {
       this.uvPins,
       width,
       height,
-      this.textureStack.image
+      this.textureStack.image,
+      this.uvViewState()
     );
   }
 
@@ -1358,7 +1441,7 @@ export class EditorRuntime {
     if (!node) {
       return false;
     }
-    const projection = computeUvProjection(node.mesh, width, height);
+    const projection = this.uvProjection(node.mesh, width, height);
     let hit: number | null = null;
     if (!additive && this.uvSelection.size > 0) {
       // Coincident UV corners are common across seams. Prefer a corner that is
@@ -1420,7 +1503,7 @@ export class EditorRuntime {
       return false;
     }
     const before = corners.map((corner) => node.mesh.getCornerUv(corner));
-    const projection = computeUvProjection(node.mesh, width, height);
+    const projection = this.uvProjection(node.mesh, width, height);
     const startUv: Vec2 = [
       (x - projection.offsetX) / projection.scale,
       (height - projection.offsetY - y) / projection.scale
@@ -1453,7 +1536,7 @@ export class EditorRuntime {
     if (!drag) {
       return;
     }
-    const projection = computeUvProjection(drag.node.mesh, width, height);
+    const projection = this.uvProjection(drag.node.mesh, width, height);
     const current: Vec2 = [
       (x - projection.offsetX) / projection.scale,
       (height - projection.offsetY - y) / projection.scale
@@ -1506,6 +1589,30 @@ export class EditorRuntime {
           factor,
           this.uvAxisLock
         );
+      }
+    }
+    if (this.uvClampMode && next.length > 0) {
+      let minU = Infinity;
+      let maxU = -Infinity;
+      let minV = Infinity;
+      let maxV = -Infinity;
+      for (const [u, v] of next) {
+        minU = Math.min(minU, u);
+        maxU = Math.max(maxU, u);
+        minV = Math.min(minV, v);
+        maxV = Math.max(maxV, v);
+      }
+      if (maxU - minU <= 1.000001) {
+        const shiftU = minU < 0 ? -minU : maxU > 1 ? 1 - maxU : 0;
+        if (shiftU !== 0) {
+          for (const uv of next) uv[0] += shiftU;
+        }
+      }
+      if (maxV - minV <= 1.000001) {
+        const shiftV = minV < 0 ? -minV : maxV > 1 ? 1 - maxV : 0;
+        if (shiftV !== 0) {
+          for (const uv of next) uv[1] += shiftV;
+        }
       }
     }
     for (let index = 0; index < drag.corners.length; index += 1) {

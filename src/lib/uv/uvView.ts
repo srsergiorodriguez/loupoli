@@ -1,5 +1,12 @@
 import type { HalfEdgeMesh, Vec2 } from '../geometry/HalfEdgeMesh';
 
+/** User zoom/pan applied after fitting the mesh UV bounds. */
+export interface UvViewState {
+  readonly zoom: number;
+  readonly panX: number;
+  readonly panY: number;
+}
+
 /** Maps UV space to a canvas pixel rectangle while preserving aspect ratio. */
 export interface UvProjection {
   readonly scale: number;
@@ -39,7 +46,8 @@ export function computeUvProjection(
   mesh: HalfEdgeMesh,
   width: number,
   height: number,
-  padding = 24
+  padding = 24,
+  view?: UvViewState
 ): UvProjection {
   let minU = Infinity;
   let minV = Infinity;
@@ -72,9 +80,16 @@ export function computeUvProjection(
       Math.max(height - padding * 2, 1) / spanV
     )
   );
-  const offsetX = (width - spanU * scale) / 2 - minU * scale;
-  const offsetY = (height - spanV * scale) / 2 - minV * scale;
-  return { scale, offsetX, offsetY, width, height };
+  const baseOffsetX = (width - spanU * scale) / 2 - minU * scale;
+  const baseOffsetY = (height - spanV * scale) / 2 - minV * scale;
+  const zoom = Math.max(0.01, view?.zoom ?? 1);
+  return {
+    scale: scale * zoom,
+    offsetX: baseOffsetX + (view?.panX ?? 0),
+    offsetY: baseOffsetY + (view?.panY ?? 0),
+    width,
+    height
+  };
 }
 
 /**

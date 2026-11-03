@@ -10,15 +10,38 @@
 
   let { session }: Props = $props();
 
-  const modes: ReadonlyArray<{
-    id: SelectionMode;
+  type ContextMode = SelectionMode | 'island';
+
+  const modes = $derived<ReadonlyArray<{
+    id: ContextMode;
     short: string;
     label: string;
-  }> = [
+  }>>([
     { id: 'vertex', short: 'V', label: 'Vertex' },
     { id: 'edge', short: 'E', label: 'Edge' },
-    { id: 'face', short: 'F', label: 'Face' }
-  ];
+    { id: 'face', short: 'F', label: 'Face' },
+    ...(session.snapshot.uvOpen
+      ? [{ id: 'island' as const, short: 'I', label: 'Island' }]
+      : [])
+  ]);
+
+  function chooseMode(mode: ContextMode): void {
+    if (mode === 'island') {
+      session.setUvSelectionMode('island');
+      return;
+    }
+    session.setSelectionMode(mode);
+    if (session.snapshot.uvOpen) {
+      session.setUvSelectionMode(mode);
+    }
+  }
+
+  function isActive(id: ContextMode): boolean {
+    if (!session.snapshot.uvOpen) {
+      return session.snapshot.selectionMode === id;
+    }
+    return session.snapshot.uvSelectionMode === id;
+  }
 </script>
 
 <div
@@ -30,11 +53,11 @@
     <button
       type="button"
       class="mode-button"
-      class:active={session.snapshot.selectionMode === mode.id}
-      aria-pressed={session.snapshot.selectionMode === mode.id}
+      class:active={isActive(mode.id)}
+      aria-pressed={isActive(mode.id)}
       aria-label={`${mode.label} selection mode`}
       title={`${mode.label} selection mode`}
-      onclick={() => session.setSelectionMode(mode.id)}
+      onclick={() => chooseMode(mode.id)}
     >
       <span class="mode-key" aria-hidden="true">{mode.short}</span>
       <span class="mode-label">{mode.label}</span>
@@ -46,7 +69,10 @@
     class="mode-button"
     aria-label="Select all elements in the current mode"
     title="Select all elements"
-    onclick={() => session.selectAll3d()}
+    onclick={() =>
+      session.snapshot.uvOpen
+        ? session.selectAllUv()
+        : session.selectAll3d()}
   >
     <span class="mode-label">All</span>
   </button>

@@ -21,6 +21,9 @@
   let lassoing = $state(false);
   let uvLassoPath = $state<[number, number][]>([]);
   let lassoAdditive = false;
+  let uvPanning = $state(false);
+  let panLastX = 0;
+  let panLastY = 0;
   let deltaU = $state(0);
   let deltaV = $state(0);
   let angle = $state(0);
@@ -36,9 +39,10 @@
   const transformMode = $derived(session.snapshot.uvTransformMode);
   const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
   const paintMode = $derived(session.snapshot.uvPaintMode);
-  const selectionMode = $derived(session.snapshot.uvSelectionMode);
   const lassoMode = $derived(session.snapshot.uvLassoMode);
   const subtractMode = $derived(session.snapshot.uvSubtractMode);
+  const clampMode = $derived(session.snapshot.uvClampMode);
+  const uvZoom = $derived(session.snapshot.uvZoom);
   const layout = $derived(session.snapshot.uvLayout);
   const effectiveLayout = $derived(
     session.compactLayout ? 'bottom' : layout
@@ -54,7 +58,25 @@
       height = rect.height;
     });
     observer.observe(host);
-    return () => observer.disconnect();
+    const onWheel = (event: WheelEvent): void => {
+      if (!canvas || width <= 0 || height <= 0) {
+        return;
+      }
+      event.preventDefault();
+      const point = localPoint(event);
+      session.zoomUv(
+        Math.exp(-event.deltaY * 0.0015),
+        width,
+        height,
+        point.x,
+        point.y
+      );
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      observer.disconnect();
+      canvas.removeEventListener('wheel', onWheel);
+    };
   });
 
   onDestroy(detachDragListeners);
@@ -84,7 +106,7 @@
     }
   });
 
-  function localPoint(event: PointerEvent): { x: number; y: number } {
+  function localPoint(event: { clientX: number; clientY: number }): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect();
     return {
       x: event.clientX - rect.left,
@@ -111,7 +133,23 @@
     session.setUvLassoMode(next);
   }
 
+  function beginPan(event: PointerEvent): void {
+    uvPanning = true;
+    const point = localPoint(event);
+    panLastX = point.x;
+    panLastY = point.y;
+    activePointerId = event.pointerId;
+    window.addEventListener('pointermove', windowPointerMove);
+    window.addEventListener('pointerup', windowPointerUp);
+    window.addEventListener('pointercancel', windowPointerCancel);
+  }
+
   function pointerDown(event: PointerEvent): void {
+    if (event.button === 1 || event.button === 2) {
+      event.preventDefault();
+      beginPan(event);
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
@@ -165,10 +203,8 @@
       height,
       additive
     );
-    if (
-      !hit ||
-      !session.beginUvDrag(point.x, point.y, width, height)
-    ) {
+    if (!hit || !session.beginUvDrag(point.x, point.y, width, height)) {
+      beginPan(event);
       return;
     }
     dragging = true;
@@ -185,6 +221,12 @@
     event.preventDefault();
     const point = localPoint(event);
     updateBrushCursor(event);
+    if (uvPanning) {
+      session.panUv(point.x - panLastX, point.y - panLastY);
+      panLastX = point.x;
+      panLastY = point.y;
+      return;
+    }
     if (lassoing) {
       const previous = uvLassoPath[uvLassoPath.length - 1];
       if (
@@ -212,6 +254,10 @@
       return;
     }
     detachDragListeners();
+    if (uvPanning) {
+      uvPanning = false;
+      return;
+    }
     if (lassoing) {
       lassoing = false;
       const points = uvLassoPath;
@@ -241,7 +287,10 @@
       return;
     }
     event.preventDefault();
-    if (lassoing) {
+    if (uvPanning) {
+      detachDragListeners();
+      uvPanning = false;
+    } else if (lassoing) {
       detachDragListeners();
       lassoing = false;
       uvLassoPath = [];
@@ -263,6 +312,10 @@
       return;
     }
     detachDragListeners();
+    if (uvPanning) {
+      uvPanning = false;
+      return;
+    }
     if (lassoing) {
       lassoing = false;
       uvLassoPath = [];
@@ -372,134 +425,106 @@
   <header class="uv-head">
     <div class="uv-title-group">
       <span class="uv-kicker">UV</span>
-      <span class="uv-count">{selectedCount} corner{selectedCount === 1 ? '' : 's'}</span>
+      <span class="uv-count">{selectedCount} corner{selectedCount === 1 ? '' : 's'} · {Math.round(uvZoom * 100)}%</span>
     </div>
     <div class="uv-actions">
-      <div class="uv-element-modes" role="group" aria-label="UV selection mode">
+      <div class="uv-group" role="group" aria-label="UV selection">
         <button
           type="button"
-          class="uv-element"
-          class:active={selectionMode === 'vertex'}
-          aria-pressed={selectionMode === 'vertex'}
-          aria-label="UV vertex selection"
-          onclick={() => session.setUvSelectionMode('vertex')}
+          class="uv-action"
+          aria-label="Select all UV corners"
+          onclick={() => session.selectAllUv()}
+        >All</button>
+        <button
+          type="button"
+          class="uv-action"
+          class:active={lassoMode}
+          aria-pressed={lassoMode}
+          aria-label="UV lasso selection"
+          onclick={toggleLasso}
+        ><Icon name="lasso" size={15} /></button>
+        <button
+          type="button"
+          class="uv-action uv-subtract"
+          class:active={subtractMode}
+          aria-pressed={subtractMode}
+          aria-label="Subtract from UV selection"
+          onclick={() => session.setUvSubtractMode(!subtractMode)}
+        >−</button>
+      </div>
+      <div class="uv-group" role="group" aria-label="UV operations">
+        <button
+          type="button"
+          class="uv-chip"
+          disabled={transformMode === 'rotate'}
+          class:active={axisLock === 'u'}
+          aria-label="Constrain UV drag to U"
+          aria-pressed={axisLock === 'u'}
+          onclick={() => session.setUvAxisLock('u')}
+        >U</button>
+        <button
+          type="button"
+          class="uv-chip"
+          class:active={axisLock === 'v'}
+          aria-label="Constrain UV drag to V"
+          aria-pressed={axisLock === 'v'}
+          disabled={transformMode === 'rotate'}
+          onclick={() => session.setUvAxisLock('v')}
         >V</button>
         <button
           type="button"
-          class="uv-element"
-          class:active={selectionMode === 'edge'}
-          aria-pressed={selectionMode === 'edge'}
-          aria-label="UV edge selection"
-          onclick={() => session.setUvSelectionMode('edge')}
-        >E</button>
+          class="uv-action"
+          aria-label="Sync UV selection from 3D selection"
+          onclick={() => session.syncUvFrom3d()}
+        >Sync 3D</button>
         <button
           type="button"
-          class="uv-element"
-          class:active={selectionMode === 'face'}
-          aria-pressed={selectionMode === 'face'}
-          aria-label="UV face selection"
-          onclick={() => session.setUvSelectionMode('face')}
-        >F</button>
+          class="uv-action"
+          aria-label={pinnedCount === 2 ? 'Clear UV pins' : 'Pin selected UV corners'}
+          disabled={pinnedCount !== 2 && selectedCount !== 2}
+          onclick={() => session.toggleUvPins()}
+        >{pinnedCount === 2 ? 'Unpin' : 'Pin'}</button>
         <button
           type="button"
-          class="uv-element uv-element--island"
-          class:active={selectionMode === 'island'}
-          aria-pressed={selectionMode === 'island'}
-          aria-label="UV island selection"
-          onclick={() => session.setUvSelectionMode('island')}
-        >Island</button>
+          class="uv-action"
+          aria-label="Unwrap UV charts"
+          onclick={() => session.unwrapUv()}
+        >Unwrap</button>
+        <button
+          type="button"
+          class="uv-action"
+          aria-label="Stack selected UV islands onto the active island"
+          onclick={() => session.stackUvIslands()}
+        >Stack</button>
       </div>
-      <button
-        type="button"
-        class="uv-action"
-        aria-label="Select all UV corners"
-        onclick={() => session.selectAllUv()}
-      >All</button>
-      <button
-        type="button"
-        class="uv-action"
-        class:active={lassoMode}
-        aria-pressed={lassoMode}
-        aria-label="UV lasso selection"
-        onclick={toggleLasso}
-      ><Icon name="lasso" size={15} /></button>
-      <button
-        type="button"
-        class="uv-action uv-subtract"
-        class:active={subtractMode}
-        aria-pressed={subtractMode}
-        aria-label="Subtract from UV selection"
-        onclick={() => session.setUvSubtractMode(!subtractMode)}
-      >−</button>
-      <div class="uv-modes" role="group" aria-label="UV transform mode">
+      <div class="uv-group" role="group" aria-label="UV view">
         <button
           type="button"
-          class="uv-mode"
-          class:active={transformMode === 'move'}
-          aria-label="UV Move"
-          aria-pressed={transformMode === 'move'}
-          onclick={() => session.setUvTransformMode('move')}
-        ><Icon name="move" size={15} /></button>
+          class="uv-action"
+          aria-label="Zoom UV out"
+          onclick={() => session.zoomUv(1 / 1.25, width, height)}
+        >−</button>
         <button
           type="button"
-          class="uv-mode"
-          class:active={transformMode === 'rotate'}
-          aria-label="UV Rotate"
-          aria-pressed={transformMode === 'rotate'}
-          onclick={() => session.setUvTransformMode('rotate')}
-        ><Icon name="rotate" size={15} /></button>
+          class="uv-action"
+          aria-label="Fit UV view"
+          onclick={() => session.resetUvView()}
+        >Fit</button>
         <button
           type="button"
-          class="uv-mode"
-          class:active={transformMode === 'scale'}
-          aria-label="UV Scale"
-          aria-pressed={transformMode === 'scale'}
-          onclick={() => session.setUvTransformMode('scale')}
-        ><Icon name="scale" size={15} /></button>
+          class="uv-action"
+          aria-label="Zoom UV in"
+          onclick={() => session.zoomUv(1.25, width, height)}
+        >+</button>
+        <button
+          type="button"
+          class="uv-action"
+          class:active={clampMode}
+          aria-pressed={clampMode}
+          aria-label="Clamp direct UV transforms to the texture square"
+          onclick={() => session.setUvClampMode(!clampMode)}
+        >Clamp</button>
       </div>
-      <button
-        type="button"
-        class="uv-chip"
-        disabled={transformMode === 'rotate'}
-        class:active={axisLock === 'u'}
-        aria-label="Constrain UV drag to U"
-        aria-pressed={axisLock === 'u'}
-        onclick={() => session.setUvAxisLock('u')}
-      >U</button>
-      <button
-        type="button"
-        class="uv-chip"
-        class:active={axisLock === 'v'}
-        aria-label="Constrain UV drag to V"
-        aria-pressed={axisLock === 'v'}
-        disabled={transformMode === 'rotate'}
-        onclick={() => session.setUvAxisLock('v')}
-      >V</button>
-      <button
-        type="button"
-        class="uv-action"
-        aria-label="Sync UV selection from 3D selection"
-        onclick={() => session.syncUvFrom3d()}
-      >Sync 3D</button>
-      <button
-        type="button"
-        class="uv-action"
-        aria-label={pinnedCount === 2 ? 'Clear UV pins' : 'Pin selected UV corners'}
-        disabled={pinnedCount !== 2 && selectedCount !== 2}
-        onclick={() => session.toggleUvPins()}
-      >{pinnedCount === 2 ? 'Unpin' : 'Pin'}</button>
-      <button
-        type="button"
-        class="uv-action"
-        aria-label="Unwrap UV charts"
-        onclick={() => session.unwrapUv()}
-      >Unwrap</button>
-      <button
-        type="button"
-        class="uv-action"
-        aria-label="Stack selected UV islands onto the active island"
-        onclick={() => session.stackUvIslands()}
-      >Stack</button>
       <button
         type="button"
         class="uv-layout"
@@ -527,6 +552,7 @@
       class="uv-canvas"
       class:paint-mode={paintMode}
       class:lasso-mode={lassoMode}
+      class:panning={uvPanning}
       tabindex="0"
       aria-label="UV editor. Drag corners to transform UVs, or enable Paint to brush the active texture layer."
       onpointerdown={pointerDown}
@@ -538,6 +564,7 @@
         }
       }}
       onkeydown={keyDown}
+      oncontextmenu={(event) => event.preventDefault()}
     ></canvas>
     {#if lassoing && uvLassoPath.length > 1}
       <svg class="uv-lasso-overlay" aria-hidden="true">
@@ -824,18 +851,24 @@
     white-space: nowrap;
   }
 
+  .uv-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding-right: var(--space-1);
+    border-right: var(--hairline) solid var(--border-subtle);
+  }
+
   .uv-actions {
     display: flex;
     align-items: center;
     gap: var(--space-1);
   }
 
-  .uv-element,
   .uv-chip,
   .uv-action,
   .uv-layout,
-  .uv-close,
-  .uv-mode {
+  .uv-close {
     min-width: var(--hit-min);
     min-height: var(--hit-min);
     border: var(--hairline) solid var(--border-subtle);
@@ -848,69 +881,25 @@
     cursor: pointer;
   }
 
-  .uv-element:hover,
   .uv-chip:hover,
   .uv-action:hover,
   .uv-layout:hover,
-  .uv-close:hover,
-  .uv-mode:hover {
+  .uv-close:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
   }
 
-  .uv-element.active,
   .uv-chip.active,
-  .uv-action.active,
-  .uv-mode.active {
+  .uv-action.active {
     border-color: var(--accent-primary);
     background: var(--bg-selected);
     color: var(--accent-primary);
   }
 
-  .uv-element,
   .uv-chip:disabled,
-  .uv-layout:disabled,
-  .uv-mode:disabled {
+  .uv-layout:disabled {
     opacity: 0.35;
     cursor: default;
-  }
-
-  .uv-element-modes {
-    display: flex;
-    align-items: center;
-    gap: 1px;
-    padding-right: var(--space-1);
-    border-right: var(--hairline) solid var(--border-subtle);
-  }
-
-  .uv-element {
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
-    padding: 0 var(--space-1);
-    border: var(--hairline) solid transparent;
-    border-radius: var(--radius-xs);
-    background: transparent;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-  }
-
-  .uv-element--island {
-    min-width: 52px;
-  }
-
-  .uv-modes {
-    display: flex;
-    gap: 1px;
-    margin-right: var(--space-1);
-  }
-
-  .uv-mode {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
   }
 
   .uv-action {
@@ -947,6 +936,10 @@
 
   .uv-canvas.lasso-mode {
     cursor: crosshair;
+  }
+
+  .uv-canvas.panning {
+    cursor: grabbing;
   }
 
   .uv-lasso-overlay {

@@ -5,6 +5,7 @@ import {
   LinearFilter,
   LinearMipmapLinearFilter,
   LineBasicMaterial,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   NearestFilter,
   RepeatWrapping,
@@ -22,6 +23,8 @@ export interface ViewportMaterials {
   readonly ps1: ShaderMaterial;
   readonly wire: LineBasicMaterial;
   readonly wireOverlay: LineBasicMaterial;
+  readonly wireTube: MeshBasicMaterial;
+  readonly wireOverlayTube: MeshBasicMaterial;
   readonly ps1Texture: Texture;
   readonly litTexture: Texture;
 }
@@ -193,6 +196,23 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
     depthWrite: false,
     toneMapped: false
   });
+  const wireTube = new MeshBasicMaterial({
+    name: 'loupoli-wire-tube',
+    color: theme.wireframe.color,
+    transparent: true,
+    opacity: Math.max(theme.wireframe.alpha, 0.55),
+    depthWrite: false,
+    toneMapped: false
+  });
+  const wireOverlayTube = new MeshBasicMaterial({
+    name: 'loupoli-wire-front-tube',
+    color: theme.accent.color,
+    transparent: true,
+    opacity: 1,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false
+  });
 
 
   return {
@@ -201,6 +221,8 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
     ps1: createPs1Material(ps1Texture),
     wire,
     wireOverlay,
+    wireTube,
+    wireOverlayTube,
     ps1Texture,
     litTexture
   };
@@ -213,6 +235,8 @@ export function disposeViewportMaterials(materials: ViewportMaterials): void {
   materials.ps1.dispose();
   materials.wire.dispose();
   materials.wireOverlay.dispose();
+  materials.wireTube.dispose();
+  materials.wireOverlayTube.dispose();
   materials.ps1Texture.dispose();
   materials.litTexture.dispose();
 }

@@ -137,11 +137,15 @@ export interface EditorSnapshot {
   readonly uvOpen: boolean;
   readonly uvSplit: number;
   readonly uvLayout: UvLayout;
+  readonly uvZoom: number;
+  readonly uvPanX: number;
+  readonly uvPanY: number;
   readonly uvAxisLock: UvAxisLock;
   readonly uvTransformMode: UvTransformMode;
   readonly uvSelectionMode: UvSelectionMode;
   readonly uvLassoMode: boolean;
   readonly uvSubtractMode: boolean;
+  readonly uvClampMode: boolean;
   readonly uvSelectedCorners: readonly number[];
   readonly uvPinnedCorners: readonly number[];
   readonly uvPaintMode: boolean;

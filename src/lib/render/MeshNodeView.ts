@@ -44,6 +44,10 @@ interface ProjectedPoint {
 }
 
 const PICK_RADIUS_CSS = 16;
+const WIRE_TUBE_RADIUS = 0.012;
+const FRONT_WIRE_TUBE_RADIUS = 0.014;
+const SELECTED_EDGE_RADIUS = 0.025;
+const SEAM_TUBE_RADIUS = 0.008;
 const Y_AXIS = new Vector3(0, 1, 0);
 
 function pointInPolygon(
@@ -138,6 +142,8 @@ export class MeshNodeView {
   private readonly selectedVertexPoint: Points;
   private readonly pickingMesh: Mesh;
   private selectedEdgeMesh: InstancedMesh;
+  private wireTubeMesh: InstancedMesh;
+  private frontWireTubeMesh: InstancedMesh;
   private readonly edgeUnitGeometry: CylinderGeometry;
   private edgeCapacity = 1;
   private readonly selectedFaceMesh: Mesh;
@@ -279,6 +285,18 @@ export class MeshNodeView {
 
     this.edgeUnitGeometry = new CylinderGeometry(1, 1, 1, 6, 1, false);
     this.selectedEdgeMesh = this.createEdgeInstances(shared.selectedEdge, 1);
+    this.wireTubeMesh = this.createEdgeInstances(
+      surfaceMaterials.wireTube,
+      Math.max(1, mesh.edgeCount),
+      'loupoli-wire-tubes',
+      1
+    );
+    this.frontWireTubeMesh = this.createEdgeInstances(
+      surfaceMaterials.wireOverlayTube,
+      Math.max(1, mesh.edgeCount),
+      'loupoli-front-wire-tubes',
+      2
+    );
     this.seamEdgeMesh = this.createEdgeInstances(
       shared.seamEdge,
       1,
@@ -311,7 +329,9 @@ export class MeshNodeView {
     this.group.add(
       this.triangleMesh,
       this.wireSegments,
+      this.wireTubeMesh,
       this.frontWireSegments,
+      this.frontWireTubeMesh,
       this.seamSegments,
       this.previewLine,
       this.vertexPoints,
@@ -372,7 +392,9 @@ export class MeshNodeView {
     const isTextureWire = mode === 'texture-wire';
     this.triangleMesh.visible = !isWire;
     this.wireSegments.visible = isWire;
+    this.wireTubeMesh.visible = isWire;
     this.frontWireSegments.visible = isTextureWire;
+    this.frontWireTubeMesh.visible = isTextureWire;
     if (this.frontWireSegments.visible) {
       this.frontWireGeometry.setDrawRange(0, 0);
     }
@@ -404,6 +426,7 @@ export class MeshNodeView {
       this.triangleUvs
     );
     mesh.writeEdgePositions(this.wirePositions);
+    this.updateWireTubes();
     const seamCount = mesh.writeSeamEdgePositions(this.seamPositions);
     this.seamGeometry.setDrawRange(0, seamCount * 2);
     this.updateSeamEdges(seamCount);
@@ -721,6 +744,8 @@ export class MeshNodeView {
     this.vertexGeometry.dispose();
     this.selectedVertexGeometry.dispose();
     this.selectedEdgeMesh.dispose();
+    this.wireTubeMesh.dispose();
+    this.frontWireTubeMesh.dispose();
     this.edgeUnitGeometry.dispose();
     this.selectedFaceOutline.geometry.dispose();
     faceGeometry.dispose();
@@ -849,6 +874,8 @@ export class MeshNodeView {
       const material = this.selectedEdgeMesh.material as MeshBasicMaterial;
       this.group.remove(this.selectedEdgeMesh);
       this.selectedEdgeMesh.dispose();
+    this.wireTubeMesh.dispose();
+    this.frontWireTubeMesh.dispose();
       this.edgeCapacity = nextPowerOfTwo(edges.length);
       this.selectedEdgeMesh = this.createEdgeInstances(
         material,
@@ -868,7 +895,7 @@ export class MeshNodeView {
         continue;
       }
       this.edgeDirection.normalize();
-      const radius = Math.min(0.08, Math.max(0.008, length * 0.035));
+      const radius = SELECTED_EDGE_RADIUS;
       this.edgePosition.copy(start).add(end).multiplyScalar(0.5);
       this.edgeQuaternion.setFromUnitVectors(Y_AXIS, this.edgeDirection);
       this.edgeScale.set(radius, length, radius);
@@ -928,7 +955,7 @@ export class MeshNodeView {
         this.seamEdgeMesh.setMatrixAt(cursor, this.edgeMatrix.makeScale(0, 0, 0));
       } else {
         this.edgeDirection.normalize();
-        const radius = Math.min(0.04, Math.max(0.012, length * 0.02));
+        const radius = SEAM_TUBE_RADIUS;
         this.edgePosition.copy(start).add(end).multiplyScalar(0.5);
         this.edgeQuaternion.setFromUnitVectors(Y_AXIS, this.edgeDirection);
         this.edgeScale.set(radius, length, radius);
@@ -1024,6 +1051,53 @@ export class MeshNodeView {
     }
   }
 
+  private updateWireTubes(): void {
+    const mesh = this.mesh;
+    for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+      const [from, to] = mesh.getEdgeVertices(edge);
+      this.writeEdgeTube(
+        this.wireTubeMesh,
+        edge,
+        from,
+        to,
+        WIRE_TUBE_RADIUS
+      );
+    }
+    this.wireTubeMesh.count = mesh.edgeCount;
+    this.wireTubeMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private writeEdgeTube(
+    target: InstancedMesh,
+    index: number,
+    fromVertex: number,
+    toVertex: number,
+    radius: number
+  ): void {
+    const start = new Vector3(
+      ...this.mesh.getVertexPosition(fromVertex)
+    );
+    const end = new Vector3(...this.mesh.getVertexPosition(toVertex));
+    this.edgeDirection.copy(end).sub(start);
+    const length = this.edgeDirection.length();
+    if (length <= Number.EPSILON) {
+      target.setMatrixAt(index, this.edgeMatrix.makeScale(0, 0, 0));
+      return;
+    }
+    this.edgeDirection.normalize();
+    this.edgePosition.copy(start).add(end).multiplyScalar(0.5);
+    this.edgeQuaternion.setFromUnitVectors(Y_AXIS, this.edgeDirection);
+    this.edgeScale.set(radius, length, radius);
+    target.setMatrixAt(
+      index,
+      this.edgeMatrix.compose(
+        this.edgePosition,
+        this.edgeQuaternion,
+        this.edgeScale
+      )
+    );
+  }
+
   /**
    * Rebuild the camera-facing wire subset used by Texture + Wire.
    *
@@ -1039,6 +1113,7 @@ export class MeshNodeView {
       .clone()
       .applyMatrix4(this.group.matrixWorld.clone().invert());
     let cursor = 0;
+    let tubeCount = 0;
     for (let edge = 0; edge < this.mesh.edgeCount; edge += 1) {
       const halfEdge = this.mesh.edgeHalfEdge[edge];
       const fromVertex = this.mesh.heOrigin[halfEdge];
@@ -1077,10 +1152,20 @@ export class MeshNodeView {
       this.frontWirePositions[cursor + 3] = this.mesh.positions[to];
       this.frontWirePositions[cursor + 4] = this.mesh.positions[to + 1];
       this.frontWirePositions[cursor + 5] = this.mesh.positions[to + 2];
+      this.writeEdgeTube(
+        this.frontWireTubeMesh,
+        tubeCount,
+        fromVertex,
+        toVertex,
+        FRONT_WIRE_TUBE_RADIUS
+      );
+      tubeCount += 1;
       cursor += 6;
     }
     this.frontWireGeometry.getAttribute('position').needsUpdate = true;
     this.frontWireGeometry.setDrawRange(0, cursor / 3);
+    this.frontWireTubeMesh.count = tubeCount;
+    this.frontWireTubeMesh.instanceMatrix.needsUpdate = true;
   }
 
   /** Show or clear the temporary action loop preview line. */

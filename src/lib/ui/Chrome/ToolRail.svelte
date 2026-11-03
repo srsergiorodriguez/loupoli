@@ -33,6 +33,9 @@
     session.closeInspector();
     session.setLassoMode(false);
     session.setTransformMode(mode);
+    session.setUvTransformMode(
+      mode === 'translate' ? 'move' : mode === 'rotate' ? 'rotate' : 'scale'
+    );
   }
 
   function frameMesh(): void {

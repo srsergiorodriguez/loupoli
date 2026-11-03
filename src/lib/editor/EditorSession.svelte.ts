@@ -31,11 +31,15 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvOpen: false,
   uvSplit: 0.38,
   uvLayout: 'bottom',
+  uvZoom: 1,
+  uvPanX: 0,
+  uvPanY: 0,
   uvAxisLock: null,
   uvTransformMode: 'move',
   uvSelectionMode: 'vertex',
   uvLassoMode: false,
   uvSubtractMode: false,
+  uvClampMode: true,
   uvSelectedCorners: [],
   uvPinnedCorners: [],
   uvPaintMode: false,
@@ -198,6 +202,24 @@ export class EditorSession {
     this.runtime?.setUvSplit(fraction);
   }
 
+  zoomUv(
+    factor: number,
+    width: number,
+    height: number,
+    anchorX = width / 2,
+    anchorY = height / 2
+  ): void {
+    this.runtime?.zoomUv(factor, width, height, anchorX, anchorY);
+  }
+
+  panUv(dx: number, dy: number): void {
+    this.runtime?.panUv(dx, dy);
+  }
+
+  resetUvView(): void {
+    this.runtime?.resetUvView();
+  }
+
   setUvLayout(layout: 'bottom' | 'side'): void {
     this.runtime?.setUvLayout(layout);
     writePreference(UV_LAYOUT_STORAGE_KEY, layout);
@@ -257,6 +279,10 @@ export class EditorSession {
 
   setUvSubtractMode(enabled: boolean): void {
     this.runtime?.setUvSubtractMode(enabled);
+  }
+
+  setUvClampMode(enabled: boolean): void {
+    this.runtime?.setUvClampMode(enabled);
   }
 
   selectUvLasso(

@@ -50,19 +50,22 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Seam-based LSCM unwrap with pinned corners](docs/media/uv-unwrap.png)
 
-- **UV workspaces.** Use the TopBar **Model / UV / Paint** switcher. UV opens the bottom split; Paint opens UV with the raster brush active. The UV header switches between bottom and side-by-side layouts, and the divider resizes the active orientation.
+- **UV workspaces.** Use the TopBar **Model / UV / Paint** switcher. UV opens the bottom split; Paint opens UV with the raster brush active. The UV header switches between bottom and side-by-side layouts, and the divider resizes the active orientation. UV controls are grouped into Selection (All/Lasso/Subtract), UV Operations (U/V, Sync, Pin, Unwrap, Stack), and View (zoom out, Fit, zoom in, Clamp). Move/Rotate/Scale and V/E/F/Island are contextual: the left tool rail and top-left selection control drive both 3D and UV.
 
 ![Side-by-side UV and 3D workspace](docs/media/uv-side-workspace.png)
 
-- **UV editing split.** Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move, rotate around the median, or scale around the median. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, and UV raster painting are implemented; projection painting remains. Paint resolves to the UV workspace with the brush enabled.
+- **UV editing split.** Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius; in Island mode clicking anywhere inside a chart selects and drags the whole island. Mouse wheel zooms around the pointer, right/middle-drag pans, dragging empty UV space pans, and the View group provides 44 px zoom/Fit controls. Direct transforms clamp to the 0–1 texture square while Clamp is enabled. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, and UV raster painting are implemented; projection painting remains. Paint resolves to the UV workspace with the brush enabled.
 
 ![UV editing split with selected corners and seams](docs/media/uv-split.png)
+
+![UV controls grouped with contextual transform state](docs/media/uv-zoom-controls.png)
 
 ![UV transform modes and exact numeric entry](docs/media/uv-transform.png)
 - **Four real primitives.** QuadSphere (all quads), Cube (all quads), Cylinder (quad wall plus n-gon caps), and Grid (open surface with explicit boundary loops). The first-run scene contains an editable QuadSphere.
 - **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed at the world origin and immediately selected; they may overlap existing objects until moved.
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
 - **Object/group transform gizmos.** With no element selection, Move/Rotate/Scale show object-space handles. Dragging an axis commits one `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation.
+- **Consistent edge overlays.** Selected edges use constant-width instanced tubes rather than length-scaled radius, so cube and QuadSphere selections have comparable weight. Wireframe and Texture + Wire add instanced tubes for a heavier, readable line without replacing the DCEL edges.
 - **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag orbits on empty space, so additive selection and camera movement work together. Selected vertices, edges, and faces render distinct overlays. Selection remains session state.
 - **Lasso selection.** The Lasso tool draws a screen-space polygon and selects vertices inside it, edges inside or crossing it, and faces with a corner or centroid inside. It works in the active V/E/F mode, supports the sticky Add toggle, and is available to mouse, Pencil, and one-finger touch. Lasso selection is view-through in Wireframe and occlusion-aware in every shaded mode; back-facing/covered vertices, edges, and faces are rejected.
 
@@ -187,7 +190,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **98 passing** tests across twenty-three files:
+- `npm test`: **99 passing** tests across twenty-three files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.
