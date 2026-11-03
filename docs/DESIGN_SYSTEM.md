@@ -452,7 +452,8 @@ Implemented component files and local patterns:
 | `.section` / `.section-head` | 1–3 | Inspector section layout | Shared local pattern; non-collapsible sections use `.section-head` |
 | Disclosure sections | 2 | Transform, Modifiers, Texture, PS1 look | One native `<details>/<summary>` pattern; chevron rotation; persisted Transform/Modifiers state |
 | Selection actions | 3–4 | Extrude, inset, loop cut, seam, merge, bridge, delete | Compact chips; destructive action separated; seam uses `--accent-warning` |
-| `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | 44px rows/actions, lime selected dots |
+| `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | Compact action beside Group/Delete; 44px rows/actions |
+| Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; 44px eye; hidden rows dimmed |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
 | Modifier stack | 3 | Ordered cards with enable/order/remove/parameters | Explicit evaluated state and error panel |
 | Transform orientation toggle | 3 | Local/Global transform space | Two-button control; 44px touch width/height |

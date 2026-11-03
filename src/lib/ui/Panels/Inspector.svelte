@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import Icon from '../Icons/Icon.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
   import Switch from '../Primitives/Switch.svelte';
@@ -87,6 +87,88 @@
 
   const SECTION_STORAGE_KEY = 'loupoli:inspector:sections';
   let sections = $state({ transform: true, modifiers: true });
+  let draggedNodeId = $state<string | null>(null);
+  let dropTargetId = $state<string | null>(null);
+  let dropAfter = $state(false);
+  let reorderPointerId: number | null = null;
+
+  onDestroy(cleanupReorder);
+
+  function beginReorder(event: PointerEvent, nodeId: string): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    draggedNodeId = nodeId;
+    dropTargetId = null;
+    reorderPointerId = event.pointerId;
+    window.addEventListener('pointermove', reorderMove);
+    window.addEventListener('pointerup', reorderEnd);
+    window.addEventListener('pointercancel', cleanupReorder);
+  }
+
+  function reorderMove(event: PointerEvent): void {
+    if (event.pointerId !== reorderPointerId || !draggedNodeId) {
+      return;
+    }
+    event.preventDefault();
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-node-id]');
+    if (!target) {
+      dropTargetId = null;
+      return;
+    }
+    const id = target.dataset.nodeId ?? null;
+    if (!id || id === draggedNodeId) {
+      dropTargetId = null;
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    dropTargetId = id;
+    dropAfter = event.clientY > rect.top + rect.height / 2;
+  }
+
+  function reorderEnd(event: PointerEvent): void {
+    if (event.pointerId !== reorderPointerId) {
+      return;
+    }
+    const source = draggedNodeId;
+    const target = dropTargetId;
+    const after = dropAfter;
+    cleanupReorder();
+    if (source && target) {
+      session.reorderNode(source, target, after);
+    }
+  }
+
+  function cleanupReorder(): void {
+    window.removeEventListener('pointermove', reorderMove);
+    window.removeEventListener('pointerup', reorderEnd);
+    window.removeEventListener('pointercancel', cleanupReorder);
+    reorderPointerId = null;
+    draggedNodeId = null;
+    dropTargetId = null;
+    dropAfter = false;
+  }
+
+  function toggleNodeVisibility(
+    event: MouseEvent,
+    nodeId: string,
+    visible: boolean
+  ): void {
+    event.stopPropagation();
+    session.setNodeVisibility(nodeId, !visible);
+  }
+
+  function toggleGroupVisibility(
+    event: MouseEvent,
+    groupId: string,
+    visible: boolean
+  ): void {
+    event.stopPropagation();
+    session.setGroupVisibility(groupId, !visible);
+  }
 
   onMount(() => {
     try {
@@ -250,19 +332,33 @@
 
       <div class="object-list">
         {#each groups as group (group.id)}
-          <button
-            type="button"
+          <div
             class="object-row group-row"
             class:active={group.id === activeGroupId}
+            class:is-hidden={!group.visible}
             aria-current={group.id === activeGroupId ? 'true' : undefined}
-            onclick={() => session.selectGroup(group.id)}
           >
-            <span class="object-glyph"><Icon name="folder" size={14} /></span>
-            <span class="object-name">{group.name}</span>
-            <span class="object-kind">
-              {nodes.filter((node) => node.parentId === group.id).length} objects
-            </span>
-          </button>
+            <button
+              type="button"
+              class="object-select"
+              onclick={() => session.selectGroup(group.id)}
+            >
+              <span class="object-glyph"><Icon name="folder" size={14} /></span>
+              <span class="object-name">{group.name}</span>
+              <span class="object-kind">
+                {nodes.filter((node) => node.parentId === group.id).length} objects
+              </span>
+            </button>
+            <button
+              type="button"
+              class="object-visibility"
+              aria-label={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
+              aria-pressed={group.visible}
+              onclick={(event) => toggleGroupVisibility(event, group.id, group.visible)}
+            >
+              <Icon name={group.visible ? 'eye' : 'eye-off'} size={14} />
+            </button>
+          </div>
           {#each nodes.filter((node) => node.parentId === group.id) as node (node.id)}
             {@render objectRow(node, true)}
           {/each}
@@ -273,51 +369,58 @@
       </div>
 
       {#snippet objectRow(node: (typeof nodes)[number], child: boolean)}
-        <button
-          type="button"
+        <div
           class="object-row"
           class:active={node.id === activeNodeId}
           class:selected={selectedNodeIds.includes(node.id)}
           class:child
-          aria-pressed={selectedNodeIds.includes(node.id)}
+          class:is-hidden={!node.visible}
+          class:dragging={draggedNodeId === node.id}
+          class:drop-target={dropTargetId === node.id}
+          class:drop-after={dropTargetId === node.id && dropAfter}
+          data-node-id={node.id}
           aria-current={node.id === activeNodeId ? 'true' : undefined}
-          onclick={(event) =>
-            session.selectNode(
-              node.id,
-              event.shiftKey || event.metaKey || event.ctrlKey
-            )}
         >
-          <span class="object-glyph"><Icon name="solid" size={14} /></span>
-          <span class="object-name">{node.name}</span>
-          <span class="object-kind">
-            {node.primitive === 'quadsphere'
-              ? 'Sphere'
-              : node.primitive === 'cylinder'
-                ? 'Cylinder'
-                : 'Grid'}
-          </span>
-        </button>
+          <button
+            type="button"
+            class="object-drag-handle"
+            aria-label={`Drag to reorder ${node.name}`}
+            title="Drag to reorder"
+            onpointerdown={(event) => beginReorder(event, node.id)}
+          ><span aria-hidden="true">⠿</span></button>
+          <button
+            type="button"
+            class="object-select"
+            aria-pressed={selectedNodeIds.includes(node.id)}
+            onclick={(event) =>
+              session.selectNode(
+                node.id,
+                event.shiftKey || event.metaKey || event.ctrlKey
+              )}
+          >
+            <span class="object-glyph"><Icon name="solid" size={14} /></span>
+            <span class="object-name">{node.name}</span>
+            <span class="object-kind">
+              {node.primitive === 'quadsphere'
+                ? 'Sphere'
+                : node.primitive === 'cube'
+                  ? 'Cube'
+                  : node.primitive === 'cylinder'
+                    ? 'Cylinder'
+                    : 'Grid'}
+            </span>
+          </button>
+          <button
+            type="button"
+            class="object-visibility"
+            aria-label={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
+            aria-pressed={node.visible}
+            onclick={(event) => toggleNodeVisibility(event, node.id, node.visible)}
+          >
+            <Icon name={node.visible ? 'eye' : 'eye-off'} size={14} />
+          </button>
+        </div>
       {/snippet}
-
-      {#if nodes.length > 0}
-        <button
-          type="button"
-          class="object-add-toggle"
-          class:is-active={session.snapshot.additiveNodeSelection}
-          aria-pressed={session.snapshot.additiveNodeSelection}
-          onclick={() =>
-            session.setAdditiveNodeSelection(
-              !session.snapshot.additiveNodeSelection
-            )}
-        >
-          <Icon name="plus" size={13} />
-          <span>
-            {session.snapshot.additiveNodeSelection
-              ? 'Adding to selection'
-              : 'Multi-select objects'}
-          </span>
-        </button>
-      {/if}
 
       <div class="scene-actions">
         <select
@@ -335,8 +438,23 @@
         </button>
       </div>
 
-      {#if activeNodeId !== null || activeGroupId !== null || selectedNodeIds.length > 0}
+      {#if nodes.length > 0 || groups.length > 0}
         <div class="scene-action-row">
+          <button
+            type="button"
+            class="compact-action"
+            class:is-active={session.snapshot.additiveNodeSelection}
+            aria-pressed={session.snapshot.additiveNodeSelection}
+            aria-label="Multi-select objects"
+            title="Add to object selection"
+            onclick={() =>
+              session.setAdditiveNodeSelection(
+                !session.snapshot.additiveNodeSelection
+              )}
+          >
+            <Icon name="plus" size={13} />
+            <span>Multi</span>
+          </button>
           {#if selectedNodeIds.length > 0 && activeGroupId === null}
             <button
               type="button"
@@ -1176,15 +1294,29 @@
 
   .object-row {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     width: 100%;
     min-height: var(--hit-min);
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--bg-input);
     color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    overflow: hidden;
+  }
+
+  .object-select {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-width: 0;
+    min-height: var(--hit-min);
+    gap: var(--space-2);
+    padding: 0 var(--space-2);
+    border: 0;
+    background: transparent;
+    color: inherit;
     font: inherit;
     text-align: left;
     cursor: pointer;
@@ -1192,6 +1324,55 @@
 
   .object-row:hover {
     background: var(--bg-hover);
+  }
+
+  .object-drag-handle,
+  .object-visibility {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: var(--hit-min);
+    min-height: var(--hit-min);
+    border: 0;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    touch-action: none;
+  }
+
+  .object-drag-handle {
+    min-width: 28px;
+    cursor: grab;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: -2px;
+  }
+
+  .object-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .object-visibility:hover,
+  .object-drag-handle:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .object-row.is-hidden {
+    opacity: 0.52;
+  }
+
+  .object-row.dragging {
+    opacity: 0.4;
+  }
+
+  .object-row.drop-target {
+    box-shadow: inset 0 2px 0 var(--accent-primary);
+  }
+
+  .object-row.drop-target.drop-after {
+    box-shadow: inset 0 -2px 0 var(--accent-primary);
   }
 
   .object-row.active {
@@ -1208,7 +1389,7 @@
     border-color: var(--accent-primary);
   }
 
-  .object-row.child {
+  .object-row.child .object-select {
     padding-left: calc(var(--space-2) + 14px);
   }
 
@@ -1227,35 +1408,6 @@
     flex: 0 0 auto;
     border-radius: 50%;
     background: var(--accent-primary);
-  }
-
-  .object-add-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: var(--hit-min);
-    margin-top: var(--space-2);
-    gap: 6px;
-    border: var(--hairline) dashed var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--text-tertiary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-  }
-
-  .object-add-toggle:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  .object-add-toggle.is-active {
-    border-style: solid;
-    border-color: var(--border-strong);
-    color: var(--accent-primary);
-    background: var(--bg-selected);
   }
 
   .scene-actions {
@@ -1288,6 +1440,12 @@
     margin-top: var(--space-2);
   }
 
+  @media (pointer: coarse) {
+    .object-drag-handle {
+      min-width: var(--hit-min);
+    }
+  }
+
   .compact-action {
     display: inline-flex;
     align-items: center;
@@ -1302,6 +1460,12 @@
     font-family: var(--font-body);
     font-size: var(--text-2xs);
     cursor: pointer;
+  }
+
+  .compact-action.is-active {
+    border-color: var(--accent-primary);
+    background: var(--bg-selected);
+    color: var(--accent-primary);
   }
 
   .compact-action:hover {

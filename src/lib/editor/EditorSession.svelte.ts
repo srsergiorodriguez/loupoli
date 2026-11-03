@@ -508,6 +508,18 @@ export class EditorSession {
     this.runtime?.updateModifier(id, patch);
   }
 
+  setNodeVisibility(nodeId: string, visible: boolean): void {
+    this.runtime?.setNodeVisibility(nodeId, visible);
+  }
+
+  setGroupVisibility(groupId: string, visible: boolean): void {
+    this.runtime?.setGroupVisibility(groupId, visible);
+  }
+
+  reorderNode(nodeId: string, targetId: string, placeAfter: boolean): void {
+    this.runtime?.reorderNode(nodeId, targetId, placeAfter);
+  }
+
   setAdditiveNodeSelection(enabled: boolean): void {
     this.runtime?.setAdditiveNodeSelection(enabled);
   }

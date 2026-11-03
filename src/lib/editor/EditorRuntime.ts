@@ -75,6 +75,11 @@ import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
 import { DeleteMeshNodeCommand } from './commands/DeleteMeshNodeCommand';
+import {
+  ReorderNodeCommand,
+  SetGroupVisibilityCommand,
+  SetNodeVisibilityCommand
+} from './commands/SceneOrderCommands';
 import { SetEdgeSeamsCommand } from './commands/SetEdgeSeamsCommand';
 import { MoveUvCornersCommand } from './commands/MoveUvCornersCommand';
 import {
@@ -2137,6 +2142,49 @@ export class EditorRuntime {
       new UngroupGroupCommand(this.document, group, index, children)
     );
     this.publish();
+  }
+
+  /** Toggle one mesh node's visibility through undoable document state. */
+  setNodeVisibility(nodeId: string, visible: boolean): void {
+    const node = this.document.getNode(nodeId);
+    if (!node || node.visible === visible) {
+      return;
+    }
+    this.history.execute(new SetNodeVisibilityCommand(node, visible));
+  }
+
+  /** Toggle a group's visibility through undoable document state. */
+  setGroupVisibility(groupId: string, visible: boolean): void {
+    const group = this.document.getGroup(groupId);
+    if (!group || group.visible === visible) {
+      return;
+    }
+    this.history.execute(new SetGroupVisibilityCommand(group, visible));
+  }
+
+  /** Move a node before/after another node in the same scene parent. */
+  reorderNode(nodeId: string, targetId: string, placeAfter: boolean): void {
+    if (nodeId === targetId) {
+      return;
+    }
+    const source = this.document.getNode(nodeId);
+    const target = this.document.getNode(targetId);
+    if (!source || !target || source.parentId !== target.parentId) {
+      return;
+    }
+    const from = this.document.nodes.indexOf(source);
+    const targetIndex = this.document.nodes.indexOf(target);
+    let to = targetIndex + (placeAfter ? 1 : 0);
+    if (from < to) {
+      to -= 1;
+    }
+    to = Math.max(0, Math.min(to, this.document.nodes.length - 1));
+    if (to === from) {
+      return;
+    }
+    this.history.execute(
+      new ReorderNodeCommand(this.document, source, from, to)
+    );
   }
 
   setAdditiveNodeSelection(enabled: boolean): void {

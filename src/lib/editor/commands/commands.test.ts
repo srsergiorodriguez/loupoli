@@ -13,6 +13,10 @@ import { MoveVertexCommand } from './MoveVertexCommand';
 import { TransformNodeCommand } from './TransformNodeCommand';
 import { SetModifiersCommand } from './SetModifiersCommand';
 import {
+  ReorderNodeCommand,
+  SetNodeVisibilityCommand
+} from './SceneOrderCommands';
+import {
   CreateGroupCommand,
   TransformGroupCommand,
   UngroupGroupCommand
@@ -32,6 +36,29 @@ function validateAll(document: SceneDocument): void {
 }
 
 describe('scene commands and journal', () => {
+  it('reorders and hides scene nodes with localized undo', () => {
+    const document = SceneDocument.createDefault();
+    const history = new History();
+    const cube = document.createNode('cube');
+    document.insertNode(cube, 1);
+    const reorder = new ReorderNodeCommand(document, cube, 1, 0);
+    history.execute(reorder);
+    expect(document.nodes.map((node) => node.name)).toEqual(['Cube', 'QuadSphere']);
+    expect(reorder.journalPatch('forward')).toEqual({
+      type: 'reorder-node',
+      nodeId: cube.id,
+      index: 0
+    });
+    history.undo();
+    expect(document.nodes.map((node) => node.name)).toEqual(['QuadSphere', 'Cube']);
+
+    const hide = new SetNodeVisibilityCommand(cube, false);
+    history.execute(hide);
+    expect(cube.visible).toBe(false);
+    history.undo();
+    expect(cube.visible).toBe(true);
+  });
+
   it('undoes and redoes localized primitive creation and deletion', () => {
     const document = SceneDocument.createDefault();
     const history = new History();

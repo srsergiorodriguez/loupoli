@@ -146,6 +146,30 @@ export class SceneDocument {
     return [maxX + spacing - newBounds.min[0], 0, 0];
   }
 
+  /** Move one node to a final index in the scene collection. */
+  moveNodeToIndex(id: string, index: number): boolean {
+    const from = this.nodes.findIndex((node) => node.id === id);
+    if (from < 0) {
+      return false;
+    }
+    const [node] = this.nodes.splice(from, 1);
+    const to = Math.max(0, Math.min(index, this.nodes.length));
+    this.nodes.splice(to, 0, node);
+    return from !== to;
+  }
+
+  /** Move one group to a final index in the group collection. */
+  moveGroupToIndex(id: string, index: number): boolean {
+    const from = this.groups.findIndex((group) => group.id === id);
+    if (from < 0) {
+      return false;
+    }
+    const [group] = this.groups.splice(from, 1);
+    const to = Math.max(0, Math.min(index, this.groups.length));
+    this.groups.splice(to, 0, group);
+    return from !== to;
+  }
+
   /** UI summaries for the outliner. */
   summaries(): NodeSummary[] {
     return this.nodes.map((node) => ({
