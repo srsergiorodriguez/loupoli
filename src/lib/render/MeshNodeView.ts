@@ -126,6 +126,7 @@ export class MeshNodeView {
   /** Mesh instance this view's derived buffers were built for. */
   readonly boundMesh: HalfEdgeMesh;
   private readonly mesh: HalfEdgeMesh;
+  private seamVisible = false;
 
   private triangleGeometry = new BufferGeometry();
   private readonly wireGeometry = new BufferGeometry();
@@ -343,6 +344,7 @@ export class MeshNodeView {
       this.pickingMesh
     );
 
+    this.seamSegments.visible = false;
     this.setTransform(node.transform);
     this.refreshMesh();
   }
@@ -406,6 +408,13 @@ export class MeshNodeView {
     } else {
       this.triangleMesh.material = this.surfaceMaterials.ps1;
     }
+  }
+
+  /** Show or hide the seam overlay without changing seam data. */
+  setSeamVisible(visible: boolean): void {
+    this.seamVisible = visible;
+    this.seamSegments.visible = visible;
+    this.seamEdgeMesh.visible = visible && this.seamEdgeMesh.count > 0;
   }
 
   /** Write current DCEL data into the reusable render buffers. */
@@ -970,7 +979,7 @@ export class MeshNodeView {
     }
     this.seamEdgeMesh.count = cursor;
     this.seamEdgeMesh.instanceMatrix.needsUpdate = true;
-    this.seamEdgeMesh.visible = true;
+    this.seamEdgeMesh.visible = this.seamVisible;
   }
 
   private updateSelectedFaces(): void {

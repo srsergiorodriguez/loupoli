@@ -102,6 +102,7 @@ If any answer is missing, do not add the control.
 - The Viewport Stage owns HUD and lasso overlays; HUD anchors to the visible 3D rectangle, not the window.
 - Transparent HUD wrappers are `pointer-events: none`; only visible controls opt back in. No invisible rectangle may block viewport picking.
 - Pane dividers are constrained to the pane frame bounds and must never extend over the Application Bar or Workspace Tabs.
+- The 3D seam overlay is visible only while the UV workspace is open; Model and Paint keep the model clean. The UV canvas always draws seam edges.
 - UV transforms use the fitted projection cached at the start of the gesture; auto-fit is not allowed to move the view mid-transform.
 - Camera pan/orbit/zoom never mutate selection. Only a no-move click/tap on empty viewport space clears it.
 - A selection gesture applies its pick exactly once. Pointer-up resolves only the deferred empty-click case; it must never re-run additive selection or toggle the pick back off.

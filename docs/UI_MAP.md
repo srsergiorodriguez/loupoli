@@ -23,6 +23,7 @@ This is the authoritative map of the application shell. New controls must be ass
 
 - **Viewport context strip** — object/group name, element mode, active-editor marker.
 - **Shading Bar** — icon-only Wireframe, Solid, Texture, Texture + Wire, Lit, below the Selection Bar.
+- **Seam overlay** — 3D seams appear only in the UV workspace; the UV canvas always shows seams.
 - **PaneHeader** — one 44 px title row with active dot, detail, meta, and optional actions.
 - **PaneToolbar** — optional second row for pane-specific commands, such as UV operations.
 - **View Actions** — Frame and Home in a vertical cluster left of the View Gizmo.

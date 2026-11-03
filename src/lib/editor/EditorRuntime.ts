@@ -939,6 +939,7 @@ export class EditorRuntime {
     this.uvOpen = false;
     this.uvPaintMode = false;
     this.activeEditor = '3d';
+    this.renderer.setSeamOverlayVisible(false);
     this.uvSelection.clear();
     this.uvPins.clear();
     this.uvActiveChart = null;
@@ -979,6 +980,7 @@ export class EditorRuntime {
         this.closeUvView();
       } else if (this.uvPaintMode) {
         this.uvPaintMode = false;
+        this.renderer.setSeamOverlayVisible(false);
         this.publish();
       }
       return;
@@ -996,6 +998,7 @@ export class EditorRuntime {
       this.uvRevision += 1;
       this.publish();
     }
+    this.renderer.setSeamOverlayVisible(!paint);
   }
 
   private openUvView(): void {
@@ -1021,6 +1024,7 @@ export class EditorRuntime {
     this.uvActiveChart = null;
     this.lastUvSourceSignature = '';
     this.uvRevision += 1;
+    this.renderer.setSeamOverlayVisible(true);
     this.syncUvSelectionIfChanged();
     this.publish();
   }
@@ -1033,6 +1037,7 @@ export class EditorRuntime {
     this.uvActiveChart = null;
     this.uvBaseProjection = null;
     this.uvBaseNodeId = null;
+    this.renderer.setSeamOverlayVisible(false);
     this.uvRevision += 1;
     this.publish();
   }

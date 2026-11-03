@@ -94,6 +94,7 @@ export class ViewportRenderer {
   };
 
   private currentMode: ShadingMode = 'unlit';
+  private seamOverlayVisible = false;
   private transformMode: TransformMode = 'select';
   private transformOrientation: TransformOrientation = 'local';
   private actionPreviewLine: Float32Array | null = null;
@@ -312,6 +313,7 @@ export class ViewportRenderer {
         view = new MeshNodeView(node, this.materials, this.overlayMaterials());
         this.nodeViews.set(node.id, view);
         view.setShadingMode(this.currentMode);
+        view.setSeamVisible(this.seamOverlayVisible);
       }
 
       const parent =
@@ -357,6 +359,18 @@ export class ViewportRenderer {
     }
 
     this.applyActionPreviewLine();
+    this.schedule();
+  }
+
+  /** Show the seam overlay only in contexts that explicitly opt in. */
+  setSeamOverlayVisible(visible: boolean): void {
+    if (this.seamOverlayVisible === visible) {
+      return;
+    }
+    this.seamOverlayVisible = visible;
+    for (const view of this.nodeViews.values()) {
+      view.setSeamVisible(visible);
+    }
     this.schedule();
   }
 
