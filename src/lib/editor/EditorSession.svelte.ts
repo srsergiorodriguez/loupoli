@@ -32,6 +32,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvTransformMode: 'move',
   uvSelectedCorners: [],
   uvRevision: 0,
+  uvError: null,
   activeTransform: null,
   globalTransform: null,
   transformOrientation: 'local',
@@ -195,6 +196,10 @@ export class EditorSession {
 
   applyUvScale(factor: number): void {
     this.runtime?.applyUvScale(factor);
+  }
+
+  unwrapUv(): void {
+    this.runtime?.unwrapUv();
   }
 
   finishUvDrag(): void {

@@ -33,6 +33,11 @@ export type JournalPatch =
       readonly uv: Vec2;
     }
   | {
+      readonly type: 'replace-uv';
+      readonly nodeId: string;
+      readonly uvs: Float32Array;
+    }
+  | {
       readonly type: 'insert-node';
       readonly index: number;
       readonly node: NodeSnapshot;
@@ -96,6 +101,14 @@ export function applyJournalPatch(
         throw new Error(`Autosave references missing node ${patch.nodeId}.`);
       }
       node.mesh.setCornerUv(patch.corner, patch.uv);
+      return;
+    }
+    case 'replace-uv': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.mesh.setAllCornerUvs(patch.uvs);
       return;
     }
     case 'set-edge-seam': {
@@ -206,6 +219,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'move-uv') {
     return patch.nodeId.length * 2 + 32;
+  }
+  if (patch.type === 'replace-uv') {
+    return patch.nodeId.length * 2 + patch.uvs.byteLength + 16;
   }
   if (patch.type === 'replace-mesh') {
     const mesh = patch.mesh;

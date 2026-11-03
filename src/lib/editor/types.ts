@@ -128,6 +128,7 @@ export interface EditorSnapshot {
   readonly uvTransformMode: UvTransformMode;
   readonly uvSelectedCorners: readonly number[];
   readonly uvRevision: number;
+  readonly uvError: string | null;
   readonly activeTransform: NodeTransform | null;
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;

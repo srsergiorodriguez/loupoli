@@ -444,6 +444,10 @@ local math fix.
 
 ## 7. Rendering architecture
 
+### UV charts and unwrap
+
+Seam charts are connected face sets split across seam edges and open boundaries. The unwrap path uses a bespoke LSCM solver: triangle gradients produce the two Cauchy-Riemann residual rows, the farthest boundary pair is pinned, and the sparse normal equations are solved with conjugate gradients. Charts are aligned by their longest boundary edge and shelf-packed into the UV square. Closed charts fail explicitly; zero-area and mixed-winding results are rejected before any document mutation. Interactive pins, overlap validation, and multi-chart packing improvements remain.
+
 ### Viewport sizing
 
 The renderer observes the **canvas** element, not its parent, and derives width/height from the canvas CSS box. This keeps the perspective aspect, picking rectangle, and drawing-buffer size synchronized when a split view changes only the canvas height while the full-viewport parent stays fixed.

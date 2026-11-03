@@ -272,6 +272,12 @@
       >Sync 3D</button>
       <button
         type="button"
+        class="uv-action"
+        aria-label="Unwrap UV charts"
+        onclick={() => session.unwrapUv()}
+      >Unwrap</button>
+      <button
+        type="button"
         class="uv-close"
         aria-label="Close UV editor"
         onclick={() => session.toggleUvView()}
@@ -293,6 +299,9 @@
         Select 3D faces or click UV corners. Drag to move; U/V locks and grid
         snap apply.
       </p>
+    {/if}
+    {#if session.snapshot.uvError}
+      <p class="uv-error" role="status">{session.snapshot.uvError}</p>
     {/if}
   </div>
 
@@ -528,6 +537,24 @@
     outline-offset: -3px;
   }
 
+  .uv-error {
+    position: absolute;
+    top: var(--space-2);
+    left: 50%;
+    width: min(420px, calc(100% - 32px));
+    margin: 0;
+    padding: var(--space-2);
+    border: var(--hairline) solid var(--accent-warning);
+    border-radius: var(--radius-xs);
+    background: var(--bg-panel-strong);
+    color: var(--accent-warning);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    line-height: 1.5;
+    text-align: center;
+    transform: translateX(-50%);
+  }
+
   .uv-empty {
     position: absolute;
     top: 50%;
@@ -624,14 +651,12 @@
   }
 
   @media (max-width: 720px) {
-    .uv-action {
-      padding: 0;
-      font-size: 0;
+    .uv-head {
+      gap: var(--space-1);
     }
 
-    .uv-action::before {
-      content: 'Sync';
-      font-size: var(--text-2xs);
+    .uv-action {
+      padding: 0 6px;
     }
   }
 </style>

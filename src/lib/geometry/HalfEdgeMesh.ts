@@ -477,6 +477,20 @@ export class HalfEdgeMesh {
     return [this.heUv[offset], this.heUv[offset + 1]];
   }
 
+  /** Replace every per-corner UV from a validated copy. */
+  setAllCornerUvs(uvs: Float32Array): void {
+    if (uvs.length !== this.heUv.length) {
+      throw new Error('UV buffer does not match the mesh corner count.');
+    }
+    for (let index = 0; index < uvs.length; index += 1) {
+      if (!Number.isFinite(uvs[index])) {
+        throw new Error('UV coordinates must be finite.');
+      }
+    }
+    this.heUv.set(uvs);
+    this.revision += 1;
+  }
+
   /** Move one per-corner UV without changing topology. */
   setCornerUv(halfEdge: number, uv: Vec2): void {
     if (halfEdge < 0 || halfEdge >= this.halfEdgeCount) {

@@ -53,6 +53,9 @@ import {
   uvToCanvas
 } from '../uv/uvView';
 import { drawUvCanvas } from '../uv/uvCanvas';
+import { extractUvCharts } from '../geometry/uvCharts';
+import { LscmError, unwrapUvCharts } from '../geometry/lscm';
+import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
 import { rotateUv, scaleUv, uvMedian } from '../uv/uvTransform';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
@@ -307,6 +310,7 @@ export class EditorRuntime {
   private readonly uvSelection = new Set<number>();
   private uvDrag: UvDrag | null = null;
   private uvRevision = 0;
+  private uvError: string | null = null;
   private lastUvSourceSignature = '';
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
@@ -425,6 +429,7 @@ export class EditorRuntime {
       uvTransformMode: this.uvTransformMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvRevision: this.uvRevision,
+      uvError: this.uvError,
       modifiers: active ? active.modifiers.map((modifier) => ({ ...modifier })) : [],
       modifiersActive: evaluated?.modifiersActive ?? false,
       modifierError: evaluated?.error ?? null,
@@ -575,6 +580,7 @@ export class EditorRuntime {
       this.renderer.setActionPreviewLine(null);
     }
     this.uvOpen = true;
+    this.uvError = null;
     this.uvSelection.clear();
     this.lastUvSourceSignature = '';
     this.uvRevision += 1;
@@ -609,6 +615,40 @@ export class EditorRuntime {
     this.rebuildUvSelection();
     this.lastUvSourceSignature = this.uvSourceSignature();
     this.publish();
+  }
+
+  /**
+   * Extract seam charts and run the bespoke LSCM unwrap.
+   *
+   * UVs are replaced in one localized command. Solver failures are surfaced in
+   * the UV pane and never write partial or non-finite coordinates.
+   */
+  unwrapUv(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    try {
+      const before = node.mesh.heUv.slice();
+      const charts = extractUvCharts(node.mesh);
+      const after = unwrapUvCharts(node.mesh, charts);
+      const command = new ReplaceUvCommand(
+        node.mesh,
+        node.id,
+        before,
+        after
+      );
+      this.uvError = null;
+      this.history.execute(command);
+      this.uvRevision += 1;
+      this.publish();
+    } catch (error) {
+      this.uvError =
+        error instanceof LscmError
+          ? error.message
+          : this.errorMessage(error);
+      this.publish();
+    }
   }
 
   /** Draw the UV layout into the panel canvas. */
