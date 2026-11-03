@@ -48,7 +48,7 @@ Undo and redo append the inverse/forward transitions, so replay reconstructs the
 
 `NodeSnapshot` copies typed arrays before they can mutate; IndexedDB's structured clone stores the arrays directly. No base64 is used.
 
-Texture edits are not represented as pixel deltas; instead they mark the autosave dirty and force a fresh v2 checkpoint with PNG chunks on the next flush. Other future topology, material, and light commands still need journal patches.
+Texture edits and paint strokes are not represented as autosave pixel deltas; they mark the autosave dirty and force a fresh v2 checkpoint with PNG chunks on the next flush. Paint history stores only the localized before/after dirty rectangle. Other future topology, material, and light commands still need journal patches.
 
 ### 2.2 Schedule
 

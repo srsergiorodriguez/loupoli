@@ -62,6 +62,8 @@ import {
   textureStackStatesEqual
 } from '../texture/TextureStack';
 import { rotateUv, scaleUv, uvMedian } from '../uv/uvTransform';
+import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
+import { PaintTextureCommand } from './commands/PaintTextureCommand';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
@@ -240,6 +242,13 @@ interface ActionDrag {
   value: number;
 }
 
+/** A live raster paint stroke over the active texture layer. */
+interface UvPaintStroke {
+  readonly layerId: string;
+  lastX: number;
+  lastY: number;
+}
+
 /** A localized UV-corner drag with its pre-drag values. */
 interface UvDrag {
   readonly node: MeshNode;
@@ -314,6 +323,11 @@ export class EditorRuntime {
   private uvTransformMode: UvTransformMode = 'move';
   private readonly uvSelection = new Set<number>();
   private readonly uvPins = new Set<number>();
+  private uvPaint: UvPaintStroke | null = null;
+  private uvPaintMode = false;
+  private uvBrushColor = '#f2ffe0';
+  private uvBrushSize = 36;
+  private uvBrushOpacity = 0.9;
   private uvDrag: UvDrag | null = null;
   private uvRevision = 0;
   private uvError: string | null = null;
@@ -444,6 +458,10 @@ export class EditorRuntime {
       uvTransformMode: this.uvTransformMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
+      uvPaintMode: this.uvPaintMode,
+      uvBrushColor: this.uvBrushColor,
+      uvBrushSize: this.uvBrushSize,
+      uvBrushOpacity: this.uvBrushOpacity,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
       textureLayers: this.textureStack.summaries(),
@@ -727,6 +745,143 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Toggle the UV raster brush. */
+  setUvPaintMode(enabled: boolean): void {
+    this.uvPaintMode = enabled;
+    this.publish();
+  }
+
+  setUvBrushColor(color: string): void {
+    this.uvBrushColor = color;
+    this.publish();
+  }
+
+  setUvBrushSize(size: number): void {
+    this.uvBrushSize = Math.min(128, Math.max(2, size));
+    this.publish();
+  }
+
+  setUvBrushOpacity(opacity: number): void {
+    this.uvBrushOpacity = Math.min(1, Math.max(0.01, opacity));
+    this.publish();
+  }
+
+  /** Start painting on the active layer at panel-local coordinates. */
+  beginUvPaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): boolean {
+    if (!this.uvOpen || !this.uvPaintMode) {
+      return false;
+    }
+    const node = this.getActiveNode();
+    const layerId = this.textureStack.activeLayerId;
+    if (!node || !layerId || !this.textureStack.beginPaint(layerId)) {
+      return false;
+    }
+    const projection = computeUvProjection(node.mesh, width, height);
+    const [tx, ty] = uvCanvasToTexture(
+      x,
+      y,
+      projection,
+      this.textureStack.width,
+      this.textureStack.height
+    );
+    const radius =
+      brushTextureRadius(
+        this.uvBrushSize,
+        projection,
+        this.textureStack.width
+      ) * Math.min(1, Math.max(0.2, pressure || 1));
+    this.textureStack.paintSegment(
+      layerId,
+      tx,
+      ty,
+      tx,
+      ty,
+      radius,
+      this.uvBrushColor,
+      this.uvBrushOpacity
+    );
+    this.uvPaint = { layerId, lastX: tx, lastY: ty };
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+    return true;
+  }
+
+  /** Continue a paint stroke; missing pointer samples interpolate. */
+  updateUvPaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): void {
+    if (!this.uvPaint) {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const projection = computeUvProjection(node.mesh, width, height);
+    const [tx, ty] = uvCanvasToTexture(
+      x,
+      y,
+      projection,
+      this.textureStack.width,
+      this.textureStack.height
+    );
+    const radius =
+      brushTextureRadius(
+        this.uvBrushSize,
+        projection,
+        this.textureStack.width
+      ) * Math.min(1, Math.max(0.2, pressure || 1));
+    this.textureStack.paintSegment(
+      this.uvPaint.layerId,
+      this.uvPaint.lastX,
+      this.uvPaint.lastY,
+      tx,
+      ty,
+      radius,
+      this.uvBrushColor,
+      this.uvBrushOpacity
+    );
+    this.uvPaint.lastX = tx;
+    this.uvPaint.lastY = ty;
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
+  /** Commit the current paint stroke as one localized pixel patch. */
+  finishUvPaint(): void {
+    if (!this.uvPaint) {
+      return;
+    }
+    this.uvPaint = null;
+    const patch = this.textureStack.endPaint();
+    if (patch) {
+      this.history.execute(new PaintTextureCommand(this.textureStack, patch));
+    }
+    this.renderer.refreshTexture();
+  }
+
+  /** Discard the live stroke and restore pre-stroke pixels. */
+  cancelUvPaint(): void {
+    if (!this.uvPaint) {
+      return;
+    }
+    this.uvPaint = null;
+    this.textureStack.cancelPaint();
+    this.renderer.refreshTexture();
+  }
+
   /** Rebuild the UV corner set from the active 3D element selection. */
   syncUvFrom3d(): void {
     this.rebuildUvSelection();
@@ -784,7 +939,15 @@ export class EditorRuntime {
     if (!node) {
       return;
     }
-    drawUvCanvas(canvas, node.mesh, this.uvSelection, this.uvPins, width, height);
+    drawUvCanvas(
+      canvas,
+      node.mesh,
+      this.uvSelection,
+      this.uvPins,
+      width,
+      height,
+      this.textureStack.image
+    );
   }
 
   /**
@@ -4229,7 +4392,10 @@ export class EditorRuntime {
   private afterDocumentChanged(event: HistoryEvent): void {
     this.pruneUvSelection();
     this.renderer.refreshTexture();
-    if (event.command instanceof TextureStackCommand) {
+    if (
+      event.command instanceof TextureStackCommand ||
+      event.command instanceof PaintTextureCommand
+    ) {
       this.autosave.markTextureDirty();
     }
     this.uvRevision += 1;

@@ -92,10 +92,10 @@
 - Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **First pass implemented as a fresh v2 checkpoint when texture pixels change; dedicated texture-only patches remain future work.**
 - Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery. **Dispose path exists; project load resets the session stack.**
 
-### Slice 5 — 3D projection painting
+### Slice 5 — 3D projection painting (UV brush implemented)
 
-- Raycast-to-UV stamp with pressure/tilt input.
-- Brush size/opacity/flow and eraser.
+- Raycast-to-UV stamp with pressure/tilt input. **UV-canvas painting is implemented with pressure radius; 3D raycast projection and tilt shaping remain.**
+- Brush size/opacity/flow and eraser. **Size/opacity/color are implemented; flow and eraser remain.**
 - One command per stroke; undo restores the previous layer pixels (bounded by a stroke patch budget).
 - No continuous loop; at most one scheduled frame per changed stroke step.
 - Texture memory and paint history surfaced in the Inspector.

@@ -32,6 +32,10 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvTransformMode: 'move',
   uvSelectedCorners: [],
   uvPinnedCorners: [],
+  uvPaintMode: false,
+  uvBrushColor: '#f2ffe0',
+  uvBrushSize: 36,
+  uvBrushOpacity: 0.9,
   uvRevision: 0,
   uvError: null,
   textureLayers: [],
@@ -174,6 +178,52 @@ export class EditorSession {
 
   setUvTransformMode(mode: 'move' | 'rotate' | 'scale'): void {
     this.runtime?.setUvTransformMode(mode);
+  }
+
+  setUvPaintMode(enabled: boolean): void {
+    this.runtime?.setUvPaintMode(enabled);
+  }
+
+  setUvBrushColor(color: string): void {
+    this.runtime?.setUvBrushColor(color);
+  }
+
+  setUvBrushSize(size: number): void {
+    this.runtime?.setUvBrushSize(size);
+  }
+
+  setUvBrushOpacity(opacity: number): void {
+    this.runtime?.setUvBrushOpacity(opacity);
+  }
+
+  beginUvPaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): boolean {
+    return (
+      this.runtime?.beginUvPaint(x, y, width, height, pressure) ?? false
+    );
+  }
+
+  updateUvPaint(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    pressure: number
+  ): void {
+    this.runtime?.updateUvPaint(x, y, width, height, pressure);
+  }
+
+  finishUvPaint(): void {
+    this.runtime?.finishUvPaint();
+  }
+
+  cancelUvPaint(): void {
+    this.runtime?.cancelUvPaint();
   }
 
   setActiveTextureLayer(id: string): void {

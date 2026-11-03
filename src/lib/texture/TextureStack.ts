@@ -33,6 +33,17 @@ export interface TextureLayerRecord extends TextureLayerSummary {
   readonly png: Uint8Array;
 }
 
+/** A localized before/after pixel patch for one paint stroke. */
+export interface TexturePaintPatch {
+  readonly layerId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly before: Uint8ClampedArray;
+  readonly after: Uint8ClampedArray;
+}
+
 /** Project-level texture set with binary PNG chunks, never base64. */
 export interface TextureProjectData {
   readonly width: number;
@@ -102,6 +113,8 @@ export class TextureStack {
   private readonly composite: HTMLCanvasElement;
   private readonly compositeContext: CanvasRenderingContext2D;
   private activeId: string | null = null;
+  private paintSnapshot: { layerId: string; image: ImageData } | null = null;
+  private paintBounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
   private readonly checkerA: string;
   private readonly checkerB: string;
   private revision = 0;
@@ -138,6 +151,11 @@ export class TextureStack {
     this.drawLayer(base);
     this.activeId = base.id;
     this.compositeLayers();
+  }
+
+  /** Composite image for the UV view background. */
+  get image(): HTMLCanvasElement {
+    return this.composite;
   }
 
   /** Number of layers currently in the stack. */
@@ -210,6 +228,148 @@ export class TextureStack {
     }
     this.layers.splice(0, this.layers.length, ...next);
     this.activeId = state.activeId;
+    this.compositeLayers();
+  }
+
+  /** Capture the active layer before a raster paint stroke. */
+  beginPaint(layerId: string): boolean {
+    const layer = this.layers.find((item) => item.id === layerId);
+    if (!layer || this.paintSnapshot) {
+      return false;
+    }
+    this.paintSnapshot = {
+      layerId,
+      image: layer.context.getImageData(0, 0, this.width, this.height)
+    };
+    this.paintBounds = null;
+    return true;
+  }
+
+  /**
+   * Paint a circular segment in texture pixels.
+   *
+   * Stamps are interpolated so fast pointer moves do not leave gaps. The
+   * composite is refreshed once per segment, not once per stamp.
+   */
+  paintSegment(
+    layerId: string,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    radius: number,
+    color: string,
+    opacity: number
+  ): void {
+    const layer = this.layers.find((item) => item.id === layerId);
+    if (!layer || !this.paintSnapshot || this.paintSnapshot.layerId !== layerId) {
+      return;
+    }
+    const safeRadius = Math.max(0.5, radius);
+    const distance = Math.hypot(toX - fromX, toY - fromY);
+    const steps = Math.max(1, Math.ceil(distance / Math.max(1, safeRadius * 0.35)));
+    const context = layer.context;
+    context.save();
+    context.globalAlpha = Math.min(1, Math.max(0, opacity));
+    context.fillStyle = color;
+    for (let step = 0; step <= steps; step += 1) {
+      const t = step / steps;
+      const x = fromX + (toX - fromX) * t;
+      const y = fromY + (toY - fromY) * t;
+      context.beginPath();
+      context.arc(x, y, safeRadius, 0, Math.PI * 2);
+      context.fill();
+      const minX = Math.max(0, Math.floor(x - safeRadius));
+      const minY = Math.max(0, Math.floor(y - safeRadius));
+      const maxX = Math.min(this.width, Math.ceil(x + safeRadius));
+      const maxY = Math.min(this.height, Math.ceil(y + safeRadius));
+      if (maxX <= minX || maxY <= minY) {
+        continue;
+      }
+      const bounds = this.paintBounds;
+      this.paintBounds = bounds
+        ? {
+            minX: Math.min(bounds.minX, minX),
+            minY: Math.min(bounds.minY, minY),
+            maxX: Math.max(bounds.maxX, maxX),
+            maxY: Math.max(bounds.maxY, maxY)
+          }
+        : { minX, minY, maxX, maxY };
+    }
+    context.restore();
+    this.compositeLayers();
+  }
+
+  /** Crop the stroke's deterministic dirty rectangle into a command patch. */
+  endPaint(): TexturePaintPatch | null {
+    const layer = this.layers.find(
+      (item) => item.id === this.paintSnapshot?.layerId
+    );
+    const snapshot = this.paintSnapshot;
+    const bounds = this.paintBounds;
+    this.paintSnapshot = null;
+    this.paintBounds = null;
+    if (!layer || !snapshot || !bounds) {
+      return null;
+    }
+    const x = Math.max(0, bounds.minX);
+    const y = Math.max(0, bounds.minY);
+    const width = Math.min(this.width, bounds.maxX) - x;
+    const height = Math.min(this.height, bounds.maxY) - y;
+    if (width <= 0 || height <= 0) {
+      return null;
+    }
+    const after = layer.context.getImageData(x, y, width, height);
+    const before = new ImageData(width, height);
+    for (let row = 0; row < height; row += 1) {
+      const source = (y + row) * this.width + x;
+      const target = row * width;
+      before.data.set(
+        snapshot.image.data.subarray(source * 4, (source + width) * 4),
+        target * 4
+      );
+    }
+    return {
+      layerId: layer.id,
+      x,
+      y,
+      width,
+      height,
+      before: before.data.slice(),
+      after: after.data.slice()
+    };
+  }
+
+  /** Restore the pre-stroke pixels when a stroke is cancelled. */
+  cancelPaint(): void {
+    const layer = this.layers.find(
+      (item) => item.id === this.paintSnapshot?.layerId
+    );
+    const snapshot = this.paintSnapshot;
+    this.paintSnapshot = null;
+    this.paintBounds = null;
+    if (layer && snapshot) {
+      layer.context.putImageData(snapshot.image, 0, 0);
+      this.compositeLayers();
+    }
+  }
+
+  /** Apply a before/after pixel patch for paint undo and redo. */
+  applyPaintPatch(patch: TexturePaintPatch, direction: 'before' | 'after'): void {
+    const layer = this.layers.find((item) => item.id === patch.layerId);
+    if (!layer) {
+      return;
+    }
+    const pixels = direction === 'before' ? patch.before : patch.after;
+    layer.context.putImageData(
+      new ImageData(
+        new Uint8ClampedArray(pixels),
+        patch.width,
+        patch.height
+      ),
+      patch.x,
+      patch.y
+    );
     this.compositeLayers();
   }
 

@@ -129,6 +129,10 @@ export interface EditorSnapshot {
   readonly uvTransformMode: UvTransformMode;
   readonly uvSelectedCorners: readonly number[];
   readonly uvPinnedCorners: readonly number[];
+  readonly uvPaintMode: boolean;
+  readonly uvBrushColor: string;
+  readonly uvBrushSize: number;
+  readonly uvBrushOpacity: number;
   readonly uvRevision: number;
   readonly uvError: string | null;
   readonly textureLayers: readonly TextureLayerSummary[];

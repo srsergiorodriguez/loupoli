@@ -29,7 +29,11 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
-- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture edits are captured by a v2 autosave checkpoint and survive recovery. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted; raster painting remains.
+- **UV raster brush.** Enable **Paint** in the UV footer, choose color/size/opacity, and drag on the UV canvas. Strokes draw into the active layer, update the one composite texture live in both the UV and 3D views, and commit as one localized pixel-patch command. Pen pressure scales the brush radius. Undo restores the paint rectangle; autosave captures the painted PNG in the next v2 checkpoint. Tilt shaping and 3D projection painting remain.
+
+![UV raster brush on the active texture layer](docs/media/uv-paint.png)
+
+- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture edits are captured by a v2 autosave checkpoint and survive recovery. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted. A raster brush paints the active layer directly in the UV view; 3D projection painting remains.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
 
@@ -37,7 +41,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Seam-based LSCM unwrap with pinned corners](docs/media/uv-unwrap.png)
 
-- **UV editing split.** Toggle **UV** in the viewport HUD to split the workspace. Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move, rotate around the median, or scale around the median. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers and LSCM unwrap are implemented; raster painting remains.
+- **UV editing split.** Toggle **UV** in the viewport HUD to split the workspace. Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move, rotate around the median, or scale around the median. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, and UV raster painting are implemented; projection painting remains.
 
 ![UV editing split with selected corners and seams](docs/media/uv-split.png)
 
@@ -162,7 +166,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **87 passing** tests across nineteen files:
+- `npm test`: **89 passing** tests across twenty files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

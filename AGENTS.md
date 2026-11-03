@@ -119,7 +119,7 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - UV seam authoring: Edge-mode Seam toggles bit 0 of the DCEL edge flags, renders an amber overlay, uses localized undo and per-edge autosave patches, and round-trips through `.lpoly`.
 - UV editing split: resizable bottom pane with two-way linked 3D/per-corner selection, seam/selected overlays, 16 px picking, Move/Rotate/Scale drag around the UV median, U/V locks, grid snap (15° rotation snap), and exact unsnapped numeric entry. Two selected corners can pin an unwrap; pins are session-only.
 - Seam-chart LSCM unwrap: chart extraction across seams/boundaries, automatic farthest-boundary pins or two explicit pins, longest-edge alignment, shelf packing, and explicit rejection of closed, non-finite, zero-area, flipped, or overlapping charts. `ReplaceUvCommand` stores the full UV column with a `replace-uv` patch.
-- Texture layer stack: up to eight 1024² `OffscreenCanvas` layers with visibility, opacity, solid fills, active-layer selection, reorder, delete, and undoable metadata commands. One composite `CanvasTexture` feeds Unlit/Lit. Manual save writes `.lpoly` v2 with layer metadata and aligned binary PNG chunks; v1 still decodes. Texture edits mark autosave dirty and force a fresh v2 checkpoint with PNGs, so recovery restores layers. Rename and Normal/Multiply/Screen blend modes are implemented and serialized. Raster painting remains.
+- Texture layer stack: up to eight 1024² `OffscreenCanvas` layers with visibility, opacity, solid fills, active-layer selection, reorder, delete, and undoable metadata commands. One composite `CanvasTexture` feeds Unlit/Lit. Manual save writes `.lpoly` v2 with layer metadata and aligned binary PNG chunks; v1 still decodes. Texture edits mark autosave dirty and force a fresh v2 checkpoint with PNGs, so recovery restores layers. Rename and Normal/Multiply/Screen blend modes are implemented and serialized. A UV raster brush paints the active layer with pen pressure, live composite feedback, localized pixel-patch undo, and v2 autosave. 3D projection painting remains.
 - QuadSphere, Cylinder (n-gon caps), and Grid primitives; the first-run scene is an editable QuadSphere.
 - Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.
 - Additive multi-element selection: Shift/Cmd/Ctrl-click, a sticky 44 px Add mode for pen/mouse, and one-finger touch taps; selected sets render multi-vertex points, instanced edge tubes, and merged face fills.
@@ -142,7 +142,7 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: raster painting and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
+Next planned work: 3D projection painting, tilt shaping, and dedicated texture deltas. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
 
 Approved decisions:
 

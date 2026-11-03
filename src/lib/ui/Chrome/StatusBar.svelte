@@ -41,6 +41,9 @@
       return 'Scene empty · add a primitive in the inspector';
     }
     if (session.snapshot.uvOpen) {
+      if (session.snapshot.uvPaintMode) {
+        return `UV · paint active layer · ${session.snapshot.uvBrushSize}px brush`;
+      }
       const count = session.snapshot.uvSelectedCorners.length;
       const mode =
         session.snapshot.uvTransformMode === 'rotate'

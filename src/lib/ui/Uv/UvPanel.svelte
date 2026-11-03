@@ -16,6 +16,7 @@
   let height = $state(0);
   let resizing = $state(false);
   let dragging = $state(false);
+  let painting = $state(false);
   let deltaU = $state(0);
   let deltaV = $state(0);
   let angle = $state(0);
@@ -27,6 +28,7 @@
   const axisLock = $derived(session.snapshot.uvAxisLock);
   const transformMode = $derived(session.snapshot.uvTransformMode);
   const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
+  const paintMode = $derived(session.snapshot.uvPaintMode);
 
   onMount(() => {
     const observer = new ResizeObserver((entries) => {
@@ -77,6 +79,26 @@
     event.preventDefault();
     canvas.focus({ preventScroll: true });
     const point = localPoint(event);
+    const pressure =
+      event.pointerType === 'pen' ? Math.max(0.2, event.pressure) : 1;
+    if (paintMode) {
+      if (
+        session.beginUvPaint(
+          point.x,
+          point.y,
+          width,
+          height,
+          pressure
+        )
+      ) {
+        painting = true;
+        activePointerId = event.pointerId;
+        window.addEventListener('pointermove', windowPointerMove);
+        window.addEventListener('pointerup', windowPointerUp);
+        window.addEventListener('pointercancel', windowPointerCancel);
+      }
+      return;
+    }
     const additive =
       event.shiftKey ||
       event.metaKey ||
@@ -103,19 +125,36 @@
   }
 
   function windowPointerMove(event: PointerEvent): void {
-    if (!dragging || event.pointerId !== activePointerId) {
+    if (event.pointerId !== activePointerId) {
       return;
     }
     event.preventDefault();
     const point = localPoint(event);
+    if (painting) {
+      const pressure =
+        event.pointerType === 'pen' ? Math.max(0.2, event.pressure) : 1;
+      session.updateUvPaint(point.x, point.y, width, height, pressure);
+      return;
+    }
+    if (!dragging) {
+      return;
+    }
     session.updateUvDrag(point.x, point.y, width, height);
   }
 
   function windowPointerUp(event: PointerEvent): void {
-    if (!dragging || event.pointerId !== activePointerId) {
+    if (event.pointerId !== activePointerId) {
       return;
     }
     detachDragListeners();
+    if (painting) {
+      painting = false;
+      session.finishUvPaint();
+      return;
+    }
+    if (!dragging) {
+      return;
+    }
     dragging = false;
     session.finishUvDrag();
   }
@@ -125,7 +164,11 @@
       return;
     }
     event.preventDefault();
-    if (dragging) {
+    if (painting) {
+      detachDragListeners();
+      painting = false;
+      session.cancelUvPaint();
+    } else if (dragging) {
       detachDragListeners();
       dragging = false;
       session.cancelUvDrag();
@@ -135,10 +178,18 @@
   }
 
   function windowPointerCancel(event: PointerEvent): void {
-    if (!dragging || event.pointerId !== activePointerId) {
+    if (event.pointerId !== activePointerId) {
       return;
     }
     detachDragListeners();
+    if (painting) {
+      painting = false;
+      session.cancelUvPaint();
+      return;
+    }
+    if (!dragging) {
+      return;
+    }
     dragging = false;
     session.cancelUvDrag();
   }
@@ -298,11 +349,11 @@
       bind:this={canvas}
       class="uv-canvas"
       tabindex="0"
-      aria-label="UV editor. Drag selected corners to move their texture coordinates."
+      aria-label="UV editor. Drag corners to transform UVs, or enable Paint to brush the active texture layer."
       onpointerdown={pointerDown}
       onkeydown={keyDown}
     ></canvas>
-    {#if selectedCount === 0}
+    {#if selectedCount === 0 && !paintMode}
       <p class="uv-empty">
         Select 3D faces or click UV corners. Drag to move; U/V locks and grid
         snap apply.
@@ -314,6 +365,52 @@
   </div>
 
   <footer class="uv-foot">
+    <button
+      type="button"
+      class="uv-paint-toggle"
+      class:active={paintMode}
+      aria-label="Toggle texture paint brush"
+      aria-pressed={paintMode}
+      onclick={() => session.setUvPaintMode(!paintMode)}
+    >Paint</button>
+    {#if paintMode}
+      <div class="uv-brush-controls">
+        <input
+          type="color"
+          class="uv-brush-color"
+          value={session.snapshot.uvBrushColor}
+          aria-label="Brush color"
+          oninput={(event) =>
+            session.setUvBrushColor(event.currentTarget.value)}
+        />
+        <label class="uv-brush-slider">
+          <span>Size {session.snapshot.uvBrushSize}px</span>
+          <input
+            type="range"
+            min="2"
+            max="128"
+            step="1"
+            value={session.snapshot.uvBrushSize}
+            aria-label="Brush size in texture pixels"
+            oninput={(event) =>
+              session.setUvBrushSize(Number(event.currentTarget.value))}
+          />
+        </label>
+        <label class="uv-brush-slider">
+          <span>Opacity {Math.round(session.snapshot.uvBrushOpacity * 100)}%</span>
+          <input
+            type="range"
+            min="0.01"
+            max="1"
+            step="0.01"
+            value={session.snapshot.uvBrushOpacity}
+            aria-label="Brush opacity"
+            oninput={(event) =>
+              session.setUvBrushOpacity(Number(event.currentTarget.value))}
+          />
+        </label>
+      </div>
+    {:else}
     <form
       class="uv-numeric"
       onsubmit={(event) => {
@@ -373,8 +470,13 @@
         disabled={selectedCount === 0}
       >Apply</button>
     </form>
+    {/if}
     <span class="uv-foot-hint">
-      16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
+      {#if paintMode}
+        paint active layer · pen pressure · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
+      {:else}
+        16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
+      {/if}
     </span>
   </footer>
 </section>
@@ -592,6 +694,64 @@
     white-space: nowrap;
   }
 
+  .uv-paint-toggle {
+    min-width: var(--hit-min);
+    min-height: var(--hit-min);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .uv-paint-toggle.active {
+    border-color: var(--accent-primary);
+    background: var(--bg-selected);
+    color: var(--accent-primary);
+  }
+
+  .uv-paint-toggle:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .uv-brush-controls {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .uv-brush-color {
+    width: var(--hit-min);
+    height: var(--control-h);
+    padding: 2px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .uv-brush-slider {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  .uv-brush-slider input {
+    width: 100%;
+    accent-color: var(--accent-primary);
+  }
+
   .uv-numeric {
     display: flex;
     align-items: center;
@@ -660,6 +820,10 @@
   }
 
   @media (max-width: 720px) {
+    .uv-foot-hint {
+      display: none;
+    }
+
     .uv-head {
       gap: var(--space-1);
     }

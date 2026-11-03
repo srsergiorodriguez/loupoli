@@ -32,7 +32,8 @@ export function drawUvCanvas(
   selected: ReadonlySet<number>,
   pinned: ReadonlySet<number>,
   width: number,
-  height: number
+  height: number,
+  backgroundImage: CanvasImageSource | null = null
 ): void {
   if (width <= 0 || height <= 0) {
     return;
@@ -59,6 +60,19 @@ export function drawUvCanvas(
   context.fillRect(0, 0, width, height);
 
   const projection = computeUvProjection(mesh, width, height, 26);
+  if (backgroundImage) {
+    const imageOrigin = uvToCanvas([0, 1], projection);
+    context.save();
+    context.globalAlpha = 0.58;
+    context.drawImage(
+      backgroundImage,
+      imageOrigin.x,
+      imageOrigin.y,
+      projection.scale,
+      projection.scale
+    );
+    context.restore();
+  }
   const toPoint = (u: number, v: number): [number, number] => {
     const point = uvToCanvas([u, v], projection);
     return [point.x, point.y];

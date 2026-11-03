@@ -439,7 +439,7 @@ Implemented component files and local patterns:
 | `ActionDock` | 3 | One-shot mesh actions | Bottom-left 2×2 grid, 64×44 minimum targets, contextual disabled states |
 | `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
 | `Texture` module | 4 | Scene-level texture layer stack | Collapsed Inspector section, 8-layer cap, 44px row actions, rename, color/opacity/blend controls, one composite texture, `.lpoly` v2 PNG chunks |
-| `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, and failure banner |
+| `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, Paint toggle, brush color/size/opacity controls, and failure banner |
 | `TransformHud` | 2 | G/R/S readout | Bottom-center pill with target, axis, exact value, key hints |
 | `Inspector` | 1–3 | Scene, transform, modifiers, mesh actions | Floating panel; section-head pattern |
 | `IconButton` | 1 | Compact symbol actions | Accessible label mandatory |
