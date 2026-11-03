@@ -37,6 +37,11 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV raster brush on the active texture layer](docs/media/uv-paint.png)
 
+- **Numeric drag-scrub.** Position, rotation, and scale fields support horizontal drag: one pointer pixel is half a step, Shift gives 10× finer control, and release commits one undoable transform. Click to type, Enter to commit, Escape to revert. UV numeric fields share the same control.
+- **Brush-size preview.** Paint mode hides the native cursor and draws a circular brush outline at the current texture-pixel size, updated on hover and drag.
+
+![Brush-size preview in the UV paint workspace](docs/media/brush-cursor.png)
+
 - **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture edits are captured by a v2 autosave checkpoint and survive recovery. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted. A raster brush paints the active layer directly in the UV view; 3D projection painting remains.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
@@ -180,7 +185,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **89 passing** tests across twenty files:
+- `npm test`: **91 passing** tests across twenty-one files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

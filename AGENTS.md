@@ -125,6 +125,8 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - QuadSphere, Cube, Cylinder (n-gon caps), and Grid primitives; the first-run scene is an editable QuadSphere. New primitives are created at the origin and selected.
 - Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.
 - Additive multi-element selection: Cmd/Ctrl-click, a sticky 44 px Add mode for pen/mouse, and one-finger touch taps; selected sets render multi-vertex points, instanced edge tubes, and merged face fills. The Lasso tool selects vertices inside a screen polygon, edges inside/crossing it, and faces with a corner/centroid inside; lasso selection is currently view-through without occlusion rejection.
+- Numeric fields share a drag-scrub control: half a step per pointer pixel, Shift fine mode, one command on release, click-to-type, Enter/Escape. UV numeric fields use the same component.
+- The UV Paint workspace previews the brush as a screen circle sized to the texture-pixel brush diameter and hides the native cursor.
 - Transform and Modifiers sections are collapsible with persisted disclosure state. Sidebar open/closed state persists in `localStorage`; no UI state enters the project file.
 - Numeric object transforms (position, rotation, scale) through undoable commands; selection overlays follow the node transform. The orientation gizmo supports drag-to-orbit while retaining axis-click snap and center-frame.
 - Local/Global orientation for node transforms, with world-space position/rotation fields and world-oriented translate/rotate gizmos. Scale stays local to avoid unsupported shear; conversions use the one-level parent group transform.

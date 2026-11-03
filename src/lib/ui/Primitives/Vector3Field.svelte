@@ -1,4 +1,6 @@
 <script lang="ts">
+  import NumberField from './NumberField.svelte';
+
   /** One labeled XYZ numeric row for object transforms. */
   interface Props {
     label: string;
@@ -22,28 +24,13 @@
 
   const axes = ['x', 'y', 'z'] as const;
 
-  function display(value: number): string {
-    if (!Number.isFinite(value)) {
-      return '0';
-    }
-    const normalized = Math.abs(value) < 0.5 * 10 ** -precision ? 0 : value;
-    return normalized.toFixed(precision);
-  }
-
-  function commit(axis: number, event: Event): void {
-    const input = event.currentTarget as HTMLInputElement;
-    const parsed = Number(input.value);
-    if (!Number.isFinite(parsed) || (min !== undefined && parsed < min)) {
-      input.value = display(values[axis]);
+  function commit(axis: number, next: number): void {
+    if (Math.abs(next - values[axis]) < 1e-9) {
       return;
     }
-    if (Math.abs(parsed - values[axis]) < 1e-9) {
-      input.value = display(parsed);
-      return;
-    }
-    const next: [number, number, number] = [values[0], values[1], values[2]];
-    next[axis] = parsed;
-    onCommit(next);
+    const updated: [number, number, number] = [values[0], values[1], values[2]];
+    updated[axis] = next;
+    onCommit(updated);
   }
 </script>
 
@@ -53,18 +40,15 @@
     {#each axes as axis, index (axis)}
       <label class="axis-field axis-field--{axis}">
         <span class="axis-label" aria-hidden="true">{axis.toUpperCase()}</span>
-        <input
-          type="number"
-          inputmode="decimal"
-          value={display(values[index])}
+        <NumberField
+          value={values[index]}
+          label={`${label} ${axis.toUpperCase()}`}
           {step}
-          min={min}
-          aria-label={`${label} ${axis.toUpperCase()}`}
-          onchange={(event) => commit(index, event)}
+          {precision}
+          {min}
+          {unit}
+          onCommit={(next) => commit(index, next)}
         />
-        {#if unit}
-          <span class="unit" aria-hidden="true">{unit}</span>
-        {/if}
       </label>
     {/each}
   </div>
@@ -127,35 +111,4 @@
     color: var(--axis-z);
   }
 
-  input {
-    width: 100%;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    outline: none;
-    background: transparent;
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    appearance: textfield;
-  }
-
-  input::-webkit-outer-spin-button,
-  input::-webkit-inner-spin-button {
-    margin: 0;
-    -webkit-appearance: none;
-  }
-
-  input:focus-visible {
-    color: var(--accent-primary);
-  }
-
-  .unit {
-    flex: 0 0 auto;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: 9px;
-  }
 </style>

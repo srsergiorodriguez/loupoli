@@ -2,6 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import Icon from '../Icons/Icon.svelte';
+  import NumberField from '../Primitives/NumberField.svelte';
 
   /** Props for the UV editing pane. */
   interface Props {
@@ -22,6 +23,9 @@
   let angle = $state(0);
   let scaleFactor = $state(1);
   let activePointerId: number | null = null;
+  let brushVisible = $state(false);
+  let brushX = $state(0);
+  let brushY = $state(0);
 
   const selectedCount = $derived(session.snapshot.uvSelectedCorners.length);
   const uvSplit = $derived(session.snapshot.uvSplit);
@@ -57,6 +61,12 @@
   }
 
   $effect(() => {
+    if (!paintMode) {
+      brushVisible = false;
+    }
+  });
+
+  $effect(() => {
     // The runtime owns the DCEL; this effect only asks it to repaint when the
     // UV selection, mesh, or canvas size actually changes.
     session.snapshot.uvRevision;
@@ -76,12 +86,24 @@
     };
   }
 
+  function updateBrushCursor(event: PointerEvent): void {
+    if (!paintMode) {
+      brushVisible = false;
+      return;
+    }
+    const point = localPoint(event);
+    brushX = point.x;
+    brushY = point.y;
+    brushVisible = true;
+  }
+
   function pointerDown(event: PointerEvent): void {
     if (event.button !== 0) {
       return;
     }
     event.preventDefault();
     canvas.focus({ preventScroll: true });
+    updateBrushCursor(event);
     const point = localPoint(event);
     const pressure =
       event.pointerType === 'pen' ? Math.max(0.2, event.pressure) : 1;
@@ -134,6 +156,7 @@
     }
     event.preventDefault();
     const point = localPoint(event);
+    updateBrushCursor(event);
     if (painting) {
       const pressure =
         event.pointerType === 'pen' ? Math.max(0.2, event.pressure) : 1;
@@ -232,11 +255,6 @@
     if (target.hasPointerCapture(event.pointerId)) {
       target.releasePointerCapture(event.pointerId);
     }
-  }
-
-  function numberValue(event: Event): number {
-    const value = Number((event.currentTarget as HTMLInputElement).value);
-    return Number.isFinite(value) ? value : 0;
   }
 
   function applyNumeric(mode: 'move' | 'rotate' | 'scale'): void {
@@ -386,11 +404,26 @@
     <canvas
       bind:this={canvas}
       class="uv-canvas"
+      class:paint-mode={paintMode}
       tabindex="0"
       aria-label="UV editor. Drag corners to transform UVs, or enable Paint to brush the active texture layer."
       onpointerdown={pointerDown}
+      onpointermove={updateBrushCursor}
+      onpointerenter={updateBrushCursor}
+      onpointerleave={() => {
+        if (!painting) {
+          brushVisible = false;
+        }
+      }}
       onkeydown={keyDown}
     ></canvas>
+    {#if paintMode && brushVisible}
+      <div
+        class="uv-brush-cursor"
+        style={`left:${brushX}px;top:${brushY}px;width:${session.snapshot.uvBrushSize}px;height:${session.snapshot.uvBrushSize}px`}
+        aria-hidden="true"
+      ></div>
+    {/if}
     {#if selectedCount === 0 && !paintMode && effectiveLayout !== 'side'}
       <p class="uv-empty">
         Select 3D faces or click UV corners. Drag to move; U/V locks and grid
@@ -459,45 +492,50 @@
       {#if transformMode === 'move'}
         <label class="uv-field">
           <span>ΔU</span>
-          <input
-            type="number"
-            step="any"
+          <NumberField
             value={deltaU}
-            oninput={(event) => (deltaU = numberValue(event))}
-            aria-label="Exact U delta"
+            label="Exact U delta"
+            step={0.001}
+            precision={3}
+            framed
+            onCommit={(next) => (deltaU = next)}
           />
         </label>
         <label class="uv-field">
           <span>ΔV</span>
-          <input
-            type="number"
-            step="any"
+          <NumberField
             value={deltaV}
-            oninput={(event) => (deltaV = numberValue(event))}
-            aria-label="Exact V delta"
+            label="Exact V delta"
+            step={0.001}
+            precision={3}
+            framed
+            onCommit={(next) => (deltaV = next)}
           />
         </label>
       {:else if transformMode === 'rotate'}
         <label class="uv-field">
           <span>Angle°</span>
-          <input
-            type="number"
-            step="any"
+          <NumberField
             value={angle}
-            oninput={(event) => (angle = numberValue(event))}
-            aria-label="Exact rotation angle in degrees"
+            label="Exact rotation angle in degrees"
+            step={0.5}
+            precision={2}
+            unit="°"
+            framed
+            onCommit={(next) => (angle = next)}
           />
         </label>
       {:else}
         <label class="uv-field">
           <span>Factor</span>
-          <input
-            type="number"
-            step="any"
-            min="0.001"
+          <NumberField
             value={scaleFactor}
-            oninput={(event) => (scaleFactor = numberValue(event))}
-            aria-label="Exact scale factor"
+            label="Exact scale factor"
+            step={0.005}
+            precision={3}
+            min={0.001}
+            framed
+            onCommit={(next) => (scaleFactor = next)}
           />
         </label>
       {/if}
@@ -744,6 +782,23 @@
     outline: none;
   }
 
+  .uv-canvas.paint-mode {
+    cursor: none;
+  }
+
+  .uv-brush-cursor {
+    position: absolute;
+    z-index: 2;
+    border: var(--hairline) solid var(--accent-primary);
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.55),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+    background: rgba(201, 244, 92, 0.06);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+
   .uv-canvas:focus-visible {
     outline: var(--focus-ring-width) solid var(--border-focus);
     outline-offset: -3px;
@@ -868,21 +923,8 @@
     color: var(--text-tertiary);
   }
 
-  .uv-field input {
-    width: 62px;
-    min-height: var(--control-h);
-    padding: 0 6px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: var(--bg-input);
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-  }
-
-  .uv-field input:focus-visible {
-    outline: var(--focus-ring-width) solid var(--border-focus);
-    outline-offset: 1px;
+  .uv-field :global(.number-field) {
+    width: 68px;
   }
 
   .uv-apply {
