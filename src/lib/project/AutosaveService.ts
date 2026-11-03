@@ -125,6 +125,7 @@ export class AutosaveService {
   private deltas: JournalPatch[] = [];
   private deltaBytes = 0;
   private dirty = false;
+  private textureDirty = false;
   private timer: ReturnType<typeof setInterval> | null = null;
   private state: AutosaveState = {
     status: 'unavailable',
@@ -142,10 +143,10 @@ export class AutosaveService {
   };
 
   constructor(
-    private readonly makeCheckpoint: () => {
+    private readonly makeCheckpoint: () => Promise<{
       bytes: Uint8Array;
       settings: ProjectSettings;
-    },
+    }>,
     onStateChange: (state: AutosaveState) => void
   ) {
     this.onStateChange = onStateChange;
@@ -192,6 +193,7 @@ export class AutosaveService {
     this.deltas = [];
     this.deltaBytes = 0;
     this.dirty = false;
+    this.textureDirty = false;
     this.enabled = true;
     this.setState(persistInitial ? 'saving' : 'idle', null);
 
@@ -217,6 +219,19 @@ export class AutosaveService {
     this.setState('dirty', null);
   }
 
+  /**
+   * Mark texture pixels dirty. The next flush rebuilds a full v2 checkpoint
+   * because texture PNG chunks are not represented by geometry deltas.
+   */
+  markTextureDirty(): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.dirty = true;
+    this.textureDirty = true;
+    this.setState('dirty', null);
+  }
+
   /** Persist the checkpoint and pending deltas. No-op when already clean. */
   async flush(): Promise<void> {
     if (!this.enabled || !this.dirty) {
@@ -224,15 +239,22 @@ export class AutosaveService {
     }
     this.setState('saving', null);
 
-    if (
-      this.deltas.length > MAX_DELTA_COUNT ||
-      this.deltaBytes > MAX_DELTA_BYTES
-    ) {
-      const fresh = this.makeCheckpoint();
-      this.checkpoint = fresh.bytes;
-      this.settings = fresh.settings;
-      this.deltas = [];
-      this.deltaBytes = 0;
+    try {
+      if (
+        this.textureDirty ||
+        this.deltas.length > MAX_DELTA_COUNT ||
+        this.deltaBytes > MAX_DELTA_BYTES
+      ) {
+        const fresh = await this.makeCheckpoint();
+        this.checkpoint = fresh.bytes;
+        this.settings = fresh.settings;
+        this.deltas = [];
+        this.deltaBytes = 0;
+        this.textureDirty = false;
+      }
+    } catch (error) {
+      this.setState('error', error);
+      return;
     }
 
     await this.persist();
@@ -244,6 +266,7 @@ export class AutosaveService {
     this.deltas = [];
     this.deltaBytes = 0;
     this.dirty = false;
+    this.textureDirty = false;
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;

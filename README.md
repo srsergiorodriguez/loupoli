@@ -25,11 +25,11 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
   - **PS1 affine** — enable affine UV swim.
   Both start off, apply only to Unlit shading, and the module starts collapsed. It is a render effect, not a geometry modifier.
 - **General half-edge kernel.** Columnar DCEL with explicit face and boundary loops, per-corner UVs, per-edge seam flags, per-face materials, Newell normals, invariant validation, n-gon fan triangulation, and validated reconstruction from serialized columns.
-- **UV seam authoring.** Select edges in Edge mode and use **Seam** to mark or clear UV seams. Seams render as an amber overlay, use one localized undoable command with per-edge autosave patches, and round-trip through `.lpoly`. Unwrapping, a UV viewport, texture layers, and painting are Phase 4 work.
+- **UV seam authoring.** Select edges in Edge mode and use **Seam** to mark or clear UV seams. Seams render as an amber overlay, use one localized undoable command with per-edge autosave patches, and round-trip through `.lpoly`. A UV viewport, seam charts, LSCM unwrap, and linked corner editing are implemented.
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
-- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture autosave, blend modes, raster painting, and layer rename are not implemented yet.
+- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture edits are captured by a v2 autosave checkpoint and survive recovery. Blend modes, raster painting, and layer rename are not implemented yet.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
 
@@ -37,7 +37,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Seam-based LSCM unwrap with pinned corners](docs/media/uv-unwrap.png)
 
-- **UV editing split.** Toggle **UV** in the viewport HUD to split the workspace. Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move, rotate around the median, or scale around the median. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Unwrapping, layers, and painting are not implemented yet.
+- **UV editing split.** Toggle **UV** in the viewport HUD to split the workspace. Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius, Shift/Add for multi-select, and drag to move, rotate around the median, or scale around the median. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers and LSCM unwrap are implemented; raster painting remains.
 
 ![UV editing split with selected corners and seams](docs/media/uv-split.png)
 
@@ -50,7 +50,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Draggable view gizmo.** Dragging the orientation gizmo orbits the view; tapping an axis still snaps to that axis and tapping the center frames the active object.
 - **Quad-aware deformation.** A bent quad renders as a 4 × 4 bilinear patch instead of two independent texture panels, avoiding a diagonal texture crease. The DCEL remains one quad, and displayed V/E/F/triangle counts stay topological.
 - **Bounded command history.** Localized vertex deltas and node add/delete snapshots, redo truncation, a 100-command cap, and a 32 MB retained-byte budget.
-- **Local-first autosave.** A checkpoint plus localized command deltas is written to IndexedDB every 30 seconds while dirty and on visibility loss. Cold start offers **Recover** or **Discard**; recovered work is labelled until saved.
+- **Local-first autosave.** A v2 checkpoint (including texture PNGs) plus localized command deltas is written to IndexedDB every 30 seconds while dirty and on visibility loss. Texture edits force a fresh v2 checkpoint on the next flush. Cold start offers **Recover** or **Discard**; recovered work is labelled until saved.
 - **Versioned `.lpoly` v1/v2.** Binary container with a CRC-checked manifest and aligned typed-array columns. v1 round-trips nodes, quads, n-gons, boundary loops, per-corner UVs, seam flags, face materials, transforms, and viewport settings. v2 adds texture-set metadata and per-layer binary PNG chunks; v1 files still open.
 - **Native and browser file I/O.** Tauri uses the native dialog plugin plus Rust byte-level read/write commands with size checks, same-directory temporary files, `fsync`, and rename. Browser mode uses download and file-picker fallbacks. `Cmd/Ctrl+S` and `Cmd/Ctrl+O` are wired.
 - **Pointer routing.** Pen never moves the camera; it selects, drags selection/action gizmos, and edits vertices. Touch remains the camera/gesture surface, with taps selecting and one-finger drag orbiting. Mouse supports the documented DCC orbit mappings.
@@ -341,7 +341,7 @@ Target baseline: **iPadOS 16.4+**. The Tauri app is structured for iOS, but the 
 | [Master Plan](docs/PLAN.md) | Product constraints, approved decisions, phase exits, risks, toolchain audit |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, DCEL, multi-node rendering, picking, autosave, file I/O |
 | [Design System](docs/DESIGN_SYSTEM.md) | Tokens, visual direction, responsive editor layout, component inventory |
-| [Persistence](docs/PERSISTENCE.md) | Implemented autosave journal and `.lpoly` v1/v2 binary format |
+| [Persistence](docs/PERSISTENCE.md) | Implemented autosave journal, v2 texture checkpoints, and `.lpoly` v1/v2 |
 
 ## Project layout
 

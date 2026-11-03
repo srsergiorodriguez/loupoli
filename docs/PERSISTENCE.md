@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 4 persistence. Autosave, `.lpoly` v1/v2, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, and texture layers round-trip. v2 adds binary PNG texture chunks and retains v1 decode. Texture autosave and shape keys remain later work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).  
+**Status:** Phase 4 persistence. Autosave, `.lpoly` v1/v2, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, and texture layers round-trip. v2 adds binary PNG texture chunks, texture-aware autosave, and retains v1 decode. Shape keys remain later work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).  
 **Related:** [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
@@ -48,7 +48,7 @@ Undo and redo append the inverse/forward transitions, so replay reconstructs the
 
 `NodeSnapshot` copies typed arrays before they can mutate; IndexedDB's structured clone stores the arrays directly. No base64 is used.
 
-Current limitation: only command types exposed in Phase 2 implement `journalPatch`. Future topology, material, light, and texture commands must extend the same interface.
+Texture edits are not represented as pixel deltas; instead they mark the autosave dirty and force a fresh v2 checkpoint with PNG chunks on the next flush. Other future topology, material, and light commands still need journal patches.
 
 ### 2.2 Schedule
 
@@ -62,7 +62,7 @@ Current limitation: only command types exposed in Phase 2 implement `journalPatc
 ### 2.3 Checkpoints and compaction
 
 - The session checkpoint is captured at autosave initialization (or immediately after a recovered document is accepted).
-- A checkpoint is encoded from the current scene when the delta journal exceeds **512 deltas** or **4 MB**; that checkpoint replaces the in-memory baseline and deltas are cleared.
+- A checkpoint is encoded from the current scene when the delta journal exceeds **512 deltas** or **4 MB**, or when texture pixels change; that checkpoint replaces the in-memory baseline and deltas are cleared.
 - When a manual save or open resets persistence, a fresh baseline is captured; it is not written until the first dirty flush.
 - Checkpoint generation can copy the current mesh columns and should not run during a pen stroke. The current implementation only compacts on a 30 s flush when the caps are exceeded.
 
@@ -80,7 +80,7 @@ Current limitation: only command types exposed in Phase 2 implement `journalPatc
 | Faces per mesh | 2,000,000 |
 | History | 100 commands / 32 MB retained |
 
-Texture budgets will be added with the texture stack.
+Texture budget: 1024² default, 2048² format cap, eight-layer stack cap. Texture autosave stores full PNGs in the checkpoint, so texture-heavy projects increase the checkpoint size.
 
 ### 2.5 IndexedDB schema
 
@@ -91,7 +91,7 @@ Record key: **`current`**
 ```ts
 {
   version: 1,
-  checkpoint: Uint8Array,      // complete .lpoly v1 bytes
+  checkpoint: Uint8Array,      // complete .lpoly v2 bytes (PNG texture chunks included)
   settings: ProjectSettings,   // shading + PS1 flags
   deltas: JournalPatch[],      // transitions since checkpoint
   updatedAt: number
@@ -105,7 +105,7 @@ Only one recovery lineage is current in Phase 2. There is no per-project ID or s
 1. Runtime initialization reads the one autosave record.
 2. If present, it sets `recoveryAvailable` and does not start a new autosave or overwrite the record.
 3. The recovery banner offers **Recover** or **Discard**.
-4. **Recover** decodes the `.lpoly` checkpoint, applies deltas in order, then validates/replaces the scene. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
+4. **Recover** decodes the `.lpoly` v2 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
 5. **Discard** deletes the record and starts a new baseline from the current scene.
 6. Save/Open are disabled until recovery is resolved.
 7. Any decode/replay error is reported; the invalid record is not partly applied.
@@ -223,7 +223,7 @@ For each node, in order:
 9. `edgeHalfEdge` — `u32`, `edgeCount`
 10. `edgeFlags` — `u8`, `edgeCount`. Bit 0 is the UV seam flag; other bits remain reserved.
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. The session texture layer stack is not yet part of autosave or `.lpoly`; texture metadata and binary PNG chunks are planned for v2.
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture layers are part of `.lpoly` v2 and the v2 autosave checkpoint.
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
@@ -235,7 +235,7 @@ After all mesh columns, v2 writes each texture layer's binary PNG in manifest or
 
 - v1 files open with no texture set.
 - v2 files with `textures` restore layers on open; v2 without textures resets to the checker base.
-- Texture autosave is **not** implemented yet: autosave checkpoints remain v1 and therefore reset textures after recovery.
+- Texture edits mark autosave dirty and force a fresh v2 checkpoint; recovery restores texture PNGs.
 - Layer PNGs are never base64 or JSON strings.
 
 ### 3.5 Not yet serialized

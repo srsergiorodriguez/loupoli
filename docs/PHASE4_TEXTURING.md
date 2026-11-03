@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a texture layer stack are implemented. Layers save as binary PNG chunks in `.lpoly` v2. Texture autosave, blend modes/rename, and projection painting remain.
+**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a texture layer stack are implemented. Layers save as binary PNG chunks in `.lpoly` v2 and are captured by v2 autosave checkpoints; recovery restores them. Blend modes/rename and projection painting remain.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -88,7 +88,7 @@
 - Color fills and active-layer selection. **Implemented as deterministic fill patterns; raster painting pending.**
 - Composite cache: recompute only when a layer or composite changes; one GPU texture. **Implemented. Layer canvases are OffscreenCanvas; the composite is a single HTML canvas wrapped in one CanvasTexture.**
 - `.lpoly` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration. **Implemented for manual save/open; v1 decode retained.**
-- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **Pending; recovery still uses a texture-free v1 checkpoint and resets to the checker base.**
+- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **First pass implemented as a fresh v2 checkpoint when texture pixels change; dedicated texture-only patches remain future work.**
 - Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery. **Dispose path exists; project load resets the session stack.**
 
 ### Slice 5 — 3D projection painting

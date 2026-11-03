@@ -100,7 +100,6 @@ import {
 import { applyJournalPatch } from '../project/journal';
 import {
   decodeLpoly,
-  encodeLpoly,
   encodeLpolyV2,
   type DecodedProject,
   type ProjectSettings
@@ -2179,7 +2178,7 @@ export class EditorRuntime {
       this.recoveryAvailable = false;
       this.recoveryUpdatedAt = null;
       this.pendingRecovery = null;
-      const checkpoint = this.makeCheckpoint();
+      const checkpoint = await this.makeCheckpoint();
       await this.autosave.start(checkpoint.bytes, checkpoint.settings, true);
     } catch (error) {
       this.projectError = this.errorMessage(error);
@@ -2203,7 +2202,7 @@ export class EditorRuntime {
       this.recoveryUpdatedAt = null;
       this.recovered = false;
       await this.autosave.clear();
-      const checkpoint = this.makeCheckpoint();
+      const checkpoint = await this.makeCheckpoint();
       await this.autosave.start(checkpoint.bytes, checkpoint.settings);
     } catch (error) {
       this.projectError = this.errorMessage(error);
@@ -2227,18 +2226,16 @@ export class EditorRuntime {
     this.projectError = null;
     this.publish();
     try {
-      const textures = await this.textureStack.exportProject();
-      const bytes = encodeLpolyV2(
-        this.document,
-        this.getSettings(),
-        textures
+      const checkpoint = await this.makeCheckpoint();
+      const saved = await saveProjectFile(
+        checkpoint.bytes,
+        `${this.projectName}.lpoly`
       );
-      const saved = await saveProjectFile(bytes, `${this.projectName}.lpoly`);
       if (saved) {
         this.recovered = false;
         this.projectName = this.projectName || 'Untitled';
         await this.autosave.clear();
-        const checkpoint = this.makeCheckpoint();
+        const checkpoint = await this.makeCheckpoint();
         await this.autosave.start(checkpoint.bytes, checkpoint.settings);
       }
     } catch (error) {
@@ -2276,7 +2273,7 @@ export class EditorRuntime {
       this.recoveryUpdatedAt = null;
       this.pendingRecovery = null;
       await this.autosave.clear();
-      const checkpoint = this.makeCheckpoint();
+      const checkpoint = await this.makeCheckpoint();
       await this.autosave.start(checkpoint.bytes, checkpoint.settings);
     } catch (error) {
       this.projectError = this.errorMessage(error);
@@ -4220,6 +4217,9 @@ export class EditorRuntime {
   private afterDocumentChanged(event: HistoryEvent): void {
     this.pruneUvSelection();
     this.renderer.refreshTexture();
+    if (event.command instanceof TextureStackCommand) {
+      this.autosave.markTextureDirty();
+    }
     this.uvRevision += 1;
     const loopContext =
       event.command instanceof ReplaceMeshCommand
@@ -4401,9 +4401,16 @@ export class EditorRuntime {
     };
   }
 
-  private makeCheckpoint(): { bytes: Uint8Array; settings: ProjectSettings } {
+  private async makeCheckpoint(): Promise<{
+    bytes: Uint8Array;
+    settings: ProjectSettings;
+  }> {
     const settings = this.getSettings();
-    return { bytes: encodeLpoly(this.document, settings), settings };
+    const textures = await this.textureStack.exportProject();
+    return {
+      bytes: encodeLpolyV2(this.document, settings, textures),
+      settings
+    };
   }
 
   private async initializePersistence(): Promise<void> {
@@ -4418,7 +4425,7 @@ export class EditorRuntime {
       this.publish();
       return;
     }
-    const checkpoint = this.makeCheckpoint();
+    const checkpoint = await this.makeCheckpoint();
     await this.autosave.start(checkpoint.bytes, checkpoint.settings);
     this.publish();
   }

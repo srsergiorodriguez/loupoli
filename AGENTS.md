@@ -116,6 +116,10 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
 - Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (front-face-culled topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
 - Generalized half-edge DCEL with open boundary loops, validated column reconstruction, per-corner UVs, seam flags, face materials, and adaptive bilinear rendering for non-planar quads.
+- UV seam authoring: Edge-mode Seam toggles bit 0 of the DCEL edge flags, renders an amber overlay, uses localized undo and per-edge autosave patches, and round-trips through `.lpoly`.
+- UV editing split: resizable bottom pane with two-way linked 3D/per-corner selection, seam/selected overlays, 16 px picking, Move/Rotate/Scale drag around the UV median, U/V locks, grid snap (15° rotation snap), and exact unsnapped numeric entry. Two selected corners can pin an unwrap; pins are session-only.
+- Seam-chart LSCM unwrap: chart extraction across seams/boundaries, automatic farthest-boundary pins or two explicit pins, longest-edge alignment, shelf packing, and explicit rejection of closed, non-finite, zero-area, flipped, or overlapping charts. `ReplaceUvCommand` stores the full UV column with a `replace-uv` patch.
+- Texture layer stack: up to eight 1024² `OffscreenCanvas` layers with visibility, opacity, solid fills, active-layer selection, reorder, delete, and undoable metadata commands. One composite `CanvasTexture` feeds Unlit/Lit. Manual save writes `.lpoly` v2 with layer metadata and aligned binary PNG chunks; v1 still decodes. Texture edits mark autosave dirty and force a fresh v2 checkpoint with PNGs, so recovery restores layers. Blend modes, rename, and raster painting remain.
 - QuadSphere, Cylinder (n-gon caps), and Grid primitives; the first-run scene is an editable QuadSphere.
 - Multi-object scene outliner, primitive creation, active-object selection, undoable add/delete, and vertex/edge/face selection with 16 px picking and viewport overlays.
 - Additive multi-element selection: Shift/Cmd/Ctrl-click, a sticky 44 px Add mode for pen/mouse, and one-finger touch taps; selected sets render multi-vertex points, instanced edge tubes, and merged face fills.
@@ -132,13 +136,13 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - One-level scene groups with an average-position pivot, outliner tree, group numeric/gizmo transforms, ungroup with transform baking, undo, ordered group autosave patches, and optional `.lpoly` group manifests/node parentage.
 - Ordered non-destructive Mirror / Grid Array / Radial Array stacks with base-DCEL preservation, evaluated rendering/counts, Inspector add/toggle/reorder/edit/remove controls, undo, autosave patches, `.lpoly` serialization, and evaluated-to-base vertex/edge/face provenance. Picking selects base elements and overlays highlight every evaluated copy. Destructive topology actions and direct vertex dragging edit the base mesh while the stack re-evaluates. Per-vertex linear provenance maps the dragged evaluated copy back to its base vertex; axis locks and snapping are not yet applied to mapped drags.
 - Localized vertex moves and scene-node commands; redo truncation, a 100-command cap, and a 32 MB history budget.
-- IndexedDB autosave checkpoint plus localized deltas every 30 seconds and on visibility loss, with explicit Recover/Discard.
-- `.lpoly` v1/v2 binary codec with a CRC-checked manifest, aligned typed-array columns, optional binary PNG texture chunks, file-size limits, v1 migration, and multi-node round-trip tests.
+- IndexedDB autosave checkpoint plus localized deltas every 30 seconds and on visibility loss, with explicit Recover/Discard. Texture edits force a fresh v2 checkpoint with PNG chunks.
+- `.lpoly` v1/v2 binary codec with a CRC-checked manifest, aligned typed-array columns, optional binary PNG texture chunks, file-size limits, v1 migration, and multi-node/PNG round-trip tests.
 - Tauri native open/save dialogs and Rust atomic byte-level file I/O; browser download/file-picker fallbacks.
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: texture autosave, blend modes/rename, and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
+Next planned work: blend modes/rename and projection painting. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
 
 Approved decisions:
 
