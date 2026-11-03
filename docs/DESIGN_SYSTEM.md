@@ -449,7 +449,8 @@ Implemented component files and local patterns:
 | `Icon` | 1–3 | Local SVG registry | No icon package |
 | `ProjectBanner` / save state | 2 | Recovery, save/open errors, autosave status | Explicit Recover/Discard; errors persist until dismissed |
 | `.loupoli-panel` surface | 1 | Floating glass surface | Flat nested sections; no nested blur |
-| `.section` / `.section-head` | 1–3 | Inspector section layout | Shared local pattern, not a component file |
+| `.section` / `.section-head` | 1–3 | Inspector section layout | Shared local pattern; non-collapsible sections use `.section-head` |
+| Disclosure sections | 2 | Transform, Modifiers, Texture, PS1 look | One native `<details>/<summary>` pattern; chevron rotation; persisted Transform/Modifiers state |
 | Selection actions | 3–4 | Extrude, inset, loop cut, seam, merge, bridge, delete | Compact chips; destructive action separated; seam uses `--accent-warning` |
 | `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | 44px rows/actions, lime selected dots |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
