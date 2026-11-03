@@ -34,6 +34,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvAxisLock: null,
   uvTransformMode: 'move',
   uvSelectionMode: 'vertex',
+  uvLassoMode: false,
+  uvSubtractMode: false,
   uvSelectedCorners: [],
   uvPinnedCorners: [],
   uvPaintMode: false,
@@ -88,6 +90,27 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
 };
 
 const SIDEBAR_STORAGE_KEY = 'loupoli:sidebar:open';
+const WORKSPACE_STORAGE_KEY = 'loupoli:workspace';
+const UV_LAYOUT_STORAGE_KEY = 'loupoli:uv-layout';
+
+function readPreference(key: string, fallback: string): string {
+  if (typeof localStorage === 'undefined') {
+    return fallback;
+  }
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePreference(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // UI preferences are best-effort.
+  }
+}
 
 function readSidebarPreference(): boolean {
   if (typeof localStorage === 'undefined') {
@@ -117,6 +140,12 @@ export class EditorSession {
   /** Connect the mounted runtime and immediately sync its first snapshot. */
   attach(runtime: EditorRuntime): void {
     this.runtime = runtime;
+    const layout = readPreference(UV_LAYOUT_STORAGE_KEY, 'bottom');
+    runtime.setUvLayout(layout === 'side' ? 'side' : 'bottom');
+    const workspace = readPreference(WORKSPACE_STORAGE_KEY, 'model');
+    runtime.setWorkspace(
+      workspace === 'paint' ? 'paint' : workspace === 'uv' ? 'uv' : 'model'
+    );
     this.snapshot = runtime.getSnapshot();
   }
 
@@ -171,14 +200,17 @@ export class EditorSession {
 
   setUvLayout(layout: 'bottom' | 'side'): void {
     this.runtime?.setUvLayout(layout);
+    writePreference(UV_LAYOUT_STORAGE_KEY, layout);
   }
 
   toggleUvLayout(): void {
     this.runtime?.toggleUvLayout();
+    writePreference(UV_LAYOUT_STORAGE_KEY, this.snapshot.uvLayout);
   }
 
   setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
     this.runtime?.setWorkspace(workspace);
+    writePreference(WORKSPACE_STORAGE_KEY, workspace);
   }
 
   setUvAxisLock(axis: 'u' | 'v'): void {
@@ -217,6 +249,23 @@ export class EditorSession {
 
   setUvSelectionMode(mode: 'vertex' | 'edge' | 'face' | 'island'): void {
     this.runtime?.setUvSelectionMode(mode);
+  }
+
+  setUvLassoMode(enabled: boolean): void {
+    this.runtime?.setUvLassoMode(enabled);
+  }
+
+  setUvSubtractMode(enabled: boolean): void {
+    this.runtime?.setUvSubtractMode(enabled);
+  }
+
+  selectUvLasso(
+    points: readonly { x: number; y: number }[],
+    additive: boolean,
+    width: number,
+    height: number
+  ): void {
+    this.runtime?.selectUvLasso(points, additive, width, height);
   }
 
   pickUvElement(

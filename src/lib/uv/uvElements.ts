@@ -208,7 +208,119 @@ function distanceToSegment(
 }
 
 /**
+ * Select UV corners inside a screen-space lasso for the active entity mode.
+ *
+ * Vertices use point containment, edges use endpoint containment or segment
+ * crossing, faces use corner/centroid containment, and islands expand any hit
+ * face to the complete chart.
+ */
+export function selectUvCornersInPolygon(
+  mesh: HalfEdgeMesh,
+  topology: UvTopology,
+  mode: UvSelectionMode,
+  polygon: readonly { x: number; y: number }[],
+  projection: UvProjection
+): number[] {
+  if (polygon.length < 3) {
+    return [];
+  }
+  const selected = new Set<number>();
+  if (mode === 'vertex') {
+    for (const group of topology.vertices) {
+      const point = uvToCanvas(group.uv, projection);
+      if (pointInPolygon(point.x, point.y, polygon)) {
+        for (const corner of group.corners) selected.add(corner);
+      }
+    }
+    return [...selected].sort((a, b) => a - b);
+  }
+  if (mode === 'edge') {
+    for (const group of topology.edges) {
+      const a = uvToCanvas(group.uvA, projection);
+      const b = uvToCanvas(group.uvB, projection);
+      let crosses = false;
+      for (let index = 0; index < polygon.length && !crosses; index += 1) {
+        const next = polygon[(index + 1) % polygon.length];
+        crosses = segmentsIntersect(a, b, polygon[index], next);
+      }
+      if (
+        crosses ||
+        pointInPolygon(a.x, a.y, polygon) ||
+        pointInPolygon(b.x, b.y, polygon)
+      ) {
+        for (const corner of group.corners) selected.add(corner);
+      }
+    }
+    return [...selected].sort((a, b) => a - b);
+  }
+  const hitCharts = new Set<number>();
+  for (const face of topology.faces) {
+    const points = face.corners.map((corner) =>
+      uvToCanvas(mesh.getCornerUv(corner), projection)
+    );
+    let inside = false;
+    for (const point of points) {
+      if (pointInPolygon(point.x, point.y, polygon)) {
+        inside = true;
+        break;
+      }
+    }
+    if (!inside) {
+      let cx = 0;
+      let cy = 0;
+      for (const point of points) {
+        cx += point.x;
+        cy += point.y;
+      }
+      inside = pointInPolygon(
+        cx / points.length,
+        cy / points.length,
+        polygon
+      );
+    }
+    if (!inside) {
+      continue;
+    }
+    if (mode === 'face') {
+      for (const corner of face.corners) selected.add(corner);
+    } else {
+      hitCharts.add(face.chart);
+    }
+  }
+  if (mode === 'island') {
+    for (const chart of hitCharts) {
+      for (const corner of topology.chartCorners[chart]) {
+        selected.add(corner);
+      }
+    }
+  }
+  return [...selected].sort((a, b) => a - b);
+}
+
+function segmentsIntersect(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number },
+  d: { x: number; y: number }
+): boolean {
+  const orientation = (
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    cx: number,
+    cy: number
+  ): number => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+  const o1 = orientation(a.x, a.y, b.x, b.y, c.x, c.y);
+  const o2 = orientation(a.x, a.y, b.x, b.y, d.x, d.y);
+  const o3 = orientation(c.x, c.y, d.x, d.y, a.x, a.y);
+  const o4 = orientation(c.x, c.y, d.x, d.y, b.x, b.y);
+  return (o1 > 0) !== (o2 > 0) && (o3 > 0) !== (o4 > 0);
+}
+
+/**
  * Pick a UV vertex, edge, face, or island in panel-local CSS pixels.
+
  *
  * Vertices and edges use a 16 px screen tolerance; faces require the point to
  * be inside the UV polygon. Islands resolve through the picked face or vertex.

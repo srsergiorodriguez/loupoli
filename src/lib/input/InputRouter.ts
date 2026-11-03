@@ -69,7 +69,7 @@ interface TouchRecord {
 
 /** Mouse gesture state while a button is held. */
 interface MouseGesture {
-  mode: 'none' | 'orbit' | 'pan' | 'panPending' | 'tool' | 'lasso';
+  mode: 'none' | 'orbit' | 'pan' | 'tool' | 'lasso';
   pointerId: number | null;
   lastX: number;
   lastY: number;
@@ -85,7 +85,6 @@ interface TouchCentroid {
 const TAP_MAX_DURATION_MS = 300;
 const TAP_MAX_TRAVEL_CSS = 10;
 const CAMERA_START_TRAVEL_CSS = 3;
-const SHIFT_CLICK_DRAG_CSS = 4;
 const PEN_TOUCH_COOLDOWN_MS = 300;
 const TOUCH_MOUSE_GUARD_MS = 350;
 
@@ -214,16 +213,6 @@ export class InputRouter {
       return;
     }
 
-    if (event.button === 0 && sample.shiftKey) {
-      // Shift-drag pans, Shift-click adds to the selection. The gesture stays
-      // pending until the pointer moves past the click threshold.
-      this.mouse.mode = 'panPending';
-      this.mouse.pointerId = sample.pointerId;
-      this.mouse.lastX = sample.clientX;
-      this.mouse.lastY = sample.clientY;
-      return;
-    }
-
     if (event.button === 0) {
       this.mouse.pointerId = sample.pointerId;
       this.mouse.lastX = sample.clientX;
@@ -241,6 +230,13 @@ export class InputRouter {
       this.mouse.mode = captured ? 'tool' : 'orbit';
     } else if (event.button === 1) {
       this.mouse.mode = sample.shiftKey ? 'pan' : 'orbit';
+      this.mouse.pointerId = sample.pointerId;
+      this.mouse.lastX = sample.clientX;
+      this.mouse.lastY = sample.clientY;
+    } else if (event.button === 2) {
+      // Right-drag is the dedicated pan gesture. Shift is therefore free for
+      // additive selection and for orbiting while adding elements.
+      this.mouse.mode = 'pan';
       this.mouse.pointerId = sample.pointerId;
       this.mouse.lastX = sample.clientX;
       this.mouse.lastY = sample.clientY;
@@ -284,21 +280,6 @@ export class InputRouter {
         return;
       }
       this.handleTouchMove(sample);
-      return;
-    }
-
-    if (
-      this.mouse.mode === 'panPending' &&
-      this.mouse.pointerId === sample.pointerId
-    ) {
-      const dx = sample.clientX - this.mouse.lastX;
-      const dy = sample.clientY - this.mouse.lastY;
-      if (Math.hypot(dx, dy) >= SHIFT_CLICK_DRAG_CSS) {
-        this.mouse.mode = 'pan';
-        this.mouse.lastX = sample.clientX;
-        this.mouse.lastY = sample.clientY;
-        this.host.pan(dx, dy);
-      }
       return;
     }
 
@@ -374,9 +355,7 @@ export class InputRouter {
       return;
     }
 
-    if (this.mouse.mode === 'panPending' && this.mouse.pointerId === sample.pointerId) {
-      this.host.tapSelect(sample.clientX, sample.clientY, true);
-    } else if (this.mouse.mode === 'lasso' && this.mouse.pointerId === sample.pointerId) {
+    if (this.mouse.mode === 'lasso' && this.mouse.pointerId === sample.pointerId) {
       this.host.endLasso(sample.clientX, sample.clientY);
     } else if (
       this.mouse.mode === 'tool' &&

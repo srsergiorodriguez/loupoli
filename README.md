@@ -63,7 +63,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Multi-object scene.** Add primitives from the inspector, select the active object in the Scene outliner, delete it through an undoable command, and keep working with the same selection mode. New primitives are placed at the world origin and immediately selected; they may overlap existing objects until moved.
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
 - **Object/group transform gizmos.** With no element selection, Move/Rotate/Scale show object-space handles. Dragging an axis commits one `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation.
-- **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag pans after a 4 px threshold. Selected vertices, edges, and faces render distinct overlays. Selection remains session state.
+- **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag orbits on empty space, so additive selection and camera movement work together. Selected vertices, edges, and faces render distinct overlays. Selection remains session state.
 - **Lasso selection.** The Lasso tool draws a screen-space polygon and selects vertices inside it, edges inside or crossing it, and faces with a corner or centroid inside. It works in the active V/E/F mode, supports the sticky Add toggle, and is available to mouse, Pencil, and one-finger touch. Lasso selection is view-through in Wireframe and occlusion-aware in every shaded mode; back-facing/covered vertices, edges, and faces are rejected.
 
 ![Lasso face selection](docs/media/lasso-select.png)
@@ -150,8 +150,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | L / Shift+L | Arm Loop Cut for one selected edge / Loop Slide for the most recent loop cut. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | Shift, Cmd, or Ctrl + click | Add or remove an element from the current selection. |
-| Shift + click vs Shift + drag | A click is additive selection; movement past 4 px becomes a pan. |
-| Shift + LMB drag | Pan the view. |
+| Right-drag | Pan the view. |
 | Lasso tool + drag | Select a screen-space region in the current element mode. |
 | Add toggle | Sticky additive selection for pen, mouse, and touch taps. |
 | Touch tap / drag | One-finger tap selects the current V/E/F element; drag orbits unless the Lasso tool is active. With Add on, taps toggle the set. |
@@ -188,7 +187,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **96 passing** tests across twenty-three files:
+- `npm test`: **97 passing** tests across twenty-three files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

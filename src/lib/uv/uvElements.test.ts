@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createCubeMesh } from '../geometry/primitives';
-import { buildUvTopology, pickUvElement } from './uvElements';
+import {
+  buildUvTopology,
+  pickUvElement,
+  selectUvCornersInPolygon
+} from './uvElements';
 import { computeUvProjection } from './uvView';
 
 const mesh = createCubeMesh(2);
@@ -14,6 +18,24 @@ describe('UV element topology', () => {
     expect(topology.edges).toHaveLength(12);
     expect(topology.faces).toHaveLength(6);
     expect(topology.chartCorners[0]).toHaveLength(24);
+  });
+
+  it('selects all corners inside a full-canvas lasso', () => {
+    const polygon = [
+      { x: 0, y: 0 },
+      { x: 400, y: 0 },
+      { x: 400, y: 400 },
+      { x: 0, y: 400 }
+    ];
+    expect(
+      selectUvCornersInPolygon(mesh, topology, 'vertex', polygon, projection)
+    ).toHaveLength(24);
+    expect(
+      selectUvCornersInPolygon(mesh, topology, 'island', polygon, projection)
+    ).toHaveLength(24);
+    expect(
+      selectUvCornersInPolygon(mesh, topology, 'face', [], projection)
+    ).toHaveLength(0);
   });
 
   it('selects a face by containment and an island through that face', () => {

@@ -18,6 +18,9 @@
   let resizing = $state(false);
   let dragging = $state(false);
   let painting = $state(false);
+  let lassoing = $state(false);
+  let uvLassoPath = $state<[number, number][]>([]);
+  let lassoAdditive = false;
   let deltaU = $state(0);
   let deltaV = $state(0);
   let angle = $state(0);
@@ -34,6 +37,8 @@
   const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
   const paintMode = $derived(session.snapshot.uvPaintMode);
   const selectionMode = $derived(session.snapshot.uvSelectionMode);
+  const lassoMode = $derived(session.snapshot.uvLassoMode);
+  const subtractMode = $derived(session.snapshot.uvSubtractMode);
   const layout = $derived(session.snapshot.uvLayout);
   const effectiveLayout = $derived(
     session.compactLayout ? 'bottom' : layout
@@ -98,6 +103,14 @@
     brushVisible = true;
   }
 
+  function toggleLasso(): void {
+    const next = !lassoMode;
+    if (next && paintMode) {
+      session.setUvPaintMode(false);
+    }
+    session.setUvLassoMode(next);
+  }
+
   function pointerDown(event: PointerEvent): void {
     if (event.button !== 0) {
       return;
@@ -124,6 +137,20 @@
         window.addEventListener('pointerup', windowPointerUp);
         window.addEventListener('pointercancel', windowPointerCancel);
       }
+      return;
+    }
+    if (lassoMode) {
+      lassoing = true;
+      uvLassoPath = [[point.x, point.y]];
+      lassoAdditive =
+        event.shiftKey ||
+        event.metaKey ||
+        event.ctrlKey ||
+        session.snapshot.additiveSelection;
+      activePointerId = event.pointerId;
+      window.addEventListener('pointermove', windowPointerMove);
+      window.addEventListener('pointerup', windowPointerUp);
+      window.addEventListener('pointercancel', windowPointerCancel);
       return;
     }
     const additive =
@@ -158,6 +185,16 @@
     event.preventDefault();
     const point = localPoint(event);
     updateBrushCursor(event);
+    if (lassoing) {
+      const previous = uvLassoPath[uvLassoPath.length - 1];
+      if (
+        !previous ||
+        Math.hypot(point.x - previous[0], point.y - previous[1]) >= 1
+      ) {
+        uvLassoPath = [...uvLassoPath, [point.x, point.y]];
+      }
+      return;
+    }
     if (painting) {
       const pressure =
         event.pointerType === 'pen' ? Math.max(0.2, event.pressure) : 1;
@@ -175,6 +212,18 @@
       return;
     }
     detachDragListeners();
+    if (lassoing) {
+      lassoing = false;
+      const points = uvLassoPath;
+      uvLassoPath = [];
+      session.selectUvLasso(
+        points.map(([x, y]) => ({ x, y })),
+        lassoAdditive,
+        width,
+        height
+      );
+      return;
+    }
     if (painting) {
       painting = false;
       session.finishUvPaint();
@@ -192,7 +241,11 @@
       return;
     }
     event.preventDefault();
-    if (painting) {
+    if (lassoing) {
+      detachDragListeners();
+      lassoing = false;
+      uvLassoPath = [];
+    } else if (painting) {
       detachDragListeners();
       painting = false;
       session.cancelUvPaint();
@@ -210,6 +263,11 @@
       return;
     }
     detachDragListeners();
+    if (lassoing) {
+      lassoing = false;
+      uvLassoPath = [];
+      return;
+    }
     if (painting) {
       painting = false;
       session.cancelUvPaint();
@@ -357,6 +415,22 @@
         aria-label="Select all UV corners"
         onclick={() => session.selectAllUv()}
       >All</button>
+      <button
+        type="button"
+        class="uv-action"
+        class:active={lassoMode}
+        aria-pressed={lassoMode}
+        aria-label="UV lasso selection"
+        onclick={toggleLasso}
+      ><Icon name="lasso" size={15} /></button>
+      <button
+        type="button"
+        class="uv-action uv-subtract"
+        class:active={subtractMode}
+        aria-pressed={subtractMode}
+        aria-label="Subtract from UV selection"
+        onclick={() => session.setUvSubtractMode(!subtractMode)}
+      >−</button>
       <div class="uv-modes" role="group" aria-label="UV transform mode">
         <button
           type="button"
@@ -452,6 +526,7 @@
       bind:this={canvas}
       class="uv-canvas"
       class:paint-mode={paintMode}
+      class:lasso-mode={lassoMode}
       tabindex="0"
       aria-label="UV editor. Drag corners to transform UVs, or enable Paint to brush the active texture layer."
       onpointerdown={pointerDown}
@@ -464,6 +539,13 @@
       }}
       onkeydown={keyDown}
     ></canvas>
+    {#if lassoing && uvLassoPath.length > 1}
+      <svg class="uv-lasso-overlay" aria-hidden="true">
+        <polygon
+          points={uvLassoPath.map(([x, y]) => `${x},${y}`).join(' ')}
+        />
+      </svg>
+    {/if}
     {#if paintMode && brushVisible}
       <div
         class="uv-brush-cursor"
@@ -778,6 +860,7 @@
 
   .uv-element.active,
   .uv-chip.active,
+  .uv-action.active,
   .uv-mode.active {
     border-color: var(--accent-primary);
     background: var(--bg-selected);
@@ -860,6 +943,32 @@
 
   .uv-canvas.paint-mode {
     cursor: none;
+  }
+
+  .uv-canvas.lasso-mode {
+    cursor: crosshair;
+  }
+
+  .uv-lasso-overlay {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .uv-lasso-overlay polygon {
+    fill: rgba(201, 244, 92, 0.08);
+    stroke: var(--accent-primary);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .uv-subtract {
+    font-size: var(--text-md);
+    line-height: 1;
   }
 
   .uv-brush-cursor {

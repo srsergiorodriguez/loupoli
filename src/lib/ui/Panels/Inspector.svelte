@@ -4,6 +4,7 @@
   import IconButton from '../Primitives/IconButton.svelte';
   import Switch from '../Primitives/Switch.svelte';
   import Vector3Field from '../Primitives/Vector3Field.svelte';
+  import NumberField from '../Primitives/NumberField.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import {
     GRID_SNAP_STEPS,
@@ -187,9 +188,8 @@
   function updateModifierNumber(
     modifierId: string,
     key: 'countX' | 'countY' | 'spacingX' | 'spacingY' | 'count',
-    event: Event
+    value: number
   ): void {
-    const value = Number((event.currentTarget as HTMLInputElement).value);
     if (!Number.isFinite(value)) {
       return;
     }
@@ -599,62 +599,54 @@
                     {:else if modifier.type === 'grid-array'}
                       <label class="modifier-field">
                         <span>X count</span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="64"
-                          step="1"
+                        <NumberField
                           value={modifier.countX}
-                          onchange={(event) =>
-                            updateModifierNumber(
-                              modifier.id,
-                              'countX',
-                              event
-                            )}
+                          label="Grid array X count"
+                          step={1}
+                          precision={0}
+                          min={1}
+                          max={64}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'countX', value)}
                         />
                       </label>
                       <label class="modifier-field">
                         <span>Y count</span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="64"
-                          step="1"
+                        <NumberField
                           value={modifier.countY}
-                          onchange={(event) =>
-                            updateModifierNumber(
-                              modifier.id,
-                              'countY',
-                              event
-                            )}
+                          label="Grid array Y count"
+                          step={1}
+                          precision={0}
+                          min={1}
+                          max={64}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'countY', value)}
                         />
                       </label>
                       <label class="modifier-field">
                         <span>X spacing</span>
-                        <input
-                          type="number"
-                          step="0.1"
+                        <NumberField
                           value={modifier.spacingX}
-                          onchange={(event) =>
-                            updateModifierNumber(
-                              modifier.id,
-                              'spacingX',
-                              event
-                            )}
+                          label="Grid array X spacing"
+                          step={0.1}
+                          precision={3}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'spacingX', value)}
                         />
                       </label>
                       <label class="modifier-field">
                         <span>Y spacing</span>
-                        <input
-                          type="number"
-                          step="0.1"
+                        <NumberField
                           value={modifier.spacingY}
-                          onchange={(event) =>
-                            updateModifierNumber(
-                              modifier.id,
-                              'spacingY',
-                              event
-                            )}
+                          label="Grid array Y spacing"
+                          step={0.1}
+                          precision={3}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'spacingY', value)}
                         />
                       </label>
                     {:else}
@@ -673,18 +665,16 @@
                       </label>
                       <label class="modifier-field">
                         <span>Count</span>
-                        <input
-                          type="number"
-                          min="1"
-                          max="128"
-                          step="1"
+                        <NumberField
                           value={modifier.count}
-                          onchange={(event) =>
-                            updateModifierNumber(
-                              modifier.id,
-                              'count',
-                              event
-                            )}
+                          label="Radial array count"
+                          step={1}
+                          precision={0}
+                          min={1}
+                          max={128}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'count', value)}
                         />
                       </label>
                     {/if}
@@ -1615,8 +1605,7 @@
   }
 
   .modifier-select,
-  .modifier-field select,
-  .modifier-field input {
+  .modifier-field select {
     min-height: var(--hit-min);
     min-width: 0;
     border: var(--hairline) solid var(--border-subtle);
@@ -1729,8 +1718,7 @@
     font-size: var(--text-2xs);
   }
 
-  .modifier-field select,
-  .modifier-field input {
+  .modifier-field select {
     width: 100%;
     padding: 0 var(--space-2);
   }

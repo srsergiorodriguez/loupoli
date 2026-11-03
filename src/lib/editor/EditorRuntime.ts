@@ -66,6 +66,7 @@ import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
   buildUvTopology,
   pickUvElement as pickUvEntity,
+  selectUvCornersInPolygon,
   type UvSelectionMode
 } from '../uv/uvElements';
 import { copyUvChart, sameUvTopology } from '../uv/uvStack';
@@ -331,6 +332,8 @@ export class EditorRuntime {
   private uvAxisLock: UvAxisLock = null;
   private uvTransformMode: UvTransformMode = 'move';
   private uvSelectionMode: UvSelectionMode = 'vertex';
+  private uvLassoMode = false;
+  private uvSubtractMode = false;
   private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
   private readonly uvPins = new Set<number>();
@@ -478,6 +481,8 @@ export class EditorRuntime {
       uvAxisLock: this.uvAxisLock,
       uvTransformMode: this.uvTransformMode,
       uvSelectionMode: this.uvSelectionMode,
+      uvLassoMode: this.uvLassoMode,
+      uvSubtractMode: this.uvSubtractMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvPaintMode: this.uvPaintMode,
@@ -875,6 +880,63 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Toggle the UV lasso selection tool. */
+  setUvLassoMode(enabled: boolean): void {
+    if (this.uvLassoMode === enabled) {
+      return;
+    }
+    this.uvLassoMode = enabled;
+    this.publish();
+  }
+
+  /** Toggle subtract semantics for UV clicks and lasso selection. */
+  setUvSubtractMode(enabled: boolean): void {
+    if (this.uvSubtractMode === enabled) {
+      return;
+    }
+    this.uvSubtractMode = enabled;
+    this.publish();
+  }
+
+  /** Apply a UV lasso to the current entity mode. */
+  selectUvLasso(
+    points: readonly { x: number; y: number }[],
+    additive: boolean,
+    width: number,
+    height: number
+  ): void {
+    const node = this.getActiveNode();
+    if (!node || !this.uvOpen || points.length < 3 || width <= 0 || height <= 0) {
+      return;
+    }
+    const actualProjection = computeUvProjection(node.mesh, width, height);
+    const topology = buildUvTopology(node.mesh);
+    const selected = selectUvCornersInPolygon(
+      node.mesh,
+      topology,
+      this.uvSelectionMode,
+      points,
+      actualProjection
+    );
+    if (this.uvSubtractMode) {
+      for (const corner of selected) {
+        this.uvSelection.delete(corner);
+      }
+    } else if (additive) {
+      for (const corner of selected) {
+        this.uvSelection.add(corner);
+      }
+    } else {
+      this.uvSelection.clear();
+      for (const corner of selected) {
+        this.uvSelection.add(corner);
+      }
+    }
+    this.uvRevision += 1;
+    this.linkUvSelectionTo3d();
+    this.publish();
+  }
+
   /**
    * Pick the current UV entity mode at panel-local coordinates.
    *
@@ -914,7 +976,11 @@ export class EditorRuntime {
     const allSelected = hit.corners.every((corner) =>
       this.uvSelection.has(corner)
     );
-    if (additive) {
+    if (this.uvSubtractMode) {
+      for (const corner of hit.corners) {
+        this.uvSelection.delete(corner);
+      }
+    } else if (additive) {
       if (allSelected) {
         for (const corner of hit.corners) {
           this.uvSelection.delete(corner);
