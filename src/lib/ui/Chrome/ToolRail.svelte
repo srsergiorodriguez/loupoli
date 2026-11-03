@@ -69,26 +69,29 @@
     <ToolButton
       label="Move"
       icon="move"
+      shortcut="G"
       active={session.snapshot.transformMode === 'translate'}
       onActivate={() => chooseTransform('translate')}
     />
     <ToolButton
       label="Rotate"
       icon="rotate"
+      shortcut="R"
       active={session.snapshot.transformMode === 'rotate'}
       onActivate={() => chooseTransform('rotate')}
     />
     <ToolButton
       label="Scale"
       icon="scale"
+      shortcut="S"
       active={session.snapshot.transformMode === 'scale'}
       onActivate={() => chooseTransform('scale')}
     />
   </div>
   <span class="rail-divider" aria-hidden="true"></span>
   <div class="tool-group">
-    <ToolButton label="Frame" icon="frame" onActivate={frameMesh} />
-    <ToolButton label="Home" icon="home" onActivate={resetView} />
+    <ToolButton label="Frame" icon="frame" shortcut="F" onActivate={frameMesh} />
+    <ToolButton label="Home" icon="home" shortcut="Home" onActivate={resetView} />
   </div>
 </nav>
 

@@ -6,6 +6,7 @@
   interface Props {
     label: string;
     icon: IconName;
+    shortcut?: string;
     onActivate: () => void;
     active?: boolean;
     tooltipPlacement?: 'right' | 'bottom';
@@ -14,6 +15,7 @@
   let {
     label,
     icon,
+    shortcut = '',
     onActivate,
     active = undefined,
     tooltipPlacement = 'right'
@@ -26,7 +28,8 @@
   class:is-active={active === true}
   aria-label={label}
   aria-pressed={active === undefined ? undefined : active}
-  data-tooltip={label}
+  aria-keyshortcuts={shortcut || undefined}
+  data-tooltip={shortcut ? `${label} — ${shortcut}` : label}
   data-tooltip-placement={tooltipPlacement}
   onclick={onActivate}
 >

@@ -72,6 +72,12 @@ export type UvLayout = 'bottom' | 'side';
 /** The top-level modeling workspace. */
 export type Workspace = 'model' | 'uv' | 'paint';
 
+/** The pane that currently owns contextual selection and tool commands. */
+export type EditorPane = '3d' | 'uv';
+
+/** How a selection gesture combines with the current set. */
+export type SelectionCombineMode = 'replace' | 'add' | 'subtract';
+
 /** The four required viewport shading modes. */
 export const SHADING_MODES = [
   'wireframe',
@@ -131,7 +137,8 @@ export interface EditorSnapshot {
   readonly ps1Snap: boolean;
   readonly ps1Affine: boolean;
   readonly selectedElements: readonly number[];
-  readonly additiveSelection: boolean;
+  readonly selectionCombineMode: SelectionCombineMode;
+  readonly activeEditor: EditorPane;
   readonly selectionMode: SelectionMode;
   readonly selectedPosition: [number, number, number] | null;
   readonly uvOpen: boolean;
@@ -141,10 +148,9 @@ export interface EditorSnapshot {
   readonly uvPanX: number;
   readonly uvPanY: number;
   readonly uvAxisLock: UvAxisLock;
+  readonly uvFineMode: boolean;
   readonly uvTransformMode: UvTransformMode;
   readonly uvSelectionMode: UvSelectionMode;
-  readonly uvLassoMode: boolean;
-  readonly uvSubtractMode: boolean;
   readonly uvClampMode: boolean;
   readonly uvSelectedCorners: readonly number[];
   readonly uvPinnedCorners: readonly number[];

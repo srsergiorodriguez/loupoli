@@ -6,6 +6,8 @@ import {
   DEFAULT_PS1_SNAP,
   DEFAULT_SHADING,
   type EditorSnapshot,
+  type EditorPane,
+  type SelectionCombineMode,
   type ShadingMode,
   type TransformMode,
   type AxisLock,
@@ -25,7 +27,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   ps1Snap: DEFAULT_PS1_SNAP,
   ps1Affine: DEFAULT_PS1_AFFINE,
   selectedElements: [],
-  additiveSelection: false,
+  selectionCombineMode: 'replace',
+  activeEditor: '3d',
   selectionMode: 'vertex',
   selectedPosition: null,
   uvOpen: false,
@@ -35,10 +38,9 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvPanX: 0,
   uvPanY: 0,
   uvAxisLock: null,
+  uvFineMode: false,
   uvTransformMode: 'move',
   uvSelectionMode: 'vertex',
-  uvLassoMode: false,
-  uvSubtractMode: false,
   uvClampMode: true,
   uvSelectedCorners: [],
   uvPinnedCorners: [],
@@ -194,6 +196,18 @@ export class EditorSession {
     this.runtime?.setSelectionMode(mode);
   }
 
+  setSelectionCombineMode(mode: SelectionCombineMode): void {
+    this.runtime?.setSelectionCombineMode(mode);
+  }
+
+  setActiveEditor(editor: EditorPane): void {
+    this.runtime?.setActiveEditor(editor);
+  }
+
+  selectAllActive(): void {
+    this.runtime?.selectAllActive();
+  }
+
   toggleUvView(): void {
     this.runtime?.toggleUvView();
   }
@@ -273,14 +287,6 @@ export class EditorSession {
     this.runtime?.setUvSelectionMode(mode);
   }
 
-  setUvLassoMode(enabled: boolean): void {
-    this.runtime?.setUvLassoMode(enabled);
-  }
-
-  setUvSubtractMode(enabled: boolean): void {
-    this.runtime?.setUvSubtractMode(enabled);
-  }
-
   setUvClampMode(enabled: boolean): void {
     this.runtime?.setUvClampMode(enabled);
   }
@@ -343,6 +349,10 @@ export class EditorSession {
 
   selectAll(): void {
     this.runtime?.selectAll();
+  }
+
+  setSelectedVertexPosition(position: [number, number, number]): void {
+    this.runtime?.setSelectedVertexPosition(position);
   }
 
   selectAll3d(): void {
@@ -455,9 +465,14 @@ export class EditorSession {
     x: number,
     y: number,
     width: number,
-    height: number
+    height: number,
+    fine = false
   ): void {
-    this.runtime?.updateUvDrag(x, y, width, height);
+    this.runtime?.updateUvDrag(x, y, width, height, fine);
+  }
+
+  setUvFineMode(enabled: boolean): void {
+    this.runtime?.setUvFineMode(enabled);
   }
 
   applyUvMove(du: number, dv: number): void {
@@ -482,10 +497,6 @@ export class EditorSession {
 
   cancelUvDrag(): void {
     this.runtime?.cancelUvDrag();
-  }
-
-  setAdditiveSelection(enabled: boolean): void {
-    this.runtime?.setAdditiveSelection(enabled);
   }
 
   setActiveTransform(

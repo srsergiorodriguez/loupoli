@@ -450,10 +450,12 @@ Implemented component files and local patterns:
 | `ProjectBanner` / save state | 2 | Recovery, save/open errors, autosave status | Explicit Recover/Discard; errors persist until dismissed |
 | `.loupoli-panel` surface | 1 | Floating glass surface | Flat nested sections; no nested blur |
 | `.section` / `.section-head` | 1–3 | Inspector section layout | Shared local pattern; non-collapsible sections use `.section-head` |
-| Disclosure sections | 2 | Transform, Modifiers, Texture, PS1 look | One native `<details>/<summary>` pattern; chevron rotation; persisted Transform/Modifiers state |
+| Disclosure sections | 2 | Every Inspector section | One `InspectorSection` native `<details>/<summary>`; Scene open, others closed; persisted state |
 | Selection actions | 3–4 | Extrude, inset, loop cut, seam, merge, bridge, delete | Compact chips; destructive action separated; seam uses `--accent-warning` |
 | `Object multi-select` | 3 | Shift/Cmd-click and sticky toggle; join | Compact action beside Group/Delete; 44px rows/actions |
 | Selection history | 2 | 3D and UV element sets | Lightweight undo command; never serialized or journaled |
+| Inspector sections | 2 | One `InspectorSection`; Scene open, others closed | Native details; no sidebar X |
+| Active editor | 2 | Last clicked pane | Title dot and accent; shared commands route to it |
 | UV keyboard transform | 2 | G/R/S, U/V, typed number, Enter/Esc | Footer shows current mode/value and commit hint |
 | Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; 44px eye; hidden rows dimmed |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |

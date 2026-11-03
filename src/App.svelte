@@ -12,6 +12,7 @@
   import Inspector from './lib/ui/Panels/Inspector.svelte';
   import ProjectBanner from './lib/ui/Chrome/ProjectBanner.svelte';
   import UvPanel from './lib/ui/Uv/UvPanel.svelte';
+  import { shortcutBus } from './lib/input/ShortcutBus';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
   import { EditorRuntime } from './lib/editor/EditorRuntime';
 
@@ -85,12 +86,12 @@
         void session.openProject();
       }
     };
-    window.addEventListener('keydown', onKeyDown);
+    const unregisterShortcuts = shortcutBus.register(onKeyDown);
 
     return () => {
       compactQuery.removeEventListener('change', syncCompact);
       pointerQuery.removeEventListener('change', syncDensity);
-      window.removeEventListener('keydown', onKeyDown);
+      unregisterShortcuts();
       if (
         import.meta.env.DEV &&
         window.__LOUPOLI_DEBUG__?.session === session
@@ -135,6 +136,12 @@
 
     {#if !startupError}
       <div class="viewport-context" aria-live="polite">
+        <span
+          class="context-editor"
+          class:active={session.snapshot.activeEditor === '3d'}
+        >
+          3D<span class="context-dot" aria-hidden="true"></span>
+        </span>
         <span class="context-scene">Scene</span>
         <span class="context-separator" aria-hidden="true">/</span>
         <span class="context-object">{session.snapshot.objectName}</span>
@@ -280,6 +287,29 @@
     font-size: var(--text-2xs);
     line-height: 1;
     pointer-events: none;
+  }
+
+  .context-editor {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-tertiary);
+  }
+
+  .context-editor.active {
+    color: var(--text-primary);
+  }
+
+  .context-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    opacity: 0;
+  }
+
+  .context-editor.active .context-dot {
+    opacity: 1;
   }
 
   .context-object {

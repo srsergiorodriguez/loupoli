@@ -12,6 +12,7 @@ export type IconName =
   | 'lit'
   | 'close'
   | 'plus'
+  | 'minus'
   | 'trash'
   | 'open'
   | 'save'

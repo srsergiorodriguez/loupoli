@@ -71,6 +71,8 @@
     <path d="m6 6 12 12M18 6 6 18" />
   {:else if name === 'plus'}
     <path d="M12 5v14M5 12h14" />
+  {:else if name === 'minus'}
+    <path d="M5 12h14" />
   {:else if name === 'trash'}
     <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v6M14 11v6" />
   {:else if name === 'open'}

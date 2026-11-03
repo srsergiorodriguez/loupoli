@@ -1,6 +1,7 @@
 <script lang="ts">
   import BrandMark from '../Brand/BrandMark.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
+  import { shortcut } from '../../input/shortcuts';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
 
   /** Session projection used by the application bar. */
@@ -110,6 +111,7 @@
       disabled={session.snapshot.fileBusy || session.snapshot.recoveryAvailable}
       onActivate={() => void session.openProject()}
       tooltip="Open project"
+      shortcut={shortcut('open').display}
     />
     <IconButton
       label="Save project"
@@ -117,6 +119,7 @@
       disabled={session.snapshot.fileBusy || session.snapshot.recoveryAvailable}
       onActivate={() => void session.saveProject()}
       tooltip="Save project"
+      shortcut={shortcut('save').display}
     />
     <span class="divider divider--actions" aria-hidden="true"></span>
     <IconButton
@@ -125,6 +128,7 @@
       disabled={!session.snapshot.canUndo}
       onActivate={() => session.undo()}
       tooltip={undoLabel}
+      shortcut={shortcut('undo').display}
     />
     <IconButton
       label={redoLabel}
@@ -132,6 +136,7 @@
       disabled={!session.snapshot.canRedo}
       onActivate={() => session.redo()}
       tooltip={redoLabel}
+      shortcut={shortcut('redo').display}
     />
     <span class="divider divider--actions" aria-hidden="true"></span>
     <span class="inspector-toggle">

@@ -9,6 +9,7 @@
     onActivate?: () => void;
     disabled?: boolean;
     tooltip?: string;
+    shortcut?: string;
     tooltipPlacement?: 'bottom' | 'right';
   }
 
@@ -18,6 +19,7 @@
     onActivate,
     disabled = false,
     tooltip,
+    shortcut = '',
     tooltipPlacement = 'bottom'
   }: Props = $props();
 </script>
@@ -26,8 +28,9 @@
   type="button"
   class="icon-button"
   aria-label={label}
+  aria-keyshortcuts={shortcut || undefined}
   {disabled}
-  data-tooltip={tooltip}
+  data-tooltip={tooltip ? `${tooltip}${shortcut ? ` — ${shortcut}` : ''}` : undefined}
   data-tooltip-placement={tooltipPlacement}
   onclick={() => onActivate?.()}
 >

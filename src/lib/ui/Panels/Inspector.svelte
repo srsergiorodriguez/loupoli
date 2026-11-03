@@ -5,6 +5,7 @@
   import Switch from '../Primitives/Switch.svelte';
   import Vector3Field from '../Primitives/Vector3Field.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
+  import InspectorSection from './InspectorSection.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import {
     GRID_SNAP_STEPS,
@@ -82,11 +83,71 @@
         : 'faces'
   );
 
+  const sceneMeta = $derived(
+    `${nodes.length} ${nodes.length === 1 ? 'object' : 'objects'}${
+      selectedNodeIds.length > 1 ? ` · ${selectedNodeIds.length} selected` : ''
+    }`
+  );
+  const meshMeta = $derived(
+    activeGroupId !== null
+      ? `Group · ${nodes.filter((node) => node.parentId === activeGroupId).length} objects`
+      : activeNodeId === null
+        ? 'No object'
+        : modifiersActive
+          ? 'Evaluated'
+          : boundaryEdges === 0
+            ? 'Closed manifold'
+            : `${boundaryEdges} boundary edges`
+  );
+  const selectionMeta = $derived(
+    selectionCount > 0 ? `${selectionCount} selected` : modeLabel
+  );
+  const transformMeta = $derived(
+    activeNodeId === null
+      ? 'Local'
+      : transformOrientation === 'local'
+        ? 'Local'
+        : 'Global'
+  );
+  const modifiersMeta = $derived(
+    activeNodeId === null
+      ? 'No object'
+      : modifiers.length === 0
+        ? 'None'
+        : modifiersActive
+          ? 'Evaluated'
+          : 'Disabled'
+  );
+  const textureMeta = $derived(
+    `${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'} · ${session.snapshot.textureSize}²`
+  );
+
+  type SectionKey =
+    | 'scene'
+    | 'mesh'
+    | 'selection'
+    | 'transform'
+    | 'modifiers'
+    | 'texture'
+    | 'ps1'
+    | 'controls';
+
+  const SECTION_DEFAULTS: Record<SectionKey, boolean> = {
+    scene: true,
+    mesh: false,
+    selection: false,
+    transform: false,
+    modifiers: false,
+    texture: false,
+    ps1: false,
+    controls: false
+  };
+
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
 
-  const SECTION_STORAGE_KEY = 'loupoli:inspector:sections';
-  let sections = $state({ transform: true, modifiers: true });
+  const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v2';
+  let sections = $state<Record<SectionKey, boolean>>({ ...SECTION_DEFAULTS });
   let draggedNodeId = $state<string | null>(null);
   let dropTargetId = $state<string | null>(null);
   let dropAfter = $state(false);
@@ -174,26 +235,19 @@
     try {
       const stored = localStorage.getItem(SECTION_STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored) as Partial<typeof sections>;
-        sections = {
-          transform: parsed.transform ?? true,
-          modifiers: parsed.modifiers ?? true
-        };
+        const parsed = JSON.parse(stored) as Partial<Record<SectionKey, boolean>>;
+        sections = { ...SECTION_DEFAULTS, ...parsed };
       }
     } catch {
       // Corrupt or unavailable storage falls back to open sections.
     }
   });
 
-  function handleSectionToggle(
-    key: 'transform' | 'modifiers',
-    event: Event
-  ): void {
-    const details = event.currentTarget as HTMLDetailsElement;
-    if (sections[key] === details.open) {
+  function setSection(key: SectionKey, open: boolean): void {
+    if (sections[key] === open) {
       return;
     }
-    sections = { ...sections, [key]: details.open };
+    sections = { ...sections, [key]: open };
     try {
       localStorage.setItem(SECTION_STORAGE_KEY, JSON.stringify(sections));
     } catch {
@@ -291,82 +345,7 @@
     );
   }
 
-  function formatCoordinate(value: number): string {
-    const text = Math.abs(value) < 0.0005 ? '0.000' : value.toFixed(3);
-    return text;
-  }
-
-  function close(): void {
-    session.closeSidebar();
-  }
 </script>
-
-<aside
-  id="inspector-panel"
-  class="inspector loupoli-panel"
-  data-open={session.inspectorOpen}
-  data-sidebar-open={session.sidebarOpen}
-  aria-label="Inspector"
->
-  <header class="panel-head">
-    <div>
-      <h2 class="section-label">Inspector</h2>
-      <p class="panel-title">{session.snapshot.objectName}</p>
-    </div>
-    <span class="close-button">
-      <IconButton label="Close inspector" icon="close" onActivate={close} />
-    </span>
-  </header>
-
-  <div class="panel-body">
-    <section class="section" aria-labelledby="scene-heading">
-      <div class="section-head">
-        <h2 id="scene-heading" class="section-label">Scene</h2>
-        <span class="section-meta">
-          {nodes.length} {nodes.length === 1 ? 'object' : 'objects'}
-          {#if selectedNodeIds.length > 1}
-            · {selectedNodeIds.length} selected
-          {/if}
-        </span>
-      </div>
-
-      <div class="object-list">
-        {#each groups as group (group.id)}
-          <div
-            class="object-row group-row"
-            class:active={group.id === activeGroupId}
-            class:is-hidden={!group.visible}
-            aria-current={group.id === activeGroupId ? 'true' : undefined}
-          >
-            <button
-              type="button"
-              class="object-select"
-              onclick={() => session.selectGroup(group.id)}
-            >
-              <span class="object-glyph"><Icon name="folder" size={14} /></span>
-              <span class="object-name">{group.name}</span>
-              <span class="object-kind">
-                {nodes.filter((node) => node.parentId === group.id).length} objects
-              </span>
-            </button>
-            <button
-              type="button"
-              class="object-visibility"
-              aria-label={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
-              aria-pressed={group.visible}
-              onclick={(event) => toggleGroupVisibility(event, group.id, group.visible)}
-            >
-              <Icon name={group.visible ? 'eye' : 'eye-off'} size={14} />
-            </button>
-          </div>
-          {#each nodes.filter((node) => node.parentId === group.id) as node (node.id)}
-            {@render objectRow(node, true)}
-          {/each}
-        {/each}
-        {#each nodes.filter((node) => node.parentId === null) as node (node.id)}
-          {@render objectRow(node, false)}
-        {/each}
-      </div>
 
       {#snippet objectRow(node: (typeof nodes)[number], child: boolean)}
         <div
@@ -421,6 +400,68 @@
           </button>
         </div>
       {/snippet}
+
+<aside
+  id="inspector-panel"
+  class="inspector loupoli-panel"
+  data-open={session.inspectorOpen}
+  data-sidebar-open={session.sidebarOpen}
+  aria-label="Inspector"
+>
+  <header class="panel-head">
+    <div>
+      <h2 class="section-label">Inspector</h2>
+      <p class="panel-title">{session.snapshot.objectName}</p>
+    </div>
+  </header>
+
+  <div class="panel-body">
+    <InspectorSection
+      title="Scene"
+      meta={sceneMeta}
+      open={sections.scene}
+      onToggle={(open) => setSection('scene', open)}
+    >
+
+      <div class="object-list">
+        {#each groups as group (group.id)}
+          <div
+            class="object-row group-row"
+            class:active={group.id === activeGroupId}
+            class:is-hidden={!group.visible}
+            aria-current={group.id === activeGroupId ? 'true' : undefined}
+          >
+            <button
+              type="button"
+              class="object-select"
+              onclick={() => session.selectGroup(group.id)}
+            >
+              <span class="object-glyph"><Icon name="folder" size={14} /></span>
+              <span class="object-name">{group.name}</span>
+              <span class="object-kind">
+                {nodes.filter((node) => node.parentId === group.id).length} objects
+              </span>
+            </button>
+            <button
+              type="button"
+              class="object-visibility"
+              aria-label={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
+              aria-pressed={group.visible}
+              onclick={(event) => toggleGroupVisibility(event, group.id, group.visible)}
+            >
+              <Icon name={group.visible ? 'eye' : 'eye-off'} size={14} />
+            </button>
+          </div>
+          {#each nodes.filter((node) => node.parentId === group.id) as node (node.id)}
+            {@render objectRow(node, true)}
+          {/each}
+        {/each}
+        {#each nodes.filter((node) => node.parentId === null) as node (node.id)}
+          {@render objectRow(node, false)}
+        {/each}
+      </div>
+
+
 
       <div class="scene-actions">
         <select
@@ -500,22 +541,205 @@
           {/if}
         </div>
       {/if}
-    </section>
+    </InspectorSection>
 
-    <details
-      class="section module-section"
-      open={sections.transform}
-      ontoggle={(event) => handleSectionToggle('transform', event)}
+    <InspectorSection
+      title="Mesh"
+      meta={meshMeta}
+      open={sections.mesh}
+      onToggle={(open) => setSection('mesh', open)}
     >
-      <summary class="module-summary">
-        <span class="module-title">
-          <span class="section-label">Transform</span>
-          <span class="section-meta">
-            {activeNodeId === null ? 'Local' : transformOrientation === 'local' ? 'Local' : 'Global'}
-          </span>
-        </span>
-        <span class="module-chevron" aria-hidden="true"></span>
-      </summary>
+      {#if activeGroupId !== null}
+        <p class="empty-state">
+          Group transform only. Select a child object to edit its mesh.
+        </p>
+      {:else}
+      <dl class="stats">
+        <div>
+          <dt>Vertices</dt>
+          <dd class="text-mono">{counts.vertices}</dd>
+        </div>
+        <div>
+          <dt>Edges</dt>
+          <dd class="text-mono">{counts.edges}</dd>
+        </div>
+        <div>
+          <dt>Faces</dt>
+          <dd class="text-mono">{counts.faces}</dd>
+        </div>
+        <div>
+          <dt>Triangles</dt>
+          <dd class="text-mono">{counts.triangles}</dd>
+        </div>
+      </dl>
+      {/if}
+    </InspectorSection>
+
+    <InspectorSection
+      title="Selection"
+      meta={selectionMeta}
+      open={sections.selection}
+      onToggle={(open) => setSection('selection', open)}
+    >
+      {#if activeGroupId !== null}
+        <p class="selection-title">Group selected</p>
+        <p class="hint">
+          Move, rotate, or scale the group in the Inspector or with the object
+          gizmo. Select a child object above to edit its mesh.
+        </p>
+      {:else if modifiersActive}
+        <p class="selection-title">
+          {selectionCount > 0 ? `${selectionCount} ${modePlural} selected` : 'Modifiers active'}
+        </p>
+        <p class="hint">
+          Picking maps through provenance. Vertex dragging and topology actions
+          edit the base mesh, and the stack re-evaluates automatically.
+        </p>
+      {:else if activeNodeId === null}
+        <p class="empty-state">
+          The scene is empty. Add a QuadSphere, Cylinder, or Grid above.
+        </p>
+      {:else if session.snapshot.selectionMode === 'vertex' && selectionCount === 1 && selectedPosition}
+        <p class="selection-title">
+          Vertex <span class="text-mono">{primarySelection! + 1}</span>
+        </p>
+        <Vector3Field
+          label="Position (object)"
+          values={selectedPosition}
+          step={0.1}
+          precision={3}
+          onCommit={(position) => session.setSelectedVertexPosition(position)}
+        />
+        <div class="axis-lock" role="group" aria-label="Vertex move axis lock">
+          <span class="axis-lock-label">Move axis</span>
+          {#each ['x', 'y', 'z'] as const as axis (axis)}
+            <button
+              type="button"
+              class="axis-chip axis-chip--{axis}"
+              class:is-active={session.snapshot.axisLock === axis}
+              aria-pressed={session.snapshot.axisLock === axis}
+              onclick={() => toggleAxis(axis)}
+            >
+              {axis.toUpperCase()}
+            </button>
+          {/each}
+        </div>
+        <p class="hint">
+          Drag the selected handle in the viewport. Axis chips or the X/Y/Z keys
+          constrain the move; Grid snap rounds committed coordinates.
+        </p>
+      {:else if selectionCount === 1}
+        <p class="selection-title">
+          {modeLabel} <span class="text-mono">{primarySelection! + 1}</span>
+        </p>
+        <p class="hint">
+          {session.snapshot.selectionMode === 'edge'
+            ? 'The selected topological edge is highlighted in the viewport.'
+            : 'The selected face is highlighted in the viewport.'}
+        </p>
+      {:else if selectionCount > 1}
+        <p class="selection-title">
+          <span class="text-mono">{selectionCount}</span>
+          {modePlural} selected
+        </p>
+        <p class="hint">
+          Every selected {modeLabel.toLowerCase()} is highlighted in the
+          viewport. Use Add mode or Shift/Cmd-click to adjust the set.
+        </p>
+      {:else}
+        <p class="empty-state">
+          No {modeLabel.toLowerCase()} selected. Click an element in the
+          viewport, or turn on Add to build a multi-selection.
+        </p>
+      {/if}
+
+      {#if selectionCount > 0}
+        <div class="selection-actions">
+          {#if session.snapshot.selectionMode === 'vertex' && selectionCount >= 2}
+            <button
+              type="button"
+              class="topology-action"
+              aria-label="Merge selected vertices"
+              onclick={() => session.mergeSelectedVertices()}
+            >
+              <Icon name="merge" size={14} />
+              <span>Merge</span>
+            </button>
+          {/if}
+          {#if session.snapshot.selectionMode === 'face' && selectionCount > 0}
+            <button
+              type="button"
+              class="topology-action"
+              aria-label="Extrude selected faces"
+              onclick={() => session.extrudeSelectedFaces()}
+            >
+              <Icon name="extrude" size={14} />
+              <span>Extrude</span>
+            </button>
+          {/if}
+          {#if session.snapshot.selectionMode === 'face' && selectionCount === 1}
+            <button
+              type="button"
+              class="topology-action"
+              aria-label="Inset selected face"
+              onclick={() => session.insetSelectedFace()}
+            >
+              <Icon name="inset" size={14} />
+              <span>Inset</span>
+            </button>
+          {/if}
+          {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
+            <button
+              type="button"
+              class="topology-action"
+              aria-label="Toggle UV seam on selected edges"
+              onclick={() => session.toggleSelectedSeams()}
+            >
+              <Icon name="seam" size={14} />
+              <span>Seam</span>
+            </button>
+          {/if}
+          {#if session.snapshot.selectionMode === 'edge' && selectionCount === 1}
+            <button
+              type="button"
+              class="topology-action"
+              aria-label="Loop cut selected edge"
+              onclick={() => session.loopCut()}
+            >
+              <Icon name="loop-cut" size={14} />
+              <span>Loop cut</span>
+            </button>
+          {/if}
+          {#if session.snapshot.selectionMode === 'edge' && selectionCount >= 2}
+            <button
+              type="button"
+              class="topology-action"
+              aria-label="Bridge selected edges"
+              onclick={() => session.bridgeSelectedEdges()}
+            >
+              <Icon name="bridge" size={14} />
+              <span>Bridge</span>
+            </button>
+          {/if}
+          <button
+            type="button"
+            class="delete-selection"
+            aria-label="Delete selected {modePlural}"
+            onclick={() => session.deleteSelection()}
+          >
+            <Icon name="trash" size={14} />
+            <span>Delete</span>
+          </button>
+        </div>
+      {/if}
+    </InspectorSection>
+
+    <InspectorSection
+      title="Transform"
+      meta={transformMeta}
+      open={sections.transform}
+      onToggle={(open) => setSection('transform', open)}
+    >
       <div id="transform-body" class="module-body">
         {#if activeNodeId !== null}
           <div class="transform-orientation">
@@ -597,31 +821,15 @@
           <p class="empty-state">No active object to transform.</p>
         {/if}
       </div>
-    </details>
+    </InspectorSection>
 
     {#if activeGroupId === null}
-      <details
-        class="section module-section"
+      <InspectorSection
+        title="Modifiers"
+        meta={modifiersMeta}
         open={sections.modifiers}
-        ontoggle={(event) => handleSectionToggle('modifiers', event)}
+        onToggle={(open) => setSection('modifiers', open)}
       >
-        <summary class="module-summary">
-          <span class="module-title">
-            <span class="section-label">Modifiers</span>
-            <span class="section-meta">
-              {#if activeNodeId === null}
-                No object
-              {:else if modifiers.length === 0}
-                None
-              {:else if modifiersActive}
-                Evaluated
-              {:else}
-                Disabled
-              {/if}
-            </span>
-          </span>
-          <span class="module-chevron" aria-hidden="true"></span>
-        </summary>
         <div id="modifiers-body" class="module-body">
         {#if activeNodeId === null}
           <p class="empty-state">Select a mesh object to edit its stack.</p>
@@ -811,230 +1019,15 @@
           {/if}
         {/if}
         </div>
-      </details>
+            </InspectorSection>
     {/if}
 
-    <section class="section" aria-labelledby="stats-heading">
-      <div class="section-head">
-        <h2 id="stats-heading" class="section-label">Mesh</h2>
-        <span class="section-meta">
-          {#if activeGroupId !== null}
-            Group · {nodes.filter((node) => node.parentId === activeGroupId).length} objects
-          {:else if activeNodeId === null}
-            No object
-          {:else if modifiersActive}
-            Evaluated
-          {:else if boundaryEdges === 0}
-            Closed manifold
-          {:else}
-            {boundaryEdges} boundary edges
-          {/if}
-        </span>
-      </div>
-      {#if activeGroupId !== null}
-        <p class="empty-state">
-          Group transform only. Select a child object to edit its mesh.
-        </p>
-      {:else}
-      <dl class="stats">
-        <div>
-          <dt>Vertices</dt>
-          <dd class="text-mono">{counts.vertices}</dd>
-        </div>
-        <div>
-          <dt>Edges</dt>
-          <dd class="text-mono">{counts.edges}</dd>
-        </div>
-        <div>
-          <dt>Faces</dt>
-          <dd class="text-mono">{counts.faces}</dd>
-        </div>
-        <div>
-          <dt>Triangles</dt>
-          <dd class="text-mono">{counts.triangles}</dd>
-        </div>
-      </dl>
-      {/if}
-    </section>
-
-    <section class="section" aria-labelledby="selection-heading">
-      <div class="section-head">
-        <h2 id="selection-heading" class="section-label">Selection</h2>
-        <span class="section-meta">
-          {selectionCount > 0 ? `${selectionCount} selected` : modeLabel}
-        </span>
-      </div>
-      {#if activeGroupId !== null}
-        <p class="selection-title">Group selected</p>
-        <p class="hint">
-          Move, rotate, or scale the group in the Inspector or with the object
-          gizmo. Select a child object above to edit its mesh.
-        </p>
-      {:else if modifiersActive}
-        <p class="selection-title">
-          {selectionCount > 0 ? `${selectionCount} ${modePlural} selected` : 'Modifiers active'}
-        </p>
-        <p class="hint">
-          Picking maps through provenance. Vertex dragging and topology actions
-          edit the base mesh, and the stack re-evaluates automatically.
-        </p>
-      {:else if activeNodeId === null}
-        <p class="empty-state">
-          The scene is empty. Add a QuadSphere, Cylinder, or Grid above.
-        </p>
-      {:else if session.snapshot.selectionMode === 'vertex' && selectionCount === 1 && selectedPosition}
-        <p class="selection-title">
-          Vertex <span class="text-mono">{primarySelection! + 1}</span>
-        </p>
-        <div class="coordinates" aria-label="Selected vertex position in object space">
-          <div class="coordinate coordinate--x">
-            <span class="axis-label">X</span>
-            <span class="text-mono value">{formatCoordinate(selectedPosition[0])}</span>
-          </div>
-          <div class="coordinate coordinate--y">
-            <span class="axis-label">Y</span>
-            <span class="text-mono value">{formatCoordinate(selectedPosition[1])}</span>
-          </div>
-          <div class="coordinate coordinate--z">
-            <span class="axis-label">Z</span>
-            <span class="text-mono value">{formatCoordinate(selectedPosition[2])}</span>
-          </div>
-        </div>
-        <div class="axis-lock" role="group" aria-label="Vertex move axis lock">
-          <span class="axis-lock-label">Move axis</span>
-          {#each ['x', 'y', 'z'] as const as axis (axis)}
-            <button
-              type="button"
-              class="axis-chip axis-chip--{axis}"
-              class:is-active={session.snapshot.axisLock === axis}
-              aria-pressed={session.snapshot.axisLock === axis}
-              onclick={() => toggleAxis(axis)}
-            >
-              {axis.toUpperCase()}
-            </button>
-          {/each}
-        </div>
-        <p class="hint">
-          Drag the selected handle in the viewport. Axis chips or the X/Y/Z keys
-          constrain the move; Grid snap rounds committed coordinates.
-        </p>
-      {:else if selectionCount === 1}
-        <p class="selection-title">
-          {modeLabel} <span class="text-mono">{primarySelection! + 1}</span>
-        </p>
-        <p class="hint">
-          {session.snapshot.selectionMode === 'edge'
-            ? 'The selected topological edge is highlighted in the viewport.'
-            : 'The selected face is highlighted in the viewport.'}
-        </p>
-      {:else if selectionCount > 1}
-        <p class="selection-title">
-          <span class="text-mono">{selectionCount}</span>
-          {modePlural} selected
-        </p>
-        <p class="hint">
-          Every selected {modeLabel.toLowerCase()} is highlighted in the
-          viewport. Use Add mode or Shift/Cmd-click to adjust the set.
-        </p>
-      {:else}
-        <p class="empty-state">
-          No {modeLabel.toLowerCase()} selected. Click an element in the
-          viewport, or turn on Add to build a multi-selection.
-        </p>
-      {/if}
-
-      {#if selectionCount > 0}
-        <div class="selection-actions">
-          {#if session.snapshot.selectionMode === 'vertex' && selectionCount >= 2}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Merge selected vertices"
-              onclick={() => session.mergeSelectedVertices()}
-            >
-              <Icon name="merge" size={14} />
-              <span>Merge</span>
-            </button>
-          {/if}
-          {#if session.snapshot.selectionMode === 'face' && selectionCount > 0}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Extrude selected faces"
-              onclick={() => session.extrudeSelectedFaces()}
-            >
-              <Icon name="extrude" size={14} />
-              <span>Extrude</span>
-            </button>
-          {/if}
-          {#if session.snapshot.selectionMode === 'face' && selectionCount === 1}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Inset selected face"
-              onclick={() => session.insetSelectedFace()}
-            >
-              <Icon name="inset" size={14} />
-              <span>Inset</span>
-            </button>
-          {/if}
-          {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Toggle UV seam on selected edges"
-              onclick={() => session.toggleSelectedSeams()}
-            >
-              <Icon name="seam" size={14} />
-              <span>Seam</span>
-            </button>
-          {/if}
-          {#if session.snapshot.selectionMode === 'edge' && selectionCount === 1}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Loop cut selected edge"
-              onclick={() => session.loopCut()}
-            >
-              <Icon name="loop-cut" size={14} />
-              <span>Loop cut</span>
-            </button>
-          {/if}
-          {#if session.snapshot.selectionMode === 'edge' && selectionCount >= 2}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Bridge selected edges"
-              onclick={() => session.bridgeSelectedEdges()}
-            >
-              <Icon name="bridge" size={14} />
-              <span>Bridge</span>
-            </button>
-          {/if}
-          <button
-            type="button"
-            class="delete-selection"
-            aria-label="Delete selected {modePlural}"
-            onclick={() => session.deleteSelection()}
-          >
-            <Icon name="trash" size={14} />
-            <span>Delete</span>
-          </button>
-        </div>
-      {/if}
-    </section>
-
-    <details class="section module-section">
-      <summary class="module-summary">
-        <span class="module-title">
-          <span class="section-label">Texture</span>
-          <span class="section-meta">
-            {textureLayers.length} layer{textureLayers.length === 1 ? '' : 's'} ·
-            {session.snapshot.textureSize}²
-          </span>
-        </span>
-        <span class="module-chevron" aria-hidden="true"></span>
-      </summary>
+    <InspectorSection
+      title="Texture"
+      meta={textureMeta}
+      open={sections.texture}
+      onToggle={(open) => setSection('texture', open)}
+    >
       <div class="module-body texture-body">
         <div class="texture-toolbar">
           <button
@@ -1150,16 +1143,14 @@
           are captured by the v2 autosave checkpoint; raster painting follows.
         </p>
       </div>
-    </details>
+    </InspectorSection>
 
-    <details class="section module-section">
-      <summary class="module-summary">
-        <span class="module-title">
-          <span id="ps1-heading" class="section-label">PS1 look</span>
-          <span class="section-meta">Render effect · Opt-in</span>
-        </span>
-        <span class="module-chevron" aria-hidden="true"></span>
-      </summary>
+    <InspectorSection
+      title="PS1 look"
+      meta="Render effect · Opt-in"
+      open={sections.ps1}
+      onToggle={(open) => setSection('ps1', open)}
+    >
       <div class="module-body">
         <Switch
           label="Vertex snapping"
@@ -1178,12 +1169,13 @@
           mapping is the default view.
         </p>
       </div>
-    </details>
+    </InspectorSection>
 
-    <section class="section section--last" aria-labelledby="controls-heading">
-      <div class="section-head">
-        <h2 id="controls-heading" class="section-label">Controls</h2>
-      </div>
+    <InspectorSection
+      title="Controls"
+      open={sections.controls}
+      onToggle={(open) => setSection('controls', open)}
+    >
       <dl class="controls">
         <div>
           <dt>Pen</dt>
@@ -1202,7 +1194,7 @@
           <dd>Drag background/face, Alt, or MMB to orbit · Click to select · Shift+MMB pan · wheel zoom</dd>
         </div>
       </dl>
-    </section>
+    </InspectorSection>
   </div>
 </aside>
 
@@ -1238,10 +1230,6 @@
     line-height: var(--leading-tight);
   }
 
-  .close-button {
-    display: inline-flex;
-  }
-
   @media (min-width: 900px) {
     .inspector[data-sidebar-open='false'] {
       display: none;
@@ -1254,36 +1242,6 @@
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 0 var(--space-3);
-  }
-
-  .section {
-    padding: var(--space-4) 0;
-    border-bottom: var(--hairline) solid var(--border-subtle);
-  }
-
-  .section--last {
-    border-bottom: none;
-  }
-
-  .section-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    margin-bottom: var(--space-3);
-  }
-
-  .section-head .section-label {
-    flex: 1;
-  }
-
-  .section-meta {
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    line-height: 1;
-    white-space: nowrap;
   }
 
   .object-list {
@@ -1585,52 +1543,6 @@
 
   .selection-title span {
     color: var(--text-primary);
-  }
-
-  .coordinates {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
-    overflow: hidden;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--border-subtle);
-  }
-
-  .coordinate {
-    display: flex;
-    align-items: baseline;
-    gap: 6px;
-    min-width: 0;
-    padding: 8px 8px;
-    background: var(--bg-input);
-  }
-
-  .axis-label {
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    font-weight: var(--weight-semibold);
-    line-height: 1;
-  }
-
-  .coordinate--x .axis-label {
-    color: var(--axis-x);
-  }
-
-  .coordinate--y .axis-label {
-    color: var(--axis-y);
-  }
-
-  .coordinate--z .axis-label {
-    color: var(--axis-z);
-  }
-
-  .value {
-    overflow: hidden;
-    color: var(--text-primary);
-    font-size: var(--text-2xs);
-    line-height: 1;
-    text-overflow: ellipsis;
   }
 
   .orientation-toggle {
@@ -2120,46 +2032,6 @@
     font-size: var(--text-2xs);
   }
 
-  .module-section {
-    padding: 0;
-  }
-
-  .module-summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    min-height: var(--hit-min);
-    padding: var(--space-4) 0;
-    list-style: none;
-    cursor: pointer;
-  }
-
-  .module-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .module-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex: 1;
-    gap: var(--space-3);
-  }
-
-  .module-chevron {
-    width: 7px;
-    height: 7px;
-    border-right: 1.5px solid var(--text-tertiary);
-    border-bottom: 1.5px solid var(--text-tertiary);
-    transform: rotate(45deg) translateY(-2px);
-    transition: transform var(--motion-fast) var(--ease-out);
-  }
-
-  .module-section[open] .module-chevron {
-    transform: rotate(225deg) translate(-2px, -1px);
-  }
-
   .module-body {
     padding-bottom: var(--space-4);
   }
@@ -2219,9 +2091,6 @@
         visibility 0s linear 0s;
     }
 
-    .close-button {
-      display: inline-flex;
-    }
 
     .inspector .panel-body {
       padding-bottom: var(--safe-bottom);

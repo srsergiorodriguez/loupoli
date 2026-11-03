@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
+  import { shortcutBus } from '../../input/ShortcutBus';
   import Icon from '../Icons/Icon.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
 
@@ -44,9 +45,10 @@
   const transformMode = $derived(session.snapshot.uvTransformMode);
   const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
   const paintMode = $derived(session.snapshot.uvPaintMode);
-  const lassoMode = $derived(session.snapshot.uvLassoMode);
-  const subtractMode = $derived(session.snapshot.uvSubtractMode);
+  const lassoMode = $derived(session.snapshot.lassoMode);
+  const activeEditor = $derived(session.snapshot.activeEditor);
   const clampMode = $derived(session.snapshot.uvClampMode);
+  const fineMode = $derived(session.snapshot.uvFineMode);
   const uvZoom = $derived(session.snapshot.uvZoom);
   const layout = $derived(session.snapshot.uvLayout);
   const effectiveLayout = $derived(
@@ -78,11 +80,11 @@
       );
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('keydown', windowKeyDown, true);
+    const unregisterShortcuts = shortcutBus.register(windowKeyDown);
     return () => {
       observer.disconnect();
       canvas.removeEventListener('wheel', onWheel);
-      window.removeEventListener('keydown', windowKeyDown, true);
+      unregisterShortcuts();
       detachKeyboardTransform(false);
     };
   });
@@ -203,6 +205,9 @@
   }
 
   function windowKeyDown(event: KeyboardEvent): void {
+    if (session.snapshot.activeEditor !== 'uv') {
+      return;
+    }
     const target = event.target;
     if (
       target instanceof HTMLElement &&
@@ -270,9 +275,9 @@
       (key === 'g' || key === 'r' || key === 's')
     ) {
       const kind = key === 'g' ? 'move' : key === 'r' ? 'rotate' : 'scale';
+      event.preventDefault();
+      event.stopPropagation();
       if (session.snapshot.uvSelectedCorners.length > 0) {
-        event.preventDefault();
-        event.stopPropagation();
         startKeyboardTransform(kind);
       }
       return;
@@ -282,14 +287,6 @@
       event.stopPropagation();
       session.setUvAxisLock(key);
     }
-  }
-
-  function toggleLasso(): void {
-    const next = !lassoMode;
-    if (next && paintMode) {
-      session.setUvPaintMode(false);
-    }
-    session.setUvLassoMode(next);
   }
 
   function beginPan(event: PointerEvent): void {
@@ -318,6 +315,7 @@
       return;
     }
     event.preventDefault();
+    session.setActiveEditor('uv');
     canvas.focus({ preventScroll: true });
     updateBrushCursor(event);
     const point = localPoint(event);
@@ -345,10 +343,7 @@
       lassoing = true;
       uvLassoPath = [[point.x, point.y]];
       lassoAdditive =
-        event.shiftKey ||
-        event.metaKey ||
-        event.ctrlKey ||
-        session.snapshot.additiveSelection;
+        event.shiftKey || event.metaKey || event.ctrlKey;
       activePointerId = event.pointerId;
       window.addEventListener('pointermove', windowPointerMove);
       window.addEventListener('pointerup', windowPointerUp);
@@ -356,10 +351,7 @@
       return;
     }
     const additive =
-      event.shiftKey ||
-      event.metaKey ||
-      event.ctrlKey ||
-      session.snapshot.additiveSelection;
+      event.shiftKey || event.metaKey || event.ctrlKey;
     const hit = session.pickUvElement(
       point.x,
       point.y,
@@ -410,7 +402,7 @@
     if (!dragging) {
       return;
     }
-    session.updateUvDrag(point.x, point.y, width, height);
+    session.updateUvDrag(point.x, point.y, width, height, event.shiftKey);
   }
 
   function windowPointerUp(event: PointerEvent): void {
@@ -516,10 +508,14 @@
     }
     if (effectiveLayout === 'side') {
       const viewport = host.closest('.viewport')?.getBoundingClientRect();
-      if (!viewport || viewport.width <= 0) {
+      const pane = host.closest('.uv-pane');
+      if (!viewport || viewport.width <= 0 || !pane) {
         return;
       }
-      session.setUvSplit((viewport.right - event.clientX) / viewport.width);
+      const rightGutter = Number.parseFloat(getComputedStyle(pane).right) || 0;
+      session.setUvSplit(
+        (viewport.right - rightGutter - event.clientX) / viewport.width
+      );
       return;
     }
     const fraction = 1 - event.clientY / Math.max(window.innerHeight, 1);
@@ -592,34 +588,10 @@
 
   <header class="uv-head">
     <div class="uv-title-group">
-      <span class="uv-kicker">UV</span>
+      <span class="uv-kicker" class:active={activeEditor === 'uv'}>UV<span class="active-dot"></span></span>
       <span class="uv-count">{selectedCount} corner{selectedCount === 1 ? '' : 's'} · {Math.round(uvZoom * 100)}%</span>
     </div>
     <div class="uv-actions">
-      <div class="uv-group" role="group" aria-label="UV selection">
-        <button
-          type="button"
-          class="uv-action"
-          aria-label="Select all UV corners"
-          onclick={() => session.selectAllUv()}
-        >All</button>
-        <button
-          type="button"
-          class="uv-action"
-          class:active={lassoMode}
-          aria-pressed={lassoMode}
-          aria-label="UV lasso selection"
-          onclick={toggleLasso}
-        ><Icon name="lasso" size={15} /></button>
-        <button
-          type="button"
-          class="uv-action uv-subtract"
-          class:active={subtractMode}
-          aria-pressed={subtractMode}
-          aria-label="Subtract from UV selection"
-          onclick={() => session.setUvSubtractMode(!subtractMode)}
-        >−</button>
-      </div>
       <div class="uv-group" role="group" aria-label="UV operations">
         <button
           type="button"
@@ -639,6 +611,15 @@
           disabled={transformMode === 'rotate'}
           onclick={() => session.setUvAxisLock('v')}
         >V</button>
+        <button
+          type="button"
+          class="uv-chip"
+          class:active={fineMode}
+          aria-pressed={fineMode}
+          aria-label="Fine UV transforms"
+          title="Fine UV transforms (Shift while dragging)"
+          onclick={() => session.setUvFineMode(!fineMode)}
+        >Fine</button>
         <button
           type="button"
           class="uv-action"
@@ -705,12 +686,6 @@
         disabled={session.compactLayout}
         onclick={() => session.toggleUvLayout()}
       ><Icon name={effectiveLayout === 'side' ? 'rows' : 'columns'} size={15} /></button>
-      <button
-        type="button"
-        class="uv-close"
-        aria-label="Close UV editor"
-        onclick={() => session.toggleUvView()}
-      ><span aria-hidden="true">×</span></button>
     </div>
   </header>
 
@@ -975,7 +950,7 @@
   .uv-pane.side .uv-resize {
     top: 0;
     bottom: 0;
-    left: -44px;
+    left: -22px;
     width: 44px;
     height: auto;
     cursor: ew-resize;
@@ -984,10 +959,10 @@
   .uv-pane.side .uv-resize::after {
     top: 50%;
     bottom: auto;
-    left: 0;
+    left: 50%;
     width: 4px;
     height: 52px;
-    transform: translateY(-50%);
+    transform: translate(-50%, -50%);
   }
 
   .uv-head {
@@ -1008,12 +983,27 @@
   }
 
   .uv-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: var(--text-primary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
     font-weight: var(--weight-medium);
     letter-spacing: var(--tracking-label);
     text-transform: uppercase;
+  }
+
+  .active-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    opacity: 0;
+  }
+
+  .uv-kicker.active .active-dot {
+    opacity: 1;
   }
 
   .uv-count {
@@ -1040,23 +1030,11 @@
   .uv-chip,
   .uv-action,
   .uv-layout,
-  .uv-close {
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    line-height: 1;
-    cursor: pointer;
-  }
+
 
   .uv-chip:hover,
   .uv-action:hover,
-  .uv-layout:hover,
-  .uv-close:hover {
+  .uv-layout:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
   }
@@ -1080,10 +1058,7 @@
   }
 
   .uv-layout,
-  .uv-close {
-    padding: 0;
-    font-size: var(--text-md);
-  }
+
 
   .uv-canvas-wrap {
     position: relative;
@@ -1129,11 +1104,6 @@
     stroke-width: 1.5;
     stroke-dasharray: 5 4;
     vector-effect: non-scaling-stroke;
-  }
-
-  .uv-subtract {
-    font-size: var(--text-md);
-    line-height: 1;
   }
 
   .uv-brush-cursor {

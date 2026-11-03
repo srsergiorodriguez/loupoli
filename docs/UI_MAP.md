@@ -1,0 +1,61 @@
+# loupoli UI map
+
+This is the authoritative map of the application shell. New controls must be assigned to one of these regions before implementation.
+
+## Shell regions
+
+| Region | Responsibility | Owns |
+| --- | --- | --- |
+| **Application Bar** | Identity, project file state, global document actions | Brand, project name, save state, open, save, undo, redo, sidebar toggle |
+| **Workspace Tabs** | Switch the working context | Model, UV, Paint. Reserved IDs: Light, Animation, Export |
+| **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale, Frame, Home |
+| **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), All, Add, Subtract |
+| **Viewport** | 3D editing surface | Viewport context strip, Shading Bar, View Gizmo |
+| **UV Editor** | UV editing surface | UV Toolbar, UV Canvas, UV Footer |
+| **Inspector** | Properties of the active object/selection/context | Inspector Sections |
+| **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
+| **Status Bar** | Persistent status | Selection counts, frame budget, render state |
+
+## Subregions
+
+- **Viewport context strip** — object/group name, element mode, active-editor marker.
+- **Shading Bar** — Wireframe, Solid, Texture, Texture + Wire, Lit.
+- **View Gizmo** — signed axis endpoints and center frame.
+- **UV Toolbar** — UV-only operations: U/V locks, Sync 3D, Pin, Unpin, Unwrap, Stack, Fit, Clamp.
+- **UV Canvas** — charts, texture, picking, lasso, paint.
+- **UV Footer** — exact UV values and transform hints.
+- **Inspector Section** — one collapsible disclosure with a title, optional meta, and body.
+- **Tooltip** — command label plus shortcut, from the command registry.
+
+## Ownership rules
+
+1. A cross-editor action lives in shared chrome.
+2. A UV-only action lives in the UV Editor.
+3. The Inspector never owns global tool state.
+4. The Selection Bar owns every selection mode and combination modifier.
+5. The Tool Rail owns pointer tools, not selection combination.
+6. The Action Dock owns one-shot topology commands.
+7. The Application Bar owns document-level actions only.
+
+## Active editor
+
+- The active editor is the pane last clicked by the user.
+- `activeEditor` is `3d` or `uv`.
+- Clicking a canvas or its View Gizmo activates that editor.
+- Clicking shared chrome or the Inspector does not change the active editor.
+- Switching workspace sets the active editor: Model → 3D; UV/Paint → UV.
+- Island mode, All, Lasso, and context transforms target the active editor.
+- The active editor is shown with a lime dot and title accent, never a full border.
+
+## Future workspaces
+
+Workspace identifiers are reserved now so adding them does not require renaming layout regions:
+
+- `model`
+- `uv`
+- `paint`
+- `light`
+- `animation`
+- `export`
+
+Only implemented workspaces are rendered in Workspace Tabs. A future workspace gets its own editor pane inside the same shell and must reuse the active-editor, Inspector Section, command, and shortcut contracts.

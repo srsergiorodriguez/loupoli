@@ -19,7 +19,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Local/Global transforms.** Node transforms stay parent-local in the document; the Inspector can display world-space position/rotation and orient translate/rotate gizmos to world axes. Scale remains local to avoid unsupported shear.
 - **Context-sensitive Desktop G/R/S.** If vertices, edges, or faces are selected, Grab/Rotate/Scale transform those elements around their median pivot; with no element selection they transform the active object or group. Mouse preview, X/Y/Z constraints, typed exact values, a transform HUD, Enter/click commit, and Escape/right-click cancel are shared. Element transforms are localized vertex moves with their own undo/autosave patches.
 - **Selection gizmo on iPad and desktop.** With elements selected, the Move/Rotate/Scale tools place a gizmo at the selection median. Move has X/Y/Z axes plus a free view-plane center handle; Scale has axes plus a uniform center handle; Rotate uses axis rings. Drag with the Pencil or mouse; the object/group gizmo returns when the element selection is empty. Selection stays active after commit.
-- **Collapsible sidebar and centered viewport.** On desktop the 3D canvas ends at the inspector's left edge, so the camera, picking, UV split, and HUD center inside the visible modeling area rather than behind the sidebar. The inspector header and top-bar control collapse it; canvas width and camera aspect expand immediately. Transform, Modifiers, Texture, and PS1 look all use the same native `<details>/<summary>` disclosure. Sidebar and Transform/Modifiers open/closed state persists in `localStorage`.
+- **Collapsible sidebar and centered viewport.** On desktop the 3D canvas ends at the inspector's left edge, so the camera, picking, UV split, and HUD center inside the visible modeling area rather than behind the sidebar. The Application Bar control is the only sidebar toggle; there is no redundant sidebar X. Every Inspector section uses the shared `InspectorSection` native `<details>/<summary>`; Scene is open on first run and the rest are closed. Sidebar and section state persist in `localStorage`.
 
 ![Collapsed Transform section with a viewport-centered sidebar](docs/media/sidebar-collapse.png)
 
@@ -68,7 +68,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
 - **Object/group transform gizmos.** With no element selection, Move/Rotate/Scale show object-space handles. Dragging an axis commits one `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation.
 - **Consistent edge overlays.** Selected edges use constant-width instanced tubes rather than length-scaled radius, so cube and QuadSphere selections have comparable weight. Wireframe and Texture + Wire add instanced tubes for a heavier, readable line without replacing the DCEL edges.
-- **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag orbits on empty space, so additive selection and camera movement work together. Selected vertices, edges, and faces render distinct overlays. Selection changes are undoable but remain session-only and are never written to `.lpoly` or autosave.
+- **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag orbits on empty space, so additive selection and camera movement work together. Selected vertices, edges, and faces render distinct overlays. Replace/Add/Subtract applies to clicks and lasso in both 3D and UV. Selection changes are undoable but remain session-only and are never written to `.lpoly` or autosave.
 - **Lasso selection.** The Lasso tool draws a screen-space polygon and selects vertices inside it, edges inside or crossing it, and faces with a corner or centroid inside. It works in the active V/E/F mode, supports the sticky Add toggle, and is available to mouse, Pencil, and one-finger touch. Lasso selection is view-through in Wireframe and occlusion-aware in every shaded mode; back-facing/covered vertices, edges, and faces are rejected.
 
 ![Lasso face selection](docs/media/lasso-select.png)
@@ -192,7 +192,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **101 passing** tests across twenty-four files:
+- `npm test`: **103 passing** tests across twenty-five files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.

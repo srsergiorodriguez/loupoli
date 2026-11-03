@@ -77,6 +77,11 @@ export class ElementSelection {
     }
   }
 
+  /** Remove one element without toggling another selection. */
+  remove(index: number): void {
+    this.selected.delete(index);
+  }
+
   /** Remove indices that no longer exist after a topology or node change. */
   prune(limit: number): boolean {
     let changed = false;

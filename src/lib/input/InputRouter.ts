@@ -1,3 +1,5 @@
+import { shortcutBus } from './ShortcutBus';
+
 /** Normalized pointer data handed to the editor, independent of DOM quirks. */
 export interface PointerSample {
   readonly pointerId: number;
@@ -23,6 +25,8 @@ export interface InputRouterHost {
    * topology element; mouse clicks on empty viewport space then fall through to
    * the orbit fallback.
    */
+  activateEditor(editor: '3d' | 'uv'): void;
+  isUvActive(): boolean;
   beginToolPointer(sample: PointerSample): boolean;
   moveToolPointer(sample: PointerSample): void;
   endToolPointer(sample: PointerSample): void;
@@ -98,6 +102,7 @@ const TOUCH_MOUSE_GUARD_MS = 350;
  */
 export class InputRouter {
   private readonly element: HTMLElement;
+  private readonly unregisterShortcuts: () => void;
   private readonly host: InputRouterHost;
 
   private readonly touches = new Map<number, TouchRecord>();
@@ -135,6 +140,7 @@ export class InputRouter {
     if (!sample) {
       return;
     }
+    this.host.activateEditor('3d');
 
     if (sample.pointerType === 'mouse') {
       this.lastMouseX = sample.clientX;
@@ -402,6 +408,7 @@ export class InputRouter {
   };
 
   private readonly onWheel = (event: WheelEvent): void => {
+    this.host.activateEditor('3d');
     event.preventDefault();
     if (this.host.isModalTransformActive()) {
       return;
@@ -427,6 +434,15 @@ export class InputRouter {
 
     const key = event.key.toLowerCase();
     const command = event.metaKey || event.ctrlKey;
+
+    if (
+      this.host.isUvActive() &&
+      !command &&
+      !event.altKey &&
+      (key === 'g' || key === 'r' || key === 's')
+    ) {
+      return;
+    }
 
     if (this.host.isModalTransformActive()) {
       event.preventDefault();
@@ -553,7 +569,7 @@ export class InputRouter {
     element.addEventListener('pointercancel', this.onPointerCancel);
     element.addEventListener('wheel', this.onWheel, { passive: false });
     element.addEventListener('contextmenu', this.onContextMenu);
-    window.addEventListener('keydown', this.onKeyDown);
+    this.unregisterShortcuts = shortcutBus.register(this.onKeyDown);
     window.addEventListener('blur', this.onWindowBlur);
   }
 
@@ -565,7 +581,7 @@ export class InputRouter {
     this.element.removeEventListener('pointercancel', this.onPointerCancel);
     this.element.removeEventListener('wheel', this.onWheel);
     this.element.removeEventListener('contextmenu', this.onContextMenu);
-    window.removeEventListener('keydown', this.onKeyDown);
+    this.unregisterShortcuts();
     window.removeEventListener('blur', this.onWindowBlur);
     this.touches.clear();
     this.ignoredTouches.clear();

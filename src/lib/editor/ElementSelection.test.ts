@@ -50,4 +50,13 @@ describe('ElementSelection', () => {
     expect(selection.prune(4)).toBe(false);
     expect(() => selection.pick(-1, true)).toThrow(/invalid/);
   });
+
+  it('removes one element without toggling another', () => {
+    const selection = new ElementSelection('face');
+    selection.setValues([2, 5, 8]);
+    selection.remove(5);
+    expect(selection.values()).toEqual([2, 8]);
+    selection.remove(99);
+    expect(selection.values()).toEqual([2, 8]);
+  });
 });

@@ -129,6 +129,8 @@ import {
   DEFAULT_PS1_SNAP,
   DEFAULT_SHADING,
   type EditorSnapshot,
+  type EditorPane,
+  type SelectionCombineMode,
   type MeshCounts,
   type ShadingMode,
   type TransformMode,
@@ -335,7 +337,8 @@ export class EditorRuntime {
   private readonly selectedNodeIds = new Set<string>();
   private additiveNodeSelection = false;
   private readonly selection = new ElementSelection('vertex');
-  private additiveSelection = false;
+  private selectionCombineMode: SelectionCombineMode = 'replace';
+  private activeEditor: EditorPane = '3d';
   private uvOpen = false;
   private uvSplit = 0.38;
   private uvLayout: 'bottom' | 'side' = 'bottom';
@@ -343,10 +346,9 @@ export class EditorRuntime {
   private uvPanX = 0;
   private uvPanY = 0;
   private uvAxisLock: UvAxisLock = null;
+  private uvFineMode = false;
   private uvTransformMode: UvTransformMode = 'move';
   private uvSelectionMode: UvSelectionMode = 'vertex';
-  private uvLassoMode = false;
-  private uvSubtractMode = false;
   private uvClampMode = true;
   private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
@@ -402,6 +404,8 @@ export class EditorRuntime {
     this.renderer.setTextureMap(this.textureStack.texture);
 
     this.inputHost = {
+      activateEditor: (editor) => this.setActiveEditor(editor),
+      isUvActive: () => this.activeEditor === 'uv',
       orbit: (dx, dy) => this.renderer.orbit(dx, dy),
       pan: (dx, dy) => this.renderer.pan(dx, dy),
       zoom: (factor) => this.renderer.zoom(factor),
@@ -487,7 +491,8 @@ export class EditorRuntime {
       ps1Snap: this.ps1Snap,
       ps1Affine: this.ps1Affine,
       selectedElements,
-      additiveSelection: this.additiveSelection,
+      selectionCombineMode: this.selectionCombineMode,
+      activeEditor: this.activeEditor,
       selectionMode: this.selection.mode,
       selectedPosition,
       uvOpen: this.uvOpen,
@@ -497,10 +502,9 @@ export class EditorRuntime {
       uvPanX: this.uvPanX,
       uvPanY: this.uvPanY,
       uvAxisLock: this.uvAxisLock,
+      uvFineMode: this.uvFineMode,
       uvTransformMode: this.uvTransformMode,
       uvSelectionMode: this.uvSelectionMode,
-      uvLassoMode: this.uvLassoMode,
-      uvSubtractMode: this.uvSubtractMode,
       uvClampMode: this.uvClampMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
@@ -757,7 +761,7 @@ export class EditorRuntime {
         this.selectEvaluatedElementAt(
           x,
           y,
-          this.additiveSelection,
+          this.selectionCombineMode,
           node
         );
       }
@@ -770,7 +774,13 @@ export class EditorRuntime {
       this.selection.mode,
       path.map(([x, y]) => ({ x, y }))
     );
-    if (this.additiveSelection) {
+    if (this.selectionCombineMode === 'subtract') {
+      const remaining = new Set(this.selection.values());
+      for (const index of selected) {
+        remaining.delete(index);
+      }
+      this.selection.setValues(Array.from(remaining));
+    } else if (this.selectionCombineMode === 'add') {
       const union = new Set(this.selection.values());
       for (const index of selected) {
         union.add(index);
@@ -872,6 +882,7 @@ export class EditorRuntime {
   /** Switch Model, UV, and Paint without duplicating open/close logic. */
   setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
     if (workspace === 'model') {
+      this.activeEditor = '3d';
       if (this.uvOpen) {
         this.closeUvView();
       } else if (this.uvPaintMode) {
@@ -902,6 +913,7 @@ export class EditorRuntime {
       this.renderer.setActionPreviewLine(null);
     }
     this.uvOpen = true;
+    this.activeEditor = 'uv';
     this.uvZoom = 1;
     this.uvPanX = 0;
     this.uvPanY = 0;
@@ -918,6 +930,7 @@ export class EditorRuntime {
   private closeUvView(): void {
     this.cancelUvDrag();
     this.uvOpen = false;
+    this.activeEditor = '3d';
     this.uvPaintMode = false;
     this.uvActiveChart = null;
     this.uvRevision += 1;
@@ -1010,6 +1023,15 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Toggle fine UV pointer transforms for touch and precise dragging. */
+  setUvFineMode(enabled: boolean): void {
+    if (this.uvFineMode === enabled) {
+      return;
+    }
+    this.uvFineMode = enabled;
+    this.publish();
+  }
+
   /** Toggle the U/V constraint used by UV drags. */
   setUvAxisLock(axis: 'u' | 'v'): void {
     this.uvAxisLock = this.uvAxisLock === axis ? null : axis;
@@ -1032,30 +1054,12 @@ export class EditorRuntime {
     this.publish();
   }
 
-  /** Toggle the UV lasso selection tool. */
-  setUvLassoMode(enabled: boolean): void {
-    if (this.uvLassoMode === enabled) {
-      return;
-    }
-    this.uvLassoMode = enabled;
-    this.publish();
-  }
-
   /** Keep direct UV transforms inside the 0–1 texture square. */
   setUvClampMode(enabled: boolean): void {
     if (this.uvClampMode === enabled) {
       return;
     }
     this.uvClampMode = enabled;
-    this.publish();
-  }
-
-  /** Toggle subtract semantics for UV clicks and lasso selection. */
-  setUvSubtractMode(enabled: boolean): void {
-    if (this.uvSubtractMode === enabled) {
-      return;
-    }
-    this.uvSubtractMode = enabled;
     this.publish();
   }
 
@@ -1080,11 +1084,14 @@ export class EditorRuntime {
       points,
       actualProjection
     );
-    if (this.uvSubtractMode) {
+    const combine: SelectionCombineMode = additive
+      ? 'add'
+      : this.selectionCombineMode;
+    if (combine === 'subtract') {
       for (const corner of selected) {
         this.uvSelection.delete(corner);
       }
-    } else if (additive) {
+    } else if (combine === 'add') {
       for (const corner of selected) {
         this.uvSelection.add(corner);
       }
@@ -1158,11 +1165,16 @@ export class EditorRuntime {
     const allSelected = hit.corners.every((corner) =>
       this.uvSelection.has(corner)
     );
-    if (this.uvSubtractMode) {
+    const combine: SelectionCombineMode = additive
+      ? 'add'
+      : this.selectionCombineMode;
+    const exactMode =
+      this.uvSelectionMode === 'vertex' || this.uvSelectionMode === 'edge';
+    if (combine === 'subtract') {
       for (const corner of hit.corners) {
         this.uvSelection.delete(corner);
       }
-    } else if (additive) {
+    } else if (combine === 'add') {
       if (allSelected) {
         for (const corner of hit.corners) {
           this.uvSelection.delete(corner);
@@ -1172,7 +1184,7 @@ export class EditorRuntime {
           this.uvSelection.add(corner);
         }
       }
-    } else if (!allSelected) {
+    } else if (!allSelected || exactMode) {
       this.uvSelection.clear();
       for (const corner of hit.corners) {
         this.uvSelection.add(corner);
@@ -1182,6 +1194,30 @@ export class EditorRuntime {
     this.linkUvSelectionTo3d();
     this.publish();
     return true;
+  }
+
+  /** Move the one selected vertex to an exact object-space position. */
+  setSelectedVertexPosition(position: Vec3): void {
+    const node = this.getActiveNode();
+    if (!node || this.selection.mode !== 'vertex') {
+      return;
+    }
+    const values = this.selection.values();
+    if (values.length !== 1) {
+      return;
+    }
+    const vertex = values[0];
+    const before = node.mesh.getVertexPosition(vertex);
+    if (
+      Math.abs(before[0] - position[0]) < 1e-9 &&
+      Math.abs(before[1] - position[1]) < 1e-9 &&
+      Math.abs(before[2] - position[2]) < 1e-9
+    ) {
+      return;
+    }
+    this.history.execute(
+      new MoveVertexCommand(node.mesh, vertex, before, position, node.id)
+    );
   }
 
   /** Select every element in the current 3D mode on the active node. */
@@ -1222,11 +1258,7 @@ export class EditorRuntime {
 
   /** Cmd/Ctrl+A selects in the active workspace. */
   selectAll(): void {
-    if (this.uvOpen) {
-      this.selectAllUv();
-    } else {
-      this.selectAll3d();
-    }
+    this.selectAllActive();
   }
 
   /**
@@ -1685,7 +1717,13 @@ export class EditorRuntime {
   }
 
   /** Apply an absolute UV-space pointer position to the active UV drag. */
-  updateUvDrag(x: number, y: number, width: number, height: number): void {
+  updateUvDrag(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    shiftFine = false
+  ): void {
     const drag = this.uvDrag;
     if (!drag) {
       return;
@@ -1696,9 +1734,12 @@ export class EditorRuntime {
       (height - projection.offsetY - y) / projection.scale
     ];
     const next: Vec2[] = drag.before.map((uv) => [...uv] as Vec2);
+    const precision = this.uvFineMode || shiftFine ? 0.1 : 1;
+    const startRadius = drag.startDistance * projection.scale;
+    const pivotSensitivity = Math.min(1, Math.max(0.15, startRadius / 40));
     if (drag.mode === 'move') {
-      let du = current[0] - drag.startUv[0];
-      let dv = current[1] - drag.startUv[1];
+      let du = (current[0] - drag.startUv[0]) * precision;
+      let dv = (current[1] - drag.startUv[1]) * precision;
       if (this.uvAxisLock === 'u') {
         dv = 0;
       } else if (this.uvAxisLock === 'v') {
@@ -1718,6 +1759,7 @@ export class EditorRuntime {
         current[0] - drag.pivot[0]
       );
       let radians = shortestAngleDelta(drag.startAngle, angle);
+      radians *= precision * pivotSensitivity;
       if (this.snapEnabled) {
         radians = snapScalar(radians, Math.PI / 12);
       }
@@ -1729,7 +1771,7 @@ export class EditorRuntime {
         current[0] - drag.pivot[0],
         current[1] - drag.pivot[1]
       );
-      let factor = distance / drag.startDistance;
+      let factor = 1 + (distance / drag.startDistance - 1) * precision * pivotSensitivity;
       if (this.snapEnabled) {
         factor = Math.max(
           1e-3,
@@ -1934,13 +1976,34 @@ export class EditorRuntime {
     this.publish();
   }
 
-  /** Toggle sticky additive selection for pen and touch input. */
-  setAdditiveSelection(enabled: boolean): void {
-    if (this.additiveSelection === enabled) {
+  /** Set the sticky selection combination used by clicks and lasso. */
+  setSelectionCombineMode(mode: SelectionCombineMode): void {
+    if (this.selectionCombineMode === mode) {
       return;
     }
-    this.additiveSelection = enabled;
+    this.selectionCombineMode = mode;
     this.publish();
+  }
+
+  /** Mark the pane that owns contextual selection and tool commands. */
+  setActiveEditor(editor: EditorPane): void {
+    if (editor === 'uv' && !this.uvOpen) {
+      return;
+    }
+    if (this.activeEditor === editor) {
+      return;
+    }
+    this.activeEditor = editor;
+    this.publish();
+  }
+
+  /** Select all elements in the current mode in the active editor. */
+  selectAllActive(): void {
+    if (this.activeEditor === 'uv' && this.uvOpen) {
+      this.selectAllUv();
+    } else {
+      this.selectAll3d();
+    }
   }
 
   /** Orbit the viewport camera by a CSS-pixel delta from an overlay gizmo. */
@@ -3194,21 +3257,26 @@ export class EditorRuntime {
   private tapSelect(
     clientX: number,
     clientY: number,
-    additive = this.additiveSelection
+    additive = false
   ): void {
     const before = this.captureSelection();
     const node = this.getActiveNode();
     if (!node) {
       return;
     }
-    this.selectEvaluatedElementAt(clientX, clientY, additive, node);
+    this.selectEvaluatedElementAt(
+      clientX,
+      clientY,
+      additive ? 'add' : this.selectionCombineMode,
+      node
+    );
     this.recordSelection(before, 'Select element');
   }
 
   private selectEvaluatedElementAt(
     clientX: number,
     clientY: number,
-    additive: boolean,
+    combine: SelectionCombineMode,
     node: MeshNode
   ): void {
     const evaluated = node.getEvaluatedMesh();
@@ -3237,11 +3305,15 @@ export class EditorRuntime {
     }
 
     if (evaluatedIndex === null) {
-      if (!additive) {
+      if (combine === 'replace') {
         this.selection.clear();
       }
     } else if (baseIndex >= 0) {
-      this.selection.pick(baseIndex, additive);
+      if (combine === 'subtract') {
+        this.selection.remove(baseIndex);
+      } else {
+        this.selection.pick(baseIndex, combine === 'add');
+      }
     }
     this.syncScene();
     this.publish();
@@ -3326,14 +3398,16 @@ export class EditorRuntime {
       return false;
     }
 
-    const additive =
-      this.additiveSelection ||
-      sample.shiftKey ||
-      sample.metaKey ||
-      sample.ctrlKey;
+    const modifierAdd =
+      sample.shiftKey || sample.metaKey || sample.ctrlKey;
+    const combine: SelectionCombineMode = modifierAdd
+      ? 'add'
+      : this.selectionCombineMode;
+    const additive = combine === 'add';
+    const subtract = combine === 'subtract';
 
     if (node.getEvaluatedMesh().modifiersActive) {
-      if (this.selection.mode === 'vertex' && !additive) {
+      if (this.selection.mode === 'vertex' && combine === 'replace') {
         const evaluatedVertex = this.renderer.pickVertex(
           sample.clientX,
           sample.clientY
@@ -3365,7 +3439,7 @@ export class EditorRuntime {
       this.selectEvaluatedElementAt(
         sample.clientX,
         sample.clientY,
-        additive,
+        combine,
         node
       );
       return false;
@@ -3374,9 +3448,11 @@ export class EditorRuntime {
     if (this.selection.mode === 'edge') {
       const edge = this.renderer.pickEdge(sample.clientX, sample.clientY);
       if (edge === null) {
-        if (!additive) {
+        if (combine === 'replace') {
           this.selection.clear();
         }
+      } else if (subtract) {
+        this.selection.remove(edge);
       } else {
         this.selection.pick(edge, additive);
       }
@@ -3388,9 +3464,11 @@ export class EditorRuntime {
     if (this.selection.mode === 'face') {
       const face = this.renderer.pickFace(sample.clientX, sample.clientY);
       if (face === null) {
-        if (!additive) {
+        if (combine === 'replace') {
           this.selection.clear();
         }
+      } else if (subtract) {
+        this.selection.remove(face);
       } else {
         this.selection.pick(face, additive);
       }
@@ -3401,7 +3479,7 @@ export class EditorRuntime {
 
     const vertex = this.renderer.pickVertex(sample.clientX, sample.clientY);
     if (vertex === null) {
-      if (!additive) {
+      if (combine === 'replace') {
         this.selection.clear();
       }
       this.syncScene();
@@ -3409,8 +3487,12 @@ export class EditorRuntime {
       return false;
     }
 
-    if (additive) {
-      this.selection.pick(vertex, true);
+    if (combine !== 'replace') {
+      if (subtract) {
+        this.selection.remove(vertex);
+      } else {
+        this.selection.pick(vertex, true);
+      }
       this.syncScene();
       this.publish();
       return false;
@@ -3788,7 +3870,7 @@ export class EditorRuntime {
     if (this.modalTransform) {
       return true;
     }
-    if (this.uvOpen || this.armedAction || this.actionDrag) {
+    if (this.activeEditor !== '3d' || this.armedAction || this.actionDrag) {
       return false;
     }
     const node = this.getActiveNode();

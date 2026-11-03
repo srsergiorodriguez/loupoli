@@ -2,6 +2,7 @@
   import Icon from '../Icons/Icon.svelte';
   import type { SelectionMode } from '../../scene/MeshNode';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
+  import { shortcut } from '../../input/shortcuts';
 
   /** Session projection for the viewport selection-mode switch. */
   interface Props {
@@ -20,7 +21,7 @@
     { id: 'vertex', short: 'V', label: 'Vertex' },
     { id: 'edge', short: 'E', label: 'Edge' },
     { id: 'face', short: 'F', label: 'Face' },
-    ...(session.snapshot.uvOpen
+    ...(session.snapshot.activeEditor === 'uv'
       ? [{ id: 'island' as const, short: 'I', label: 'Island' }]
       : [])
   ]);
@@ -37,10 +38,16 @@
   }
 
   function isActive(id: ContextMode): boolean {
-    if (!session.snapshot.uvOpen) {
+    if (session.snapshot.activeEditor !== 'uv') {
       return session.snapshot.selectionMode === id;
     }
     return session.snapshot.uvSelectionMode === id;
+  }
+
+  function toggleCombine(mode: 'add' | 'subtract'): void {
+    session.setSelectionCombineMode(
+      session.snapshot.selectionCombineMode === mode ? 'replace' : mode
+    );
   }
 </script>
 
@@ -67,27 +74,35 @@
   <button
     type="button"
     class="mode-button"
-    aria-label="Select all elements in the current mode"
-    title="Select all elements"
-    onclick={() =>
-      session.snapshot.uvOpen
-        ? session.selectAllUv()
-        : session.selectAll3d()}
+    aria-label="Select all elements in the current mode in the active editor"
+    title={`Select all elements in the active editor — ${shortcut('selectAll').display}`}
+    onclick={() => session.selectAllActive()}
   >
     <span class="mode-label">All</span>
   </button>
   <button
     type="button"
-    class="mode-button add-button"
-    class:active={session.snapshot.additiveSelection}
-    aria-pressed={session.snapshot.additiveSelection}
-    aria-label="Additive selection mode"
-    title="Additive selection — Shift/Cmd/Ctrl-click, or use this toggle for pen/touch"
-    onclick={() =>
-      session.setAdditiveSelection(!session.snapshot.additiveSelection)}
+    class="mode-button"
+    class:active={session.snapshot.selectionCombineMode === 'add'}
+    aria-pressed={session.snapshot.selectionCombineMode === 'add'}
+    aria-label="Add to selection"
+    title="Add to selection"
+    onclick={() => toggleCombine('add')}
   >
     <Icon name="plus" size={13} />
     <span class="mode-label">Add</span>
+  </button>
+  <button
+    type="button"
+    class="mode-button"
+    class:active={session.snapshot.selectionCombineMode === 'subtract'}
+    aria-pressed={session.snapshot.selectionCombineMode === 'subtract'}
+    aria-label="Subtract from selection"
+    title="Subtract from selection"
+    onclick={() => toggleCombine('subtract')}
+  >
+    <Icon name="minus" size={13} />
+    <span class="mode-label">Subtract</span>
   </button>
 </div>
 
@@ -132,12 +147,6 @@
     align-self: stretch;
     margin: 5px 2px;
     background: var(--border-subtle);
-  }
-
-  .add-button.active {
-    color: var(--accent-primary);
-    background: var(--bg-selected);
-    box-shadow: inset 0 0 0 1px var(--accent-primary);
   }
 
   .mode-key {
