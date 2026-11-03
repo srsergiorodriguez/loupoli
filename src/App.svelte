@@ -116,8 +116,8 @@
   >
     <p id="viewport-help" class="visually-hidden">
       Z-up 3D viewport. Choose vertex, edge, or face selection. With a pen or the
-      primary mouse button, select elements; use Add mode or Cmd-click to select
-      multiple; Shift-drag pans. With elements selected, Move, Rotate, and Scale place a
+      primary mouse button, select elements; use Add mode or Shift/Cmd-click to
+      select multiple; Shift-drag pans. With elements selected, Move, Rotate, and Scale place a
       gizmo at their median; drag its axes with the pen or mouse. The ActionDock
       provides E/I/L/Shift+L actions with drag or exact amounts. Desktop G/R/S
       transforms selections or the active object. Use one finger to orbit, two

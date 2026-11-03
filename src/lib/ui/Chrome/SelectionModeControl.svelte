@@ -56,7 +56,7 @@
     class:active={session.snapshot.additiveSelection}
     aria-pressed={session.snapshot.additiveSelection}
     aria-label="Additive selection mode"
-    title="Additive selection — add or remove elements without clearing"
+    title="Additive selection — Shift/Cmd/Ctrl-click, or use this toggle for pen/touch"
     onclick={() =>
       session.setAdditiveSelection(!session.snapshot.additiveSelection)}
   >

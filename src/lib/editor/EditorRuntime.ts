@@ -396,7 +396,7 @@ export class EditorRuntime {
       frameSelection: () => this.frameSelection(),
       deleteSelection: () => this.deleteSelection(),
       toggleAxisLock: (axis) => this.toggleAxisLock(axis),
-      tapSelect: (x, y) => this.tapSelect(x, y),
+      tapSelect: (x, y, additive) => this.tapSelect(x, y, additive),
       setPointerReading: (sample) => this.setPointerReading(sample),
       isModalTransformActive: () => this.modalTransform !== null,
       beginModalTransform: (kind, clientX, clientY) =>
@@ -2821,17 +2821,16 @@ export class EditorRuntime {
     return this.document.getGroup(this.activeGroupId) ?? null;
   }
 
-  private tapSelect(clientX: number, clientY: number): void {
+  private tapSelect(
+    clientX: number,
+    clientY: number,
+    additive = this.additiveSelection
+  ): void {
     const node = this.getActiveNode();
     if (!node) {
       return;
     }
-    this.selectEvaluatedElementAt(
-      clientX,
-      clientY,
-      this.additiveSelection,
-      node
-    );
+    this.selectEvaluatedElementAt(clientX, clientY, additive, node);
   }
 
   private selectEvaluatedElementAt(
