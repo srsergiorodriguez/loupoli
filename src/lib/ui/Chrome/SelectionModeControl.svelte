@@ -136,8 +136,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    min-width: 44px;
+    width: 38px;
+    min-width: 38px;
     min-height: 44px;
     gap: 4px;
     padding: 0;
@@ -175,6 +175,13 @@
 
   .mode-button.active .mode-key {
     opacity: 1;
+  }
+
+  @media (pointer: coarse) {
+    .mode-button {
+      width: 44px;
+      min-width: 44px;
+    }
   }
 
   .mode-label--all,

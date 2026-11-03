@@ -4,6 +4,7 @@ import {
   PRIMITIVE_LABELS,
   type PrimitiveKind
 } from '../geometry/primitives';
+import { applyDefaultSeams } from '../geometry/defaultSeams';
 import { MeshNode, type NodeSummary } from './MeshNode';
 import { SceneGroup, type GroupSummary } from './SceneGroup';
 
@@ -21,6 +22,7 @@ export class SceneDocument {
   static createDefault(kind: PrimitiveKind = 'quadsphere'): SceneDocument {
     const document = new SceneDocument();
     const mesh = createPrimitiveMesh(kind);
+    applyDefaultSeams(mesh, kind);
     document.insertNode(new MeshNode(mesh, kind, PRIMITIVE_LABELS[kind]));
     return document;
   }
@@ -122,7 +124,9 @@ export class SceneDocument {
     }
     const index = (counts.get(kind) ?? 0) + 1;
     const name = index === 1 ? base : `${base} ${index}`;
-    return new MeshNode(createPrimitiveMesh(kind), kind, name);
+    const mesh = createPrimitiveMesh(kind);
+    applyDefaultSeams(mesh, kind);
+    return new MeshNode(mesh, kind, name);
   }
 
   /** Compute a non-overlapping local-space X placement for a new node. */

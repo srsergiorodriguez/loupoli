@@ -280,7 +280,8 @@
   @media (min-width: 900px) {
     .app-shell[data-sidebar-open='true'] .viewport {
       right: calc(
-        var(--safe-right) + var(--inspector-w) + var(--space-3) * 2
+        var(--safe-right) + var(--inspector-w) +
+          var(--space-3) + var(--space-1)
       );
     }
   }

@@ -189,9 +189,9 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
   });
   const wireOverlay = new LineBasicMaterial({
     name: 'loupoli-wire-front',
-    color: theme.accent.color,
+    color: theme.wireframe.color,
     transparent: true,
-    opacity: 1,
+    opacity: Math.max(theme.wireframe.alpha, 0.7),
     depthTest: false,
     depthWrite: false,
     toneMapped: false
@@ -206,9 +206,9 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
   });
   const wireOverlayTube = new MeshBasicMaterial({
     name: 'loupoli-wire-front-tube',
-    color: theme.accent.color,
+    color: theme.wireframe.color,
     transparent: true,
-    opacity: 1,
+    opacity: Math.max(theme.wireframe.alpha, 0.7),
     depthTest: false,
     depthWrite: false,
     toneMapped: false

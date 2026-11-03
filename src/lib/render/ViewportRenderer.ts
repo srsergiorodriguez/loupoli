@@ -200,15 +200,21 @@ export class ViewportRenderer {
       color: theme.seam.color,
       transparent: true,
       opacity: 1,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
       toneMapped: false
     });
     this.seamEdgeMaterial = new MeshBasicMaterial({
       name: 'loupoli-seam-tube',
       color: theme.seam.color,
-      depthTest: false,
+      depthTest: true,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
       toneMapped: false
     });
     this.selectedFaceMaterial = new MeshBasicMaterial({

@@ -126,7 +126,7 @@
     box-sizing: border-box;
     padding:
       calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2)
-      var(--space-3)
+      var(--space-1)
       calc(var(--safe-bottom) + var(--status-h) + var(--space-3))
       0;
   }

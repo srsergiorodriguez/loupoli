@@ -68,6 +68,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoly` and autosave deltas.
 - **Object/group transform gizmos.** With no element selection, Move/Rotate/Scale show object-space handles. Dragging an axis commits one `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation.
 - **Consistent edge overlays.** Selected edges use constant-width instanced tubes rather than length-scaled radius, so cube and QuadSphere selections have comparable weight. Wireframe and Texture + Wire add instanced tubes for a heavier, readable line without replacing the DCEL edges.
+- **Default UV seams.** New primitives start with unfold seams: Cube and QuadSphere use a minimal cut net, Cylinder separates both caps and adds one side seam, and Grid remains unseamed. Seam overlays are depth-tested so back-facing cuts stay hidden.
 - **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag orbits on empty space, so additive selection and camera movement work together. Selected vertices, edges, and faces render distinct overlays. Replace/Add/Subtract applies to clicks and lasso in both 3D and UV. Selection changes are undoable but remain session-only and are never written to `.lpoly` or autosave.
 - **Lasso selection.** The Lasso tool draws a screen-space polygon and selects vertices inside it, edges inside or crossing it, and faces with a corner or centroid inside. It works in the active V/E/F mode, supports the sticky Add toggle, and is available to mouse, Pencil, and one-finger touch. Lasso selection is view-through in Wireframe and occlusion-aware in every shaded mode; back-facing/covered vertices, edges, and faces are rejected.
 
@@ -192,9 +193,10 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **111 passing** tests across twenty-seven files:
+- `npm test`: **115 passing** tests across twenty-eight files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
+  - Default seam profiles for Cube, QuadSphere, Cylinder, and Grid.
   - Localized vertex moves, add/delete commands, 100-edit history restoration, and the byte/command budget.
   - `.lpoly` multi-node round-trips (including open boundaries, seam flags, materials, and byte-for-byte re-encoding), corruption rejection, and empty-scene support.
   - Journal patch replay from a checkpoint, and a randomized 80-step add/delete/move/undo/redo sequence that validates every remaining mesh.

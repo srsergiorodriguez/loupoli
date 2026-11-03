@@ -3,9 +3,19 @@ import { SceneDocument } from '../../scene/SceneDocument';
 import { applyJournalPatch } from '../../project/journal';
 import { SetEdgeSeamsCommand } from './SetEdgeSeamsCommand';
 
+/** Test fixture with the default primitive seam profile removed. */
+function unseamedDocument(): SceneDocument {
+  const document = SceneDocument.createDefault();
+  const mesh = document.nodes[0].mesh;
+  for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+    mesh.setEdgeSeam(edge, false);
+  }
+  return document;
+}
+
 describe('SetEdgeSeamsCommand', () => {
   it('marks and clears seam bits with undo and journal patches', () => {
-    const document = SceneDocument.createDefault();
+    const document = unseamedDocument();
     const node = document.nodes[0];
     const mesh = node.mesh;
     const edges = [0, 2];
@@ -30,7 +40,7 @@ describe('SetEdgeSeamsCommand', () => {
   });
 
   it('writes only seam endpoints into the overlay buffer', () => {
-    const document = SceneDocument.createDefault();
+    const document = unseamedDocument();
     const mesh = document.nodes[0].mesh;
     const before = new Float32Array(mesh.edgeCount * 6);
     expect(mesh.writeSeamEdgePositions(before)).toBe(0);
@@ -46,11 +56,11 @@ describe('SetEdgeSeamsCommand', () => {
   });
 
   it('replays seam journal patches into a reconstructed document', () => {
-    const source = SceneDocument.createDefault();
+    const source = unseamedDocument();
     const node = source.nodes[0];
     const command = new SetEdgeSeamsCommand(node.mesh, node.id, [5], true);
     const patch = command.journalPatch('forward');
-    const target = SceneDocument.createDefault();
+    const target = unseamedDocument();
     expect(target.nodes[0].mesh.isEdgeSeam(5)).toBe(false);
     if (patch) {
       for (const item of Array.isArray(patch) ? patch : [patch]) {
@@ -61,7 +71,7 @@ describe('SetEdgeSeamsCommand', () => {
   });
 
   it('reports a no-op when every selected edge is already marked', () => {
-    const document = SceneDocument.createDefault();
+    const document = unseamedDocument();
     const mesh = document.nodes[0].mesh;
     mesh.setEdgeSeam(4, true);
     const command = new SetEdgeSeamsCommand(mesh, document.nodes[0].id, [4], true);
