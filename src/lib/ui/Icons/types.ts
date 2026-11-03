@@ -30,4 +30,5 @@ export type IconName =
   | 'seam'
   | 'eye'
   | 'eye-off'
-  | 'lasso';
+  | 'lasso'
+  | 'home';

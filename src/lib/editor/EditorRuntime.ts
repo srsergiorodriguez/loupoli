@@ -401,6 +401,7 @@ export class EditorRuntime {
         this.actionDrag !== null && this.actionDrag.pointerId === null,
       actionKey: (key) => this.handleActionKey(key),
       isLassoMode: () => this.lassoMode,
+      resetView: () => this.resetView(),
       beginLasso: (x, y) => this.beginLasso(x, y),
       moveLasso: (x, y) => this.moveLasso(x, y),
       endLasso: (x, y) => this.endLasso(x, y),
@@ -2393,6 +2394,10 @@ export class EditorRuntime {
 
   snapView(axis: AxisName, sign: 1 | -1): void {
     this.renderer.viewAxis(axis, sign);
+  }
+
+  resetView(): void {
+    this.renderer.resetOrientation();
   }
 
   frameSelection(): void {

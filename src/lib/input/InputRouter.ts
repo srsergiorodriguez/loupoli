@@ -52,6 +52,7 @@ export interface InputRouterHost {
   moveLasso(clientX: number, clientY: number): void;
   endLasso(clientX: number, clientY: number): void;
   cancelLasso(): void;
+  resetView(): void;
 }
 
 /** The current phase of a multi-touch recognizer. */
@@ -506,6 +507,12 @@ export class InputRouter {
 
     if (!command && !event.altKey && key === 'f') {
       this.host.frameSelection();
+    }
+
+    if (!command && key === 'home') {
+      event.preventDefault();
+      this.host.resetView();
+      return;
     }
   };
 

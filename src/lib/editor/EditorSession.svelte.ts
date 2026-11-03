@@ -452,6 +452,10 @@ export class EditorSession {
     this.runtime?.snapView(axis, sign);
   }
 
+  resetView(): void {
+    this.runtime?.resetView();
+  }
+
   toggleInspector(): void {
     this.inspectorOpen = !this.inspectorOpen;
   }

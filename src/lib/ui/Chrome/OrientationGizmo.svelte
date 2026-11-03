@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import type { AxisName } from '../../render/CameraRig';
+  import Icon from '../Icons/Icon.svelte';
 
   /** Session projection for the camera-orientation gizmo. */
   interface Props {
@@ -149,10 +150,11 @@
   }
 </script>
 
+<div class="orientation-shell">
 <button
   type="button"
   class="orientation-gizmo"
-  aria-label="Orientation gizmo. Drag to orbit the view, tap an axis to align, or tap the center to frame the mesh."
+  aria-label="Orientation gizmo. Drag to orbit. Click a signed axis to view that side; click the center to frame the active object."
   onclick={handleClick}
   onpointerdown={handlePointerDown}
   onpointermove={handlePointerMove}
@@ -183,13 +185,70 @@
           y={50 + y + 0.2}
           text-anchor="middle"
           dominant-baseline="central">{style.label}</text>
+        <circle
+          class="axis-negative-endpoint"
+          cx={50 - x}
+          cy={50 - y}
+          r="5.2"
+        />
+        <text
+          class="axis-negative-label"
+          x={50 - x}
+          y={50 - y + 0.2}
+          text-anchor="middle"
+          dominant-baseline="central">−{style.label}</text>
       </g>
     {/each}
     <circle class="center" cx="50" cy="50" r="2.4" />
   </svg>
 </button>
+<button
+  type="button"
+  class="orientation-reset"
+  aria-label="Reset to Blender Front view"
+  title="Standard view — Blender Front (Home)"
+  onclick={() => session.resetView()}
+>
+  <Icon name="home" size={16} />
+</button>
+</div>
 
 <style>
+  .orientation-shell {
+    position: relative;
+    width: var(--gizmo-size);
+    height: var(--gizmo-size);
+  }
+
+  .orientation-reset {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--hit-min);
+    height: var(--hit-min);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: 50%;
+    background: var(--bg-panel-strong);
+    color: var(--text-secondary);
+    font-size: 17px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: var(--shadow-panel);
+  }
+
+  .orientation-reset:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+  }
+
+  .orientation-reset:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 2px;
+  }
+
   .orientation-gizmo {
     display: block;
     width: var(--gizmo-size);
@@ -247,6 +306,20 @@
   .axis-endpoint {
     fill: var(--axis-color);
     opacity: var(--axis-opacity);
+  }
+
+  .axis-negative-endpoint {
+    fill: var(--axis-color);
+    opacity: calc(var(--axis-opacity) * 0.36);
+  }
+
+  .axis-negative-label {
+    fill: var(--axis-color);
+    opacity: calc(var(--axis-opacity) * 0.72);
+    font-family: var(--font-mono);
+    font-size: 7px;
+    font-weight: var(--weight-medium);
+    pointer-events: none;
   }
 
   .axis-label {

@@ -438,6 +438,12 @@ export class ViewportRenderer {
     this.markCameraChanged();
   }
 
+  /** Reset orientation to Blender Front, preserving target and zoom. */
+  resetOrientation(): void {
+    this.cameraRig.resetOrientation();
+    this.markCameraChanged();
+  }
+
   /** Place the transform gizmo at a selected-element median instead of a node. */
   setSelectionGizmoFrame(
     origin: Vector3 | null,

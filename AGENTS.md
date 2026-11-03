@@ -114,6 +114,7 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 
 - Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad inspector, and a live autosave indicator.
 - Z-up WebGL2 viewport with multiple scene nodes, custom XY grid, on-demand scheduler, camera rig, and orientation gizmo.
+- Signed orientation gizmo: positive and negative axis endpoints, center framing, and Blender-Front reset via Home/44 px control.
 - Five viewport modes: Wireframe, Solid, Texture (the custom PS1 Unlit path), Texture + Wire (front-face-culled topological overlay), and Lit. Correct unsnapped perspective mapping is the default; the mode control sits left of the orientation gizmo.
 - Generalized half-edge DCEL with open boundary loops, validated column reconstruction, per-corner UVs, seam flags, face materials, and adaptive bilinear rendering for non-planar quads.
 - UV seam authoring: Edge-mode Seam toggles bit 0 of the DCEL edge flags, renders an amber overlay, uses localized undo and per-edge autosave patches, and round-trips through `.lpoly`.

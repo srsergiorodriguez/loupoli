@@ -164,6 +164,11 @@ export class CameraRig {
     this.beginTransition(azimuth, elevation);
   }
 
+  /** Reset to Blender's Front view (camera on −Y), preserving target/zoom. */
+  resetOrientation(): void {
+    this.beginTransition(-Math.PI / 2, 0);
+  }
+
   /** Advance an axis-view transition. Returns true while more frames are needed. */
   tick(timestamp: number): boolean {
     const transition = this.transition;
