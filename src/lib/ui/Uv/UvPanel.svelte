@@ -26,6 +26,7 @@
   const uvSplit = $derived(session.snapshot.uvSplit);
   const axisLock = $derived(session.snapshot.uvAxisLock);
   const transformMode = $derived(session.snapshot.uvTransformMode);
+  const pinnedCount = $derived(session.snapshot.uvPinnedCorners.length);
 
   onMount(() => {
     const observer = new ResizeObserver((entries) => {
@@ -273,6 +274,13 @@
       <button
         type="button"
         class="uv-action"
+        aria-label={pinnedCount === 2 ? 'Clear UV pins' : 'Pin selected UV corners'}
+        disabled={pinnedCount !== 2 && selectedCount !== 2}
+        onclick={() => session.toggleUvPins()}
+      >{pinnedCount === 2 ? 'Unpin' : 'Pin'}</button>
+      <button
+        type="button"
+        class="uv-action"
         aria-label="Unwrap UV charts"
         onclick={() => session.unwrapUv()}
       >Unwrap</button>
@@ -366,7 +374,7 @@
       >Apply</button>
     </form>
     <span class="uv-foot-hint">
-      16 px pick · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
+      16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
     </span>
   </footer>
 </section>
@@ -633,7 +641,8 @@
     color: var(--accent-primary);
   }
 
-  .uv-apply:disabled {
+  .uv-apply:disabled,
+  .uv-action:disabled {
     opacity: 0.35;
     cursor: default;
   }

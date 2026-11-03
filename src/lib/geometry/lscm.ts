@@ -1,5 +1,6 @@
 import type { HalfEdgeMesh, Vec2, Vec3 } from './HalfEdgeMesh';
 import type { UvChart } from './uvCharts';
+import { chartHasUvOverlap } from './uvValidation';
 
 /** A failure that the unwrap UI should surface instead of applying bad UVs. */
 export class LscmError extends Error {}
@@ -45,7 +46,11 @@ function triangleArea2(a: Vec3, b: Vec3, c: Vec3): number {
  * equations with conjugate gradients. Charts are low-poly by design, and the
  * implementation remains dependency-free as required.
  */
-function unwrapChart(mesh: HalfEdgeMesh, chart: UvChart): Map<number, Vec2> {
+function unwrapChart(
+  mesh: HalfEdgeMesh,
+  chart: UvChart,
+  pinnedVertices: readonly number[] | null = null
+): Map<number, Vec2> {
   const local = new Map<number, number>();
   chart.vertices.forEach((vertex, index) => local.set(vertex, index));
   const count = chart.vertices.length;
@@ -94,24 +99,45 @@ function unwrapChart(mesh: HalfEdgeMesh, chart: UvChart): Map<number, Vec2> {
   let pinA = 0;
   let pinB = Math.min(1, count - 1);
   let farthest = -1;
-  for (let i = 0; i < pinCandidates.length; i += 1) {
-    for (let j = i + 1; j < pinCandidates.length; j += 1) {
-      const a = pinCandidates[i];
-      const b = pinCandidates[j];
-      const distance = Math.hypot(
-        positions[a][0] - positions[b][0],
-        positions[a][1] - positions[b][1],
-        positions[a][2] - positions[b][2]
-      );
-      if (distance > farthest) {
-        farthest = distance;
-        pinA = a;
-        pinB = b;
+  const explicitA =
+    pinnedVertices?.[0] !== undefined
+      ? local.get(pinnedVertices[0])
+      : undefined;
+  const explicitB =
+    pinnedVertices?.[1] !== undefined
+      ? local.get(pinnedVertices[1])
+      : undefined;
+  if (explicitA !== undefined && explicitB !== undefined) {
+    pinA = explicitA;
+    pinB = explicitB;
+    farthest = Math.hypot(
+      positions[pinA][0] - positions[pinB][0],
+      positions[pinA][1] - positions[pinB][1],
+      positions[pinA][2] - positions[pinB][2]
+    );
+    if (farthest <= 1e-9) {
+      throw new LscmError('The pinned UV vertices are coincident.');
+    }
+  } else {
+    for (let i = 0; i < pinCandidates.length; i += 1) {
+      for (let j = i + 1; j < pinCandidates.length; j += 1) {
+        const a = pinCandidates[i];
+        const b = pinCandidates[j];
+        const distance = Math.hypot(
+          positions[a][0] - positions[b][0],
+          positions[a][1] - positions[b][1],
+          positions[a][2] - positions[b][2]
+        );
+        if (distance > farthest) {
+          farthest = distance;
+          pinA = a;
+          pinB = b;
+        }
       }
     }
-  }
-  if (farthest <= 1e-9) {
-    throw new LscmError('A UV chart has no usable pin distance.');
+    if (farthest <= 1e-9) {
+      throw new LscmError('A UV chart has no usable pin distance.');
+    }
   }
 
   const fixed = new Map<number, number>([
@@ -307,6 +333,9 @@ function unwrapChart(mesh: HalfEdgeMesh, chart: UvChart): Map<number, Vec2> {
   if (positive > 0 && negative > 0) {
     throw new LscmError('LSCM produced flipped UV triangles; adjust seams and retry.');
   }
+  if (chartHasUvOverlap(uvs, triangles)) {
+    throw new LscmError('LSCM produced overlapping UV triangles; adjust seams or pins and retry.');
+  }
 
   // Align the longest chart boundary edge horizontally. Pins fix scale and
   // rotation mathematically, but a diagonal pin pair would otherwise leave a
@@ -357,7 +386,8 @@ function unwrapChart(mesh: HalfEdgeMesh, chart: UvChart): Map<number, Vec2> {
  */
 export function unwrapUvCharts(
   mesh: HalfEdgeMesh,
-  charts: readonly UvChart[]
+  charts: readonly UvChart[],
+  pinnedVertices: readonly number[] | null = null
 ): Float32Array {
   if (charts.length === 0) {
     throw new LscmError('The mesh has no faces to unwrap.');
@@ -372,7 +402,13 @@ export function unwrapUvCharts(
   const usableHeight = Math.max(1e-6, cellHeight - margin * 2);
 
   charts.forEach((chart, chartIndex) => {
-    const uvs = unwrapChart(mesh, chart);
+    const chartPins =
+      pinnedVertices?.filter((vertex) => chart.vertices.includes(vertex)) ?? [];
+    const uvs = unwrapChart(
+      mesh,
+      chart,
+      chartPins.length === 2 ? chartPins : null
+    );
     let minU = Infinity;
     let minV = Infinity;
     let maxU = -Infinity;

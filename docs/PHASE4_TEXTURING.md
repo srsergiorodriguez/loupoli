@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction and a bespoke LSCM unwrap are implemented; interactive pins, overlap validation, texture layers, and projection painting remain.
+**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, and overlap rejection are implemented; texture layers and projection painting remain.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -75,12 +75,12 @@
 
 - Build charts from seam edges and boundary loops. **Implemented by `extractUvCharts`.**
 - Implement a bespoke LSCM solver: no LSCM dependency. **Implemented with sparse triangle gradients and conjugate-gradient normal equations.**
-- Handle pinned vertices, degenerate triangles, disconnected charts, and solver failure. **Automatic farthest boundary pair; degenerate/zero-area/flipped charts fail explicitly. Interactive pins pending.**
+- Handle pinned vertices, degenerate triangles, disconnected charts, and solver failure. **Two selected corners pin the chart; automatic farthest boundary pair otherwise. Degenerate/zero-area/flipped/overlapping charts fail explicitly.**
 - Deterministic output for the same mesh, seams, pins, and solver settings. **Deterministic chart order, pins, and shelf packing.**
 - Commit the unwrap as one command with before/after per-corner UVs. **Implemented with `ReplaceUvCommand` and a `replace-uv` autosave patch.**
 - Test charts: cube cross, cylinder wall, open grid, mirrored sphere quadrant. **Quad, seam-separated cube, and closed-chart rejection tests are present; broader fixtures pending.**
 - Surface failures explicitly; never write NaN or silently discard a chart. **Closed charts, non-finite results, zero-area triangles, and mixed winding fail before applying.**
-- Full triangle-overlap validation and interactive pins remain open.
+- Two-corner pins and full triangle-overlap rejection are implemented; broader chart fixtures and pin editing remain open.
 
 ### Slice 4 — Texture layer stack and format v2
 

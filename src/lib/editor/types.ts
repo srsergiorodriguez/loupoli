@@ -127,6 +127,7 @@ export interface EditorSnapshot {
   readonly uvAxisLock: UvAxisLock;
   readonly uvTransformMode: UvTransformMode;
   readonly uvSelectedCorners: readonly number[];
+  readonly uvPinnedCorners: readonly number[];
   readonly uvRevision: number;
   readonly uvError: string | null;
   readonly activeTransform: NodeTransform | null;

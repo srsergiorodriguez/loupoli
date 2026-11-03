@@ -30,6 +30,7 @@ export function drawUvCanvas(
   canvas: HTMLCanvasElement,
   mesh: HalfEdgeMesh,
   selected: ReadonlySet<number>,
+  pinned: ReadonlySet<number>,
   width: number,
   height: number
 ): void {
@@ -50,6 +51,7 @@ export function drawUvCanvas(
   const wire = cssToken('--wireframe-edge', 'rgba(242,239,230,.26)');
   const seam = cssToken('--accent-warning', '#ffb45e');
   const accent = cssToken('--accent-primary', '#c9f45c');
+  const pin = cssToken('--accent-secondary', '#8f8ff8');
   const text = cssToken('--text-tertiary', '#8e8c96');
 
   context.clearRect(0, 0, width, height);
@@ -155,6 +157,28 @@ export function drawUvCanvas(
     context.fill();
     context.lineWidth = 1.5;
     context.strokeStyle = background;
+    context.stroke();
+  }
+
+  for (const corner of pinned) {
+    if (corner < 0 || corner >= mesh.halfEdgeCount) {
+      continue;
+    }
+    const [x, y] = toPoint(
+      mesh.heUv[corner * 2],
+      mesh.heUv[corner * 2 + 1]
+    );
+    context.beginPath();
+    context.arc(x, y, 6.5, 0, Math.PI * 2);
+    context.lineWidth = 2;
+    context.strokeStyle = pin;
+    context.stroke();
+    context.beginPath();
+    context.moveTo(x - 2.5, y);
+    context.lineTo(x + 2.5, y);
+    context.moveTo(x, y - 2.5);
+    context.lineTo(x, y + 2.5);
+    context.lineWidth = 1.5;
     context.stroke();
   }
 }

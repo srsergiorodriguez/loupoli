@@ -308,6 +308,7 @@ export class EditorRuntime {
   private uvAxisLock: UvAxisLock = null;
   private uvTransformMode: UvTransformMode = 'move';
   private readonly uvSelection = new Set<number>();
+  private readonly uvPins = new Set<number>();
   private uvDrag: UvDrag | null = null;
   private uvRevision = 0;
   private uvError: string | null = null;
@@ -428,6 +429,7 @@ export class EditorRuntime {
       uvAxisLock: this.uvAxisLock,
       uvTransformMode: this.uvTransformMode,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
+      uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvRevision: this.uvRevision,
       uvError: this.uvError,
       modifiers: active ? active.modifiers.map((modifier) => ({ ...modifier })) : [],
@@ -582,6 +584,7 @@ export class EditorRuntime {
     this.uvOpen = true;
     this.uvError = null;
     this.uvSelection.clear();
+    this.uvPins.clear();
     this.lastUvSourceSignature = '';
     this.uvRevision += 1;
     this.syncUvSelectionIfChanged();
@@ -610,6 +613,25 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Pin two selected UV corners, or clear existing pins. */
+  toggleUvPins(): void {
+    if (this.uvPins.size === 2) {
+      this.uvPins.clear();
+      this.uvRevision += 1;
+      this.publish();
+      return;
+    }
+    if (this.uvSelection.size !== 2) {
+      return;
+    }
+    this.uvPins.clear();
+    for (const corner of this.uvSelection) {
+      this.uvPins.add(corner);
+    }
+    this.uvRevision += 1;
+    this.publish();
+  }
+
   /** Rebuild the UV corner set from the active 3D element selection. */
   syncUvFrom3d(): void {
     this.rebuildUvSelection();
@@ -631,7 +653,17 @@ export class EditorRuntime {
     try {
       const before = node.mesh.heUv.slice();
       const charts = extractUvCharts(node.mesh);
-      const after = unwrapUvCharts(node.mesh, charts);
+      const pinnedVertices = new Set<number>();
+      for (const corner of this.uvPins) {
+        if (corner >= 0 && corner < node.mesh.halfEdgeCount) {
+          pinnedVertices.add(node.mesh.heOrigin[corner]);
+        }
+      }
+      const after = unwrapUvCharts(
+        node.mesh,
+        charts,
+        pinnedVertices.size === 2 ? Array.from(pinnedVertices) : null
+      );
       const command = new ReplaceUvCommand(
         node.mesh,
         node.id,
@@ -657,7 +689,7 @@ export class EditorRuntime {
     if (!node) {
       return;
     }
-    drawUvCanvas(canvas, node.mesh, this.uvSelection, width, height);
+    drawUvCanvas(canvas, node.mesh, this.uvSelection, this.uvPins, width, height);
   }
 
   /**
@@ -1384,6 +1416,9 @@ export class EditorRuntime {
       this.activeNodeId = nodeId;
     }
 
+    if (this.activeNodeId !== nodeId) {
+      this.uvPins.clear();
+    }
     this.selection.setContext(this.activeNodeId, this.selection.mode);
     this.syncScene();
     this.publish();
@@ -4452,6 +4487,11 @@ export class EditorRuntime {
     for (const corner of this.uvSelection) {
       if (corner < 0 || corner >= limit) {
         this.uvSelection.delete(corner);
+      }
+    }
+    for (const corner of this.uvPins) {
+      if (corner < 0 || corner >= limit) {
+        this.uvPins.delete(corner);
       }
     }
   }

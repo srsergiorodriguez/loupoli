@@ -31,6 +31,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvAxisLock: null,
   uvTransformMode: 'move',
   uvSelectedCorners: [],
+  uvPinnedCorners: [],
   uvRevision: 0,
   uvError: null,
   activeTransform: null,
@@ -162,6 +163,10 @@ export class EditorSession {
     additive: boolean
   ): boolean {
     return this.runtime?.pickUvCorner(x, y, width, height, additive) ?? false;
+  }
+
+  toggleUvPins(): void {
+    this.runtime?.toggleUvPins();
   }
 
   setUvTransformMode(mode: 'move' | 'rotate' | 'scale'): void {

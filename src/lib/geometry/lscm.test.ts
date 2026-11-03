@@ -72,6 +72,16 @@ describe('LSCM unwrap', () => {
     expect(points.size).toBe(4);
   });
 
+  it('accepts explicit chart pins', () => {
+    const grid = createGridMesh(2, 2);
+    const charts = extractUvCharts(grid);
+    const uvs = unwrapUvCharts(grid, charts, [0, 8]);
+    for (let corner = 0; corner < grid.halfEdgeCount; corner += 1) {
+      expect(Number.isFinite(uvs[corner * 2])).toBe(true);
+      expect(Number.isFinite(uvs[corner * 2 + 1])).toBe(true);
+    }
+  });
+
   it('rejects a closed chart instead of applying collapsed UVs', () => {
     const sphere = createQuadSphereMesh(1.5, 2);
     const charts = extractUvCharts(sphere);
