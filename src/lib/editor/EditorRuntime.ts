@@ -68,7 +68,7 @@ import {
   pickUvElement as pickUvEntity,
   type UvSelectionMode
 } from '../uv/uvElements';
-import { alignUvChart, sameUvTopology } from '../uv/uvStack';
+import { copyUvChart, sameUvTopology } from '../uv/uvStack';
 import { PaintTextureCommand } from './commands/PaintTextureCommand';
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
@@ -1022,14 +1022,15 @@ export class EditorRuntime {
       this.publish();
       return;
     }
-    const alignment = alignUvChart(
+    const alignment = copyUvChart(
       node.mesh,
       topology,
       reference,
       moving
     );
     if (!alignment) {
-      this.uvError = 'The selected UV islands could not be aligned.';
+      this.uvError =
+        'The selected UV islands could not be mapped one-to-one.';
       this.uvRevision += 1;
       this.publish();
       return;

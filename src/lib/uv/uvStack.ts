@@ -134,3 +134,66 @@ export function alignUvChart(
   });
   return { corners, before, after };
 }
+
+
+/**
+ * Copy the reference chart's UV layout onto the moving chart.
+ *
+ * A similarity transform first predicts where each moving corner belongs. The
+ * predicted position is matched one-to-one against reference corners; every
+ * moving corner then receives the corresponding reference UV. Returning null
+ * means the predicted mapping was not bijective, so a misleading overlay is not
+ * applied.
+ */
+export function copyUvChart(
+  mesh: HalfEdgeMesh,
+  topology: UvTopology,
+  referenceChart: number,
+  movingChart: number
+): UvChartAlignment | null {
+  const alignment = alignUvChart(
+    mesh,
+    topology,
+    referenceChart,
+    movingChart
+  );
+  if (!alignment) {
+    return null;
+  }
+  const referenceCorners = topology.chartCorners[referenceChart];
+  const referenceUvs = referenceCorners.map((corner) =>
+    mesh.getCornerUv(corner)
+  );
+  const used = new Set<number>();
+  const mapped: Vec2[] = [];
+  for (const predicted of alignment.after) {
+    let best = -1;
+    let bestDistance = Infinity;
+    for (let index = 0; index < referenceUvs.length; index += 1) {
+      if (used.has(index)) {
+        continue;
+      }
+      const distance = Math.hypot(
+        referenceUvs[index][0] - predicted[0],
+        referenceUvs[index][1] - predicted[1]
+      );
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = index;
+      }
+    }
+    if (best < 0) {
+      return null;
+    }
+    used.add(best);
+    mapped.push([...referenceUvs[best]] as Vec2);
+  }
+  if (used.size !== referenceUvs.length) {
+    return null;
+  }
+  return {
+    corners: alignment.corners,
+    before: alignment.before,
+    after: mapped
+  };
+}
