@@ -75,11 +75,54 @@ describe('LSCM unwrap', () => {
   it('accepts explicit chart pins', () => {
     const grid = createGridMesh(2, 2);
     const charts = extractUvCharts(grid);
-    const uvs = unwrapUvCharts(grid, charts, [0, 8]);
+    const uvs = unwrapUvCharts(grid, charts, [
+      grid.faceHalfEdge[0],
+      grid.faceHalfEdge[grid.faceCount - 1]
+    ]);
     for (let corner = 0; corner < grid.halfEdgeCount; corner += 1) {
       expect(Number.isFinite(uvs[corner * 2])).toBe(true);
       expect(Number.isFinite(uvs[corner * 2 + 1])).toBe(true);
     }
+  });
+
+  it('unwraps one cube net with split corner fans', () => {
+    const cube = createCubeMesh(1);
+    for (let edge = 0; edge < cube.edgeCount; edge += 1) {
+      cube.setEdgeSeam(edge, true);
+    }
+    const connect = (firstFace: number, secondFace: number): void => {
+      for (let edge = 0; edge < cube.edgeCount; edge += 1) {
+        const halfEdge = cube.edgeHalfEdge[edge];
+        const twin = cube.heTwin[halfEdge];
+        if (twin < 0) {
+          continue;
+        }
+        const a = cube.heFace[halfEdge];
+        const b = cube.heFace[twin];
+        if (
+          (a === firstFace && b === secondFace) ||
+          (a === secondFace && b === firstFace)
+        ) {
+          cube.setEdgeSeam(edge, false);
+        }
+      }
+    };
+    for (const [a, b] of [
+      [0, 2],
+      [1, 2],
+      [2, 3],
+      [2, 5],
+      [4, 5]
+    ]) {
+      connect(a, b);
+    }
+    const charts = extractUvCharts(cube);
+    expect(charts).toHaveLength(1);
+    const meshVertices = new Set(charts[0].uvVertices.map((vertex) => vertex.vertex));
+    expect(charts[0].uvVertices.length).toBeGreaterThan(meshVertices.size);
+    const uvs = unwrapUvCharts(cube, charts);
+    expect(uvs).toHaveLength(cube.halfEdgeCount * 2);
+    expect(Array.from(uvs).every((value) => Number.isFinite(value))).toBe(true);
   });
 
   it('rejects a closed chart instead of applying collapsed UVs', () => {

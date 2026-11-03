@@ -9,6 +9,7 @@ describe('UV chart extraction', () => {
     expect(charts).toHaveLength(1);
     expect(charts[0].faces).toHaveLength(6);
     expect(charts[0].vertices).toHaveLength(8);
+    expect(charts[0].uvVertices).toHaveLength(8);
     expect(charts[0].boundaryHalfEdges).toHaveLength(0);
   });
 

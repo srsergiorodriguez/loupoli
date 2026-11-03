@@ -446,7 +446,7 @@ local math fix.
 
 ### UV charts and unwrap
 
-Seam charts are connected face sets split across seam edges and open boundaries. The unwrap path uses a bespoke LSCM solver: triangle gradients produce the two Cauchy-Riemann residual rows, the farthest boundary pair is pinned, and the sparse normal equations are solved with conjugate gradients. Charts are aligned by their longest boundary edge and shelf-packed into the UV square. Closed charts fail explicitly; zero-area, mixed-winding, and overlapping results are rejected before any document mutation. Two selected corners may pin a chart; otherwise the farthest boundary pair is automatic. Multi-chart packing improvements remain.
+Seam charts are connected face sets split across seam edges and open boundaries. Chart vertices are corner fans welded across non-seam edges, so one mesh vertex may map to several UV vertices inside the same chart when seams cut through its fan. The unwrap path uses a bespoke LSCM solver over those UV vertices: triangle gradients produce the two Cauchy-Riemann residual rows, the farthest boundary pair is pinned, and the sparse normal equations are solved with conjugate gradients. Charts are aligned by their longest boundary edge and shelf-packed into the UV square. Closed charts fail explicitly; zero-area, mixed-winding, and overlapping results are rejected before any document mutation. Two selected corners may pin a chart; otherwise the farthest boundary pair is automatic. Multi-chart packing improvements remain.
 
 ### Viewport sizing
 

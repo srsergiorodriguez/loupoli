@@ -49,11 +49,9 @@ function triangleArea2(a: Vec3, b: Vec3, c: Vec3): number {
 function unwrapChart(
   mesh: HalfEdgeMesh,
   chart: UvChart,
-  pinnedVertices: readonly number[] | null = null
+  pinnedUvVertices: readonly number[] | null = null
 ): Map<number, Vec2> {
-  const local = new Map<number, number>();
-  chart.vertices.forEach((vertex, index) => local.set(vertex, index));
-  const count = chart.vertices.length;
+  const count = chart.uvVertices.length;
   if (count < 3) {
     throw new LscmError('A UV chart needs at least three vertices.');
   }
@@ -69,13 +67,13 @@ function unwrapChart(
     if (corners.length < 3) {
       continue;
     }
-    const first = local.get(mesh.heOrigin[corners[0]]);
+    const first = chart.cornerUvVertex.get(corners[0]);
     if (first === undefined) {
       continue;
     }
     for (let corner = 1; corner < corners.length - 1; corner += 1) {
-      const b = local.get(mesh.heOrigin[corners[corner]]);
-      const c = local.get(mesh.heOrigin[corners[corner + 1]]);
+      const b = chart.cornerUvVertex.get(corners[corner]);
+      const c = chart.cornerUvVertex.get(corners[corner + 1]);
       if (b === undefined || c === undefined) {
         continue;
       }
@@ -86,27 +84,26 @@ function unwrapChart(
     throw new LscmError('A UV chart has no non-degenerate triangles.');
   }
 
-  const positions = chart.vertices.map((vertex) => mesh.getVertexPosition(vertex));
+  const positions = chart.uvVertices.map((vertex) =>
+    mesh.getVertexPosition(vertex.vertex)
+  );
   const boundaryVertices = new Set<number>();
   for (const halfEdge of chart.boundaryHalfEdges) {
-    boundaryVertices.add(mesh.heOrigin[halfEdge]);
+    const uvVertex = chart.cornerUvVertex.get(halfEdge);
+    if (uvVertex !== undefined) {
+      boundaryVertices.add(uvVertex);
+    }
   }
   const pinCandidates =
     boundaryVertices.size >= 2
-      ? [...boundaryVertices].map((vertex) => local.get(vertex) as number)
+      ? [...boundaryVertices]
       : Array.from({ length: count }, (_, index) => index);
 
   let pinA = 0;
   let pinB = Math.min(1, count - 1);
   let farthest = -1;
-  const explicitA =
-    pinnedVertices?.[0] !== undefined
-      ? local.get(pinnedVertices[0])
-      : undefined;
-  const explicitB =
-    pinnedVertices?.[1] !== undefined
-      ? local.get(pinnedVertices[1])
-      : undefined;
+  const explicitA = pinnedUvVertices?.[0];
+  const explicitB = pinnedUvVertices?.[1];
   if (explicitA !== undefined && explicitB !== undefined) {
     pinA = explicitA;
     pinB = explicitB;
@@ -179,12 +176,9 @@ function unwrapChart(
   };
 
   for (const triangle of triangles) {
-    const va = chart.vertices[triangle.a];
-    const vb = chart.vertices[triangle.b];
-    const vc = chart.vertices[triangle.c];
-    const p0 = mesh.getVertexPosition(va);
-    const p1 = mesh.getVertexPosition(vb);
-    const p2 = mesh.getVertexPosition(vc);
+    const p0 = positions[triangle.a];
+    const p1 = positions[triangle.b];
+    const p2 = positions[triangle.c];
     const area2 = triangleArea2(p0, p1, p2);
     if (area2 <= 1e-12) {
       continue;
@@ -344,8 +338,8 @@ function unwrapChart(
   let longest = 0;
   let angle = 0;
   for (const halfEdge of chart.boundaryHalfEdges) {
-    const a = local.get(mesh.heOrigin[halfEdge]);
-    const b = local.get(mesh.halfEdgeDestination(halfEdge));
+    const a = chart.cornerUvVertex.get(halfEdge);
+    const b = chart.cornerUvVertex.get(mesh.heNext[halfEdge]);
     if (a === undefined || b === undefined) {
       continue;
     }
@@ -373,21 +367,21 @@ function unwrapChart(
   }
 
   const result = new Map<number, Vec2>();
-  chart.vertices.forEach((vertex, index) => {
-    result.set(vertex, uvs[index]);
+  chart.uvVertices.forEach((_vertex, index) => {
+    result.set(index, uvs[index]);
   });
   return result;
 }
 
 /**
  * Unwrap all charts, normalize them into a simple deterministic shelf, and
- * return per-half-edge UVs. Faces belonging to each chart share one UV per
- * topological vertex; corners across seams remain independent.
+ * return per-half-edge UVs. Charts solve on split corner fans, so one mesh
+ * vertex may receive multiple UVs inside the same chart across a seam cut.
  */
 export function unwrapUvCharts(
   mesh: HalfEdgeMesh,
   charts: readonly UvChart[],
-  pinnedVertices: readonly number[] | null = null
+  pinnedCorners: readonly number[] | null = null
 ): Float32Array {
   if (charts.length === 0) {
     throw new LscmError('The mesh has no faces to unwrap.');
@@ -402,8 +396,15 @@ export function unwrapUvCharts(
   const usableHeight = Math.max(1e-6, cellHeight - margin * 2);
 
   charts.forEach((chart, chartIndex) => {
-    const chartPins =
-      pinnedVertices?.filter((vertex) => chart.vertices.includes(vertex)) ?? [];
+    const chartPins = pinnedCorners
+      ? [
+          ...new Set(
+            pinnedCorners
+              .map((corner) => chart.cornerUvVertex.get(corner))
+              .filter((value): value is number => value !== undefined)
+          )
+        ]
+      : [];
     const uvs = unwrapChart(
       mesh,
       chart,
@@ -428,8 +429,8 @@ export function unwrapUvCharts(
     const originV = 1 - (row + 1) * cellHeight + margin;
     for (const face of chart.faces) {
       for (const halfEdge of faceCorners(mesh, face)) {
-        const vertex = mesh.heOrigin[halfEdge];
-        const uv = uvs.get(vertex);
+        const uvVertex = chart.cornerUvVertex.get(halfEdge);
+        const uv = uvVertex === undefined ? undefined : uvs.get(uvVertex);
         if (!uv) {
           continue;
         }

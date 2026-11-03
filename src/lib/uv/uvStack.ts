@@ -42,7 +42,7 @@ export function uvChartSignature(
     .map((face) => face.corners.length);
   return {
     faces: chart.faces.length,
-    vertices: chart.vertices.length,
+    vertices: chart.uvVertices.length,
     edges: edges.length,
     boundaryHalfEdges: chart.boundaryHalfEdges.length,
     faceValences: sortNumbers(faceValences),

@@ -1608,16 +1608,13 @@ export class EditorRuntime {
     try {
       const before = node.mesh.heUv.slice();
       const charts = extractUvCharts(node.mesh);
-      const pinnedVertices = new Set<number>();
-      for (const corner of this.uvPins) {
-        if (corner >= 0 && corner < node.mesh.halfEdgeCount) {
-          pinnedVertices.add(node.mesh.heOrigin[corner]);
-        }
-      }
+      const pinnedCorners = [...this.uvPins].filter(
+        (corner) => corner >= 0 && corner < node.mesh.halfEdgeCount
+      );
       const after = unwrapUvCharts(
         node.mesh,
         charts,
-        pinnedVertices.size === 2 ? Array.from(pinnedVertices) : null
+        pinnedCorners.length === 2 ? pinnedCorners : null
       );
       const command = new ReplaceUvCommand(
         node.mesh,
