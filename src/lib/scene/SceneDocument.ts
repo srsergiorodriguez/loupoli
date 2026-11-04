@@ -22,8 +22,9 @@ import {
 /**
  * The document's object collection.
  *
- * The document owns topology-bearing nodes only. Active object, selection,
- * camera, and UI state are session state and deliberately do not belong here.
+ * The document owns topology-bearing nodes, groups, lights, and render cameras.
+ * Active object, selection, navigation camera, and UI state are session state and
+ * deliberately do not belong here.
  */
 export class SceneDocument {
   readonly nodes: MeshNode[] = [];
