@@ -24,7 +24,7 @@ export type TextureLayerRole = 'color' | 'detail' | 'lighting';
 /** Small, rune-safe summary of one texture layer. */
 export interface TextureLayerSummary {
   readonly id: string;
-  name: string;
+  readonly name: string;
   readonly visible: boolean;
   readonly opacity: number;
   readonly color: string;
@@ -123,7 +123,7 @@ function sameState(a: TextureAssetState, b: TextureAssetState): boolean {
  */
 export interface TextureAssetOptions {
   readonly id: string;
-  readonly name: string;
+  name: string;
   readonly width: number;
   readonly height: number;
   readonly filter?: TextureFilter;
@@ -138,7 +138,7 @@ export type TextureFilter = 'nearest' | 'linear';
 /** One named raster texture and its layer stack. */
 export class TextureAsset {
   readonly id: string;
-  readonly name: string;
+  name: string;
   readonly width: number;
   readonly height: number;
   readonly texture: CanvasTexture;
@@ -214,6 +214,16 @@ export class TextureAsset {
   /** Current 3D alpha interpretation. */
   get textureAlphaMode(): TextureAlphaMode {
     return this.alphaMode;
+  }
+
+  /** Rename the asset without touching pixel content. */
+  rename(name: string): boolean {
+    const trimmed = name.trim();
+    if (trimmed.length === 0 || trimmed.length > 64 || trimmed === this.name) {
+      return false;
+    }
+    this.name = trimmed;
+    return true;
   }
 
   /** Change 3D alpha interpretation without touching pixels. */

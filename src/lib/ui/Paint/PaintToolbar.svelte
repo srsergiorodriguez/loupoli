@@ -70,11 +70,25 @@
   <BrushPreview {settings} />
   <span class="paint-size">{session.snapshot.uvBrushSize} px</span>
   <IconButton
+    label="Zoom out"
+    icon="minus"
+    tooltip="Zoom texture out"
+    tooltipPlacement="bottom"
+    onActivate={() => session.zoomPaintCenter(1 / 1.25)}
+  />
+  <IconButton
     label="Fit texture"
     icon="frame"
     tooltip="Fit texture"
     tooltipPlacement="bottom"
     onActivate={() => session.resetPaintView()}
+  />
+  <IconButton
+    label="Zoom in"
+    icon="plus"
+    tooltip="Zoom texture in"
+    tooltipPlacement="bottom"
+    onActivate={() => session.zoomPaintCenter(1.25)}
   />
   <span class="paint-size">{Math.round(session.snapshot.paintZoom * 100)}%</span>
   </div>

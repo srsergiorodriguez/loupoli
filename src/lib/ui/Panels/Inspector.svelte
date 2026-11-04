@@ -11,6 +11,7 @@
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
+  import TextField from '../Primitives/TextField.svelte';
   import {
     defaultInspectorOpen,
     inspectorSectionsFor,
@@ -1197,6 +1198,11 @@
             }))}
             onChange={(value) => session.setActiveTextureAsset(value)}
           />
+          <TextField
+            label="Name"
+            value={activeTextureAsset?.name ?? ''}
+            onCommit={(value) => session.renameTextureAsset(value)}
+          />
           <div class="texture-asset-meta">
             <span>{textureUsage} object{textureUsage === 1 ? '' : 's'}</span>
             <span>{activeTextureAsset?.width ?? session.snapshot.textureSize}²</span>
@@ -1354,6 +1360,33 @@
               <span class="texture-kind">
                 {activeTextureLayer.kind === 'raster' ? 'raster' : activeTextureLayer.pattern}
               </span>
+              <ActionMenu
+                icon="more"
+                align="end"
+                options={[
+                  {
+                    label: 'Move up',
+                    icon: 'chevron-up',
+                    disabled:
+                      textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) >=
+                      textureLayers.length - 1,
+                    onSelect: () => session.moveTextureLayer(activeTextureLayer.id, 1)
+                  },
+                  {
+                    label: 'Move down',
+                    icon: 'chevron-down',
+                    disabled:
+                      textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) <= 0,
+                    onSelect: () => session.moveTextureLayer(activeTextureLayer.id, -1)
+                  },
+                  {
+                    label: 'Delete layer',
+                    icon: 'trash',
+                    disabled: textureLayers.length <= 1,
+                    onSelect: () => session.removeTextureLayer(activeTextureLayer.id)
+                  }
+                ]}
+              />
             </div>
             {#if activeTextureLayer.kind === 'fill'}
               <SelectField
@@ -1416,34 +1449,7 @@
                   session.setTextureLayerColor(activeTextureLayer.id, value)}
               />
             {/if}
-            <ActionRow>
-              <IconButton
-                label="Move layer up"
-                icon="chevron-up"
-                tooltip="Move layer up"
-                disabled={
-                  textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) >=
-                  textureLayers.length - 1
-                }
-                onActivate={() => session.moveTextureLayer(activeTextureLayer.id, 1)}
-              />
-              <IconButton
-                label="Move layer down"
-                icon="chevron-down"
-                tooltip="Move layer down"
-                disabled={
-                  textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) <= 0
-                }
-                onActivate={() => session.moveTextureLayer(activeTextureLayer.id, -1)}
-              />
-              <ActionButton
-                label="Delete"
-                icon="trash"
-                variant="danger"
-                disabled={textureLayers.length <= 1}
-                onActivate={() => session.removeTextureLayer(activeTextureLayer.id)}
-              />
-            </ActionRow>
+
           </div>
         {/if}
       </div>
@@ -2203,15 +2209,19 @@
   .texture-body {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: 0;
   }
 
   .texture-block {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
-    padding-bottom: var(--space-2);
+    gap: 2px;
+    padding: var(--space-1) 0;
     border-bottom: var(--hairline) solid var(--border-subtle);
+  }
+
+  .texture-block:first-child {
+    padding-top: 0;
   }
 
   .texture-block:last-child {

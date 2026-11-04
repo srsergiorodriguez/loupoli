@@ -89,3 +89,24 @@ export class SetTextureAlphaModeCommand implements EditorCommand {
     this.asset.setAlphaMode(this.before);
   }
 }
+
+
+/** Rename one texture asset without touching pixels or layer metadata. */
+export class RenameTextureAssetCommand implements EditorCommand {
+  readonly label = 'Rename texture asset';
+  readonly estimatedBytes = 96;
+
+  constructor(
+    private readonly asset: TextureAsset,
+    private readonly before: string,
+    private readonly after: string
+  ) {}
+
+  execute(): void {
+    this.asset.rename(this.after);
+  }
+
+  undo(): void {
+    this.asset.rename(this.before);
+  }
+}

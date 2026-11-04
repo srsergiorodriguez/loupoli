@@ -112,6 +112,7 @@ import {
   CreateTextureAssetCommand,
   DeleteTextureAssetCommand,
   SetTextureAlphaModeCommand,
+  RenameTextureAssetCommand,
   SetTextureFilterCommand
 } from './commands/TextureAssetCommands';
 import { MoveUvCornersCommand } from './commands/MoveUvCornersCommand';
@@ -414,6 +415,8 @@ export class EditorRuntime {
   private paintZoom = 1;
   private paintPanX = 0;
   private paintPanY = 0;
+  private paintViewportWidth = 0;
+  private paintViewportHeight = 0;
   private surfaceCursor: { x: number; y: number; size: number } | null = null;
   private projectionPreview: ProjectionPreview | null = null;
   private projectedShape: {
@@ -810,6 +813,18 @@ export class EditorRuntime {
     this.commitTextureMutation('Change layer type', () => {
       this.textureStack.setPattern(id, pattern);
     });
+  }
+
+  renameTextureAsset(name: string): void {
+    const asset = this.textureStack;
+    const before = asset.name;
+    const trimmed = name.trim();
+    if (trimmed.length === 0 || trimmed.length > 64 || trimmed === before) {
+      return;
+    }
+    this.history.execute(new RenameTextureAssetCommand(asset, before, trimmed));
+    this.autosave.markTextureDirty();
+    this.publish();
   }
 
   setTextureAlphaMode(mode: TextureAlphaMode): void {
@@ -1838,6 +1853,20 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Zoom around the center of the last painted viewport. */
+  zoomPaintCenter(factor: number): void {
+    if (this.paintViewportWidth <= 0 || this.paintViewportHeight <= 0) {
+      return;
+    }
+    this.zoomPaint(
+      factor,
+      this.paintViewportWidth / 2,
+      this.paintViewportHeight / 2,
+      this.paintViewportWidth,
+      this.paintViewportHeight
+    );
+  }
+
   resetPaintView(): void {
     this.paintZoom = 1;
     this.paintPanX = 0;
@@ -2046,6 +2075,8 @@ export class EditorRuntime {
     width: number,
     height: number
   ): void {
+    this.paintViewportWidth = width;
+    this.paintViewportHeight = height;
     const prepared = prepareTextureSurface(canvas, width, height);
     if (!prepared) {
       return;
@@ -6521,7 +6552,8 @@ export class EditorRuntime {
       event.command instanceof CreateTextureAssetCommand ||
       event.command instanceof DeleteTextureAssetCommand ||
       event.command instanceof SetTextureFilterCommand ||
-      event.command instanceof SetTextureAlphaModeCommand
+      event.command instanceof SetTextureAlphaModeCommand ||
+      event.command instanceof RenameTextureAssetCommand
     ) {
       this.autosave.markTextureDirty();
     }

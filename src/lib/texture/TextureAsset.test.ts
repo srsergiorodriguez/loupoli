@@ -153,6 +153,8 @@ describe('TextureAsset', () => {
       height: 64
     });
     expect(stack.textureAlphaMode).toBe('opaque');
+    expect(stack.rename('Stone Atlas')).toBe(true);
+    expect(stack.name).toBe('Stone Atlas');
     expect(stack.addLayer('Transparent', 'transparent')).toBe(true);
     expect(stack.summaries().at(-1)?.pattern).toBe('transparent');
     expect(stack.setAlphaMode('cutout')).toBe(true);

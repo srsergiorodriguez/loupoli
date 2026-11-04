@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy } from 'svelte';
+  import { mount, unmount } from 'svelte';
   import Icon from '../Icons/Icon.svelte';
   import type { IconName } from '../Icons/types';
+  import ActionMenuPanel from './ActionMenuPanel.svelte';
 
   /** One selectable menu entry with optional icon and disabled state. */
   export interface ActionMenuOption {
@@ -27,29 +29,48 @@
     align = 'start',
     disabled = false
   }: Props = $props();
-  let host: HTMLDivElement;
+  let trigger: HTMLButtonElement;
   let open = $state(false);
+  let panelTarget: HTMLDivElement | null = null;
+  let panel: Record<string, unknown> | null = null;
 
-  onMount(() => {
-    const close = (event: PointerEvent): void => {
-      if (open && !host.contains(event.target as Node)) {
-        open = false;
-      }
-    };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  });
+  onDestroy(close);
 
-  function choose(option: ActionMenuOption): void {
-    if (option.disabled) {
+  function close(): void {
+    if (panel) {
+      unmount(panel as never);
+      panel = null;
+    }
+    panelTarget?.remove();
+    panelTarget = null;
+    open = false;
+  }
+
+  function toggle(): void {
+    if (open) {
+      close();
       return;
     }
-    open = false;
-    option.onSelect();
+    const rect = trigger.getBoundingClientRect();
+    const width = 184;
+    const height = options.length * 44 + 8;
+    let x = align === 'end' ? rect.right - width : rect.left;
+    x = Math.max(8, Math.min(window.innerWidth - width - 8, x));
+    let y = rect.bottom + 4;
+    if (y + height > window.innerHeight - 8) {
+      y = Math.max(8, rect.top - height - 4);
+    }
+    panelTarget = document.createElement('div');
+    document.body.appendChild(panelTarget);
+    panel = mount(ActionMenuPanel, {
+      target: panelTarget,
+      props: { options, x, y, onClose: close }
+    }) as unknown as Record<string, unknown>;
+    open = true;
   }
 </script>
 
-<div class="action-menu" bind:this={host}>
+<div class="action-menu">
   <button
     type="button"
     class="action-menu-trigger"
@@ -57,27 +78,13 @@
     aria-expanded={open}
     aria-label={label || 'More actions'}
     {disabled}
-    onclick={() => (open = !open)}
+    bind:this={trigger}
+    onclick={toggle}
   >
     <Icon name={icon} size={14} />
     {#if label}<span>{label}</span>{/if}
     <span class="action-menu-chevron" aria-hidden="true">⌄</span>
   </button>
-  {#if open}
-    <div class="action-menu-items" class:end={align === 'end'} role="menu">
-      {#each options as option (option.label)}
-        <button
-          type="button"
-          role="menuitem"
-          disabled={option.disabled}
-          onclick={() => choose(option)}
-        >
-          {#if option.icon}<Icon name={option.icon} size={14} />{/if}
-          <span>{option.label}</span>
-        </button>
-      {/each}
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -85,8 +92,7 @@
     position: relative;
   }
 
-  .action-menu-trigger,
-  .action-menu-items button {
+  .action-menu-trigger {
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -103,15 +109,13 @@
     cursor: pointer;
   }
 
-  .action-menu-trigger:hover:not(:disabled),
-  .action-menu-items button:hover:not(:disabled) {
+  .action-menu-trigger:hover:not(:disabled) {
     border-color: var(--border-strong);
     color: var(--text-primary);
     background: var(--bg-hover);
   }
 
-  .action-menu-trigger:disabled,
-  .action-menu-items button:disabled {
+  .action-menu-trigger:disabled {
     opacity: var(--opacity-disabled);
     cursor: default;
   }
@@ -119,30 +123,5 @@
   .action-menu-chevron {
     margin-left: auto;
     color: var(--text-tertiary);
-  }
-
-  .action-menu-items {
-    position: absolute;
-    z-index: var(--z-hud);
-    top: calc(100% + 4px);
-    left: 0;
-    min-width: 168px;
-    padding: 3px;
-    border: var(--hairline) solid var(--border-strong);
-    border-radius: var(--radius-sm);
-    background: var(--bg-panel-strong);
-    box-shadow: var(--shadow-panel);
-  }
-
-  .action-menu-items.end {
-    right: 0;
-    left: auto;
-  }
-
-  .action-menu-items button {
-    width: 100%;
-    border-color: transparent;
-    background: transparent;
-    text-align: left;
   }
 </style>

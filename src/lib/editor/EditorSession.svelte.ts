@@ -509,6 +509,10 @@ export class EditorSession {
     this.runtime?.panPaint(dx, dy);
   }
 
+  zoomPaintCenter(factor: number): void {
+    this.runtime?.zoomPaintCenter(factor);
+  }
+
   resetPaintView(): void {
     this.runtime?.resetPaintView();
   }
@@ -588,6 +592,10 @@ export class EditorSession {
 
   setTextureAlphaMode(mode: 'opaque' | 'cutout' | 'blend'): void {
     this.runtime?.setTextureAlphaMode(mode);
+  }
+
+  renameTextureAsset(name: string): void {
+    this.runtime?.renameTextureAsset(name);
   }
 
   renameTextureLayer(id: string, name: string): void {
