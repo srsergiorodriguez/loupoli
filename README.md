@@ -33,7 +33,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
-- **Dedicated Paint workspace.** Choose **Paint** in the Workspace Tabs; the 3D stage stays visible while a separate texture-space Paint pane opens. Choose color/size/opacity and drag the texture. Strokes draw into the active layer, update the composite texture live in both the Paint pane and 3D view, and commit as one localized pixel-patch command. Pen pressure scales the brush radius. Undo restores the paint rectangle; autosave captures the painted PNG in the next v3 checkpoint. Tilt shaping and 3D projection painting remain.
+- **Dedicated Paint workspace.** Choose **Paint** in the Workspace Tabs; the 3D stage stays visible while a separate texture-space Paint pane opens. Choose a tool and brush settings, then drag the texture. Brush, eraser, line, rectangle, ellipse, gradient, and fill tools share one paint transaction model. Strokes draw into the active layer, update the composite texture live in both the Paint pane and 3D view, and commit as one localized pixel-patch command. Pen pressure scales brush radius and opacity; brush hardness, smoothing, and noise are adjustable. Undo restores the paint rectangle; autosave captures the painted PNG in the next v3 checkpoint. Tilt shaping and 3D projection painting remain.
 
 ![Texture painting in the dedicated Paint workspace](docs/media/uv-paint.png)
 

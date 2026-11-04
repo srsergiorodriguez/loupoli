@@ -304,6 +304,55 @@ export class TextureAsset {
     return true;
   }
 
+  /** Context for an active raster paint transaction. */
+  getPaintContext(layerId: string): OffscreenCanvasRenderingContext2D | null {
+    if (this.paintSnapshot?.layerId !== layerId) {
+      return null;
+    }
+    return this.layers.find((layer) => layer.id === layerId)?.context ?? null;
+  }
+
+  /** Restore the pre-transaction pixels while keeping the transaction open. */
+  restorePaintSnapshot(): boolean {
+    const snapshot = this.paintSnapshot;
+    if (!snapshot) {
+      return false;
+    }
+    const layer = this.layers.find((item) => item.id === snapshot.layerId);
+    if (!layer) {
+      return false;
+    }
+    layer.context.putImageData(snapshot.image, 0, 0);
+    this.paintBounds = null;
+    this.compositeLayers();
+    return true;
+  }
+
+  /** Expand the transaction's dirty rectangle before endPaint crops it. */
+  markPaintBounds(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ): void {
+    const left = Math.max(0, Math.min(this.width, Math.floor(minX)));
+    const top = Math.max(0, Math.min(this.height, Math.floor(minY)));
+    const right = Math.max(0, Math.min(this.width, Math.ceil(maxX)));
+    const bottom = Math.max(0, Math.min(this.height, Math.ceil(maxY)));
+    if (right <= left || bottom <= top) {
+      return;
+    }
+    const bounds = this.paintBounds;
+    this.paintBounds = bounds
+      ? {
+          minX: Math.min(bounds.minX, left),
+          minY: Math.min(bounds.minY, top),
+          maxX: Math.max(bounds.maxX, right),
+          maxY: Math.max(bounds.maxY, bottom)
+        }
+      : { minX: left, minY: top, maxX: right, maxY: bottom };
+  }
+
   /**
    * Paint a circular segment in texture pixels.
    *

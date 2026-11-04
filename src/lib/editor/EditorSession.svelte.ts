@@ -50,6 +50,13 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvBrushColor: '#f2ffe0',
   uvBrushSize: 36,
   uvBrushOpacity: 0.9,
+  paintTool: 'brush',
+  paintSecondaryColor: '#1a1a1f',
+  paintHardness: 0.7,
+  paintSmoothing: 0.25,
+  paintNoise: 0,
+  paintShapeFilled: true,
+  paintGradient: 'linear',
   uvRevision: 0,
   uvError: null,
   textureAssets: [],
@@ -432,6 +439,34 @@ export class EditorSession {
 
   setUvBrushOpacity(opacity: number): void {
     this.runtime?.setUvBrushOpacity(opacity);
+  }
+
+  setPaintTool(tool: 'brush' | 'eraser' | 'line' | 'rectangle' | 'ellipse' | 'gradient' | 'fill'): void {
+    this.runtime?.setPaintTool(tool);
+  }
+
+  setPaintSecondaryColor(color: string): void {
+    this.runtime?.setPaintSecondaryColor(color);
+  }
+
+  setPaintHardness(value: number): void {
+    this.runtime?.setPaintHardness(value);
+  }
+
+  setPaintSmoothing(value: number): void {
+    this.runtime?.setPaintSmoothing(value);
+  }
+
+  setPaintNoise(value: number): void {
+    this.runtime?.setPaintNoise(value);
+  }
+
+  setPaintShapeFilled(value: boolean): void {
+    this.runtime?.setPaintShapeFilled(value);
+  }
+
+  setPaintGradient(value: 'linear' | 'radial'): void {
+    this.runtime?.setPaintGradient(value);
   }
 
   beginUvPaint(

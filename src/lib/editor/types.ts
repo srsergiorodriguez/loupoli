@@ -8,6 +8,7 @@ import type {
 import type { AutosaveStatus } from '../project/AutosaveService';
 import type { TextureLayerSummary } from '../texture/TextureAsset';
 import type { TextureAssetSummary } from '../texture/TextureLibrary';
+import type { PaintGradient, PaintTool } from '../paint/types';
 
 /** The object transform tools exposed by the toolbar. */
 export const TRANSFORM_MODES = ['select', 'translate', 'rotate', 'scale'] as const;
@@ -161,6 +162,13 @@ export interface EditorSnapshot {
   readonly uvBrushColor: string;
   readonly uvBrushSize: number;
   readonly uvBrushOpacity: number;
+  readonly paintTool: PaintTool;
+  readonly paintSecondaryColor: string;
+  readonly paintHardness: number;
+  readonly paintSmoothing: number;
+  readonly paintNoise: number;
+  readonly paintShapeFilled: boolean;
+  readonly paintGradient: PaintGradient;
   readonly uvRevision: number;
   readonly uvError: string | null;
   readonly textureAssets: readonly TextureAssetSummary[];

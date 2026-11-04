@@ -4,6 +4,7 @@
   import NumberField from '../Primitives/NumberField.svelte';
   import PaneFrame from '../Panels/PaneFrame.svelte';
   import PaneHeader from '../Panels/PaneHeader.svelte';
+  import type { PaintTool } from '../../paint/types';
 
   /** Session projection for the dedicated texture-paint workspace. */
   interface Props {
@@ -31,6 +32,22 @@
     ) ?? null
   );
   const activeEditor = $derived(session.snapshot.activeEditor);
+  const paintTool = $derived(session.snapshot.paintTool);
+  const secondaryColor = $derived(session.snapshot.paintSecondaryColor);
+  const hardness = $derived(session.snapshot.paintHardness);
+  const smoothing = $derived(session.snapshot.paintSmoothing);
+  const noise = $derived(session.snapshot.paintNoise);
+  const shapeFilled = $derived(session.snapshot.paintShapeFilled);
+  const gradient = $derived(session.snapshot.paintGradient);
+  const tools: readonly { tool: PaintTool; label: string }[] = [
+    { tool: 'brush', label: 'Brush' },
+    { tool: 'eraser', label: 'Erase' },
+    { tool: 'line', label: 'Line' },
+    { tool: 'rectangle', label: 'Rect' },
+    { tool: 'ellipse', label: 'Ellipse' },
+    { tool: 'gradient', label: 'Gradient' },
+    { tool: 'fill', label: 'Fill' }
+  ];
 
   onMount(() => {
     const observer = new ResizeObserver((entries) => {
@@ -167,6 +184,17 @@
   function setColor(event: Event): void {
     session.setUvBrushColor((event.currentTarget as HTMLInputElement).value);
   }
+
+  function setSecondaryColor(event: Event): void {
+    session.setPaintSecondaryColor((event.currentTarget as HTMLInputElement).value);
+  }
+
+  function setRange(
+    event: Event,
+    apply: (value: number) => void
+  ): void {
+    apply(Number((event.currentTarget as HTMLInputElement).value));
+  }
 </script>
 
 {#snippet paintHeader()}
@@ -176,6 +204,19 @@
     detail={activeLayer?.name ?? 'No layer'}
     meta={`${textureSize}² · ${activeLayer?.pattern ?? '—'}`}
   />
+{/snippet}
+
+{#snippet paintToolbar()}
+  <div class="paint-tools" role="group" aria-label="Paint tool">
+    {#each tools as item (item.tool)}
+      <button
+        type="button"
+        class:active={paintTool === item.tool}
+        aria-pressed={paintTool === item.tool}
+        onclick={() => session.setPaintTool(item.tool)}
+      >{item.label}</button>
+    {/each}
+  </div>
 {/snippet}
 
 {#snippet paintFooter()}
@@ -215,6 +256,76 @@
         onCommit={(value) => session.setUvBrushOpacity(value)}
       />
     </label>
+    <label class="paint-field paint-range">
+      <span>Hard</span>
+      <input
+        type="range"
+        min="0.01"
+        max="1"
+        step="0.01"
+        value={hardness}
+        aria-label="Brush hardness"
+        oninput={(event) => setRange(event, (value) => session.setPaintHardness(value))}
+      />
+    </label>
+    <label class="paint-field paint-range">
+      <span>Smooth</span>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={smoothing}
+        aria-label="Brush smoothing"
+        oninput={(event) => setRange(event, (value) => session.setPaintSmoothing(value))}
+      />
+    </label>
+    <label class="paint-field paint-range">
+      <span>Noise</span>
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={noise}
+        aria-label="Brush noise"
+        oninput={(event) => setRange(event, (value) => session.setPaintNoise(value))}
+      />
+    </label>
+    {#if paintTool === 'gradient'}
+      <label class="paint-field paint-color">
+        <span>To</span>
+        <input
+          type="color"
+          value={secondaryColor}
+          aria-label="Gradient secondary color"
+          onchange={setSecondaryColor}
+        />
+      </label>
+      <label class="paint-field">
+        <span>Type</span>
+        <select
+          value={gradient}
+          aria-label="Gradient type"
+          onchange={(event) =>
+            session.setPaintGradient(
+              event.currentTarget.value as 'linear' | 'radial'
+            )}
+        >
+          <option value="linear">Linear</option>
+          <option value="radial">Radial</option>
+        </select>
+      </label>
+    {/if}
+    {#if paintTool === 'rectangle' || paintTool === 'ellipse'}
+      <button
+        type="button"
+        class="paint-option"
+        class:active={shapeFilled}
+        aria-pressed={shapeFilled}
+        onclick={() => session.setPaintShapeFilled(!shapeFilled)}
+      >{shapeFilled ? 'Filled' : 'Outline'}</button>
+    {/if}
     <span class="paint-hint">
       {activeLayer
         ? 'Paint the active layer · pen pressure · ⌘/Ctrl+Z undoes a stroke'
@@ -223,7 +334,12 @@
   </div>
 {/snippet}
 
-<PaneFrame label="Paint editor" header={paintHeader} footer={paintFooter}>
+<PaneFrame
+  label="Paint editor"
+  header={paintHeader}
+  toolbar={paintToolbar}
+  footer={paintFooter}
+>
 
   <div class="paint-stage" bind:this={host}>
     <canvas
@@ -288,6 +404,55 @@
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
     pointer-events: none;
     transform: translate(-50%, -50%);
+  }
+
+  .paint-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+    padding: var(--space-1) 0;
+  }
+
+  .paint-tools button,
+  .paint-option {
+    min-width: 44px;
+    min-height: var(--hit-min);
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--font-body);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .paint-tools button:hover,
+  .paint-option:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .paint-tools button.active,
+  .paint-option.active {
+    color: var(--bg-canvas);
+    background: var(--accent-primary);
+  }
+
+  .paint-range input {
+    width: 72px;
+    accent-color: var(--accent-primary);
+  }
+
+  .paint-field select {
+    min-height: var(--control-h);
+    padding: 0 var(--space-1);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font: inherit;
   }
 
   .paint-foot {

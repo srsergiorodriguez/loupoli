@@ -68,6 +68,8 @@ import {
 } from '../texture/TextureAsset';
 import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
+import { PaintEngine } from '../paint/PaintEngine';
+import type { PaintGradient, PaintTool } from '../paint/types';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
   paintBounds,
@@ -378,10 +380,18 @@ export class EditorRuntime {
   private lassoSelectionBefore: SelectionSnapshot | null = null;
   private readonly uvPins = new Set<number>();
   private uvPaint: UvPaintStroke | null = null;
+  private paintEngine: PaintEngine | null = null;
   private uvPaintMode = false;
   private uvBrushColor = '#f2ffe0';
   private uvBrushSize = 36;
   private uvBrushOpacity = 0.9;
+  private paintTool: PaintTool = 'brush';
+  private paintSecondaryColor = '#1a1a1f';
+  private paintHardness = 0.7;
+  private paintSmoothing = 0.25;
+  private paintNoise = 0;
+  private paintShapeFilled = true;
+  private paintGradient: PaintGradient = 'linear';
   private uvDrag: UvDrag | null = null;
   private pointerSelectionHit = false;
   private uvPendingClick: {
@@ -567,6 +577,13 @@ export class EditorRuntime {
       uvBrushColor: this.uvBrushColor,
       uvBrushSize: this.uvBrushSize,
       uvBrushOpacity: this.uvBrushOpacity,
+      paintTool: this.paintTool,
+      paintSecondaryColor: this.paintSecondaryColor,
+      paintHardness: this.paintHardness,
+      paintSmoothing: this.paintSmoothing,
+      paintNoise: this.paintNoise,
+      paintShapeFilled: this.paintShapeFilled,
+      paintGradient: this.paintGradient,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
       textureAssets: this.textureLibrary.summaries(),
@@ -1036,6 +1053,7 @@ export class EditorRuntime {
     }
     this.cancelToolPointer();
     this.cancelUvPaint();
+    this.cancelTexturePaint();
     this.armedAction = null;
     this.renderer.setActionPreviewLine(null);
     this.cancelLasso();
@@ -1112,6 +1130,9 @@ export class EditorRuntime {
       this.openUvView();
     }
     const paint = workspace === 'paint';
+    if (!paint && this.uvPaintMode) {
+      this.cancelTexturePaint();
+    }
     this.activeEditor = paint ? 'paint' : 'uv';
     if (paint) {
       this.lassoMode = false;
@@ -1154,6 +1175,7 @@ export class EditorRuntime {
 
   private closeUvView(): void {
     this.cancelUvDrag();
+    this.cancelTexturePaint();
     this.uvOpen = false;
     this.activeEditor = '3d';
     this.uvPaintMode = false;
@@ -1660,6 +1682,41 @@ export class EditorRuntime {
     this.publish();
   }
 
+  setPaintTool(tool: PaintTool): void {
+    this.paintTool = tool;
+    this.publish();
+  }
+
+  setPaintSecondaryColor(color: string): void {
+    this.paintSecondaryColor = color;
+    this.publish();
+  }
+
+  setPaintHardness(value: number): void {
+    this.paintHardness = Math.min(1, Math.max(0.01, value));
+    this.publish();
+  }
+
+  setPaintSmoothing(value: number): void {
+    this.paintSmoothing = Math.min(1, Math.max(0, value));
+    this.publish();
+  }
+
+  setPaintNoise(value: number): void {
+    this.paintNoise = Math.min(1, Math.max(0, value));
+    this.publish();
+  }
+
+  setPaintShapeFilled(value: boolean): void {
+    this.paintShapeFilled = value;
+    this.publish();
+  }
+
+  setPaintGradient(value: PaintGradient): void {
+    this.paintGradient = value;
+    this.publish();
+  }
+
   /** Start painting on the active layer at panel-local coordinates. */
   beginUvPaint(
     x: number,
@@ -1896,36 +1953,45 @@ export class EditorRuntime {
     if (!this.uvOpen || !this.uvPaintMode) {
       return false;
     }
-    const layerId = this.textureStack.activeLayerId;
+    if (this.paintEngine) {
+      this.cancelTexturePaint();
+    }
+    const asset = this.textureStack;
+    const layerId = asset.activeLayerId;
     const point = paintPointToTexture(
       x,
       y,
       width,
       height,
-      this.textureStack.width,
-      this.textureStack.height
+      asset.width,
+      asset.height
     );
-    if (!layerId || !point || !this.textureStack.beginPaint(layerId)) {
+    if (!layerId || !point) {
       return false;
     }
-    const radius =
-      paintTextureRadius(
-        this.uvBrushSize,
-        width,
-        height,
-        this.textureStack.width
-      ) * Math.min(1, Math.max(0.2, pressure || 1));
-    this.textureStack.paintSegment(
-      layerId,
-      point.x,
-      point.y,
-      point.x,
-      point.y,
-      radius,
-      this.uvBrushColor,
-      this.uvBrushOpacity
+    const radius = paintTextureRadius(
+      this.uvBrushSize,
+      width,
+      height,
+      asset.width
     );
-    this.uvPaint = { layerId, lastX: point.x, lastY: point.y };
+    const engine = new PaintEngine(asset, layerId, {
+      tool: this.paintTool,
+      color: this.uvBrushColor,
+      secondaryColor: this.paintSecondaryColor,
+      radius,
+      opacity: this.uvBrushOpacity,
+      hardness: this.paintHardness,
+      smoothing: this.paintSmoothing,
+      noise: this.paintNoise,
+      spacing: 0.25,
+      shapeFilled: this.paintShapeFilled,
+      gradient: this.paintGradient
+    });
+    if (!engine.begin({ x: point.x, y: point.y, pressure })) {
+      return false;
+    }
+    this.paintEngine = engine;
     this.uvRevision += 1;
     this.renderer.refreshTexture();
     this.publish();
@@ -1940,50 +2006,52 @@ export class EditorRuntime {
     height: number,
     pressure: number
   ): void {
-    if (!this.uvPaint) {
+    if (!this.paintEngine) {
       return;
     }
+    const asset = this.textureStack;
     const point = paintPointToTexture(
       x,
       y,
       width,
       height,
-      this.textureStack.width,
-      this.textureStack.height
+      asset.width,
+      asset.height
     );
     if (!point) {
       return;
     }
-    const radius =
-      paintTextureRadius(
-        this.uvBrushSize,
-        width,
-        height,
-        this.textureStack.width
-      ) * Math.min(1, Math.max(0.2, pressure || 1));
-    this.textureStack.paintSegment(
-      this.uvPaint.layerId,
-      this.uvPaint.lastX,
-      this.uvPaint.lastY,
-      point.x,
-      point.y,
-      radius,
-      this.uvBrushColor,
-      this.uvBrushOpacity
-    );
-    this.uvPaint.lastX = point.x;
-    this.uvPaint.lastY = point.y;
+    this.paintEngine.update({ x: point.x, y: point.y, pressure });
     this.uvRevision += 1;
     this.renderer.refreshTexture();
     this.publish();
   }
 
   finishTexturePaint(): void {
-    this.finishUvPaint();
+    const engine = this.paintEngine;
+    if (!engine) {
+      return;
+    }
+    this.paintEngine = null;
+    engine.finish();
+    const asset = this.textureStack;
+    const patch = asset.endPaint();
+    if (patch) {
+      this.history.execute(new PaintTextureCommand(asset, patch));
+    }
+    this.renderer.refreshTexture();
+    this.publish();
   }
 
   cancelTexturePaint(): void {
-    this.cancelUvPaint();
+    const engine = this.paintEngine;
+    if (!engine) {
+      return;
+    }
+    this.paintEngine = null;
+    engine.cancel();
+    this.renderer.refreshTexture();
+    this.publish();
   }
 
   /**
