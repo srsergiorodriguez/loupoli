@@ -2054,7 +2054,8 @@ export class EditorRuntime {
       this.paintTool === 'line' ||
       this.paintTool === 'rectangle' ||
       this.paintTool === 'ellipse' ||
-      this.paintTool === 'gradient';
+      this.paintTool === 'gradient' ||
+      this.paintTool === 'fill';
     const hasTexture =
       node !== null && this.textureLibrary.get(node.textureId) !== null;
     const hit =
@@ -2374,12 +2375,6 @@ export class EditorRuntime {
       this.publish();
       return false;
     }
-    if (this.paintTool === 'fill') {
-      this.projectError =
-        '3D Fill is not implemented yet. Use the texture pane for fill.';
-      this.publish();
-      return false;
-    }
     const hit = this.renderer.pickSurface(sample.clientX, sample.clientY);
     if (!hit || hit.nodeId !== node.id) {
       return false;
@@ -2396,6 +2391,38 @@ export class EditorRuntime {
       y: sample.clientY,
       size: this.uvBrushSize
     };
+    if (this.paintTool === 'fill') {
+      const fill = this.projectedUvIsland(node, hit.face, asset);
+      if (!fill) {
+        this.projectError = 'No UV island contains the selected surface.';
+        this.publish();
+        return false;
+      }
+      const engine = new PaintEngine(
+        asset,
+        asset.activeLayerId,
+        this.paintSettings(1)
+      );
+      if (!engine.beginProjected({
+        x: hit.uv[0] * asset.width,
+        y: (1 - hit.uv[1]) * asset.height,
+        pressure: sample.pressure
+      })) {
+        return false;
+      }
+      engine.fillProjected(fill.path, fill.bounds);
+      this.projectedPaint = {
+        engine,
+        asset,
+        nodeId: node.id,
+        pointerId: sample.pointerId,
+        lastFace: null
+      };
+      this.uvRevision += 1;
+      this.renderer.refreshTexture();
+      this.publish();
+      return true;
+    }
     if (this.paintTool === 'line' || this.paintTool === 'rectangle' ||
         this.paintTool === 'ellipse' || this.paintTool === 'gradient') {
       const shape = {
@@ -2440,6 +2467,60 @@ export class EditorRuntime {
     this.renderer.refreshTexture();
     this.publish();
     return true;
+  }
+
+  /** Build a texture-space path for the seam-bounded UV chart of one face. */
+  private projectedUvIsland(
+    node: MeshNode,
+    evaluatedFace: number,
+    asset: TextureAsset
+  ): {
+    path: Path2D;
+    bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  } | null {
+    const evaluated = node.getEvaluatedMesh();
+    const baseFace =
+      evaluated.provenance?.faceBase[evaluatedFace] ?? evaluatedFace;
+    const chart = extractUvCharts(node.mesh).find((candidate) =>
+      candidate.faces.includes(baseFace)
+    );
+    if (!chart) {
+      return null;
+    }
+    const mesh = node.mesh;
+    const path = new Path2D();
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const face of chart.faces) {
+      const start = mesh.faceHalfEdge[face];
+      let halfEdge = start;
+      let first = true;
+      do {
+        const x = mesh.heUv[halfEdge * 2] * asset.width;
+        const y = (1 - mesh.heUv[halfEdge * 2 + 1]) * asset.height;
+        if (first) {
+          path.moveTo(x, y);
+          first = false;
+        } else {
+          path.lineTo(x, y);
+        }
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        halfEdge = mesh.heNext[halfEdge];
+      } while (halfEdge !== start);
+      path.closePath();
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      return null;
+    }
+    return {
+      path,
+      bounds: { minX, minY, maxX, maxY }
+    };
   }
 
   private shapePreview(shape: NonNullable<typeof this.projectedShape>): ProjectionPreview {

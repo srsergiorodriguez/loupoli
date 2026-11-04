@@ -120,6 +120,42 @@ export class PaintEngine {
     return true;
   }
 
+  /** Fill a projected UV-chart path clipped to its texture bounds. */
+  fillProjected(
+    path: Path2D,
+    bounds: { minX: number; minY: number; maxX: number; maxY: number }
+  ): void {
+    if (!this.context) {
+      return;
+    }
+    const width = this.asset.width;
+    const height = this.asset.height;
+    const left = Math.max(0, Math.min(width, Math.floor(bounds.minX)));
+    const top = Math.max(0, Math.min(height, Math.floor(bounds.minY)));
+    const right = Math.max(0, Math.min(width, Math.ceil(bounds.maxX)));
+    const bottom = Math.max(0, Math.min(height, Math.ceil(bounds.maxY)));
+    if (right <= left || bottom <= top) {
+      return;
+    }
+    this.asset.preparePaintRegion(left, top, right, bottom);
+    this.context.save();
+    this.context.globalAlpha = Math.max(
+      0,
+      Math.min(1, this.settings.opacity)
+    );
+    this.context.fillStyle = this.settings.color;
+    this.context.fill(path, 'nonzero');
+    this.context.restore();
+    this.bounds = include(this.bounds, {
+      minX: left,
+      minY: top,
+      maxX: right,
+      maxY: bottom
+    });
+    this.changed = true;
+    this.asset.refreshPreview();
+  }
+
   /** Stamp one independently sampled projected dab. */
   stampProjected(
     x: number,

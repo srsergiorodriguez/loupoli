@@ -35,7 +35,6 @@
     textureAssets.find((asset) => asset.id === session.snapshot.textureAssetId) ?? null
   );
   const brushSize = $derived(session.snapshot.uvBrushSize);
-  const paintTool = $derived(session.snapshot.paintTool);
   const activeLayer = $derived(
     session.snapshot.textureLayers.find(
       (layer) => layer.id === session.snapshot.textureActiveId
@@ -369,8 +368,6 @@
     <span class="paint-hint">
       {#if !activeLayer}
         Add a texture layer in the Inspector
-      {:else if paintTool === 'fill'}
-        Fill is texture-pane only · other tools paint the 3D surface too
       {:else}
         Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
       {/if}
