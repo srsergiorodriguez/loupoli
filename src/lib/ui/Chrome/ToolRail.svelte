@@ -29,6 +29,9 @@
   }
 
   function chooseTransform(mode: TransformMode): void {
+    if (!session.can('edit3d')) {
+      return;
+    }
     onFocusViewport();
     session.closeInspector();
     session.setLassoMode(false);
@@ -54,27 +57,29 @@
       onActivate={toggleLasso}
     />
   </div>
-  <span class="rail-divider" aria-hidden="true"></span>
-  <div class="tool-group">
-    <ToolButton
-      command="tool.move"
-      icon="move"
-      active={session.snapshot.transformMode === 'translate'}
-      onActivate={() => chooseTransform('translate')}
-    />
-    <ToolButton
-      command="tool.rotate"
-      icon="rotate"
-      active={session.snapshot.transformMode === 'rotate'}
-      onActivate={() => chooseTransform('rotate')}
-    />
-    <ToolButton
-      command="tool.scale"
-      icon="scale"
-      active={session.snapshot.transformMode === 'scale'}
-      onActivate={() => chooseTransform('scale')}
-    />
-  </div>
+  {#if session.can('edit3d')}
+    <span class="rail-divider" aria-hidden="true"></span>
+    <div class="tool-group">
+      <ToolButton
+        command="tool.move"
+        icon="move"
+        active={session.snapshot.transformMode === 'translate'}
+        onActivate={() => chooseTransform('translate')}
+      />
+      <ToolButton
+        command="tool.rotate"
+        icon="rotate"
+        active={session.snapshot.transformMode === 'rotate'}
+        onActivate={() => chooseTransform('rotate')}
+      />
+      <ToolButton
+        command="tool.scale"
+        icon="scale"
+        active={session.snapshot.transformMode === 'scale'}
+        onActivate={() => chooseTransform('scale')}
+      />
+    </div>
+  {/if}
 
 </nav>
 

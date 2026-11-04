@@ -141,6 +141,7 @@ export interface EditorSnapshot {
   readonly selectedElements: readonly number[];
   readonly selectionCombineMode: SelectionCombineMode;
   readonly activeEditor: EditorPane;
+  readonly workspace: Workspace;
   readonly selectionMode: SelectionMode;
   readonly loopSelect: boolean;
   readonly selectedPosition: [number, number, number] | null;

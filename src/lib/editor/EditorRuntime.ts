@@ -48,6 +48,7 @@ import {
 import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
+import { workspaceCan } from './workspaces';
 import {
   applyUvView,
   fitUvProjection,
@@ -155,6 +156,7 @@ import {
   type ShadingMode,
   type TransformMode,
   type TransformOrientation,
+  type Workspace,
   type ModalTransformKind,
   type ModalTransformSnapshot,
   type MeshActionKind,
@@ -360,6 +362,7 @@ export class EditorRuntime {
   private selectionCombineMode: SelectionCombineMode = 'replace';
   private loopSelect = false;
   private activeEditor: EditorPane = '3d';
+  private workspace: Workspace = 'model';
   private uvOpen = false;
   private uvSplit = 0.38;
   private uvLayout: 'bottom' | 'side' = 'bottom';
@@ -560,6 +563,7 @@ export class EditorRuntime {
       selectedElements,
       selectionCombineMode: this.selectionCombineMode,
       activeEditor: this.activeEditor,
+      workspace: this.workspace,
       selectionMode: this.selection.mode,
       loopSelect: this.loopSelect,
       selectedPosition,
@@ -1096,6 +1100,7 @@ export class EditorRuntime {
     this.uvOpen = false;
     this.uvPaintMode = false;
     this.activeEditor = '3d';
+    this.workspace = 'model';
     this.renderer.setSeamOverlayVisible(false);
     this.uvSelection.clear();
     this.uvPins.clear();
@@ -1131,6 +1136,7 @@ export class EditorRuntime {
 
   /** Switch Model, UV, and Paint without duplicating open/close logic. */
   setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
+    this.workspace = workspace;
     if (workspace === 'model') {
       this.activeEditor = '3d';
       if (this.uvOpen) {
@@ -1138,6 +1144,7 @@ export class EditorRuntime {
       } else if (this.uvPaintMode) {
         this.uvPaintMode = false;
         this.renderer.setSeamOverlayVisible(false);
+        this.syncScene();
         this.publish();
       }
       return;
@@ -1145,6 +1152,7 @@ export class EditorRuntime {
     if (!this.uvOpen) {
       this.openUvView();
     }
+    this.workspace = workspace;
     const paint = workspace === 'paint';
     if (!paint && this.uvPaintMode) {
       this.cancelTexturePaint();
@@ -1159,6 +1167,8 @@ export class EditorRuntime {
       this.publish();
     }
     this.renderer.setSeamOverlayVisible(!paint);
+    this.syncScene();
+    this.publish();
   }
 
   private openUvView(): void {
@@ -1172,6 +1182,7 @@ export class EditorRuntime {
       this.renderer.setActionPreviewLine(null);
     }
     this.uvOpen = true;
+    this.workspace = 'uv';
     this.activeEditor = 'uv';
     this.uvZoom = 1;
     this.uvPanX = 0;
@@ -1186,6 +1197,7 @@ export class EditorRuntime {
     this.uvRevision += 1;
     this.renderer.setSeamOverlayVisible(true);
     this.syncUvSelectionIfChanged();
+    this.syncScene();
     this.publish();
   }
 
@@ -1193,6 +1205,7 @@ export class EditorRuntime {
     this.cancelUvDrag();
     this.cancelTexturePaint();
     this.uvOpen = false;
+    this.workspace = 'model';
     this.activeEditor = '3d';
     this.uvPaintMode = false;
     this.uvActiveChart = null;
@@ -1200,6 +1213,7 @@ export class EditorRuntime {
     this.uvBaseNodeId = null;
     this.renderer.setSeamOverlayVisible(false);
     this.uvRevision += 1;
+    this.syncScene();
     this.publish();
   }
 
@@ -3222,6 +3236,9 @@ export class EditorRuntime {
 
   /** Toggle UV seam flags on the selected edges as one undoable command. */
   toggleSelectedSeams(): void {
+    if (!workspaceCan(this.workspace, 'seamAuthoring')) {
+      return;
+    }
     const node = this.getActiveNode();
     if (
       !node ||
@@ -3240,6 +3257,9 @@ export class EditorRuntime {
 
   /** Clear every UV seam on the active mesh as one undoable command. */
   clearAllSeams(): void {
+    if (!workspaceCan(this.workspace, 'seamAuthoring')) {
+      return;
+    }
     const node = this.getActiveNode();
     if (!node) {
       return;
@@ -4035,7 +4055,13 @@ export class EditorRuntime {
       this.cancelToolPointer();
     }
 
-    if (this.armedAction) {
+    if (!workspaceCan(this.workspace, 'select3d')) {
+      // Projection-paint routing will intercept this in Paint later.
+      return false;
+    }
+    const allowEdit = workspaceCan(this.workspace, 'edit3d');
+
+    if (allowEdit && this.armedAction) {
       const actionNode = this.getActiveNode();
       if (actionNode) {
         return this.beginActionGesture(sample, actionNode);
@@ -4052,7 +4078,7 @@ export class EditorRuntime {
       return false;
     }
 
-    if (this.transformMode !== 'select') {
+    if (allowEdit && this.transformMode !== 'select') {
       const gizmoHit = this.renderer.pickGizmo(
         sample.clientX,
         sample.clientY
@@ -4103,6 +4129,7 @@ export class EditorRuntime {
             this.syncScene();
             this.publish();
             if (
+              allowEdit &&
               this.beginMappedVertexDrag(
                 node,
                 baseVertex,
@@ -4174,6 +4201,11 @@ export class EditorRuntime {
 
     this.pointerSelectionHit = true;
     this.selection.pick(vertex, false);
+    if (!allowEdit) {
+      this.syncScene();
+      this.publish();
+      return false;
+    }
     const original = node.mesh.getVertexPosition(vertex);
     const world = this.renderer.getVertexWorldPosition(vertex);
     const plane = this.renderer.createCameraFacingPlane(world);
@@ -6025,8 +6057,10 @@ export class EditorRuntime {
       this.activeNodeId,
       this.activeGroupId,
       this.selection.mode,
-      this.evaluatedSelectionValues(),
-      this.transformMode,
+      workspaceCan(this.workspace, 'select3d')
+        ? this.evaluatedSelectionValues()
+        : [],
+      workspaceCan(this.workspace, 'edit3d') ? this.transformMode : 'select',
       this.transformOrientation
     );
   }

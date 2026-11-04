@@ -15,7 +15,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV and Paint |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas, brush footer |
-| **Inspector** | Properties of the active object/selection/context | Inspector Sections |
+| **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
 | **Status Bar** | Persistent status | Selection counts, frame budget, render state |
 
@@ -31,7 +31,13 @@ This is the authoritative map of the application shell. New controls must be ass
 - **UV Toolbar** — UV-only operations: U/V locks, Sync 3D, Pin, Unpin, Unwrap, Stack, Fit, Clamp.
 - **UV Canvas** — charts, texture, picking, lasso, paint.
 - **UV Footer** — exact UV values and transform hints.
-- **Inspector Section** — one collapsible disclosure with a title, optional meta, and body.
+- **Inspector Section** — one collapsible disclosure with a title, optional meta, and body. Visibility and order come from the shared workspace capability policy and section registry, never from per-section workspace checks.
+
+### Inspector section sets
+
+- **Model:** Scene → Transform → Selection → Mesh → Modifiers → PS1 Look → Controls.
+- **UV:** Scene → Selection → Controls. Selection remains for edge/seam authoring; 3D editing sections are hidden.
+- **Paint:** Scene → Brush → Texture → Controls. Brush and Texture are adjacent; 3D selection overlays are hidden while the selection set persists.
 - **Tooltip** — command label plus shortcut, from the command registry.
 
 ## Ownership rules

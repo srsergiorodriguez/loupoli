@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import { workspaceCan } from './workspaces';
+import {
+  defaultInspectorOpen,
+  inspectorSectionsFor
+} from '../ui/Panels/inspectorLayout';
+
+describe('workspace capabilities', () => {
+  it('grants selection but not mesh editing in UV', () => {
+    expect(workspaceCan('uv', 'select3d')).toBe(true);
+    expect(workspaceCan('uv', 'edit3d')).toBe(false);
+    expect(workspaceCan('uv', 'seamAuthoring')).toBe(true);
+  });
+
+  it('grants paint but no selection in Paint', () => {
+    expect(workspaceCan('paint', 'paintTexture')).toBe(true);
+    expect(workspaceCan('paint', 'paintProjected')).toBe(true);
+    expect(workspaceCan('paint', 'select3d')).toBe(false);
+    expect(workspaceCan('paint', 'edit3d')).toBe(false);
+  });
+});
+
+describe('inspector layout', () => {
+  it('keeps brush and texture adjacent in Paint', () => {
+    expect(inspectorSectionsFor('paint')).toEqual([
+      'scene',
+      'brush',
+      'texture',
+      'controls'
+    ]);
+  });
+
+  it('keeps selection for UV seams and hides 3D editing sections', () => {
+    expect(inspectorSectionsFor('uv')).toEqual([
+      'scene',
+      'selection',
+      'controls'
+    ]);
+  });
+
+  it('exposes the full modeling order only in Model', () => {
+    expect(inspectorSectionsFor('model')).toEqual([
+      'scene',
+      'transform',
+      'selection',
+      'mesh',
+      'modifiers',
+      'ps1',
+      'controls'
+    ]);
+  });
+
+  it('opens Scene, Selection, Brush, and Texture by default', () => {
+    const defaults = defaultInspectorOpen();
+    expect(defaults.scene).toBe(true);
+    expect(defaults.selection).toBe(true);
+    expect(defaults.brush).toBe(true);
+    expect(defaults.texture).toBe(true);
+  });
+});

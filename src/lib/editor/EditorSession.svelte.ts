@@ -1,6 +1,7 @@
 import type { PrimitiveKind } from '../geometry/primitives';
 import type { NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { EditorRuntime } from './EditorRuntime';
+import { workspaceCan, type WorkspaceCapability } from './workspaces';
 import {
   DEFAULT_PS1_AFFINE,
   DEFAULT_PS1_SNAP,
@@ -29,6 +30,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   selectedElements: [],
   selectionCombineMode: 'replace',
   activeEditor: '3d',
+  workspace: 'model',
   selectionMode: 'vertex',
   loopSelect: false,
   selectedPosition: null,
@@ -174,6 +176,11 @@ export class EditorSession {
   receive = (snapshot: EditorSnapshot): void => {
     this.snapshot = snapshot;
   };
+
+  /** Capability gate shared by commands, input, chrome, and Inspector. */
+  can(capability: WorkspaceCapability): boolean {
+    return workspaceCan(this.snapshot.workspace, capability);
+  }
 
   setShading(mode: ShadingMode): void {
     this.runtime?.setShadingMode(mode);

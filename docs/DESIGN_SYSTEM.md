@@ -1,6 +1,6 @@
 # loupoli — Design System
 
-**Status:** Phase 2 tokens, shell, scene controls, selection overlays, autosave states, and recovery UI implemented; later component inventory remains planned.  
+**Status:** Phase 2 tokens, shell, scene controls, selection overlays, autosave states, Paint UI, and workspace-filtered Inspector sections implemented; later component inventory remains planned.  
 **Related:** [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Persistence](./PERSISTENCE.md) · [README](../README.md)
 
 ---

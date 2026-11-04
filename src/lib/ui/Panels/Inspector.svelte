@@ -10,6 +10,11 @@
   import ColorField from '../Primitives/ColorField.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
+  import {
+    defaultInspectorOpen,
+    inspectorSectionsFor,
+    type InspectorSectionId
+  } from './inspectorLayout';
   import InspectorSection from './InspectorSection.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import {
@@ -151,6 +156,12 @@
   const textureMeta = $derived(
     `${activeTextureAsset?.width ?? session.snapshot.textureSize}² · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
   );
+  const visibleSections = $derived(
+    inspectorSectionsFor(session.snapshot.workspace)
+  );
+  const canEdit3d = $derived(session.can('edit3d'));
+  const canSeam = $derived(session.can('seamAuthoring'));
+
   const paintToolLabel = $derived(
     session.snapshot.paintTool === 'brush'
       ? 'Brush'
@@ -164,33 +175,14 @@
               session.snapshot.paintTool.slice(1)
   );
 
-  type SectionKey =
-    | 'scene'
-    | 'mesh'
-    | 'selection'
-    | 'brush'
-    | 'transform'
-    | 'modifiers'
-    | 'texture'
-    | 'ps1'
-    | 'controls';
+  type SectionKey = InspectorSectionId;
 
-  const SECTION_DEFAULTS: Record<SectionKey, boolean> = {
-    scene: true,
-    mesh: false,
-    selection: false,
-    brush: true,
-    transform: false,
-    modifiers: false,
-    texture: false,
-    ps1: false,
-    controls: false
-  };
+  const SECTION_DEFAULTS: Record<SectionKey, boolean> = defaultInspectorOpen();
 
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
 
-  const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v3';
+  const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v4';
   let sections = $state<Record<SectionKey, boolean>>({ ...SECTION_DEFAULTS });
   let draggedNodeId = $state<string | null>(null);
   let dropTargetId = $state<string | null>(null);
@@ -200,7 +192,7 @@
   onDestroy(cleanupReorder);
 
   function beginReorder(event: PointerEvent, nodeId: string): void {
-    if (event.pointerType === 'mouse' && event.button !== 0) {
+    if (!canEdit3d || (event.pointerType === 'mouse' && event.button !== 0)) {
       return;
     }
     event.preventDefault();
@@ -408,7 +400,8 @@
             type="button"
             class="object-drag-handle"
             aria-label={`Drag to reorder ${node.name}`}
-            title="Drag to reorder"
+            title={canEdit3d ? 'Drag to reorder' : 'Reordering is available in Model'}
+            disabled={!canEdit3d}
             onpointerdown={(event) => beginReorder(event, node.id)}
           ><span aria-hidden="true">⠿</span></button>
           <button
@@ -461,7 +454,8 @@
   </header>
 
   <div class="panel-body">
-    <InspectorSection
+    {#snippet sceneSection()}
+<InspectorSection
       title="Scene"
       meta={sceneMeta}
       open={sections.scene}
@@ -509,23 +503,25 @@
 
 
 
-      <div class="scene-actions">
-        <select
-          class="primitive-select"
-          bind:value={primitive}
-          aria-label="Primitive type"
-        >
-          {#each PRIMITIVE_KINDS as kind (kind)}
-            <option value={kind}>{PRIMITIVE_LABELS[kind]}</option>
-          {/each}
-        </select>
-        <button type="button" class="scene-button" onclick={addPrimitive}>
-          <Icon name="plus" size={14} />
-          <span>Add</span>
-        </button>
-      </div>
+      {#if canEdit3d}
+        <div class="scene-actions">
+          <select
+            class="primitive-select"
+            bind:value={primitive}
+            aria-label="Primitive type"
+          >
+            {#each PRIMITIVE_KINDS as kind (kind)}
+              <option value={kind}>{PRIMITIVE_LABELS[kind]}</option>
+            {/each}
+          </select>
+          <button type="button" class="scene-button" onclick={addPrimitive}>
+            <Icon name="plus" size={14} />
+            <span>Add</span>
+          </button>
+        </div>
+      {/if}
 
-      {#if nodes.length > 0 || groups.length > 0}
+      {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
         <div class="scene-action-row">
           <button
             type="button"
@@ -588,8 +584,10 @@
         </div>
       {/if}
     </InspectorSection>
+{/snippet}
 
-    <InspectorSection
+    {#snippet meshSection()}
+<InspectorSection
       title="Mesh"
       meta={meshMeta}
       open={sections.mesh}
@@ -620,8 +618,10 @@
       </dl>
       {/if}
     </InspectorSection>
+{/snippet}
 
-    <InspectorSection
+    {#snippet selectionSection()}
+<InspectorSection
       title="Selection"
       meta={selectionMeta}
       open={sections.selection}
@@ -645,7 +645,7 @@
         <p class="empty-state">
           The scene is empty. Add a QuadSphere, Cylinder, or Grid above.
         </p>
-      {:else if session.snapshot.selectionMode === 'vertex' && selectionCount === 1 && selectedPosition}
+      {:else if canEdit3d && session.snapshot.selectionMode === 'vertex' && selectionCount === 1 && selectedPosition}
         <p class="selection-title">
           Vertex <span class="text-mono">{primarySelection! + 1}</span>
         </p>
@@ -701,7 +701,7 @@
 
       {#if selectionCount > 0}
         <div class="selection-actions">
-          {#if session.snapshot.selectionMode === 'vertex' && selectionCount >= 2}
+          {#if canEdit3d && (session.snapshot.selectionMode === 'vertex' && selectionCount >= 2)}
             <button
               type="button"
               class="topology-action"
@@ -712,7 +712,7 @@
               <span>Merge</span>
             </button>
           {/if}
-          {#if session.snapshot.selectionMode === 'face' && selectionCount > 0}
+          {#if canEdit3d && (session.snapshot.selectionMode === 'face' && selectionCount > 0)}
             <button
               type="button"
               class="topology-action"
@@ -723,7 +723,7 @@
               <span>Extrude</span>
             </button>
           {/if}
-          {#if session.snapshot.selectionMode === 'face' && selectionCount === 1}
+          {#if canEdit3d && (session.snapshot.selectionMode === 'face' && selectionCount === 1)}
             <button
               type="button"
               class="topology-action"
@@ -734,7 +734,7 @@
               <span>Inset</span>
             </button>
           {/if}
-          {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
+          {#if canSeam && session.snapshot.selectionMode === 'edge' && selectionCount > 0}
             <button
               type="button"
               class="topology-action"
@@ -745,7 +745,7 @@
               <span>Seam</span>
             </button>
           {/if}
-          {#if session.snapshot.selectionMode === 'edge' && selectionCount === 1}
+          {#if canEdit3d && (session.snapshot.selectionMode === 'edge' && selectionCount === 1)}
             <button
               type="button"
               class="topology-action"
@@ -756,7 +756,7 @@
               <span>Loop cut</span>
             </button>
           {/if}
-          {#if session.snapshot.selectionMode === 'edge' && selectionCount >= 2}
+          {#if canEdit3d && (session.snapshot.selectionMode === 'edge' && selectionCount >= 2)}
             <button
               type="button"
               class="topology-action"
@@ -767,19 +767,21 @@
               <span>Bridge</span>
             </button>
           {/if}
-          <button
-            type="button"
-            class="delete-selection"
-            aria-label="Delete selected {modePlural}"
-            onclick={() => session.deleteSelection()}
-          >
-            <Icon name="trash" size={14} />
-            <span>Delete</span>
-          </button>
+          {#if canEdit3d}
+            <button
+              type="button"
+              class="delete-selection"
+              aria-label="Delete selected {modePlural}"
+              onclick={() => session.deleteSelection()}
+            >
+              <Icon name="trash" size={14} />
+              <span>Delete</span>
+            </button>
+          {/if}
         </div>
       {/if}
 
-      {#if activeNodeId !== null && session.snapshot.seamCount > 0}
+      {#if canSeam && activeNodeId !== null && session.snapshot.seamCount > 0}
         <div class="selection-actions">
           <button
             type="button"
@@ -794,9 +796,11 @@
         </div>
       {/if}
     </InspectorSection>
+{/snippet}
 
-    {#if session.snapshot.activeEditor === 'paint'}
-      <InspectorSection
+    
+      {#snippet brushSection()}
+<InspectorSection
         title="Brush"
         meta={paintToolLabel}
         open={sections.brush}
@@ -861,9 +865,11 @@
           {/if}
         </div>
       </InspectorSection>
-    {/if}
+{/snippet}
+    
 
-    <InspectorSection
+    {#snippet transformSection()}
+<InspectorSection
       title="Transform"
       meta={transformMeta}
       open={sections.transform}
@@ -951,9 +957,10 @@
         {/if}
       </div>
     </InspectorSection>
+{/snippet}
 
-    {#if activeGroupId === null}
-      <InspectorSection
+    {#snippet modifiersSection()}
+<InspectorSection
         title="Modifiers"
         meta={modifiersMeta}
         open={sections.modifiers}
@@ -1156,9 +1163,10 @@
         {/if}
         </div>
             </InspectorSection>
-    {/if}
+{/snippet}
 
-    <InspectorSection
+    {#snippet textureSection()}
+<InspectorSection
       title="Texture"
       meta={textureMeta}
       open={sections.texture}
@@ -1379,8 +1387,10 @@
         {/if}
       </div>
     </InspectorSection>
+{/snippet}
 
-    <InspectorSection
+    {#snippet ps1Section()}
+<InspectorSection
       title="PS1 look"
       meta="Render effect · Opt-in"
       open={sections.ps1}
@@ -1405,8 +1415,10 @@
         </p>
       </div>
     </InspectorSection>
+{/snippet}
 
-    <InspectorSection
+    {#snippet controlsSection()}
+<InspectorSection
       title="Controls"
       open={sections.controls}
       onToggle={(open) => setSection('controls', open)}
@@ -1430,6 +1442,20 @@
         </div>
       </dl>
     </InspectorSection>
+{/snippet}
+
+      {#each visibleSections as section (section)}
+        {#if section === 'scene'}{@render sceneSection()}
+        {:else if section === 'transform'}{@render transformSection()}
+        {:else if section === 'selection'}{@render selectionSection()}
+        {:else if section === 'mesh'}{@render meshSection()}
+        {:else if section === 'modifiers'}{@render modifiersSection()}
+        {:else if section === 'ps1'}{@render ps1Section()}
+        {:else if section === 'brush'}{@render brushSection()}
+        {:else if section === 'texture'}{@render textureSection()}
+        {:else if section === 'controls'}{@render controlsSection()}
+        {/if}
+      {/each}
   </div>
 </aside>
 
