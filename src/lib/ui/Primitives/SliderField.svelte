@@ -49,7 +49,7 @@
     display: grid;
     grid-template-columns: minmax(64px, auto) minmax(0, 1fr) 44px;
     align-items: center;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     gap: var(--space-2);
     color: var(--text-tertiary);
     font-family: var(--font-mono);

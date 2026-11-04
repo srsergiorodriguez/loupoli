@@ -139,7 +139,7 @@ Tokens live in `src/design/tokens.css`. Components consume semantic tokens; no c
 
   /* Controls */
   --control-h-sm: 24px;
-  --control-h: 30px;
+  --control-h: 32px;
   --control-h-lg: 36px;
   --hit-min: 44px;
   --control-h-touch: 44px;
@@ -310,7 +310,7 @@ Use the 4px scale exclusively. The primary layout rhythm is:
 ### 4.7 Accessibility and input affordances
 
 - Touch and pen targets: minimum 44×44 CSS px even when the visual control is smaller. Expand hit areas with padding or an absolutely positioned hit region.
-- Desktop pointer targets may be 30px visual; the same controls become at least 44px under `[data-density="touch"]`.
+- Desktop pointer targets are 32px visual; the same controls become at least 44px under `[data-density="touch"]`. Inputs, selects, action buttons, and outliner rows share that control height.
 - Every icon-only button has `aria-label`. Switch/toggle semantics use `role="switch"`/`aria-checked`, or real inputs.
 - Status messages use a polite live region. Errors use an alert or persistent inline message.
 - Do not rely on color alone for axis, selection, or save state. Pair with labels, shapes, or text.
@@ -438,19 +438,19 @@ Implemented component files and local patterns:
 | `SelectionModeControl` | 2 | Vertex/Edge/Face mode switch | 44px targets, active state not color-only |
 | `ActionDock` | 3 | One-shot mesh actions | Bottom-left 2×2 grid, 64×44 minimum targets, contextual disabled states |
 | `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
-| `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, 44px action |
+| `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, shared control-height action (44px touch) |
 | `ThreeDotMenu` / `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Standard icon-only overflow wrapper; body-mounted fixed menu so inspector overflow cannot clip it |
 | `OutlinerDragHandle` / `OutlinerVisibility` | 1 | Scene and texture outliners | Shared left drag handle and right visibility control |
 | `TextField` | 1 | Inspector text fields | Labeled inline text commit |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
-| `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, 44px actions, one composite texture per asset, `.lpoly` v3 PNG chunks |
+| `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoly` v3 PNG chunks |
 | `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, Paint toggle, brush color/size/opacity controls, and failure banner |
 | `TransformHud` | 2 | G/R/S readout | Bottom-center pill with target, axis, exact value, key hints |
 | `Inspector` | 1–3 | Scene, transform, modifiers, mesh actions | Floating panel; section-head pattern |
 | `IconButton` | 1 | Compact symbol actions | Accessible label mandatory |
 | `ToolButton` | 1–3 | Tool rail item | Selected state has a non-color indicator |
 | `Switch` | 1–3 | Snap/visibility and booleans | Larger hit area than visual track |
-| `Vector3Field` | 2–3 | XYZ transform rows | Axis colors, unit suffix, 44px touch inputs |
+| `Vector3Field` | 2–3 | XYZ transform rows | Axis colors, unit suffix, shared control-height inputs (44px touch) |
 | `Icon` | 1–3 | Local SVG registry | No icon package |
 | `ProjectBanner` / save state | 2 | Recovery, save/open errors, autosave status | Explicit Recover/Discard; errors persist until dismissed |
 | `.loupoli-panel` surface | 1 | Floating glass surface | Flat nested sections; no nested blur |
@@ -468,14 +468,14 @@ Implemented component files and local patterns:
 | PaneHost | 2 | UV and Paint panes | 44px edge divider; resizable; future bottom mode |
 | PaneFrame | 1 | Shared pane interior | PaneHeader + optional PaneToolbar + flex body + footer |
 | Paint Editor | 2 | Dedicated texture paint pane | Texture canvas + brush footer; no UV chrome |
-| Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; 44px eye; hidden rows dimmed |
+| Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; control-height eye (44px touch); hidden rows dimmed |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
 | Modifier stack | 3 | Ordered cards with enable/order/remove/parameters | Explicit evaluated state and error panel |
 | Transform orientation toggle | 3 | Local/Global transform space | Two-button control; 44px touch width/height |
 | `Selection gizmo` / `ObjectGizmo` | 3 | Move/Rotate/Scale axes | Median placement for elements; screen-constant size; enlarged Pencil hit volumes |
 | Grid snap / axis chips | 3 | Snap toggle/step and X/Y/Z locks | 44px chips, accent state, axis colors |
 | PS1 look | 3 | Collapsed render-effect module | Native details/summary; off by default |
-| Native selects | 2–3 | Primitive palette and modifier parameters | 44px touch target |
+| Native selects | 2–3 | Primitive palette and modifier parameters | Shared control height; 44px touch target |
 
 Planned primitives not yet extracted:
 
@@ -488,7 +488,7 @@ Planned primitives not yet extracted:
 - **Primary:** 44px minimum height; full-width only for decisive actions such as Add.
 - **Tool rail:** 52px rail on desktop; 44px+ touch targets in the bottom dock (measured 64×52 in the iPad toolrail).
 - **ActionDock:** 64px minimum width, 44px minimum height; 2×2 grid.
-- **Compact Inspector actions:** 30px visual on desktop, 44px touch hit region.
+- **Inspector controls:** 32px visual on desktop, 44px touch. Inputs, selects, action buttons, and outliner rows share the same height.
 - **HUDs:** non-interactive; minimum height `--control-h`, pointer-events none.
 
 ### 6.2 Core component behavior
@@ -496,7 +496,7 @@ Planned primitives not yet extracted:
 #### Button
 
 - Variants: `primary` (lime fill, ink text), `secondary` (raised surface, subtle border), `ghost` (transparent until hover), `danger`.
-- Visual height 30px desktop, 44px touch; horizontal padding 12px/16px.
+- Visual height 32px desktop, 44px touch; horizontal padding 12px/16px.
 - Primary is reserved for a single decisive action in a region (Save, Recover). Do not stack multiple lime fills.
 - Labels are sentence case. Icons are optional, never decorative-only inside a labeled button.
 - Disabled state is visibly inert and retains size. If the reason is not obvious, the surrounding UI explains it.
@@ -511,7 +511,7 @@ Planned primitives not yet extracted:
 #### SegmentedControl
 
 - 2–4 mutually exclusive options, used for shading and selection modes.
-- 30px visual desktop; 44px touch. Use real radio inputs or correct `role="radiogroup"` semantics.
+- 32px visual desktop; 44px touch. Use real radio inputs or correct `role="radiogroup"` semantics.
 - Keyboard arrows move selection, Home/End jump to ends.
 - Icons may be paired with short text; avoid compressing four labels into a tiny width. On narrow screens use a single popover trigger instead.
 

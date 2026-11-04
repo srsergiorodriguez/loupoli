@@ -101,7 +101,8 @@
   }
 
   .action-menu-trigger.icon-only {
-    width: var(--hit-min);
+    width: var(--control-h);
+    height: var(--control-h);
     padding: 0;
     justify-content: center;
   }
@@ -110,7 +111,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     gap: var(--space-1);
     padding: 0 var(--space-2);
     border: var(--hairline) solid var(--border-subtle);

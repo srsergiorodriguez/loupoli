@@ -1629,14 +1629,14 @@
   .object-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: 2px;
   }
 
   .object-row {
     display: flex;
     align-items: stretch;
     width: 100%;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--bg-input);
@@ -1651,7 +1651,7 @@
     flex: 1;
     align-items: center;
     min-width: 0;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     gap: var(--space-2);
     padding: 0 var(--space-2);
     border: 0;
@@ -1726,7 +1726,7 @@
 
   .primitive-select,
   .scene-button {
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--bg-input);
@@ -1934,7 +1934,7 @@
 
   .snap-toggle,
   .snap-step {
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--bg-input);
@@ -2025,7 +2025,7 @@
 
   .modifier-select,
   .modifier-field select {
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     min-width: 0;
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -2227,6 +2227,12 @@
     gap: 0;
   }
 
+  .brush-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
   .texture-block {
     display: flex;
     flex-direction: column;
@@ -2281,7 +2287,7 @@
     display: flex;
     align-items: center;
     gap: 2px;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     border: var(--hairline) solid transparent;
     border-radius: var(--radius-sm);
     background: var(--bg-input);
@@ -2314,7 +2320,7 @@
     grid-template-columns: 16px minmax(0, 1fr) auto auto;
     align-items: center;
     min-width: 0;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     gap: var(--space-1);
     padding: 0 var(--space-1);
     border: 0;
@@ -2366,7 +2372,7 @@
   .texture-name-input {
     flex: 1;
     min-width: 0;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     padding: 0 var(--space-1);
     border: 0;
     background: transparent;

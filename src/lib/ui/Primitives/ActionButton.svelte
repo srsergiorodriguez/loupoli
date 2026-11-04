@@ -39,7 +39,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     gap: var(--space-1);
     padding: 0 var(--space-2);
     border: var(--hairline) solid var(--border-subtle);

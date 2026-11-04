@@ -28,8 +28,8 @@
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
+    min-width: var(--control-h);
+    min-height: var(--control-h);
     border: 0;
     background: transparent;
     color: var(--text-tertiary);

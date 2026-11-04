@@ -39,7 +39,7 @@
     display: grid;
     grid-template-columns: minmax(64px, auto) minmax(0, 1fr);
     align-items: center;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     gap: var(--space-2);
     color: var(--text-tertiary);
     font-family: var(--font-ui);
@@ -48,7 +48,7 @@
 
   input {
     width: 100%;
-    min-height: var(--control-h);
+    height: var(--control-h);
     padding: 0 var(--space-2);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-sm);

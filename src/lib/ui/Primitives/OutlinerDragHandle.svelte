@@ -27,7 +27,7 @@
     justify-content: center;
     flex: 0 0 auto;
     min-width: 28px;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     border: 0;
     background: transparent;
     color: var(--text-tertiary);

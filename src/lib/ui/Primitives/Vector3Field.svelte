@@ -86,7 +86,7 @@
     display: flex;
     align-items: center;
     min-width: 0;
-    min-height: var(--hit-min);
+    min-height: var(--control-h);
     gap: 5px;
     padding: 0 7px;
     background: var(--bg-input);
