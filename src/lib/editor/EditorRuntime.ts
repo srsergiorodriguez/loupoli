@@ -103,6 +103,7 @@ import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
 import { exportObj, importObjNodes } from '../io/obj';
 import { exportGlb, importGlb } from '../io/gltf';
 import { SetAnimationCommand } from './commands/AnimationCommands';
+import { SetShapeKeysCommand } from './commands/ShapeKeyCommands';
 import {
   CreateCameraCommand,
   DeleteCameraCommand,
@@ -812,6 +813,11 @@ export class EditorRuntime {
       animationPlaying: this.animationPlaying,
       animationTracks: this.animationTrackSummaries(),
       animationInterpolation: this.animationInterpolation,
+      shapeKeys: (this.getActiveNode()?.shapeKeys ?? []).map((key) => ({
+        id: key.id,
+        name: key.name,
+        weight: key.weight
+      })),
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
     };
@@ -4469,6 +4475,69 @@ export class EditorRuntime {
       this.fileBusy = false;
       this.publish();
     }
+  }
+
+  private cloneShapeKeys(node: MeshNode) {
+    return node.shapeKeys.map((key) => ({
+      ...key,
+      targetPositions: key.targetPositions.slice()
+    }));
+  }
+
+  /** Add an identity shape key to the active object. */
+  addShapeKey(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const before = this.cloneShapeKeys(node);
+    const key = node.addShapeKey();
+    this.history.execute(
+      new SetShapeKeysCommand(node, before, node.shapeKeys, `Add ${key.name}`)
+    );
+    this.publish();
+  }
+
+  /** Remove one shape key from the active object. */
+  removeShapeKey(id: string): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const before = this.cloneShapeKeys(node);
+    node.removeShapeKey(id);
+    this.history.execute(
+      new SetShapeKeysCommand(node, before, node.shapeKeys, 'Remove shape key')
+    );
+    this.publish();
+  }
+
+  /** Change one shape-key weight. */
+  setShapeKeyWeight(id: string, weight: number): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const before = this.cloneShapeKeys(node);
+    node.setShapeKeyWeight(id, weight);
+    this.history.execute(
+      new SetShapeKeysCommand(node, before, node.shapeKeys, 'Shape key weight')
+    );
+    this.publish();
+  }
+
+  /** Capture the current base mesh into a shape key. */
+  updateShapeKeyFromMesh(id: string): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const before = this.cloneShapeKeys(node);
+    node.updateShapeKeyFromMesh(id);
+    this.history.execute(
+      new SetShapeKeysCommand(node, before, node.shapeKeys, 'Update shape key')
+    );
+    this.publish();
   }
 
   /** Bake direct lights into the active object's texture lighting layer. */

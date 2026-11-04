@@ -99,6 +99,7 @@
   const animationTargetId = $derived(
     session.snapshot.activeGroupId ?? session.snapshot.activeNodeId
   );
+  const shapeKeys = $derived(session.snapshot.shapeKeys);
   const activeAnimationTrack = $derived(
     animationTracks.find((track) => track.targetId === animationTargetId) ?? null
   );
@@ -1609,6 +1610,60 @@
     </InspectorSection>
 {/snippet}
 
+    {#snippet shapesSection()}
+<InspectorSection
+      title="Shape keys"
+      meta={`${shapeKeys.length} key${shapeKeys.length === 1 ? '' : 's'}`}
+      open={sections.shapes}
+      onToggle={(open) => setSection('shapes', open)}
+    >
+      <div class="module-body">
+        {#if activeNode}
+          <div class="texture-action-row">
+            <ActionButton
+              label="Add shape key"
+              icon="plus"
+              onActivate={() => session.addShapeKey()}
+            />
+          </div>
+          {#if shapeKeys.length === 0}
+            <p class="hint">Add a shape key to store a morph target for this object.</p>
+          {:else}
+            <div class="shape-key-list">
+              {#each shapeKeys as key (key.id)}
+                <div class="shape-key-row">
+                  <SliderField
+                    label={key.name}
+                    value={key.weight}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    precision={2}
+                    onChange={(value) => session.setShapeKeyWeight(key.id, value)}
+                  />
+                  <ActionButton
+                    label="Update"
+                    icon="checker"
+                    onActivate={() => session.updateShapeKeyFromMesh(key.id)}
+                  />
+                  <ActionButton
+                    label="Delete"
+                    icon="trash"
+                    variant="danger"
+                    onActivate={() => session.removeShapeKey(key.id)}
+                  />
+                </div>
+              {/each}
+            </div>
+            <p class="hint">Topology-changing edits should be completed before adding shape keys.</p>
+          {/if}
+        {:else}
+          <p class="hint">Select an object to edit its shape keys.</p>
+        {/if}
+      </div>
+    </InspectorSection>
+    {/snippet}
+
     {#snippet modifiersSection()}
 <InspectorSection
         title="Modifiers"
@@ -2142,6 +2197,7 @@
         {:else if section === 'transform'}{@render transformSection()}
         {:else if section === 'selection'}{@render selectionSection()}
         {:else if section === 'mesh'}{@render meshSection()}
+        {:else if section === 'shapes'}{@render shapesSection()}
         {:else if section === 'modifiers'}{@render modifiersSection()}
         {:else if section === 'ps1'}{@render ps1Section()}
         {:else if section === 'brush'}{@render brushSection()}
@@ -2863,6 +2919,28 @@
   .animation-key.selected {
     border-color: var(--accent-primary);
     color: var(--text-primary);
+  }
+
+  .shape-key-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .shape-key-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
+  .shape-key-row :global(.slider-field) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .shape-key-row :global(.action-button) {
+    flex: 0 0 auto;
   }
 
   .module-body {

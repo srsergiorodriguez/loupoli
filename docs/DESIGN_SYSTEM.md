@@ -465,6 +465,7 @@ Implemented component files and local patterns:
 | `InlineNameField` | 4 | Scene, texture asset, and layer names | Shared borderless rename field with Enter/Escape handling |
 | `RenameNodeCommand` / `RenameGroupCommand` | 4 | Scene object and group rename | Undoable and journaled through `set-node-name` / `set-group-name` |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
+| `Shape keys` module | 5 | Model Inspector | Morph targets, weights, persistence, topology guard |
 | `Interchange` module | 5 | Scene Inspector | OBJ/GLB import and export, simple material colors, Y-up conversion |
 | `Animation` module | 5 | Dedicated Animate workspace | Transform keyframes, timeline, playback, and explicit animation Inspector |
 | `Camera and Render` module | 6 | Dedicated Render workspace | Scene-camera Inspector, virtual/output resolution, clean still render, camera-driven preview |

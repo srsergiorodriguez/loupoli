@@ -181,6 +181,22 @@ describe('.lpoly v4', () => {
     expect(restored?.keyframes[1].transform.position).toEqual([3, 0, 1]);
   });
 
+  it('round-trips shape keys and evaluates weights', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    const key = node.addShapeKey('Smile');
+    key.weight = 0.75;
+    key.targetPositions[0] += 2;
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    const restored = decoded.document.nodes[0];
+    expect(restored.shapeKeys).toHaveLength(1);
+    expect(restored.shapeKeys[0].name).toBe('Smile');
+    expect(restored.shapeKeys[0].weight).toBe(0.75);
+    expect(restored.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(
+      node.mesh.positions[0] + 1.5
+    );
+  });
+
   it('round-trips simple node material palettes', () => {
     const document = makeDocument();
     const node = document.nodes[0];

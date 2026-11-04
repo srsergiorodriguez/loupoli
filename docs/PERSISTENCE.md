@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 4 persistence plus Phase 5A lighting. Autosave, `.lpoly` v4, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, ambient settings, and render cameras round-trip. The manifest may contain up to 32 cameras; older files without cameras receive a default camera. v4 stores the texture asset library and lighting metadata. v3 files remain readable; legacy v1/v2 compatibility is deferred. Shape keys remain later work. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
+**Status:** Phase 4 persistence plus Phase 5A lighting. Autosave, `.lpoly` v4, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, ambient settings, and render cameras round-trip. The manifest may contain up to 32 cameras; older files without cameras receive a default camera. v4 stores the texture asset library and lighting metadata. v3 files remain readable; legacy v1/v2 compatibility is deferred. Minimal shape keys round-trip as binary payload. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 **Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
@@ -274,7 +274,7 @@ For each node, in order:
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, simple material palettes, lights, ambient settings, render cameras, and animation are part of `.lpoly` v4 and the v4 autosave checkpoint.
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, simple material palettes, shape-key payloads, lights, ambient settings, render cameras, and animation are part of `.lpoly` v4 and the v4 autosave checkpoint.
 
 Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip.
 

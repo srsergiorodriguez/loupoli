@@ -1,6 +1,6 @@
 # loupoli — Master Delivery Plan
 
-**Status:** Phase 2, Phase 3, and Phase 4 are implemented for browser and native desktop builds; Phase 4 has a [conditional exit audit](./PHASE4_AUDIT.md). Phase 5A lighting, per-light hard/soft shadows, and direct-light texture baking are implemented in the dedicated Light workspace; see [Phase 5 lighting](./PHASE5_LIGHTING.md). Physical-iPad/WKWebView validation, soft shadows/AO and shape keys remain; OBJ/GLB interchange foundation is implemented. Animation foundation and render still/frames/video capability are implemented.
+**Status:** Phase 2, Phase 3, and Phase 4 are implemented for browser and native desktop builds; Phase 4 has a [conditional exit audit](./PHASE4_AUDIT.md). Phase 5A lighting, per-light hard/soft shadows, and direct-light texture baking are implemented in the dedicated Light workspace; see [Phase 5 lighting](./PHASE5_LIGHTING.md). Physical-iPad/WKWebView validation, soft shadows/OBJ/GLB interchange and minimal shape keys are implemented; shape-key weight animation, GLB morph export, and AO remain. Animation foundation and render still/frames/video capability are implemented.
 **Brand rule:** the name is always written `loupoli`, lowercase.
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.
 **Companion docs:** [Docs index](./README.md) ·  [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
@@ -257,7 +257,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 ### Phase 5 — Lighting, baking, shape keys, and interchange
 
-**5A implemented:** editable directional/point/ambient lighting, per-light hard shadows, Lit document-light preview, dedicated Light workspace, and direct-light texture baking. AO and shape keys remain; OBJ/GLB interchange foundation is implemented. Animation foundation and render still/frames/video capability are implemented. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
+**5A implemented:** editable directional/point/ambient lighting, per-light hard shadows, Lit document-light preview, dedicated Light workspace, and direct-light texture baking. OBJ/GLB interchange and minimal shape keys are implemented; shape-key weight animation, GLB morph export, and AO remain. Animation foundation and render still/frames/video capability are implemented. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 
 **Goal:** finish the asset loop: light it, animate it, move it in and out.
 

@@ -513,6 +513,31 @@ export class HalfEdgeMesh {
     this.revision += 1;
   }
 
+  /** Clone this mesh with replacement vertex positions and identical topology. */
+  withPositions(positions: Float32Array): HalfEdgeMesh {
+    if (positions.length !== this.positions.length) {
+      throw new Error('Replacement positions do not match the vertex count.');
+    }
+    return new HalfEdgeMesh({
+      positions: positions.slice(),
+      vertexOut: this.vertexOut.slice(),
+      heOrigin: this.heOrigin.slice(),
+      heTwin: this.heTwin.slice(),
+      heNext: this.heNext.slice(),
+      heFace: this.heFace.slice(),
+      heEdge: this.heEdge.slice(),
+      heUv: this.heUv.slice(),
+      edgeHalfEdge: this.edgeHalfEdge.slice(),
+      edgeFlags: this.edgeFlags.slice(),
+      faceHalfEdge: this.faceHalfEdge.slice(),
+      faceMaterial: this.faceMaterial.slice(),
+      vertexCount: this.vertexCount,
+      halfEdgeCount: this.halfEdgeCount,
+      edgeCount: this.edgeCount,
+      faceCount: this.faceCount
+    });
+  }
+
   /** Whether an edge carries the UV seam flag. */
   isEdgeSeam(edge: number): boolean {
     if (edge < 0 || edge >= this.edgeCount) {

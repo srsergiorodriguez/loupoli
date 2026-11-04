@@ -40,6 +40,7 @@ const MAX_LIGHTS = 64;
 const MAX_CAMERAS = 32;
 const MAX_ANIMATION_TRACKS = 256;
 const MAX_ANIMATION_KEYS = 4096;
+const MAX_SHAPE_KEYS = 16;
 const MAX_VERTICES = 1_000_000;
 const MAX_HALF_EDGES = 4_000_000;
 const MAX_EDGES = 2_000_000;
@@ -94,6 +95,12 @@ export interface NodeSnapshot {
   readonly parentId: string | null;
   readonly textureId: string | null;
   readonly materialPalette?: readonly string[];
+  readonly shapeKeys?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly weight: number;
+    readonly targetPositions: Float32Array;
+  }[];
   readonly modifiers: readonly Modifier[];
   readonly mesh: MeshSnapshot;
 }
@@ -122,6 +129,12 @@ interface NodeManifest {
   readonly parentId?: string | null;
   readonly textureId?: string | null;
   readonly materialPalette?: readonly string[];
+  readonly shapeKeys?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly weight: number;
+    readonly vertexCount: number;
+  }[];
   readonly modifiers?: readonly Modifier[];
   readonly mesh: MeshManifest;
 }
@@ -427,6 +440,12 @@ export function snapshotNode(node: MeshNode): NodeSnapshot {
     parentId: node.parentId,
     textureId: node.textureId,
     materialPalette: node.materialPalette,
+    shapeKeys: node.shapeKeys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      weight: key.weight,
+      targetPositions: key.targetPositions.slice()
+    })),
     modifiers: cloneModifiers(node.modifiers),
     mesh: snapshotMesh(node.mesh)
   };
@@ -484,6 +503,7 @@ export function restoreNode(snapshot: NodeSnapshot): MeshNode {
   );
   node.visible = snapshot.visible;
   node.setMaterialPalette(snapshot.materialPalette ?? []);
+  node.setShapeKeys(snapshot.shapeKeys ?? []);
   node.transform = validateTransform(snapshot.transform);
   node.parentId = snapshot.parentId ?? null;
   node.setModifiers(validateModifiers(snapshot.modifiers));
@@ -751,6 +771,12 @@ function encodeInternal(
     parentId: node.parentId,
     textureId: node.textureId,
     materialPalette: node.materialPalette,
+    shapeKeys: node.shapeKeys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      weight: key.weight,
+      vertexCount: node.mesh.vertexCount
+    })),
     modifiers: cloneModifiers(node.modifiers),
     mesh: {
       vertexCount: node.mesh.vertexCount,
@@ -805,6 +831,20 @@ function encodeInternal(
         chunks.push(new Uint8Array(padding));
         payloadLength += padding;
       }
+      chunks.push(bytes);
+      payloadLength += bytes.byteLength;
+    }
+    for (const key of node.shapeKeys) {
+      const padding = (4 - (payloadLength % 4)) % 4;
+      if (padding > 0) {
+        chunks.push(new Uint8Array(padding));
+        payloadLength += padding;
+      }
+      const bytes = new Uint8Array(
+        key.targetPositions.buffer,
+        key.targetPositions.byteOffset,
+        key.targetPositions.byteLength
+      );
       chunks.push(bytes);
       payloadLength += bytes.byteLength;
     }
@@ -1074,6 +1114,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
       throw new Error('The .lpoly contains an invalid node.');
     }
     const node = rawNode as Partial<NodeManifest>;
+    const counts = validateMeshCounts(node.mesh);
     if (
       typeof node.id !== 'string' ||
       node.id.length === 0 ||
@@ -1097,13 +1138,28 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
           node.materialPalette.length > 64 ||
           node.materialPalette.some(
             (color) => typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)
+          ))) ||
+      (node.shapeKeys !== undefined &&
+        (!Array.isArray(node.shapeKeys) ||
+          node.shapeKeys.length > MAX_SHAPE_KEYS ||
+          node.shapeKeys.some(
+            (key) =>
+              typeof key.id !== 'string' ||
+              key.id.length === 0 ||
+              typeof key.name !== 'string' ||
+              key.name.length === 0 ||
+              key.name.length > MAX_NAME_LENGTH ||
+              typeof key.weight !== 'number' ||
+              !Number.isFinite(key.weight) ||
+              key.weight < 0 ||
+              key.weight > 1 ||
+              key.vertexCount !== counts.vertexCount
           )))
     ) {
       throw new Error('The .lpoly contains invalid node metadata.');
     }
     seen.add(node.id);
     const transform = validateTransform(node.transform);
-    const counts = validateMeshCounts(node.mesh);
     const meshBytes: Partial<Record<TypedColumnKey, unknown>> = {};
 
     for (const column of TYPED_COLUMNS) {
@@ -1131,6 +1187,32 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     restored.parentId = node.parentId ?? null;
     restored.textureId = node.textureId ?? null;
     restored.setMaterialPalette(node.materialPalette ?? []);
+    if (node.shapeKeys && node.shapeKeys.length > 0) {
+      const keys = [];
+      for (const key of node.shapeKeys) {
+        const padding = (4 - (cursor % 4)) % 4;
+        cursor += padding;
+        const byteLength = key.vertexCount * 3 * 4;
+        if (
+          cursor + byteLength > bytes.byteLength ||
+          cursor + byteLength > payloadStart + payloadLength
+        ) {
+          throw new Error('The .lpoly payload ended inside shape-key data.');
+        }
+        const targetPositions = new Float32Array(key.vertexCount * 3);
+        new Uint8Array(targetPositions.buffer).set(
+          bytes.subarray(cursor, cursor + byteLength)
+        );
+        cursor += byteLength;
+        keys.push({
+          id: key.id,
+          name: key.name,
+          weight: key.weight,
+          targetPositions
+        });
+      }
+      restored.setShapeKeys(keys);
+    }
     restored.setModifiers(validateModifiers(node.modifiers));
     document.insertNode(restored);
   }

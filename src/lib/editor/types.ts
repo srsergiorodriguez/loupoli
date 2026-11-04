@@ -155,6 +155,13 @@ export interface ProjectionPreview {
 }
 
 /** The complete small UI-facing projection of the plain editor runtime. */
+/** Reactive-safe shape-key projection. */
+export interface ShapeKeySummary {
+  readonly id: string;
+  readonly name: string;
+  readonly weight: number;
+}
+
 /** Reactive-safe animation track projection. */
 export interface AnimationTrackSummary {
   readonly id: string;
@@ -270,6 +277,7 @@ export interface EditorSnapshot {
   readonly animationPlaying: boolean;
   readonly animationTracks: readonly AnimationTrackSummary[];
   readonly animationInterpolation: AnimationInterpolation;
+  readonly shapeKeys: readonly ShapeKeySummary[];
   readonly groups: readonly GroupSummary[];
   readonly selectedNodeIds: readonly string[];
   readonly additiveNodeSelection: boolean;

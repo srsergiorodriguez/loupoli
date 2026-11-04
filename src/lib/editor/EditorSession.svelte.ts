@@ -125,6 +125,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationPlaying: false,
   animationTracks: [],
   animationInterpolation: 'linear',
+  shapeKeys: [],
   groups: [],
   selectedNodeIds: [],
   additiveNodeSelection: false,
@@ -850,6 +851,22 @@ export class EditorSession {
 
   setAnimationInterpolation(interpolation: 'step' | 'linear'): void {
     this.runtime?.setAnimationInterpolation(interpolation);
+  }
+
+  addShapeKey(): void {
+    this.runtime?.addShapeKey();
+  }
+
+  removeShapeKey(id: string): void {
+    this.runtime?.removeShapeKey(id);
+  }
+
+  setShapeKeyWeight(id: string, weight: number): void {
+    this.runtime?.setShapeKeyWeight(id, weight);
+  }
+
+  updateShapeKeyFromMesh(id: string): void {
+    this.runtime?.updateShapeKeyFromMesh(id);
   }
 
   keyActiveTransform(): void {

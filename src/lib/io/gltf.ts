@@ -1,6 +1,8 @@
 import {
   BufferAttribute,
+  type BufferAttribute as BufferAttributeType,
   BufferGeometry,
+  Matrix3,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
@@ -114,6 +116,57 @@ export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
         normalizeName(object.name, nodes.length)
       );
       node.setMaterialPalette(palette);
+      const morphTargets = geometry.morphAttributes.position ?? [];
+      if (morphTargets.length > 0) {
+        const linear = new Matrix3().setFromMatrix4(matrix);
+        const vertexByPosition = new Map<string, number>();
+        for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+          const key = `${mesh.positions[vertex * 3]}|${mesh.positions[vertex * 3 + 1]}|${mesh.positions[vertex * 3 + 2]}`;
+          vertexByPosition.set(key, vertex);
+        }
+        const names = Object.entries(object.morphTargetDictionary ?? {});
+        morphTargets.forEach((target: BufferAttributeType, shapeIndex: number) => {
+          const targetPositions = mesh.positions.slice();
+          const baseWorld = new Vector3();
+          for (let vertex = 0; vertex < position.count; vertex += 1) {
+            const localBase = new Vector3(
+              position.getX(vertex),
+              position.getY(vertex),
+              position.getZ(vertex)
+            );
+            baseWorld.copy(localBase).applyMatrix4(matrix);
+            const dcelVertex = vertexByPosition.get(
+              `${baseWorld.x}|${baseWorld.y}|${baseWorld.z}`
+            );
+            if (dcelVertex === undefined) {
+              continue;
+            }
+            const delta = new Vector3(
+              target.getX(vertex),
+              target.getY(vertex),
+              target.getZ(vertex)
+            );
+            if (!geometry.morphTargetsRelative) {
+              delta.sub(localBase);
+            }
+            delta.applyMatrix3(linear);
+            targetPositions[dcelVertex * 3] += delta.x;
+            targetPositions[dcelVertex * 3 + 1] += delta.y;
+            targetPositions[dcelVertex * 3 + 2] += delta.z;
+          }
+          const name =
+            names.find(([, index]) => index === shapeIndex)?.[0] ??
+            `Shape ${shapeIndex + 1}`;
+          const key = node.addShapeKey(name);
+          key.targetPositions.set(targetPositions);
+          key.weight = object.morphTargetInfluences?.[shapeIndex] ?? 0;
+        });
+        node.shapeKeys.forEach((key) => {
+          if (key.targetPositions.length !== mesh.positions.length) {
+            throw new Error('GLB morph target does not match the mesh vertex count.');
+          }
+        });
+      }
       nodes.push(node);
     } catch (error) {
       throw new Error(

@@ -6,6 +6,7 @@ import { History } from '../History';
 import { deleteSelectedElements } from '../../geometry/topology';
 import { CreateMeshNodeCommand } from './CreateMeshNodeCommand';
 import { SetAnimationCommand } from './AnimationCommands';
+import { SetShapeKeysCommand } from './ShapeKeyCommands';
 import {
   CreateCameraCommand,
   DeleteCameraCommand,
@@ -615,5 +616,39 @@ describe('scene commands and journal', () => {
     const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
     applyJournalPatch(replay, command.journalPatch('forward'));
     expect(replay.animation.getTrack(document.nodes[0].id)?.keyframes).toHaveLength(2);
+  });
+
+  it('edits and replays shape keys', () => {
+    const document = SceneDocument.createDefault();
+    const node = document.nodes[0];
+    const history = new History();
+    const before = node.shapeKeys.map((key) => ({
+      ...key,
+      targetPositions: key.targetPositions.slice()
+    }));
+    const key = node.addShapeKey('Wide');
+    key.targetPositions[0] += 1;
+    key.weight = 0.4;
+    const after = node.shapeKeys.map((item) => ({
+      ...item,
+      targetPositions: item.targetPositions.slice()
+    }));
+    history.execute(new SetShapeKeysCommand(node, before, after, 'Add shape key'));
+    expect(node.shapeKeys).toHaveLength(1);
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(
+      node.mesh.positions[0] + 0.4
+    );
+    history.undo();
+    expect(node.shapeKeys).toHaveLength(0);
+    history.redo();
+    const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    applyJournalPatch(
+      replay,
+      new SetShapeKeysCommand(node, before, after, 'Add shape key').journalPatch(
+        'forward'
+      )
+    );
+    expect(replay.nodes[0].shapeKeys).toHaveLength(1);
+    expect(replay.nodes[0].shapeKeys[0].name).toBe('Wide');
   });
 });

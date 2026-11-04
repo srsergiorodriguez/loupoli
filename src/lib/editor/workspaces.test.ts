@@ -51,6 +51,7 @@ describe('inspector layout', () => {
       'transform',
       'selection',
       'mesh',
+      'shapes',
       'modifiers',
       'ps1',
       'controls'

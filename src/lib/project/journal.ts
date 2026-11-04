@@ -3,6 +3,7 @@ import type { NodeTransform } from '../scene/MeshNode';
 import type { LightSnapshot } from '../scene/SceneLight';
 import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import { SceneAnimation, type AnimationSnapshot } from '../scene/SceneAnimation';
+import type { ShapeKeySnapshot } from '../editor/commands/ShapeKeyCommands';
 import { validateModifiers, type Modifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
 import { SceneLight } from '../scene/SceneLight';
@@ -149,6 +150,11 @@ export type JournalPatch =
   | {
       readonly type: 'set-animation';
       readonly animation: AnimationSnapshot;
+    }
+  | {
+      readonly type: 'set-shape-keys';
+      readonly nodeId: string;
+      readonly keys: readonly ShapeKeySnapshot[];
     };
 
 /** Apply one journal patch to a reconstructed scene document. */
@@ -332,6 +338,14 @@ export function applyJournalPatch(
       document.replaceAnimation(SceneAnimation.fromSnapshot(patch.animation));
       return;
     }
+    case 'set-shape-keys': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.setShapeKeys(patch.keys);
+      return;
+    }
     case 'set-modifiers': {
       const node = document.getNode(patch.nodeId);
       if (!node) {
@@ -380,6 +394,13 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'set-animation') {
     return patch.animation.tracks.length * 256 + 96;
+  }
+  if (patch.type === 'set-shape-keys') {
+    return (
+      patch.nodeId.length * 2 +
+      patch.keys.reduce((sum, key) => sum + key.targetPositions.byteLength, 0) +
+      64
+    );
   }
   if (patch.type === 'remove-node') {
     return patch.nodeId.length * 2 + 16;
