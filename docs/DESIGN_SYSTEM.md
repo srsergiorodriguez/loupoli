@@ -298,7 +298,15 @@ Use the 4px scale exclusively. The primary layout rhythm is:
 - Pressed state is immediate (80ms) and uses a slight background shift, not bounce.
 - Avoid animation on numeric values or mesh-related flash; fast, functional transitions only.
 
-### 4.6 Motion
+### 4.6 Action and naming contracts
+
+- Selected-item actions live below their outliner; create actions live above it.
+- Destructive actions are last and right-aligned, labelled with their noun, neutral at rest, and `--accent-danger` on hover/focus.
+- `--accent-warning` is only for warnings and recoverable errors.
+- Scene objects, groups, texture assets, and layers all use `InlineNameField`; no alternate rename box.
+- Scene and Texture both use `OutlinerRow`; no bespoke row markup or selection dot.
+
+### 4.7 Motion
 
 - Micro feedback: 80ms.
 - Hover/press/tooltip: 140ms.
@@ -307,7 +315,7 @@ Use the 4px scale exclusively. The primary layout rhythm is:
 - Respect `prefers-reduced-motion: reduce`: remove transforms and durations, keep state changes instant.
 - No ambient pulse, shimmer, or infinite animation. The renderer has the same rule.
 
-### 4.7 Accessibility and input affordances
+### 4.8 Accessibility and input affordances
 
 - Touch and pen targets: minimum 44×44 CSS px even when the visual control is smaller. Expand hit areas with padding or an absolutely positioned hit region.
 - Desktop pointer targets are 32px visual; the same controls become at least 44px under `[data-density="touch"]`. Inputs, selects, action buttons, and outliner rows share that control height.
@@ -393,9 +401,9 @@ Use the 4px scale exclusively. The primary layout rhythm is:
 ### 5.4 Layering and pointer event rules
 
 ```text
-z=60  toast
+z=60  tooltip / toast
 z=50  modal / recovery
-z=40  popover / menu / tooltip
+z=40  popover / menu
 z=30  inspector, topbar, tool rail, status
 z=20  viewport HUD (gizmo, shading)
 z=10  CSS overlays that are pointer-transparent
@@ -440,8 +448,10 @@ Implemented component files and local patterns:
 | `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
 | `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, shared control-height action (44px touch) |
 | `ThreeDotMenu` / `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Standard icon-only overflow wrapper; body-mounted fixed menu so inspector overflow cannot clip it |
-| `OutlinerRow` / `OutlinerDragHandle` / `OutlinerVisibility` | 1 | Scene and texture outliners | Shared row padding, selection states, left drag slot, right visibility |
+| `TooltipLayer` | 1 | Application-wide tooltips | Body-mounted fixed tooltip above panels and popovers; no pseudo-element tooltips |
+| `OutlinerRow` / `OutlinerDragHandle` / `OutlinerVisibility` | 1 | Scene and texture outliners | 2 px inner gutter, shared active/selected states, left drag slot, right visibility, no selection dot |
 | `InlineNameField` | 4 | Scene, texture asset, and layer names | Shared borderless rename field with Enter/Escape handling |
+| `RenameNodeCommand` / `RenameGroupCommand` | 4 | Scene object and group rename | Undoable and journaled through `set-node-name` / `set-group-name` |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
 | `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoly` v3 PNG chunks |
 | `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, Paint toggle, brush color/size/opacity controls, and failure banner |

@@ -825,7 +825,7 @@
               onclick={() => session.deleteSelection()}
             >
               <Icon name="trash" size={14} />
-              <span>Delete</span>
+              <span>Delete elements</span>
             </button>
           {/if}
         </div>
@@ -1276,7 +1276,7 @@
                   onSelect: () => textureImportInput?.click()
                 },
                 {
-                  label: 'Delete asset',
+                  label: 'Delete texture',
                   icon: 'trash',
                   destructive: true,
                   separatorBefore: true,

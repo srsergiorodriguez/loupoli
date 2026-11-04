@@ -53,8 +53,63 @@ All tooltips come from the command registry. Format: `Label — Shortcut` when a
 - **Icon + short text:** domain actions: Group, Join, Ungroup, Delete, Add Layer, Extrude, Inset, Loop Cut, Loop Slide.
 - **Text only:** modes and stateful UV operations: V/E/F, Island, All, Add, Sub, Fit, Clamp, Sync 3D, Pin, Unpin, Unwrap, Stack.
 - **Never icon-only for a destructive action.**
-- Every icon-only control has an accessible label and a tooltip.
+- Every icon-only control has an accessible label and a tooltip via `TooltipLayer`.
 - Hover is supplemental. Touch users must be able to identify every control without hover.
+
+
+## 8.1 Shared UI contracts
+
+These are mandatory reuse rules. A new surface that duplicates one of these patterns is incomplete.
+
+### Outliner rows
+
+- Use `OutlinerRow` for scene objects, scene groups, and texture layers.
+- Drag slot is always left. Visibility is always right.
+- Keep a 2 px inner gutter inside the row border; the drag handle and eye must not sit flush against it.
+- Active row: accent border plus selected background.
+- Additional multi-selected row: accent border only.
+- Never add a separate selected-dot marker. Selection state is the row treatment, not an extra glyph.
+- Hidden rows dim; dragging/drop-target rows use the shared transient states.
+- A non-draggable row renders the same drag spacer as a draggable row so names align.
+
+### Naming
+
+- Use `InlineNameField` for every editable name: scene objects, groups, texture assets, and texture layers.
+- Naming lives in the selected-item header, not in a one-off dialog or a differently styled boxed field.
+- Enter commits, Escape restores, blur commits, and the same 64-character bound applies everywhere.
+- Rename commands are undoable and journaled.
+
+### Actions
+
+- Use `ActionButton` for icon+text actions, `IconButton` for icon-only actions, and `ThreeDotMenu`/`ActionMenu` for overflow.
+- Do not create per-section button styles. `active` handles toggles; `variant="danger"` handles destructive actions.
+- Create actions sit above the outliner.
+- Contextual selection actions sit below the outliner.
+- Destructive actions are last and right-aligned.
+
+| Region | Create above list | Context actions below list | Destructive |
+|---|---|---|---|
+| Scene | primitive select + Add | Multi, Group, Join/Ungroup | Delete object, last/right |
+| Texture assets | New, import/duplicate overflow | Assign/Unassign, filter, alpha | Delete texture in overflow |
+| Texture layers | Add layer | selection properties | Delete layer, last/right |
+
+- Labels name the noun: `Delete object`, `Delete layer`, `Delete texture`, `Delete elements`.
+- Destructive controls are neutral at rest and use `--accent-danger` on hover/focus. Overflow destructive items follow the same neutral/red-hover rule.
+- `--accent-warning` is reserved for warnings and recoverable errors; never use amber for deletion.
+
+### Controls and rhythm
+
+- Inputs, selects, action buttons, and outliner rows share `--control-h`: 32 px desktop, 44 px touch.
+- Inspector row gaps are 2 px unless a section has a documented grouping reason.
+- Inputs and selects must be the same height as adjacent controls; do not put a small input inside a tall row.
+- Use the shared `SliderField`, `SelectField`, `ColorField`, `InlineNameField`, and `NumberField` shapes.
+
+### Tooltips
+
+- Render tooltips through the body-mounted `TooltipLayer`.
+- Never add pseudo-element tooltips to buttons; they clip inside transformed/overflow panels and fall behind the Inspector.
+- Tooltips use `--z-toast` and must remain above the Top Bar, Inspector, and panes.
+- Tooltip text and shortcut formatting come from the command registry.
 
 ## 9. Touch and pointer parity
 
@@ -91,7 +146,10 @@ Before adding a control, answer all of these:
 7. Is it undoable, persisted, or session-only?
 8. Does it work with mouse, pen, and touch?
 9. Is its target at least 44 px on touch?
-10. Does its tooltip come from command metadata?
+10. Does its tooltip come from command metadata and render through `TooltipLayer`?
+11. Does it reuse `OutlinerRow`, `InlineNameField`, `ActionButton`, `IconButton`, or `ThreeDotMenu` where applicable?
+12. Does it follow create-above / context-below / destructive-last placement?
+13. Does destructive styling use `--accent-danger` rather than `--accent-warning`?
 
 If any answer is missing, do not add the control.
 

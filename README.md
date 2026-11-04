@@ -126,6 +126,10 @@ The autosave recovery flow is explicit and non-destructive:
 
 ---
 
+## UI consistency contract
+
+UI consistency is part of the product contract. Scene and Texture share `OutlinerRow` (left drag slot, right visibility, 2 px inner gutter, shared active/selected states, no selection dot) and `InlineNameField` for every rename. Inputs, selects, action buttons, and outliner rows share the 32 px desktop / 44 px touch control height. Create actions sit above an outliner, contextual actions below it, and destructive actions are last/right with neutral-at-rest/red-hover styling. All custom tooltips render through the body-mounted `TooltipLayer`. See [UI rules](docs/UI_RULES.md) and the [design system](docs/DESIGN_SYSTEM.md) before adding a control.
+
 ## Getting started
 
 Requirements: Node.js ≥ 22.12 (tested on 26.12), Rust ≥ 1.90 (tested on 1.94), npm, and macOS/Xcode for the Tauri desktop shell.

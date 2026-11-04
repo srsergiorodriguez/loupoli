@@ -182,4 +182,9 @@ Before claiming work done:
 - Every document mutation can be undone and, where it belongs in the document, serialized.
 - Tests cover topology invariants, format round-trip, and math that can fail silently.
 - Documentation is updated to match behavior, including limitations.
+- UI consistency is treated as a functional requirement: reuse `OutlinerRow`, `InlineNameField`, `ActionButton`, `IconButton`, `ThreeDotMenu`, and `TooltipLayer`.
+- Outliner rows keep the left drag slot and right visibility control, a 2 px inner gutter, and shared active/selected states with no extra selection dot.
+- Destructive actions use `--accent-danger` with neutral-at-rest/red-hover treatment; `--accent-warning` is never used for deletion.
+- Create actions sit above an outliner, contextual selection actions below it, and destructive actions are last/right.
+- Tooltips render through `TooltipLayer`; do not add pseudo-element tooltips or panel-local overlays.
 - No feature is added outside the requested scope.
