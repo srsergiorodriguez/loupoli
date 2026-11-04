@@ -1212,6 +1212,7 @@
             <ActionMenu
               label="New"
               icon="plus"
+              menuTitle="New texture"
               options={[64, 128, 256, 512, 1024, 2048].map((size) => ({
                 label: `${size}² texture`,
                 onSelect: () => session.createTextureAsset(size, size)
@@ -1219,6 +1220,7 @@
             />
             <ActionMenu
               icon="more"
+              menuTitle="Texture actions"
               align="end"
               options={[
                 {
@@ -1234,6 +1236,8 @@
                 {
                   label: 'Delete asset',
                   icon: 'trash',
+                  destructive: true,
+                  separatorBefore: true,
                   disabled: textureUsage > 0 || textureAssets.length <= 1,
                   onSelect: () => session.deleteActiveTextureAsset()
                 }
@@ -1282,6 +1286,7 @@
             <ActionMenu
               label="Add layer"
               icon="plus"
+              menuTitle="Add layer"
               options={[
                 {
                   label: 'Solid layer',
@@ -1301,6 +1306,7 @@
                 {
                   label: 'Import image layer',
                   icon: 'image',
+                  separatorBefore: true,
                   onSelect: () => textureImportInput?.click()
                 }
               ]}
@@ -1362,6 +1368,7 @@
               </span>
               <ActionMenu
                 icon="more"
+                menuTitle="Layer actions"
                 align="end"
                 options={[
                   {
@@ -1382,6 +1389,8 @@
                   {
                     label: 'Delete layer',
                     icon: 'trash',
+                    destructive: true,
+                    separatorBefore: true,
                     disabled: textureLayers.length <= 1,
                     onSelect: () => session.removeTextureLayer(activeTextureLayer.id)
                   }

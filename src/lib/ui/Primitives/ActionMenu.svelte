@@ -10,6 +10,8 @@
     readonly label: string;
     readonly icon?: IconName;
     readonly disabled?: boolean;
+    readonly destructive?: boolean;
+    readonly separatorBefore?: boolean;
     readonly onSelect: () => void;
   }
 
@@ -18,6 +20,7 @@
     label?: string;
     icon?: IconName;
     options: readonly ActionMenuOption[];
+    menuTitle?: string;
     align?: 'start' | 'end';
     disabled?: boolean;
   }
@@ -26,6 +29,7 @@
     label = '',
     icon = 'more',
     options,
+    menuTitle = '',
     align = 'start',
     disabled = false
   }: Props = $props();
@@ -52,7 +56,7 @@
       return;
     }
     const rect = trigger.getBoundingClientRect();
-    const width = 184;
+    const width = 240;
     const height = options.length * 44 + 8;
     let x = align === 'end' ? rect.right - width : rect.left;
     x = Math.max(8, Math.min(window.innerWidth - width - 8, x));
@@ -64,7 +68,7 @@
     document.body.appendChild(panelTarget);
     panel = mount(ActionMenuPanel, {
       target: panelTarget,
-      props: { options, x, y, onClose: close }
+      props: { options, title: menuTitle, x, y, onClose: close }
     }) as unknown as Record<string, unknown>;
     open = true;
   }
@@ -74,22 +78,32 @@
   <button
     type="button"
     class="action-menu-trigger"
+    class:icon-only={!label}
     aria-haspopup="menu"
     aria-expanded={open}
     aria-label={label || 'More actions'}
+    title={label || 'More actions'}
     {disabled}
     bind:this={trigger}
     onclick={toggle}
   >
-    <Icon name={icon} size={14} />
-    {#if label}<span>{label}</span>{/if}
-    <span class="action-menu-chevron" aria-hidden="true">⌄</span>
+    <Icon name={icon} size={label ? 14 : 18} />
+    {#if label}
+      <span>{label}</span>
+      <span class="action-menu-chevron" aria-hidden="true">⌄</span>
+    {/if}
   </button>
 </div>
 
 <style>
   .action-menu {
     position: relative;
+  }
+
+  .action-menu-trigger.icon-only {
+    width: var(--hit-min);
+    padding: 0;
+    justify-content: center;
   }
 
   .action-menu-trigger {
