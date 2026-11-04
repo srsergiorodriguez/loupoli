@@ -441,7 +441,7 @@ Implemented component files and local patterns:
 | `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, shared control-height action (44px touch) |
 | `ThreeDotMenu` / `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Standard icon-only overflow wrapper; body-mounted fixed menu so inspector overflow cannot clip it |
 | `OutlinerDragHandle` / `OutlinerVisibility` | 1 | Scene and texture outliners | Shared left drag handle and right visibility control |
-| `TextField` | 1 | Inspector text fields | Labeled inline text commit |
+| `InlineNameField` | 4 | Texture asset and layer names | Shared borderless rename field with Enter/Escape handling |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
 | `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoly` v3 PNG chunks |
 | `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, Paint toggle, brush color/size/opacity controls, and failure banner |

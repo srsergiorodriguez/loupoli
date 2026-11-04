@@ -12,7 +12,7 @@
   import ActionRow from '../Primitives/ActionRow.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import ThreeDotMenu from '../Primitives/ThreeDotMenu.svelte';
-  import TextField from '../Primitives/TextField.svelte';
+  import InlineNameField from '../Primitives/InlineNameField.svelte';
   import OutlinerDragHandle from '../Primitives/OutlinerDragHandle.svelte';
   import OutlinerVisibility from '../Primitives/OutlinerVisibility.svelte';
   import {
@@ -1255,18 +1255,22 @@
             value={session.snapshot.textureAssetId ?? ''}
             options={textureAssets.map((asset) => ({
               value: asset.id,
-              label: `${asset.name} · ${asset.width}²`
+              label: asset.name
             }))}
             onChange={(value) => session.setActiveTextureAsset(value)}
           />
-          <TextField
-            label="Name"
-            value={activeTextureAsset?.name ?? ''}
-            onCommit={(value) => session.renameTextureAsset(value)}
-          />
+          <div class="texture-selected-head">
+            <InlineNameField
+              label="Texture name"
+              value={activeTextureAsset?.name ?? ''}
+              onCommit={(value) => session.renameTextureAsset(value)}
+            />
+            <span class="texture-kind">
+              {activeTextureAsset?.width ?? session.snapshot.textureSize}²
+            </span>
+          </div>
           <div class="texture-asset-meta">
             <span>{textureUsage} object{textureUsage === 1 ? '' : 's'}</span>
-            <span>{activeTextureAsset?.width ?? session.snapshot.textureSize}²</span>
             <span>{activeTextureAsset?.filter ?? 'nearest'}</span>
           </div>
           <ActionRow>
@@ -1418,16 +1422,11 @@
         {#if activeTextureLayer}
           <div class="texture-block">
             <div class="texture-selected-head">
-              <input
-                class="texture-name-input"
+              <InlineNameField
+                label={`${activeTextureLayer.name} layer name`}
                 value={activeTextureLayer.name}
-                maxlength="64"
-                aria-label={`${activeTextureLayer.name} layer name`}
-                onchange={(event) =>
-                  session.renameTextureLayer(
-                    activeTextureLayer.id,
-                    event.currentTarget.value
-                  )}
+                onCommit={(value) =>
+                  session.renameTextureLayer(activeTextureLayer.id, value)}
               />
               <span class="texture-kind">
                 {activeTextureLayer.kind === 'raster' ? 'raster' : activeTextureLayer.pattern}
@@ -2367,24 +2366,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
-  }
-
-  .texture-name-input {
-    flex: 1;
-    min-width: 0;
-    min-height: var(--control-h);
-    padding: 0 var(--space-1);
-    border: 0;
-    background: transparent;
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    line-height: 1.2;
-  }
-
-  .texture-name-input:focus-visible {
-    outline: var(--focus-ring-width) solid var(--border-focus);
-    outline-offset: 1px;
   }
 
   .texture-kind {
