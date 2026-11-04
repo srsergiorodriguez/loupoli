@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a texture layer stack are implemented. Texture assets and node bindings save in `.lpoly` v3; per-asset layers use binary PNG chunks and are captured by v3 autosave checkpoints. Blend modes, rename, raster layers, and Brush/Eraser 3D projection painting are implemented; projected shape/gradient tools and tilt shaping remain.
+**Status:** Phase 4 feature-complete; **conditional exit** pending the deferred multi-angle and physical-iPad verification recorded in the [Phase 4 exit audit](./PHASE4_AUDIT.md). UV editing, seam/LSCM unwrap, texture layers, raster painting, projected brush/shape/gradient/fill painting, tilt shaping, v3 persistence, and v3 autosave checkpoints are implemented.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -95,15 +95,15 @@
 
 - Layer add/delete/reorder/visibility/opacity/rename. **Implemented.**
 - Normal/Multiply/Screen blend modes. **Implemented and persisted in v2.**
-- Color fills and active-layer selection. **Implemented as deterministic fill patterns; raster painting pending.**
+- Color fills and active-layer selection. **Implemented, including raster layers.**
 - Composite cache: recompute only when a layer or composite changes; one GPU texture. **Implemented. Layer canvases are OffscreenCanvas; the composite is a single HTML canvas wrapped in one CanvasTexture.**
 - `.lpoly` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration. **Implemented for manual save/open; v1 decode retained.**
-- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **First pass implemented as a fresh v2 checkpoint when texture pixels change; dedicated texture-only patches remain future work.**
+- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **Implemented as a fresh v3 checkpoint when texture pixels change; dedicated texture-only pixel deltas are a documented performance deferral.**
 - Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery. **Dispose path exists; project load resets the session stack.**
 
 ### Slice 5 — 3D projection painting (Brush/Eraser implemented)
 
-- Raycast-to-UV stamp with pressure/tilt input. **UV-canvas painting and 3D raycast Brush/Eraser projection are implemented with pressure radius; tilt shaping and projected shape/gradient tools remain.**
+- Raycast-to-UV stamp with pressure/tilt input. **UV-canvas and 3D projected Brush/Eraser, line, rectangle, ellipse, gradient, and UV-island fill are implemented; tilt shapes stamps.**
 - Brush size/opacity/flow and eraser. **Size/opacity/color and eraser are implemented; flow remains.**
 - One command per stroke; undo restores the previous layer pixels (bounded by a stroke patch budget).
 - No continuous loop; at most one scheduled frame per changed stroke step.
@@ -132,7 +132,7 @@ Initial targets, to be confirmed on hardware:
 
 | Item | Budget |
 |---|---|
-| Texture size | 1024² default, 2048² hard maximum |
+| Texture size | 512² default, 2048² hard maximum |
 | Layer count | 8 default maximum |
 | One RGBA layer at 1024² | ~4 MB CPU + ~4 MB GPU |
 | Composite at 1024² | ~4 MB CPU + ~4 MB GPU |
@@ -146,18 +146,13 @@ The Inspector must warn before a layer addition would cross the working budget. 
 
 ## 6. Verification gates
 
-1. Seam toggle is visible, undoable, serialized, and restored by autosave. **Implemented.**
-2. UV corners can be selected and transformed without a continuous render loop.
-3. Each test chart unwraps to finite, non-overlapping UVs or reports a specific failure.
-4. UV edits and unwrap results round-trip through `.lpoly` v2.
-5. Layer reorder/blend changes reuse the existing GPU texture allocation.
-6. A texture-heavy project restores all layer pixels within the memory budget.
-7. Paint strokes project to the intended face at multiple camera angles within tolerance.
-8. Pen pressure/tilt change brush output and survive input diagnostics.
-9. Idle WebGL frames remain zero throughout.
-10. Dispose paths release all texture, composite, canvas, geometry, and material owners.
+Gate-by-gate evidence and residual deferrals live in the [Phase 4 exit audit](./PHASE4_AUDIT.md). Current result: **conditional pass**.
 
----
+- Functional/texture/seam/LSCM/idle gates: pass in browser/desktop development.
+- Eight-layer format round-trip: pass.
+- Multi-angle projected-paint tolerance: partial; implementation verified, repeatable threshold test deferred.
+- Physical iPad memory/lifecycle: deferred to hardware validation.
+- Dedicated texture pixel deltas: accepted performance deferral.
 
 ## 7. Risks and open questions
 

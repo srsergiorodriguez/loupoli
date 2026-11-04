@@ -1,6 +1,6 @@
 # loupoli — Master Delivery Plan
 
-**Status:** Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 has started with UV seam authoring, a resizable UV split with two-way linked corner selection, Move/Rotate/Scale, U/V locks, snap, exact numeric entry, seam-chart LSCM unwrap with pins and overlap rejection, a texture asset library with node bindings, `.lpoly` v3 PNG chunks, blend modes, UV raster painting, and texture-aware autosave; see [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md). Physical-iPad/WKWebView validation remains deferred.
+**Status:** Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 is feature-complete with a conditional exit: see the [Phase 4 exit audit](./PHASE4_AUDIT.md). Physical-iPad/WKWebView validation and multi-angle paint tolerance verification remain deferred. Phase 5A lighting is next.
 **Brand rule:** the name is always written `loupoli`, lowercase.
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.
 **Companion docs:** [Docs index](./README.md) ·  [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
@@ -242,6 +242,8 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 - Texture serialization in `.lpoly` and autosave of texture layer changes. Memory budget and layer limits are explicit in the UI.
 
 **Acceptance gates**
+
+**Exit audit:** [conditional pass](./PHASE4_AUDIT.md) — functional gates pass in browser/desktop development; multi-angle tolerance and physical-iPad memory remain deferred verification.
 
 1. Marking a seam changes the visible UV island boundary and is undoable.
 2. LSCM produces finite, non-overlapping UVs for the standard test charts; solver failure is surfaced, not hidden.

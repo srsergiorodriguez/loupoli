@@ -127,7 +127,7 @@ See [UI map](docs/UI_MAP.md) and [UI rules](docs/UI_RULES.md). Those two documen
 
 ## 9. Current implementation state
 
-Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 began with UV seam authoring:
+Phase 2, the Phase 3 foundations, and Phase 4 texturing are implemented for browser and native desktop builds. Phase 4 has a [conditional exit audit](docs/PHASE4_AUDIT.md); Phase 5A lighting is next.
 
 - TopBar Model/UV/Paint workspace switcher: UV opens a side-by-side editor; Model closes it. The 3D Viewport Stage owns the HUD, icon-only Shading Bar, bottom-right View Gizmo, Action Dock, and lasso overlay. A reusable 44 px `PaneHost` handles side-pane resizing, and shared `PaneFrame`/`PaneHeader`/toolbar primitives supply a consistent header, optional command row, and full-height canvas body. Paint is a dedicated texture-space workspace pane, not a UV sub-mode. The compact Selection Bar sits above an icon-only Shading Bar; Frame/Home sit in a vertical bar attached to the View Gizmo. ActionDock is hidden while the UV split is open.
 - Svelte/Vite shell with responsive editor chrome, design tokens, non-modal iPad bottom-sheet inspector, a collapsible persistent desktop sidebar, and a live autosave indicator. The desktop 3D canvas ends at the sidebar, so its aspect and center match the visible modeling area.
@@ -172,7 +172,7 @@ Phase 2 and the Phase 3 foundations are implemented for browser and native deskt
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
 - Camera state and active-object selection are not serialized; node transforms and viewport settings are.
 
-Next planned work: dedicated texture deltas. Evaluated-copy pivots remain deliberately base-space; physical iPad/WKWebView validation is deferred until an iPad is available.
+Next planned work: Phase 5A lighting. Phase 4 is feature-complete with a [conditional exit audit](docs/PHASE4_AUDIT.md); texture pixel deltas, multi-angle projected-paint tolerance, and physical iPad/WKWebView validation remain explicit follow-ups. Evaluated-copy pivots remain deliberately base-space.
 
 Approved decisions:
 

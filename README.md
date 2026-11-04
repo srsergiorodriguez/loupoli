@@ -6,7 +6,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Documentation:** Start with the [documentation index](docs/README.md) for ownership and reading order.
 
-**Status:** Phase 2 and the Phase 3 foundations are implemented. Current work includes context-sensitive object/group and selection gizmos, a Pencil ActionDock with exact action amounts, desktop G/R/S, front-face-culled Texture + Wire, loop-cut previews, groups and joins, destructive topology actions, and provenance-mapped Mirror/Grid Array/Radial Array stacks. Broader Phase 3 cleanup remains: evaluated-space element pivots and physical iPad validation.
+**Status:** Phase 2, the Phase 3 foundations, and Phase 4 texturing are feature-complete. The Phase 4 exit is conditional: multi-angle paint tolerance and physical-iPad validation remain follow-ups, with texture pixel deltas accepted as a performance deferral. Phase 5A lighting is next.
 
 ![Current loupoli desktop viewport with the selection gizmo and ActionDock](docs/media/desktop-overview.png)
 
@@ -288,12 +288,12 @@ Not yet verified:
 
 - Nested groups and rename/reparent controls beyond the current one-level groups.
 - Direct base vertex dragging while the modifier stack is active (destructive topology actions and provenance selection work now).
-- UV viewport and transforms, chart extraction/LSCM unwrap, texture layers, and Brush/Eraser 3D projection painting are implemented. Dedicated texture deltas follow the [Phase 4 plan](docs/PHASE4_TEXTURING.md).
-- Scene lights UI, baking, shape keys/timeline, and OBJ/GLB import/export.
+- UV viewport and transforms, chart extraction/LSCM unwrap, texture layers, and projected painting are implemented. Phase 4 has a [conditional exit audit](docs/PHASE4_AUDIT.md); multi-angle tolerance, physical-iPad memory, and texture pixel deltas remain follow-ups.
+- Phase 5 work: scene lights UI, baking, shape keys/timeline, and OBJ/GLB import/export.
 - Touch element dragging. Touch taps select; one-finger drag remains camera orbit.
 - Camera state and active-object selection are not stored in `.lpoly` yet; node transforms and viewport settings are.
 
-The Phase 3 topology-polish goal is complete; broader Phase 3 polishing and Phase 4 texturing remain. See the registered feature table in [PLAN.md](docs/PLAN.md#phase-3--object-mode-topology-editing-transforms-and-modifier-stack).
+Phase 3 topology polish and Phase 4 texturing are feature-complete. [Phase 4 has a conditional exit audit](docs/PHASE4_AUDIT.md); Phase 5A lighting is next.
 
 ---
 

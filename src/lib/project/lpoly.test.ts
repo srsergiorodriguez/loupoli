@@ -108,6 +108,47 @@ describe('.lpoly v3', () => {
     expect(decoded.document.nodes[0].name).toBe('QuadSphere');
   });
 
+  it('round-trips a full eight-layer texture asset', () => {
+    const document = makeDocument();
+    document.nodes[0].textureId = 'texasset-heavy';
+    const layers = Array.from({ length: 8 }, (_, index) => ({
+      id: `texlayer-${index + 1}`,
+      name: `Layer ${index + 1}`,
+      visible: index !== 3,
+      opacity: 1 - index * 0.05,
+      color: '#c8c2ad',
+      pattern: index === 0 ? ('transparent' as const) : ('solid' as const),
+      blendMode: index === 6 ? ('multiply' as const) : ('normal' as const),
+      kind: 'fill' as const,
+      role: index === 7 ? ('lighting' as const) : ('color' as const),
+      png: new Uint8Array([137, 80, 78, 71, index, index + 1])
+    }));
+    const bytes = encodeLpoly(document, SETTINGS, [
+      {
+        id: 'texasset-heavy',
+        name: 'Heavy atlas',
+        width: 512,
+        height: 512,
+        filter: 'linear',
+        alphaMode: 'blend',
+        activeId: 'texlayer-8',
+        layers
+      }
+    ]);
+    const decoded = decodeLpoly(bytes);
+    const asset = decoded.textures?.[0];
+    expect(asset?.alphaMode).toBe('blend');
+    expect(asset?.filter).toBe('linear');
+    expect(asset?.layers).toHaveLength(8);
+    expect(asset?.activeId).toBe('texlayer-8');
+    expect(asset?.layers.map((layer) => layer.png)).toEqual(
+      layers.map((layer) => layer.png)
+    );
+    expect(asset?.layers[3].visible).toBe(false);
+    expect(asset?.layers[6].blendMode).toBe('multiply');
+    expect(asset?.layers[7].role).toBe('lighting');
+  });
+
   it('round-trips a modifier stack', () => {
     const document = makeDocument();
     const node = document.nodes[0];
