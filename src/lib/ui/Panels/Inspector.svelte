@@ -62,6 +62,15 @@
   const modifiersActive = $derived(session.snapshot.modifiersActive);
   const modifierError = $derived(session.snapshot.modifierError);
   const boundaryEdges = $derived(session.snapshot.boundaryEdges);
+  const textureAssets = $derived(session.snapshot.textureAssets);
+  const activeTextureAsset = $derived(
+    textureAssets.find((asset) => asset.id === session.snapshot.textureAssetId) ??
+      null
+  );
+  const textureUsage = $derived(
+    nodes.filter((node) => node.textureId === session.snapshot.textureAssetId).length
+  );
+  let newTextureSize = $state(512);
   const textureLayers = $derived(session.snapshot.textureLayers);
   const textureLayersTopFirst = $derived(
     textureLayers
@@ -119,7 +128,7 @@
           : 'Disabled'
   );
   const textureMeta = $derived(
-    `${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'} · ${session.snapshot.textureSize}²`
+    `${activeTextureAsset?.width ?? session.snapshot.textureSize}² · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
   );
 
   type SectionKey =
@@ -1053,6 +1062,95 @@
       onToggle={(open) => setSection('texture', open)}
     >
       <div class="module-body texture-body">
+        <div class="texture-asset-controls">
+          <label class="texture-asset-select">
+            <span>Asset</span>
+            <select
+              value={session.snapshot.textureAssetId ?? ''}
+              aria-label="Active texture asset"
+              onchange={(event) =>
+                session.setActiveTextureAsset(event.currentTarget.value)}
+            >
+              {#each textureAssets as asset (asset.id)}
+                <option value={asset.id}>{asset.name} · {asset.width}²</option>
+              {/each}
+            </select>
+          </label>
+          <span class="texture-note">{textureUsage} object{textureUsage === 1 ? '' : 's'}</span>
+        </div>
+        <div class="texture-toolbar">
+          <select
+            class="texture-size-select"
+            value={newTextureSize}
+            aria-label="New texture size"
+            onchange={(event) => (newTextureSize = Number(event.currentTarget.value))}
+          >
+            {#each [64, 128, 256, 512, 1024, 2048] as size}
+              <option value={size}>{size}²</option>
+            {/each}
+          </select>
+          <button
+            type="button"
+            class="compact-action"
+            aria-label="Create texture asset"
+            onclick={() => session.createTextureAsset(newTextureSize, newTextureSize)}
+          >
+            <Icon name="plus" size={13} />
+            <span>New</span>
+          </button>
+          <button
+            type="button"
+            class="compact-action"
+            aria-label="Duplicate active texture asset"
+            onclick={() => session.duplicateActiveTextureAsset()}
+          >
+            <Icon name="open" size={13} />
+            <span>Duplicate</span>
+          </button>
+          <button
+            type="button"
+            class="compact-action"
+            aria-label="Delete active texture asset"
+            disabled={textureUsage > 0 || textureAssets.length <= 1}
+            onclick={() => session.deleteActiveTextureAsset()}
+          >
+            <Icon name="trash" size={13} />
+            <span>Delete</span>
+          </button>
+        </div>
+        <div class="texture-toolbar">
+          <label class="texture-asset-select">
+            <span>Filter</span>
+            <select
+              value={activeTextureAsset?.filter ?? 'nearest'}
+              aria-label="Texture filtering"
+              onchange={(event) =>
+                session.setTextureAssetFilter(
+                  event.currentTarget.value as 'nearest' | 'linear'
+                )}
+            >
+              <option value="nearest">Nearest</option>
+              <option value="linear">Linear</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            class="compact-action"
+            aria-label="Assign active texture to selection"
+            onclick={() => session.assignTextureToSelection(session.snapshot.textureAssetId)}
+          >
+            <Icon name="texture-wire" size={13} />
+            <span>Assign</span>
+          </button>
+          <button
+            type="button"
+            class="compact-action"
+            aria-label="Unassign texture from selection"
+            onclick={() => session.assignTextureToSelection(null)}
+          >
+            <span>Unassign</span>
+          </button>
+        </div>
         <div class="texture-toolbar">
           <button
             type="button"
@@ -1064,7 +1162,7 @@
             <Icon name="plus" size={13} />
             <span>Add layer</span>
           </button>
-          <span class="texture-note">PNG v2 · autosaved</span>
+          <span class="texture-note">PNG v3 · autosaved</span>
         </div>
         <div class="texture-list">
           {#each textureLayersTopFirst as { layer, index } (layer.id)}
@@ -1168,8 +1266,8 @@
           {/each}
         </div>
         <p class="hint">
-          Composite uploads one GPU texture. PNG chunks save in `.lpoly` v2 and
-          are captured by the v2 autosave checkpoint; raster painting follows.
+          Each asset uploads one GPU texture. PNG chunks save in `.lpoly` v3 and
+          are captured by the v3 autosave checkpoint.
         </p>
       </div>
     </InspectorSection>
@@ -1911,6 +2009,35 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .texture-asset-controls,
+  .texture-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+  }
+
+  .texture-asset-select,
+  .texture-size-select {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: var(--hit-min);
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
+  }
+
+  .texture-asset-select select,
+  .texture-size-select {
+    min-height: var(--hit-min);
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font: inherit;
   }
 
   .texture-toolbar {

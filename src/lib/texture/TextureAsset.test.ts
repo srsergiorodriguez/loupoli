@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  TextureStack,
-  TextureStackCommand,
-  textureStackStatesEqual
-} from './TextureStack';
+  TextureAsset,
+  TextureAssetCommand,
+  textureAssetStatesEqual
+} from './TextureAsset';
 
 class FakeContext {
   globalAlpha = 1;
@@ -24,7 +24,7 @@ class FakeCanvas {
 
 class FakeOffscreenCanvas extends FakeCanvas {}
 
-describe('TextureStack', () => {
+describe('TextureAsset', () => {
   beforeEach(() => {
     vi.stubGlobal('OffscreenCanvas', FakeOffscreenCanvas);
     vi.stubGlobal('document', {
@@ -36,8 +36,31 @@ describe('TextureStack', () => {
     vi.unstubAllGlobals();
   });
 
+  it('switches sampling filters without touching layers', () => {
+    const stack = new TextureAsset({
+      id: 'filter-test',
+      name: 'Filter',
+      width: 64,
+      height: 64,
+      filter: 'nearest',
+      checkerA: '#000000',
+      checkerB: '#ffffff'
+    });
+    expect(stack.textureFilter).toBe('nearest');
+    expect(stack.setFilter('linear')).toBe(true);
+    expect(stack.textureFilter).toBe('linear');
+    expect(stack.layerCount).toBe(1);
+  });
+
   it('starts with a checker base and adds a layer', () => {
-    const stack = new TextureStack(64, 64, '#000000', '#ffffff');
+    const stack = new TextureAsset({
+      id: 'test-asset',
+      name: 'Test',
+      width: 64,
+      height: 64,
+      checkerA: '#000000',
+      checkerB: '#ffffff'
+    });
     expect(stack.layerCount).toBe(1);
     expect(stack.summaries()[0].pattern).toBe('checker');
     expect(stack.summaries()[0].name).toBe('Base');
@@ -48,15 +71,22 @@ describe('TextureStack', () => {
   });
 
   it('undoes and redoes a metadata transition', () => {
-    const stack = new TextureStack(64, 64, '#000000', '#ffffff');
+    const stack = new TextureAsset({
+      id: 'test-asset',
+      name: 'Test',
+      width: 64,
+      height: 64,
+      checkerA: '#000000',
+      checkerB: '#ffffff'
+    });
     const before = stack.snapshot();
     stack.addLayer();
     stack.setColor(stack.activeLayerId as string, '#ff0000');
     stack.setOpacity(stack.activeLayerId as string, 0.25);
     const after = stack.snapshot();
-    expect(textureStackStatesEqual(before, after)).toBe(false);
+    expect(textureAssetStatesEqual(before, after)).toBe(false);
 
-    const command = new TextureStackCommand(stack, before, after, 'Texture edit');
+    const command = new TextureAssetCommand(stack, before, after, 'Texture edit');
     command.undo();
     expect(stack.layerCount).toBe(1);
     expect(stack.snapshot()).toEqual(before);
@@ -67,7 +97,14 @@ describe('TextureStack', () => {
   });
 
   it('renames and changes a blend mode with undo', () => {
-    const stack = new TextureStack(64, 64, '#000000', '#ffffff');
+    const stack = new TextureAsset({
+      id: 'test-asset',
+      name: 'Test',
+      width: 64,
+      height: 64,
+      checkerA: '#000000',
+      checkerB: '#ffffff'
+    });
     const before = stack.snapshot();
     stack.addLayer();
     const id = stack.activeLayerId as string;
@@ -76,7 +113,7 @@ describe('TextureStack', () => {
     expect(stack.summaries()[1].name).toBe('Ink');
     expect(stack.summaries()[1].blendMode).toBe('multiply');
     const after = stack.snapshot();
-    const command = new TextureStackCommand(stack, before, after, 'Layer edit');
+    const command = new TextureAssetCommand(stack, before, after, 'Layer edit');
     command.undo();
     expect(stack.layerCount).toBe(1);
     command.execute();
@@ -86,7 +123,14 @@ describe('TextureStack', () => {
   });
 
   it('reorders, hides, and caps layers', () => {
-    const stack = new TextureStack(64, 64, '#000000', '#ffffff');
+    const stack = new TextureAsset({
+      id: 'test-asset',
+      name: 'Test',
+      width: 64,
+      height: 64,
+      checkerA: '#000000',
+      checkerB: '#ffffff'
+    });
     const base = stack.summaries()[0];
     stack.addLayer();
     const top = stack.summaries()[1];

@@ -1,7 +1,7 @@
 import type {
-  TexturePaintPatch,
-  TextureStack
-} from '../../texture/TextureStack';
+  TextureAsset,
+  TexturePaintPatch
+} from '../../texture/TextureAsset';
 import type { EditorCommand } from './EditorCommand';
 
 /** One localized raster paint stroke on an active texture layer. */
@@ -10,7 +10,7 @@ export class PaintTextureCommand implements EditorCommand {
   readonly estimatedBytes: number;
 
   constructor(
-    private readonly stack: TextureStack,
+    private readonly asset: TextureAsset,
     private readonly patch: TexturePaintPatch,
     label = 'Paint texture stroke'
   ) {
@@ -20,10 +20,10 @@ export class PaintTextureCommand implements EditorCommand {
   }
 
   execute(): void {
-    this.stack.applyPaintPatch(this.patch, 'after');
+    this.asset.applyPaintPatch(this.patch, 'after');
   }
 
   undo(): void {
-    this.stack.applyPaintPatch(this.patch, 'before');
+    this.asset.applyPaintPatch(this.patch, 'before');
   }
 }

@@ -52,6 +52,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvBrushOpacity: 0.9,
   uvRevision: 0,
   uvError: null,
+  textureAssets: [],
+  textureAssetId: null,
   textureLayers: [],
   textureActiveId: null,
   textureSize: 0,
@@ -460,6 +462,30 @@ export class EditorSession {
 
   cancelUvPaint(): void {
     this.runtime?.cancelUvPaint();
+  }
+
+  setActiveTextureAsset(id: string): void {
+    this.runtime?.setActiveTextureAsset(id);
+  }
+
+  createTextureAsset(width: number, height: number): void {
+    this.runtime?.createTextureAsset(width, height);
+  }
+
+  duplicateActiveTextureAsset(): Promise<void> {
+    return this.runtime?.duplicateActiveTextureAsset() ?? Promise.resolve();
+  }
+
+  deleteActiveTextureAsset(): void {
+    this.runtime?.deleteActiveTextureAsset();
+  }
+
+  assignTextureToSelection(textureId: string | null): void {
+    this.runtime?.assignTextureToSelection(textureId);
+  }
+
+  setTextureAssetFilter(filter: 'nearest' | 'linear'): void {
+    this.runtime?.setTextureAssetFilter(filter);
   }
 
   setActiveTextureLayer(id: string): void {

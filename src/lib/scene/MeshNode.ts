@@ -34,6 +34,7 @@ export class MeshNode {
   name: string;
   visible = true;
   parentId: string | null = null;
+  textureId: string | null;
   modifiers: Modifier[] = [];
   private modifierRevision = 0;
   private evaluationBase: HalfEdgeMesh | null = null;
@@ -50,12 +51,14 @@ export class MeshNode {
     mesh: HalfEdgeMesh,
     primitive: PrimitiveKind,
     name: string,
-    id = createNodeId()
+    id = createNodeId(),
+    textureId: string | null = null
   ) {
     this.mesh = mesh;
     this.primitive = primitive;
     this.name = name;
     this.id = id;
+    this.textureId = textureId;
   }
 
   /** Replace the document-space transform in one operation. */
@@ -164,4 +167,5 @@ export interface NodeSummary {
   readonly primitive: PrimitiveKind;
   readonly visible: boolean;
   readonly parentId: string | null;
+  readonly textureId: string | null;
 }

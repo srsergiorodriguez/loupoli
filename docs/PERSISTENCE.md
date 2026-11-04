@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 4 persistence. Autosave, `.lpoly` v1/v2, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, and texture layers round-trip. v2 adds binary PNG texture chunks, texture-aware autosave, and retains v1 decode. Shape keys remain later work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).  
+**Status:** Phase 4 persistence. Autosave, `.lpoly` v3, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, and node texture bindings round-trip. v3 stores a texture asset library with per-layer binary PNG chunks. Legacy v1/v2 compatibility is intentionally deferred until the MVP build. Shape keys remain later work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).
 **Related:** [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
@@ -48,7 +48,7 @@ Undo and redo append the inverse/forward transitions, so replay reconstructs the
 
 `NodeSnapshot` copies typed arrays before they can mutate; IndexedDB's structured clone stores the arrays directly. No base64 is used.
 
-Texture edits and paint strokes are not represented as autosave pixel deltas; they mark the autosave dirty and force a fresh v2 checkpoint with PNG chunks on the next flush. Paint history stores only the localized before/after dirty rectangle. Other future topology, material, and light commands still need journal patches.
+Texture edits and paint strokes are not represented as autosave pixel deltas; they mark the autosave dirty and force a fresh v3 checkpoint with PNG chunks on the next flush. Paint history stores only the localized before/after dirty rectangle. Other future topology, material, and light commands still need journal patches.
 
 ### 2.2 Schedule
 
@@ -80,18 +80,18 @@ Texture edits and paint strokes are not represented as autosave pixel deltas; th
 | Faces per mesh | 2,000,000 |
 | History | 100 commands / 32 MB retained |
 
-Texture budget: 1024² default, 2048² format cap, eight-layer stack cap. Texture autosave stores full PNGs in the checkpoint, so texture-heavy projects increase the checkpoint size.
+Texture budget: 512² default per asset, 2048² format cap, 64–2048 presets, eight-layer stack cap, per-asset storage. Texture autosave stores full PNGs in the checkpoint, so texture-heavy projects increase the checkpoint size.
 
 ### 2.5 IndexedDB schema
 
-Database: **`loupoli-autosave`** (version 1)  
-Object store: **`state`**  
+Database: **`loupoli-autosave`** (version 1)
+Object store: **`state`**
 Record key: **`current`**
 
 ```ts
 {
   version: 1,
-  checkpoint: Uint8Array,      // complete .lpoly v2 bytes (PNG texture chunks included)
+  checkpoint: Uint8Array,      // complete .lpoly v3 bytes (texture asset PNG chunks included)
   settings: ProjectSettings,   // shading + PS1 flags
   deltas: JournalPatch[],      // transitions since checkpoint
   updatedAt: number
@@ -105,7 +105,7 @@ Only one recovery lineage is current in Phase 2. There is no per-project ID or s
 1. Runtime initialization reads the one autosave record.
 2. If present, it sets `recoveryAvailable` and does not start a new autosave or overwrite the record.
 3. The recovery banner offers **Recover** or **Discard**.
-4. **Recover** decodes the `.lpoly` v2 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
+4. **Recover** decodes the `.lpoly` v3 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
 5. **Discard** deletes the record and starts a new baseline from the current scene.
 6. Save/Open are disabled until recovery is resolved.
 7. Any decode/replay error is reported; the invalid record is not partly applied.
@@ -120,7 +120,7 @@ This is explicit recovery, never a silent replacement of the user's current scen
 
 ---
 
-## 3. `.lpoly` project format v1/v2
+## 3. `.lpoly` project format v3
 
 Implementation: `src/lib/project/lpoly.ts`. Rust validates the envelope and checksum but never parses document semantics.
 
@@ -143,7 +143,7 @@ The header is **28 bytes**:
 | pad | … | bytes | Zero padding to a 4-byte payload start |
 | … | … | bytes | Fixed-order typed-array columns |
 
-`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`. v2 appends aligned texture PNG chunks after the mesh columns.
+`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`. v3 appends aligned texture asset PNG chunks after the mesh columns; the file is aligned to four bytes.
 
 Validation occurs before geometry allocation:
 
@@ -162,26 +162,33 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
 ```json
 {
   "format": "lpoly",
-  "version": 2,
+  "version": 3,
   "settings": {
     "shading": "unlit",
     "ps1Snap": false,
     "ps1Affine": false
   },
   "textures": {
-    "width": 1024,
-    "height": 1024,
-    "activeId": "texlayer-1",
-    "layers": [
+    "assets": [
       {
-        "id": "texlayer-1",
-        "name": "Base",
-        "visible": true,
-        "opacity": 1,
-        "color": "#c8c2ad",
-        "pattern": "checker",
-        "blendMode": "normal",
-        "pngLength": 24692
+        "id": "texasset-1",
+        "name": "Texture 1",
+        "width": 512,
+        "height": 512,
+        "filter": "nearest",
+        "activeId": "texlayer-1",
+        "layers": [
+          {
+            "id": "texlayer-1",
+            "name": "Base",
+            "visible": true,
+            "opacity": 1,
+            "color": "#c8c2ad",
+            "pattern": "checker",
+            "blendMode": "normal",
+            "pngLength": 24692
+          }
+        ]
       }
     ]
   },
@@ -191,6 +198,7 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
       "name": "QuadSphere",
       "primitive": "quadsphere",
       "visible": true,
+      "textureId": "texasset-1",
       "transform": {
         "position": [0, 0, 0],
         "rotation": [0, 0, 0],
@@ -224,19 +232,20 @@ For each node, in order:
 9. `edgeHalfEdge` — `u32`, `edgeCount`
 10. `edgeFlags` — `u8`, `edgeCount`. Bit 0 is the UV seam flag; other bits remain reserved.
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture layers are part of `.lpoly` v2 and the v2 autosave checkpoint.
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets and node bindings are part of `.lpoly` v3 and the v3 autosave checkpoint.
+
 Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip.
 
-### 3.4 v2 texture chunks
+### 3.4 v3 texture asset chunks
 
-After all mesh columns, v2 writes each texture layer's binary PNG in manifest order. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
+After all mesh columns, v3 writes each asset layer's binary PNG in manifest order. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
 
 - v1 files open with no texture set.
-- v2 files with `textures` restore layers on open; v2 without textures resets to the checker base. `blendMode` is optional for earlier v2 files and defaults to `normal`.
-- Texture edits mark autosave dirty and force a fresh v2 checkpoint; recovery restores texture PNGs.
+- v3 files restore texture assets and node bindings on open; a project without textures resets to one default asset.
+- Texture edits mark autosave dirty and force a fresh v3 checkpoint; recovery restores texture PNGs.
 - Layer PNGs are never base64 or JSON strings.
 
 ### 3.5 Not yet serialized
@@ -246,11 +255,11 @@ After all mesh columns, v2 writes each texture layer's binary PNG in manifest or
 - Camera position/target
 - Active object and selection
 
-v1 remains readable. Unknown container versions are rejected with a clear message. New v2 texture fields are validated before allocation.
+Only v3 is accepted during development. Unknown container versions are rejected with a clear message. Texture asset fields are validated before allocation.
 
 ### 3.6 Save protocol
 
-1. TypeScript encodes and validates the current scene and texture layers into a v2 `.lpoly` byte array.
+1. TypeScript encodes and validates the current scene, texture assets, and node bindings into a v3 `.lpoly` byte array.
 2. Tauri save dialog chooses a path; browser mode triggers a download.
 3. For Tauri, Rust re-checks size, magic, header lengths, and CRC.
 4. Rust writes a same-directory temporary file with `create_new`, `write_all`, and `sync_all`.
@@ -263,7 +272,7 @@ v1 remains readable. Unknown container versions are rejected with a clear messag
 1. Native dialog selects a path; browser uses a file input.
 2. Rust enforces 128 MB and validates the envelope/CRC before returning bytes.
 3. TypeScript decodes manifest and columns and rebuilds/validates every DCEL.
-4. Only after success does the runtime replace the document, import v2 texture PNGs, and reset history/autosave.
+4. Only after success does the runtime replace the document, import v3 texture PNGs, and reset history/autosave.
 5. Errors are shown as project errors without mutating the current scene.
 
 ---

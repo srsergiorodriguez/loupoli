@@ -127,6 +127,7 @@ export class MeshNodeView {
   readonly boundMesh: HalfEdgeMesh;
   private readonly mesh: HalfEdgeMesh;
   private seamVisible = false;
+  private shadingMode: ShadingMode = 'unlit';
 
   private triangleGeometry = new BufferGeometry();
   private readonly wireGeometry = new BufferGeometry();
@@ -180,7 +181,7 @@ export class MeshNodeView {
 
   constructor(
     readonly node: MeshNode,
-    private readonly surfaceMaterials: ViewportMaterials,
+    private surfaceMaterials: ViewportMaterials,
     shared: NodeViewSharedMaterials
   ) {
     const mesh = node.getEvaluatedMesh().mesh;
@@ -390,6 +391,7 @@ export class MeshNodeView {
 
   /** Switch surface shading for this node. */
   setShadingMode(mode: ShadingMode): void {
+    this.shadingMode = mode;
     const isWire = mode === 'wireframe';
     const isTextureWire = mode === 'texture-wire';
     this.triangleMesh.visible = !isWire;
@@ -408,6 +410,12 @@ export class MeshNodeView {
     } else {
       this.triangleMesh.material = this.surfaceMaterials.ps1;
     }
+  }
+
+  /** Swap the per-texture material set without rebuilding geometry. */
+  setSurfaceMaterials(materials: ViewportMaterials): void {
+    this.surfaceMaterials = materials;
+    this.setShadingMode(this.shadingMode);
   }
 
   /** Show or hide the seam overlay without changing seam data. */

@@ -49,6 +49,7 @@
 
   $effect(() => {
     session.snapshot.uvRevision;
+    session.snapshot.textureAssetId;
     session.snapshot.textureActiveId;
     session.snapshot.textureLayers.length;
     if (canvas && width > 0 && height > 0) {

@@ -48,6 +48,7 @@ const TOUCH_PIXEL_RATIO_CAP = 1.5;
 /** Optional callbacks for the editor runtime that owns this viewport. */
 interface ViewportRendererOptions {
   readonly onViewChanged?: (orientation: readonly AxisProjection[]) => void;
+  readonly resolveNodeTexture?: (node: MeshNode) => Texture | null;
 }
 
 /**
@@ -65,6 +66,11 @@ export class ViewportRenderer {
   private readonly grid: ViewportGrid;
   private readonly materials: ViewportMaterials;
   private readonly nodeViews = new Map<string, MeshNodeView>();
+  private readonly textureMaterials = new Map<
+    string,
+    { texture: Texture | null; materials: ViewportMaterials }
+  >();
+  private readonly resolveNodeTexture: (node: MeshNode) => Texture | null;
   private readonly groupViews = new Map<string, ThreeGroup>();
   private readonly objectGizmo: ObjectGizmo;
 
@@ -140,6 +146,7 @@ export class ViewportRenderer {
       alpha: false,
       powerPreference: 'high-performance'
     };
+    this.resolveNodeTexture = options.resolveNodeTexture ?? (() => null);
     this.renderer = new WebGLRenderer(rendererParameters);
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setClearColor(theme.canvas.color, 1);
@@ -315,6 +322,7 @@ export class ViewportRenderer {
         view.setShadingMode(this.currentMode);
         view.setSeamVisible(this.seamOverlayVisible);
       }
+      view.setSurfaceMaterials(this.materialsForNode(node));
 
       const parent =
         node.parentId !== null
@@ -335,6 +343,17 @@ export class ViewportRenderer {
         isActive ? selectedElements : [],
         !evaluated.modifiersActive
       );
+    }
+
+    const referencedTextures = new Set(
+      nodes
+        .map((node) => node.textureId)
+        .filter((id): id is string => id !== null)
+    );
+    for (const id of [...this.textureMaterials.keys()]) {
+      if (!referencedTextures.has(id)) {
+        this.clearTextureMaterials(id);
+      }
     }
 
     this.activeGroupId = groups.some((group) => group.id === activeGroupId)
@@ -670,14 +689,56 @@ export class ViewportRenderer {
     return this.scratchPlaneHit.clone();
   }
 
-  /** Render count for development diagnostics and idle-loop verification. */
-  /** Use an authored composite map for Unlit and Lit surfaces. */
-  setTextureMap(map: Texture | null): void {
-    const uniforms = this.materials.ps1.uniforms as unknown as Ps1Uniforms;
-    uniforms.uMap.value = map ?? this.materials.ps1Texture;
-    this.materials.lit.map = map ?? this.materials.litTexture;
-    this.materials.lit.needsUpdate = true;
-    this.schedule();
+  /** Materials for a node's assigned texture, cached per asset. */
+  private materialsForNode(node: MeshNode): ViewportMaterials {
+    const id = node.textureId;
+    if (id === null) {
+      return this.materials;
+    }
+    const texture = this.resolveNodeTexture(node);
+    if (!texture) {
+      return this.materials;
+    }
+    const existing = this.textureMaterials.get(id);
+    if (existing && existing.texture === texture) {
+      return existing.materials;
+    }
+    if (existing) {
+      existing.materials.lit.dispose();
+      existing.materials.ps1.dispose();
+    }
+    const lit = this.materials.lit.clone();
+    lit.map = texture;
+    lit.needsUpdate = true;
+    const ps1 = this.materials.ps1.clone();
+    (ps1.uniforms as unknown as Ps1Uniforms).uMap.value = texture;
+    const materials: ViewportMaterials = {
+      ...this.materials,
+      lit,
+      ps1
+    };
+    this.textureMaterials.set(id, { texture, materials });
+    return materials;
+  }
+
+  /** Release per-asset material variants when an asset is deleted. */
+  clearTextureMaterials(assetId: string): void {
+    const record = this.textureMaterials.get(assetId);
+    if (!record) {
+      return;
+    }
+    record.materials.lit.dispose();
+    record.materials.ps1.dispose();
+    this.textureMaterials.delete(assetId);
+  }
+
+  /** Release every per-asset material variant after a project replacement. */
+  clearAllTextureMaterials(): void {
+    for (const record of this.textureMaterials.values()) {
+      record.materials.lit.dispose();
+      record.materials.ps1.dispose();
+    }
+    this.textureMaterials.clear();
   }
 
   /** Schedule a frame after a texture composite or layer change. */
@@ -739,6 +800,11 @@ export class ViewportRenderer {
     this.seamLineMaterial.dispose();
     this.seamEdgeMaterial.dispose();
     this.selectedFaceMaterial.dispose();
+    for (const record of this.textureMaterials.values()) {
+      record.materials.lit.dispose();
+      record.materials.ps1.dispose();
+    }
+    this.textureMaterials.clear();
     disposeViewportMaterials(this.materials);
 
     this.scene.clear();

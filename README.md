@@ -33,7 +33,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![UV seams shown as amber overlays](docs/media/uv-seams.png)
 
-- **Dedicated Paint workspace.** Choose **Paint** in the Workspace Tabs; the 3D stage stays visible while a separate texture-space Paint pane opens. Choose color/size/opacity and drag the texture. Strokes draw into the active layer, update the composite texture live in both the Paint pane and 3D view, and commit as one localized pixel-patch command. Pen pressure scales the brush radius. Undo restores the paint rectangle; autosave captures the painted PNG in the next v2 checkpoint. Tilt shaping and 3D projection painting remain.
+- **Dedicated Paint workspace.** Choose **Paint** in the Workspace Tabs; the 3D stage stays visible while a separate texture-space Paint pane opens. Choose color/size/opacity and drag the texture. Strokes draw into the active layer, update the composite texture live in both the Paint pane and 3D view, and commit as one localized pixel-patch command. Pen pressure scales the brush radius. Undo restores the paint rectangle; autosave captures the painted PNG in the next v3 checkpoint. Tilt shaping and 3D projection painting remain.
 
 ![Texture painting in the dedicated Paint workspace](docs/media/uv-paint.png)
 
@@ -42,7 +42,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Brush-size preview in the UV paint workspace](docs/media/brush-cursor.png)
 
-- **Texture layer stack (first pass).** A collapsed **Texture** Inspector module manages up to eight 1024² layers with visibility, opacity, color fills, active-layer selection, reordering, and delete. Layers use `OffscreenCanvas` 2D contexts; a single composite `CanvasTexture` feeds Unlit and Lit, so the viewport uploads one GPU texture rather than one per layer. Layer edits are undoable metadata commands. Layers save as binary PNG chunks in `.lpoly` v2 and restore on open. Texture edits are captured by a v2 autosave checkpoint and survive recovery. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted. A raster brush paints the active layer directly in the UV view; 3D projection painting remains.
+- **Texture assets and bindings.** A project-level texture library owns independent assets with 64–2048 presets, nearest/linear filtering, and up to eight layers each. Meshes bind to assets by stable ID, so several objects can share one low-poly atlas. The Inspector exposes asset selection, creation, duplication, assignment, filtering, and deletion. Each asset has one composite `CanvasTexture`, and the renderer caches material variants per asset so shared textures upload once. Layers use `OffscreenCanvas` 2D contexts and save as binary PNG chunks in `.lpoly` v3; texture edits are captured by v3 autosave checkpoints. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted. A raster brush paints the active asset layer directly in the UV view; 3D projection painting remains.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
 
@@ -80,8 +80,8 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 - **Draggable view gizmo.** Dragging the orientation gizmo orbits the view; tapping an axis still snaps to that axis and tapping the center frames the active object.
 - **Quad-aware deformation.** A bent quad renders as a 4 × 4 bilinear patch instead of two independent texture panels, avoiding a diagonal texture crease. The DCEL remains one quad, and displayed V/E/F/triangle counts stay topological.
 - **Bounded command history.** Localized vertex deltas and node add/delete snapshots, redo truncation, a 100-command cap, and a 32 MB retained-byte budget.
-- **Local-first autosave.** A v2 checkpoint (including texture PNGs) plus localized command deltas is written to IndexedDB every 30 seconds while dirty and on visibility loss. Texture edits force a fresh v2 checkpoint on the next flush. Cold start offers **Recover** or **Discard**; recovered work is labelled until saved.
-- **Versioned `.lpoly` v1/v2.** Binary container with a CRC-checked manifest and aligned typed-array columns. v1 round-trips nodes, quads, n-gons, boundary loops, per-corner UVs, seam flags, face materials, transforms, and viewport settings. v2 adds texture-set metadata and per-layer binary PNG chunks; v1 files still open.
+- **Local-first autosave.** A v3 checkpoint (including texture asset PNGs) plus localized command deltas is written to IndexedDB every 30 seconds while dirty and on visibility loss. Texture edits force a fresh v3 checkpoint on the next flush. Cold start offers **Recover** or **Discard**; recovered work is labelled until saved.
+- **Versioned `.lpoly` v3.** Binary container with a CRC-checked manifest and aligned typed-array columns. It round-trips nodes, quads, n-gons, boundary loops, per-corner UVs, seam flags, face materials, transforms, node texture bindings, viewport settings, and a texture asset library with per-layer binary PNG chunks. Development files are v3-only; no legacy compatibility is carried before the MVP.
 - **Native and browser file I/O.** Tauri uses the native dialog plugin plus Rust byte-level read/write commands with size checks, same-directory temporary files, `fsync`, and rename. Browser mode uses download and file-picker fallbacks. `Cmd/Ctrl+S` and `Cmd/Ctrl+O` are wired.
 - **Pointer routing.** Pen never moves the camera; it selects, drags selection/action gizmos, and edits vertices. Touch remains the camera/gesture surface, with taps selecting and one-finger drag orbiting. Mouse supports the documented DCC orbit mappings.
 - **Design system.** Vanilla CSS tokens, local icon registry, floating glass panels, responsive iPad portrait/touch layouts, 44 px touch targets, documented action-size tiers and bottom-HUD offsets, focus states, safe-area handling, and reduced-motion/reduced-transparency fallbacks.
@@ -195,7 +195,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
 ## Verification performed
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **119 passing** tests across twenty-nine files:
+- `npm test`: **126 passing** tests across thirty-one files:
   - DCEL invariants, outward winding, boundary loops, open-grid topology, and adaptive quad tessellation.
   - QuadSphere, Cylinder (n-gon caps), and Grid construction.
   - Default seam profiles for Cube, QuadSphere, Cylinder, and Grid.
@@ -375,7 +375,7 @@ Target baseline: **iPadOS 16.4+**. The Tauri app is structured for iOS, but the 
 | [Master Plan](docs/PLAN.md) | Product constraints, approved decisions, phase exits, risks, toolchain audit |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, DCEL, multi-node rendering, picking, autosave, file I/O |
 | [Design System](docs/DESIGN_SYSTEM.md) | Tokens, visual direction, responsive editor layout, component inventory |
-| [Persistence](docs/PERSISTENCE.md) | Implemented autosave journal, v2 texture checkpoints, and `.lpoly` v1/v2 |
+| [Persistence](docs/PERSISTENCE.md) | Implemented autosave journal, v3 texture checkpoints, and `.lpoly` v3 |
 
 ## Project layout
 
@@ -403,4 +403,4 @@ docs/                Planning, architecture, persistence, design system, media
 4. Bundle identifier is `com.loupoli.studio`.
 5. Correct perspective Unlit mapping with no vertex snapping is the default; PS1 effects are opt-in.
 6. Non-planar quads use render-only bilinear tessellation; the editable DCEL remains quads.
-7. Phase 2 uses a versioned binary `.lpoly` v1 container; Phase 4 adds v2 texture PNG chunks while retaining v1 decode. Autosave uses an IndexedDB checkpoint-plus-deltas journal.
+7. `.lpoly` v3 is the development format: texture assets, per-layer PNG chunks, and node bindings. Legacy v1/v2 compatibility is intentionally deferred until the MVP build.

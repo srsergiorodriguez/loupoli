@@ -6,7 +6,8 @@ import type {
   ModifierAxis
 } from '../geometry/modifiers';
 import type { AutosaveStatus } from '../project/AutosaveService';
-import type { TextureLayerSummary } from '../texture/TextureStack';
+import type { TextureLayerSummary } from '../texture/TextureAsset';
+import type { TextureAssetSummary } from '../texture/TextureLibrary';
 
 /** The object transform tools exposed by the toolbar. */
 export const TRANSFORM_MODES = ['select', 'translate', 'rotate', 'scale'] as const;
@@ -162,6 +163,8 @@ export interface EditorSnapshot {
   readonly uvBrushOpacity: number;
   readonly uvRevision: number;
   readonly uvError: string | null;
+  readonly textureAssets: readonly TextureAssetSummary[];
+  readonly textureAssetId: string | null;
   readonly textureLayers: readonly TextureLayerSummary[];
   readonly textureActiveId: string | null;
   readonly textureSize: number;

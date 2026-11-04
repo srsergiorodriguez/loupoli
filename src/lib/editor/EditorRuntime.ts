@@ -62,10 +62,11 @@ import { extractUvCharts } from '../geometry/uvCharts';
 import { LscmError, unwrapUvCharts } from '../geometry/lscm';
 import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
 import {
-  TextureStack,
-  TextureStackCommand,
-  textureStackStatesEqual
-} from '../texture/TextureStack';
+  TextureAsset,
+  TextureAssetCommand,
+  textureAssetStatesEqual
+} from '../texture/TextureAsset';
+import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
@@ -96,6 +97,12 @@ import {
   SetNodeVisibilityCommand
 } from './commands/SceneOrderCommands';
 import { SetEdgeSeamsCommand } from './commands/SetEdgeSeamsCommand';
+import { AssignTextureCommand } from './commands/AssignTextureCommand';
+import {
+  CreateTextureAssetCommand,
+  DeleteTextureAssetCommand,
+  SetTextureFilterCommand
+} from './commands/TextureAssetCommands';
 import { MoveUvCornersCommand } from './commands/MoveUvCornersCommand';
 import {
   ReplaceMeshCommand,
@@ -129,7 +136,7 @@ import {
 import { applyJournalPatch } from '../project/journal';
 import {
   decodeLpoly,
-  encodeLpolyV2,
+  encodeLpoly,
   type DecodedProject,
   type ProjectSettings
 } from '../project/lpoly';
@@ -386,7 +393,7 @@ export class EditorRuntime {
   } | null = null;
   private uvRevision = 0;
   private uvError: string | null = null;
-  private readonly textureStack: TextureStack;
+  private readonly textureLibrary: TextureLibrary;
   private lastUvSourceSignature = '';
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
@@ -404,28 +411,41 @@ export class EditorRuntime {
   private fileBusy = false;
   private projectError: string | null = null;
 
+  /** Active texture asset used by texture and paint tools. */
+  private get textureStack(): TextureAsset {
+    const asset = this.textureLibrary.active;
+    if (!asset) {
+      throw new Error('The texture library has no active asset.');
+    }
+    return asset;
+  }
+
   constructor(canvas: HTMLCanvasElement, options: EditorRuntimeOptions) {
     this.onSnapshot = options.onSnapshot;
-    this.document = SceneDocument.createDefault('cube');
+    const theme = readTheme();
+    this.textureLibrary = new TextureLibrary(
+      512,
+      'nearest',
+      theme.textureA.css,
+      theme.textureB.css
+    );
+    this.document = SceneDocument.createDefault(
+      'cube',
+      this.textureLibrary.activeAssetId
+    );
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     if (this.activeNodeId) {
       this.selectedNodeIds.add(this.activeNodeId);
     }
     this.selection.setContext(this.activeNodeId, 'vertex');
 
-    const theme = readTheme();
-    this.textureStack = new TextureStack(
-      1024,
-      1024,
-      theme.textureA.css,
-      theme.textureB.css
-    );
     this.renderer = new ViewportRenderer(canvas, theme, {
       onViewChanged: () => {
         this.publish();
-      }
+      },
+      resolveNodeTexture: (node) =>
+        this.textureLibrary.get(node.textureId)?.texture ?? null
     });
-    this.renderer.setTextureMap(this.textureStack.texture);
 
     this.inputHost = {
       activateEditor: (editor) => this.setActiveEditor(editor),
@@ -549,6 +569,8 @@ export class EditorRuntime {
       uvBrushOpacity: this.uvBrushOpacity,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
+      textureAssets: this.textureLibrary.summaries(),
+      textureAssetId: this.textureLibrary.activeAssetId,
       textureLayers: this.textureStack.summaries(),
       textureActiveId: this.textureStack.activeLayerId,
       textureSize: this.textureStack.width,
@@ -609,6 +631,86 @@ export class EditorRuntime {
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
     };
+  }
+
+  /** Select the active texture asset for the inspector and paint tools. */
+  setActiveTextureAsset(id: string): void {
+    if (!this.textureLibrary.setActive(id)) {
+      return;
+    }
+    this.publish();
+  }
+
+  /** Create an empty texture asset and make it the active one. */
+  createTextureAsset(width: number, height: number): void {
+    const asset = this.textureLibrary.build(width, height);
+    this.history.execute(new CreateTextureAssetCommand(this.textureLibrary, asset));
+    this.autosave.markTextureDirty();
+    this.publish();
+  }
+
+  /** Assign the active texture asset to the object selection. */
+  assignTextureToSelection(textureId: string | null): void {
+    const nodes = this.document.nodes.filter((node) =>
+      this.selectedNodeIds.has(node.id)
+    );
+    const active = this.getActiveNode();
+    const targets = nodes.length > 0 ? nodes : active ? [active] : [];
+    if (targets.length === 0) {
+      return;
+    }
+    this.history.execute(new AssignTextureCommand(targets, textureId));
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Delete the active asset when no nodes reference it. */
+  deleteActiveTextureAsset(): void {
+    const asset = this.textureLibrary.active;
+    if (!asset || this.textureLibrary.list().length <= 1) {
+      return;
+    }
+    if (this.document.nodes.some((node) => node.textureId === asset.id)) {
+      this.projectError = 'Unassign this texture before deleting it.';
+      this.publish();
+      return;
+    }
+    this.history.execute(new DeleteTextureAssetCommand(this.textureLibrary, asset));
+    this.renderer.clearTextureMaterials(asset.id);
+    this.autosave.markTextureDirty();
+    this.publish();
+  }
+
+  /** Duplicate the active texture asset with its layer content. */
+  async duplicateActiveTextureAsset(): Promise<void> {
+    const source = this.textureLibrary.active;
+    if (!source) {
+      return;
+    }
+    const copy = this.textureLibrary.build(
+      source.width,
+      source.height,
+      `${source.name} Copy`,
+      source.textureFilter
+    );
+    await copy.importData(await source.exportData());
+    this.history.execute(new CreateTextureAssetCommand(this.textureLibrary, copy));
+    this.autosave.markTextureDirty();
+    this.publish();
+  }
+
+  /** Change the active asset's sampling filter. */
+  setTextureAssetFilter(filter: 'nearest' | 'linear'): void {
+    const asset = this.textureLibrary.active;
+    if (!asset || asset.textureFilter === filter) {
+      return;
+    }
+    this.history.execute(
+      new SetTextureFilterCommand(asset, asset.textureFilter, filter)
+    );
+    this.autosave.markTextureDirty();
+    this.renderer.refreshTexture();
+    this.publish();
   }
 
   /** Activate a texture layer without adding an undo step. */
@@ -679,11 +781,11 @@ export class EditorRuntime {
     const before = this.textureStack.snapshot();
     mutate();
     const after = this.textureStack.snapshot();
-    if (textureStackStatesEqual(before, after)) {
+    if (textureAssetStatesEqual(before, after)) {
       return;
     }
     this.history.execute(
-      new TextureStackCommand(this.textureStack, before, after, label)
+      new TextureAssetCommand(this.textureStack, before, after, label)
     );
     this.renderer.refreshTexture();
     this.publish();
@@ -922,11 +1024,14 @@ export class EditorRuntime {
     this.lassoMode = false;
     this.transformMode = 'select';
     this.axisLock = null;
-    const fresh = SceneDocument.createDefault('cube');
+    this.renderer.clearAllTextureMaterials();
+    this.textureLibrary.reset(512);
+    const fresh = SceneDocument.createDefault(
+      'cube',
+      this.textureLibrary.activeAssetId
+    );
     this.document.replaceNodes(fresh.nodes);
     this.document.replaceGroups([]);
-    this.textureStack.reset();
-    this.renderer.setTextureMap(this.textureStack.texture);
     this.projectName = 'Untitled';
     this.activeGroupId = null;
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
@@ -2801,7 +2906,7 @@ export class EditorRuntime {
 
   /** Create a new primitive, place it beside the scene, and select it. */
   createPrimitive(kind: PrimitiveKind): void {
-    const node = this.document.createNode(kind);
+    const node = this.document.createNode(kind, this.textureLibrary.activeAssetId);
     // New primitives always begin at the world origin; overlapping an existing
     // object is expected and leaves placement entirely under user control.
     node.setPosition([0, 0, 0]);
@@ -3624,7 +3729,7 @@ export class EditorRuntime {
     this.history.dispose();
     this.autosave.dispose();
     this.renderer.dispose();
-    this.textureStack.dispose();
+    this.textureLibrary.dispose();
   }
 
   private getActiveNode(): MeshNode | null {
@@ -5612,8 +5717,11 @@ export class EditorRuntime {
     this.pruneUvSelection();
     this.renderer.refreshTexture();
     if (
-      event.command instanceof TextureStackCommand ||
-      event.command instanceof PaintTextureCommand
+      event.command instanceof TextureAssetCommand ||
+      event.command instanceof PaintTextureCommand ||
+      event.command instanceof CreateTextureAssetCommand ||
+      event.command instanceof DeleteTextureAssetCommand ||
+      event.command instanceof SetTextureFilterCommand
     ) {
       this.autosave.markTextureDirty();
     }
@@ -5803,9 +5911,9 @@ export class EditorRuntime {
     settings: ProjectSettings;
   }> {
     const settings = this.getSettings();
-    const textures = await this.textureStack.exportProject();
+    const textures = await this.textureLibrary.exportRecords();
     return {
-      bytes: encodeLpolyV2(this.document, settings, textures),
+      bytes: encodeLpoly(this.document, settings, textures),
       settings
     };
   }
@@ -5836,16 +5944,21 @@ export class EditorRuntime {
 
   private async applyProjectTextures(decoded: DecodedProject): Promise<void> {
     if (decoded.textures) {
-      await this.textureStack.importProject(decoded.textures);
+      this.renderer.clearAllTextureMaterials();
+      await this.textureLibrary.importRecords(decoded.textures);
     }
-    this.renderer.setTextureMap(this.textureStack.texture);
+    const active = this.getActiveNode();
+    if (active?.textureId && this.textureLibrary.get(active.textureId)) {
+      this.textureLibrary.setActive(active.textureId);
+    }
+    this.syncScene();
     this.renderer.refreshTexture();
     this.publish();
   }
 
   private applyLoadedDocument(decoded: DecodedProject, name: string): void {
-    this.textureStack.reset();
-    this.renderer.setTextureMap(this.textureStack.texture);
+    this.renderer.clearAllTextureMaterials();
+    this.textureLibrary.reset(512);
     this.document.replaceNodes(decoded.document.nodes);
     this.document.replaceGroups(decoded.document.groups);
     this.projectName = name;

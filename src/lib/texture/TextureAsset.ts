@@ -1,6 +1,7 @@
 import {
   CanvasTexture,
   LinearFilter,
+  NearestFilter,
   SRGBColorSpace,
   type Texture
 } from 'three';
@@ -23,7 +24,7 @@ export interface TextureLayerSummary {
 }
 
 /** Serializable metadata for the complete layer stack. */
-export interface TextureStackState {
+export interface TextureAssetState {
   readonly layers: readonly TextureLayerSummary[];
   readonly activeId: string | null;
 }
@@ -45,7 +46,7 @@ export interface TexturePaintPatch {
 }
 
 /** Project-level texture set with binary PNG chunks, never base64. */
-export interface TextureProjectData {
+export interface TextureAssetData {
   readonly width: number;
   readonly height: number;
   readonly activeId: string | null;
@@ -79,7 +80,7 @@ function createLayerCanvas(width: number, height: number): OffscreenCanvas {
   return new OffscreenCanvas(width, height);
 }
 
-function sameState(a: TextureStackState, b: TextureStackState): boolean {
+function sameState(a: TextureAssetState, b: TextureAssetState): boolean {
   if (a.activeId !== b.activeId || a.layers.length !== b.layers.length) {
     return false;
   }
@@ -105,10 +106,27 @@ function sameState(a: TextureStackState, b: TextureStackState): boolean {
  * never one texture per layer. This first pass stores deterministic fill
  * patterns; the same canvases are ready for projection paint later.
  */
-export class TextureStack {
+export interface TextureAssetOptions {
+  readonly id: string;
+  readonly name: string;
+  readonly width: number;
+  readonly height: number;
+  readonly filter?: TextureFilter;
+  readonly checkerA?: string;
+  readonly checkerB?: string;
+}
+
+/** Supported texture sampling filters. */
+export type TextureFilter = 'nearest' | 'linear';
+
+/** One named raster texture and its layer stack. */
+export class TextureAsset {
+  readonly id: string;
+  readonly name: string;
   readonly width: number;
   readonly height: number;
   readonly texture: CanvasTexture;
+  private filter: TextureFilter;
   private readonly layers: TextureLayer[] = [];
   private readonly composite: HTMLCanvasElement;
   private readonly compositeContext: CanvasRenderingContext2D;
@@ -119,16 +137,16 @@ export class TextureStack {
   private readonly checkerB: string;
   private revision = 0;
 
-  constructor(
-    width = 1024,
-    height = 1024,
-    checkerA = '#263129',
-    checkerB = '#c8c2ad'
-  ) {
+  constructor(options: TextureAssetOptions) {
+    const width = options.width;
+    const height = options.height;
+    this.id = options.id;
+    this.name = options.name;
     this.width = width;
     this.height = height;
-    this.checkerA = checkerA;
-    this.checkerB = checkerB;
+    this.filter = options.filter ?? 'nearest';
+    this.checkerA = options.checkerA ?? '#263129';
+    this.checkerB = options.checkerB ?? '#c8c2ad';
     this.composite = document.createElement('canvas');
     this.composite.width = width;
     this.composite.height = height;
@@ -140,8 +158,7 @@ export class TextureStack {
     this.texture = new CanvasTexture(this.composite);
     this.texture.name = 'loupoli-texture-composite';
     this.texture.colorSpace = SRGBColorSpace;
-    this.texture.magFilter = LinearFilter;
-    this.texture.minFilter = LinearFilter;
+    this.applyFilter();
     this.texture.generateMipmaps = false;
     this.texture.anisotropy = 1;
 
@@ -168,13 +185,28 @@ export class TextureStack {
     return this.revision;
   }
 
+  /** Current sampling filter. */
+  get textureFilter(): TextureFilter {
+    return this.filter;
+  }
+
+  /** Change sampling without touching pixel content. */
+  setFilter(filter: TextureFilter): boolean {
+    if (this.filter === filter) {
+      return false;
+    }
+    this.filter = filter;
+    this.applyFilter();
+    return true;
+  }
+
   /** Active layer ID, if any. */
   get activeLayerId(): string | null {
     return this.activeId;
   }
 
   /** Deterministic metadata-only snapshots for commands and undo. */
-  snapshot(): TextureStackState {
+  snapshot(): TextureAssetState {
     return {
       layers: this.layers.map((layer) => ({
         id: layer.id,
@@ -203,7 +235,7 @@ export class TextureStack {
   }
 
   /** Apply a previous/next metadata snapshot by redrawing deterministic layers. */
-  applyState(state: TextureStackState): void {
+  applyState(state: TextureAssetState): void {
     const byId = new Map(this.layers.map((layer) => [layer.id, layer]));
     const next: TextureLayer[] = [];
     for (const summary of state.layers) {
@@ -374,7 +406,7 @@ export class TextureStack {
   }
 
   /** Encode every layer as a binary PNG project payload. */
-  async exportProject(): Promise<TextureProjectData> {
+  async exportData(): Promise<TextureAssetData> {
     const layers: TextureLayerRecord[] = [];
     for (const layer of this.layers) {
       const blob = await layer.canvas.convertToBlob({ type: 'image/png' });
@@ -398,7 +430,7 @@ export class TextureStack {
   }
 
   /** Replace the session stack from decoded PNG project data. */
-  async importProject(data: TextureProjectData): Promise<void> {
+  async importData(data: TextureAssetData): Promise<void> {
     if (data.width !== this.width || data.height !== this.height) {
       throw new Error(
         `Texture size ${data.width}×${data.height} does not match this project.`
@@ -583,6 +615,13 @@ export class TextureStack {
     this.composite.height = 1;
   }
 
+  private applyFilter(): void {
+    const filter = this.filter === 'nearest' ? NearestFilter : LinearFilter;
+    this.texture.magFilter = filter;
+    this.texture.minFilter = filter;
+    this.texture.needsUpdate = true;
+  }
+
   private createLayer(
     name: string,
     pattern: TextureLayerPattern,
@@ -652,14 +691,14 @@ export class TextureStack {
 }
 
 /** Undoable metadata transition for the texture stack. */
-export class TextureStackCommand {
+export class TextureAssetCommand {
   readonly label: string;
   readonly estimatedBytes: number;
 
   constructor(
-    private readonly stack: TextureStack,
-    private readonly before: TextureStackState,
-    private readonly after: TextureStackState,
+    private readonly asset: TextureAsset,
+    private readonly before: TextureAssetState,
+    private readonly after: TextureAssetState,
     label: string
   ) {
     if (sameState(before, after)) {
@@ -671,23 +710,23 @@ export class TextureStackCommand {
   }
 
   execute(): void {
-    this.stack.applyState(this.after);
+    this.asset.applyState(this.after);
   }
 
   undo(): void {
-    this.stack.applyState(this.before);
+    this.asset.applyState(this.before);
   }
 }
 
 /** True when two texture stack states are metadata-identical. */
-export function textureStackStatesEqual(
-  a: TextureStackState,
-  b: TextureStackState
+export function textureAssetStatesEqual(
+  a: TextureAssetState,
+  b: TextureAssetState
 ): boolean {
   return sameState(a, b);
 }
 
 /** The composite texture is the only GPU upload for the stack. */
-export function textureStackTexture(stack: TextureStack): Texture {
-  return stack.texture;
+export function textureAssetTexture(asset: TextureAsset): Texture {
+  return asset.texture;
 }

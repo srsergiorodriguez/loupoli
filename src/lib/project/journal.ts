@@ -91,6 +91,11 @@ export type JournalPatch =
       readonly visible: boolean;
     }
   | {
+      readonly type: 'set-node-texture';
+      readonly nodeId: string;
+      readonly textureId: string | null;
+    }
+  | {
       readonly type: 'set-group-visible';
       readonly groupId: string;
       readonly visible: boolean;
@@ -203,6 +208,14 @@ export function applyJournalPatch(
       node.visible = patch.visible;
       return;
     }
+    case 'set-node-texture': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.textureId = patch.textureId;
+      return;
+    }
     case 'set-group-visible': {
       const group = document.getGroup(patch.groupId);
       if (!group) {
@@ -231,6 +244,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'set-node-visible') {
     return patch.nodeId.length * 2 + 24;
+  }
+  if (patch.type === 'set-node-texture') {
+    return patch.nodeId.length * 2 + (patch.textureId?.length ?? 0) * 2 + 24;
   }
   if (patch.type === 'set-group-visible') {
     return patch.groupId.length * 2 + 24;

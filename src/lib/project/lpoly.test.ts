@@ -5,7 +5,6 @@ import { createCylinderMesh, createGridMesh } from '../geometry/primitives';
 import {
   decodeLpoly,
   encodeLpoly,
-  encodeLpolyV2,
   restoreNode,
   snapshotGroup,
   snapshotNode,
@@ -39,7 +38,7 @@ function makeDocument(): SceneDocument {
   return document;
 }
 
-describe('.lpoly v1', () => {
+describe('.lpoly v3', () => {
   it('round-trips multiple closed and open meshes byte-for-byte', () => {
     const document = makeDocument();
     const bytes = encodeLpoly(document, SETTINGS);
@@ -66,32 +65,41 @@ describe('.lpoly v1', () => {
   });
 
 
-  it('round-trips v2 texture metadata and PNG chunks', () => {
+  it('round-trips texture assets and node bindings', () => {
     const document = makeDocument();
     const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3, 4]);
-    const bytes = encodeLpolyV2(document, SETTINGS, {
-      width: 64,
-      height: 64,
-      activeId: 'texlayer-1',
-      layers: [
-        {
-          id: 'texlayer-1',
-          name: 'Base',
-          visible: true,
-          opacity: 1,
-          color: '#c8c2ad',
-          pattern: 'checker',
-          blendMode: 'normal',
-          png
-        }
-      ]
-    });
+    document.nodes[0].textureId = 'texasset-1';
+    const bytes = encodeLpoly(document, SETTINGS, [
+      {
+        id: 'texasset-1',
+        name: 'Atlas',
+        width: 64,
+        height: 64,
+        filter: 'nearest',
+        activeId: 'texlayer-1',
+        layers: [
+          {
+            id: 'texlayer-1',
+            name: 'Base',
+            visible: true,
+            opacity: 1,
+            color: '#c8c2ad',
+            pattern: 'checker',
+            blendMode: 'normal',
+            png
+          }
+        ]
+      }
+    ]);
     const decoded = decodeLpoly(bytes);
-    expect(decoded.textures?.width).toBe(64);
-    expect(decoded.textures?.layers).toHaveLength(1);
-    expect(decoded.textures?.layers[0].png).toEqual(png);
-    expect(decoded.textures?.layers[0].blendMode).toBe('normal');
-    expect(decoded.textures?.activeId).toBe('texlayer-1');
+    expect(decoded.textures).toHaveLength(1);
+    expect(decoded.textures?.[0].width).toBe(64);
+    expect(decoded.textures?.[0].filter).toBe('nearest');
+    expect(decoded.textures?.[0].layers).toHaveLength(1);
+    expect(decoded.textures?.[0].layers[0].png).toEqual(png);
+    expect(decoded.textures?.[0].layers[0].blendMode).toBe('normal');
+    expect(decoded.textures?.[0].activeId).toBe('texlayer-1');
+    expect(decoded.document.nodes[0].textureId).toBe('texasset-1');
     expect(decoded.document.nodes[0].name).toBe('QuadSphere');
   });
 
@@ -184,6 +192,50 @@ describe('.lpoly v1', () => {
       Array.from(node.mesh.positions)
     );
     expect(restored.mesh.boundaryEdgeCount).toBe(node.mesh.boundaryEdgeCount);
+  });
+
+  it('round-trips two texture assets with node bindings', () => {
+    const document = makeDocument();
+    document.nodes[0].textureId = 'texasset-1';
+    document.nodes[1].textureId = 'texasset-2';
+    const pngA = new Uint8Array([1, 2, 3, 4, 5]);
+    const pngB = new Uint8Array([6, 7, 8, 9, 10, 11, 12]);
+    const makeLayer = (id: string, png: Uint8Array) => ({
+      id,
+      name: 'Base',
+      visible: true,
+      opacity: 1,
+      color: '#ffffff',
+      pattern: 'solid' as const,
+      blendMode: 'normal' as const,
+      png
+    });
+    const bytes = encodeLpoly(document, SETTINGS, [
+      {
+        id: 'texasset-1',
+        name: 'A',
+        width: 64,
+        height: 64,
+        filter: 'nearest',
+        activeId: 'texlayer-a',
+        layers: [makeLayer('texlayer-a', pngA)]
+      },
+      {
+        id: 'texasset-2',
+        name: 'B',
+        width: 128,
+        height: 128,
+        filter: 'linear',
+        activeId: 'texlayer-b',
+        layers: [makeLayer('texlayer-b', pngB)]
+      }
+    ]);
+    const decoded = decodeLpoly(bytes);
+    expect(decoded.textures).toHaveLength(2);
+    expect(decoded.textures?.[0].layers[0].png).toEqual(pngA);
+    expect(decoded.textures?.[1].layers[0].png).toEqual(pngB);
+    expect(decoded.document.nodes[0].textureId).toBe('texasset-1');
+    expect(decoded.document.nodes[1].textureId).toBe('texasset-2');
   });
 
   it('round-trips an empty scene', () => {

@@ -19,11 +19,16 @@ export class SceneDocument {
   readonly groups: SceneGroup[] = [];
 
   /** Construct the default first-run scene from the real primitive path. */
-  static createDefault(kind: PrimitiveKind = 'quadsphere'): SceneDocument {
+  static createDefault(
+    kind: PrimitiveKind = 'quadsphere',
+    textureId: string | null = null
+  ): SceneDocument {
     const document = new SceneDocument();
     const mesh = createPrimitiveMesh(kind);
     applyDefaultSeams(mesh, kind);
-    document.insertNode(new MeshNode(mesh, kind, PRIMITIVE_LABELS[kind]));
+    document.insertNode(
+      new MeshNode(mesh, kind, PRIMITIVE_LABELS[kind], undefined, textureId)
+    );
     return document;
   }
 
@@ -115,7 +120,7 @@ export class SceneDocument {
   }
 
   /** Create a named primitive node without inserting it yet. */
-  createNode(kind: PrimitiveKind): MeshNode {
+  createNode(kind: PrimitiveKind, textureId: string | null = null): MeshNode {
     const base = PRIMITIVE_LABELS[kind];
     const counts = new Map<string, number>();
     for (const node of this.nodes) {
@@ -126,7 +131,7 @@ export class SceneDocument {
     const name = index === 1 ? base : `${base} ${index}`;
     const mesh = createPrimitiveMesh(kind);
     applyDefaultSeams(mesh, kind);
-    return new MeshNode(mesh, kind, name);
+    return new MeshNode(mesh, kind, name, undefined, textureId);
   }
 
   /** Compute a non-overlapping local-space X placement for a new node. */
@@ -179,7 +184,8 @@ export class SceneDocument {
       name: node.name,
       primitive: node.primitive,
       visible: node.visible,
-      parentId: node.parentId
+      parentId: node.parentId,
+      textureId: node.textureId
     }));
   }
 

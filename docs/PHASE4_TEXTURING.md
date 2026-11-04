@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a texture layer stack are implemented. Layers save as binary PNG chunks in `.lpoly` v2 and are captured by v2 autosave checkpoints; recovery restores them. Blend modes/rename and projection painting remain.
+**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a texture layer stack are implemented. Texture assets and node bindings save in `.lpoly` v3; per-asset layers use binary PNG chunks and are captured by v3 autosave checkpoints. Blend modes/rename and projection painting remain.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -38,7 +38,7 @@
 
 - Each layer owns an `OffscreenCanvas` 2D context, optional PNG backing bytes, metadata, and a CPU dirty flag.
 - Layer order is bottom-to-top; each layer has visibility, opacity, blend mode, name, and a stable ID.
-- Default texture size is **1024²**; hard maximum is **2048²**.
+- Default texture size is **512²** per asset, with 64–2048 presets; hard maximum is **2048²**.
 - Default layer limit is **8**; the Inspector surfaces the remaining budget before adding a layer.
 - Layer dimensions are fixed for a project. Changing the project texture size requires an explicit, undoable resample.
 - The viewport uploads one composite `CanvasTexture`, not one texture per layer.

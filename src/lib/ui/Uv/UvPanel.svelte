@@ -104,6 +104,7 @@
     // The runtime owns the DCEL; this effect only asks it to repaint when the
     // UV selection, mesh, or canvas size actually changes.
     session.snapshot.uvRevision;
+    session.snapshot.textureAssetId;
     session.snapshot.uvSelectedCorners.length;
     session.snapshot.activeNodeId;
     session.snapshot.uvOpen;
