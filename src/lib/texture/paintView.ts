@@ -1,3 +1,10 @@
+/** User zoom/pan for the Paint texture surface. */
+export interface PaintViewState {
+  readonly zoom: number;
+  readonly panX: number;
+  readonly panY: number;
+}
+
 /** Square texture display bounds inside a paint canvas. */
 export interface PaintBounds {
   readonly x: number;
@@ -5,16 +12,19 @@ export interface PaintBounds {
   readonly size: number;
 }
 
-/** Fit the texture square into a paint canvas with padding. */
+/** Fit the texture square into a paint canvas with padding and zoom/pan. */
 export function paintBounds(
   width: number,
   height: number,
-  padding = 24
+  padding = 24,
+  view?: PaintViewState
 ): PaintBounds {
-  const size = Math.max(1, Math.min(width, height) - padding * 2);
+  const baseSize = Math.max(1, Math.min(width, height) - padding * 2);
+  const zoom = Math.max(0.1, view?.zoom ?? 1);
+  const size = baseSize * zoom;
   return {
-    x: (width - size) / 2,
-    y: (height - size) / 2,
+    x: (width - size) / 2 + (view?.panX ?? 0),
+    y: (height - size) / 2 + (view?.panY ?? 0),
     size
   };
 }
@@ -27,9 +37,10 @@ export function paintPointToTexture(
   height: number,
   textureWidth: number,
   textureHeight: number,
-  padding = 24
+  padding = 24,
+  view?: PaintViewState
 ): { x: number; y: number } | null {
-  const bounds = paintBounds(width, height, padding);
+  const bounds = paintBounds(width, height, padding, view);
   if (
     x < bounds.x ||
     y < bounds.y ||
@@ -50,8 +61,9 @@ export function paintTextureRadius(
   width: number,
   height: number,
   textureWidth: number,
-  padding = 24
+  padding = 24,
+  view?: PaintViewState
 ): number {
-  const bounds = paintBounds(width, height, padding);
+  const bounds = paintBounds(width, height, padding, view);
   return Math.max(0.5, (screenDiameter / 2) * (textureWidth / bounds.size));
 }

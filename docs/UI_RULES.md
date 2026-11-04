@@ -8,6 +8,7 @@ Every command has exactly one visible home. Contextual behavior changes the targ
 
 - Selection modes and combination: Selection Bar.
 - Pointer tools: Tool Rail. ActionDock is 3D-only and is hidden while the UV split is open.
+- Paint uses a fixed two-row toolbar: icon tool strip, then brush preview/quick controls. Detailed brush options live in the Brush Inspector section; tool changes must not resize the canvas.
 - Edge-loop selection is a sticky toggle shown only in 3D Edge mode; it expands an edge pick across the quad loop.
 - UV-only operations: UV Toolbar.
 - Document actions: Application Bar.

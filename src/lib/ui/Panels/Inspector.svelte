@@ -5,6 +5,11 @@
   import Switch from '../Primitives/Switch.svelte';
   import Vector3Field from '../Primitives/Vector3Field.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
+  import SliderField from '../Primitives/SliderField.svelte';
+  import SelectField from '../Primitives/SelectField.svelte';
+  import ColorField from '../Primitives/ColorField.svelte';
+  import ActionButton from '../Primitives/ActionButton.svelte';
+  import ActionRow from '../Primitives/ActionRow.svelte';
   import InspectorSection from './InspectorSection.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import {
@@ -71,7 +76,13 @@
     nodes.filter((node) => node.textureId === session.snapshot.textureAssetId).length
   );
   let newTextureSize = $state(512);
+  let textureImportInput: HTMLInputElement;
   const textureLayers = $derived(session.snapshot.textureLayers);
+  const activeTextureLayer = $derived(
+    textureLayers.find((layer) => layer.id === session.snapshot.textureActiveId) ??
+      textureLayers[textureLayers.length - 1] ??
+      null
+  );
 
   async function importTextureImage(event: Event): Promise<void> {
     const input = event.currentTarget as HTMLInputElement;
@@ -140,11 +151,24 @@
   const textureMeta = $derived(
     `${activeTextureAsset?.width ?? session.snapshot.textureSize}² · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
   );
+  const paintToolLabel = $derived(
+    session.snapshot.paintTool === 'brush'
+      ? 'Brush'
+      : session.snapshot.paintTool === 'eraser'
+        ? 'Eraser'
+        : session.snapshot.paintTool === 'rectangle'
+          ? 'Rectangle'
+          : session.snapshot.paintTool === 'ellipse'
+            ? 'Ellipse'
+            : session.snapshot.paintTool[0].toUpperCase() +
+              session.snapshot.paintTool.slice(1)
+  );
 
   type SectionKey =
     | 'scene'
     | 'mesh'
     | 'selection'
+    | 'brush'
     | 'transform'
     | 'modifiers'
     | 'texture'
@@ -155,6 +179,7 @@
     scene: true,
     mesh: false,
     selection: false,
+    brush: true,
     transform: false,
     modifiers: false,
     texture: false,
@@ -165,7 +190,7 @@
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
 
-  const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v2';
+  const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v3';
   let sections = $state<Record<SectionKey, boolean>>({ ...SECTION_DEFAULTS });
   let draggedNodeId = $state<string | null>(null);
   let dropTargetId = $state<string | null>(null);
@@ -770,6 +795,74 @@
       {/if}
     </InspectorSection>
 
+    {#if session.snapshot.activeEditor === 'paint'}
+      <InspectorSection
+        title="Brush"
+        meta={paintToolLabel}
+        open={sections.brush}
+        onToggle={(open) => setSection('brush', open)}
+      >
+        <div class="module-body brush-body">
+          <SliderField
+            label="Size"
+            value={session.snapshot.uvBrushSize}
+            min={2}
+            max={128}
+            step={1}
+            precision={0}
+            onChange={(value) => session.setUvBrushSize(value)}
+          />
+          <SliderField
+            label="Opacity"
+            value={session.snapshot.uvBrushOpacity}
+            percent
+            onChange={(value) => session.setUvBrushOpacity(value)}
+          />
+          <SliderField
+            label="Hardness"
+            value={session.snapshot.paintHardness}
+            onChange={(value) => session.setPaintHardness(value)}
+          />
+          <SliderField
+            label="Smoothing"
+            value={session.snapshot.paintSmoothing}
+            onChange={(value) => session.setPaintSmoothing(value)}
+          />
+          <SliderField
+            label="Noise"
+            value={session.snapshot.paintNoise}
+            onChange={(value) => session.setPaintNoise(value)}
+          />
+          {#if session.snapshot.paintTool === 'gradient'}
+            <ColorField
+              label="To"
+              value={session.snapshot.paintSecondaryColor}
+              onChange={(value) => session.setPaintSecondaryColor(value)}
+            />
+            <SelectField
+              label="Type"
+              value={session.snapshot.paintGradient}
+              options={[
+                { value: 'linear', label: 'Linear' },
+                { value: 'radial', label: 'Radial' }
+              ]}
+              onChange={(value) =>
+                session.setPaintGradient(value as 'linear' | 'radial')}
+            />
+          {/if}
+          {#if session.snapshot.paintTool === 'rectangle' || session.snapshot.paintTool === 'ellipse'}
+            <ActionButton
+              label={session.snapshot.paintShapeFilled ? 'Filled shape' : 'Outline shape'}
+              icon="rectangle"
+              active={session.snapshot.paintShapeFilled}
+              onActivate={() =>
+                session.setPaintShapeFilled(!session.snapshot.paintShapeFilled)}
+            />
+          {/if}
+        </div>
+      </InspectorSection>
+    {/if}
+
     <InspectorSection
       title="Transform"
       meta={transformMeta}
@@ -1072,239 +1165,218 @@
       onToggle={(open) => setSection('texture', open)}
     >
       <div class="module-body texture-body">
-        <div class="texture-asset-controls">
-          <label class="texture-asset-select">
-            <span>Asset</span>
-            <select
-              value={session.snapshot.textureAssetId ?? ''}
-              aria-label="Active texture asset"
-              onchange={(event) =>
-                session.setActiveTextureAsset(event.currentTarget.value)}
-            >
-              {#each textureAssets as asset (asset.id)}
-                <option value={asset.id}>{asset.name} · {asset.width}²</option>
-              {/each}
-            </select>
-          </label>
-          <span class="texture-note">{textureUsage} object{textureUsage === 1 ? '' : 's'}</span>
-        </div>
-        <div class="texture-toolbar">
-          <select
-            class="texture-size-select"
-            value={newTextureSize}
-            aria-label="New texture size"
-            onchange={(event) => (newTextureSize = Number(event.currentTarget.value))}
-          >
-            {#each [64, 128, 256, 512, 1024, 2048] as size}
-              <option value={size}>{size}²</option>
-            {/each}
-          </select>
-          <button
-            type="button"
-            class="compact-action"
-            aria-label="Create texture asset"
-            onclick={() => session.createTextureAsset(newTextureSize, newTextureSize)}
-          >
-            <Icon name="plus" size={13} />
-            <span>New</span>
-          </button>
-          <button
-            type="button"
-            class="compact-action"
-            aria-label="Duplicate active texture asset"
-            onclick={() => session.duplicateActiveTextureAsset()}
-          >
-            <Icon name="open" size={13} />
-            <span>Duplicate</span>
-          </button>
-          <label class="compact-action texture-import">
-            <Icon name="new-file" size={13} />
-            <span>Import image</span>
-            <input
-              type="file"
-              accept="image/*"
-              aria-label="Import image as a texture layer"
-              onchange={importTextureImage}
+        <input
+          bind:this={textureImportInput}
+          class="visually-hidden"
+          type="file"
+          accept="image/*"
+          aria-label="Import image as a texture layer"
+          onchange={importTextureImage}
+        />
+        <div class="texture-block">
+          <SelectField
+            label="Asset"
+            value={session.snapshot.textureAssetId ?? ''}
+            options={textureAssets.map((asset) => ({
+              value: asset.id,
+              label: `${asset.name} · ${asset.width}²`
+            }))}
+            onChange={(value) => session.setActiveTextureAsset(value)}
+          />
+          <span class="texture-usage">
+            {textureUsage} object{textureUsage === 1 ? '' : 's'} · {activeTextureAsset?.filter ?? 'nearest'}
+          </span>
+          <ActionRow>
+            <ActionButton
+              label="New"
+              icon="plus"
+              onActivate={() =>
+                session.createTextureAsset(newTextureSize, newTextureSize)}
             />
-          </label>
-          <button
-            type="button"
-            class="compact-action"
-            aria-label="Delete active texture asset"
-            disabled={textureUsage > 0 || textureAssets.length <= 1}
-            onclick={() => session.deleteActiveTextureAsset()}
-          >
-            <Icon name="trash" size={13} />
-            <span>Delete</span>
-          </button>
+            <ActionButton
+              label="Duplicate"
+              icon="open"
+              onActivate={() => session.duplicateActiveTextureAsset()}
+            />
+            <ActionButton
+              label="Import"
+              icon="new-file"
+              onActivate={() => textureImportInput?.click()}
+            />
+            <ActionButton
+              label="Delete"
+              icon="trash"
+              variant="danger"
+              disabled={textureUsage > 0 || textureAssets.length <= 1}
+              onActivate={() => session.deleteActiveTextureAsset()}
+            />
+          </ActionRow>
+          <SelectField
+            label="New size"
+            value={String(newTextureSize)}
+            options={[64, 128, 256, 512, 1024, 2048].map((size) => ({
+              value: String(size),
+              label: `${size}²`
+            }))}
+            onChange={(value) => (newTextureSize = Number(value))}
+          />
         </div>
-        <div class="texture-toolbar">
-          <label class="texture-asset-select">
-            <span>Filter</span>
-            <select
-              value={activeTextureAsset?.filter ?? 'nearest'}
-              aria-label="Texture filtering"
-              onchange={(event) =>
-                session.setTextureAssetFilter(
-                  event.currentTarget.value as 'nearest' | 'linear'
-                )}
-            >
-              <option value="nearest">Nearest</option>
-              <option value="linear">Linear</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            class="compact-action"
-            aria-label="Assign active texture to selection"
-            onclick={() => session.assignTextureToSelection(session.snapshot.textureAssetId)}
-          >
-            <Icon name="texture-wire" size={13} />
-            <span>Assign</span>
-          </button>
-          <button
-            type="button"
-            class="compact-action"
-            aria-label="Unassign texture from selection"
-            onclick={() => session.assignTextureToSelection(null)}
-          >
-            <span>Unassign</span>
-          </button>
+
+        <div class="texture-block">
+          <SelectField
+            label="Filter"
+            value={activeTextureAsset?.filter ?? 'nearest'}
+            options={[
+              { value: 'nearest', label: 'Nearest' },
+              { value: 'linear', label: 'Linear' }
+            ]}
+            onChange={(value) =>
+              session.setTextureAssetFilter(value as 'nearest' | 'linear')}
+          />
+          <ActionRow>
+            <ActionButton
+              label="Assign"
+              icon="texture-wire"
+              onActivate={() =>
+                session.assignTextureToSelection(session.snapshot.textureAssetId)}
+            />
+            <ActionButton
+              label="Unassign"
+              icon="close"
+              onActivate={() => session.assignTextureToSelection(null)}
+            />
+          </ActionRow>
         </div>
-        <div class="texture-toolbar">
-          <button
-            type="button"
-            class="compact-action"
-            aria-label="Add texture layer"
-            disabled={textureLayers.length >= 8}
-            onclick={() => session.addTextureLayer()}
-          >
-            <Icon name="plus" size={13} />
-            <span>Add layer</span>
-          </button>
-          <span class="texture-note">PNG v3 · autosaved</span>
-        </div>
-        <div class="texture-list">
-          {#each textureLayersTopFirst as { layer, index } (layer.id)}
-            <div
-              class="texture-layer"
-              class:active={session.snapshot.textureActiveId === layer.id}
-            >
-              <div class="texture-row">
-                <button
-                  type="button"
-                  class="texture-icon"
-                  aria-label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
-                  aria-pressed={layer.visible}
-                  title={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
-                  onclick={() => session.toggleTextureLayer(layer.id)}
-                >
-                  <Icon name={layer.visible ? 'eye' : 'eye-off'} size={14} />
-                </button>
-                <div class="texture-name-group">
-                  <input
-                    class="texture-name-input"
-                    value={layer.name}
-                    maxlength="64"
-                    aria-label={`${layer.name} layer name`}
-                    onfocus={() => session.setActiveTextureLayer(layer.id)}
-                    onchange={(event) =>
-                      session.renameTextureLayer(layer.id, event.currentTarget.value)}
-                  />
-                  <span class="texture-pattern">{layer.kind === 'raster' ? 'image' : layer.pattern} · {layer.blendMode}</span>
-                </div>
-                <button
-                  type="button"
-                  class="texture-icon texture-delete"
-                  aria-label={`Delete ${layer.name}`}
-                  title={`Delete ${layer.name}`}
-                  disabled={textureLayers.length <= 1}
-                  onclick={() => session.removeTextureLayer(layer.id)}
-                >
-                  <Icon name="trash" size={13} />
-                  <span>Delete</span>
-                </button>
-              </div>
-              <div class="texture-row texture-row--controls">
-                <input
-                  type="color"
-                  class="texture-color"
-                  value={layer.color}
-                  aria-label={`${layer.name} color`}
-                  onchange={(event) =>
-                    session.setTextureLayerColor(layer.id, event.currentTarget.value)}
+
+        <div class="texture-block">
+          <ActionRow align="between">
+            <ActionButton
+              label="Add layer"
+              icon="plus"
+              disabled={textureLayers.length >= 8}
+              onActivate={() => session.addTextureLayer()}
+            />
+            <span class="texture-note">PNG v3 · autosaved</span>
+          </ActionRow>
+          <div class="texture-layer-list" role="list">
+            {#each textureLayersTopFirst as { layer } (layer.id)}
+              <div
+                class="texture-layer-row"
+                class:active={session.snapshot.textureActiveId === layer.id}
+              >
+                <IconButton
+                  label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
+                  icon={layer.visible ? 'eye' : 'eye-off'}
+                  tooltip={layer.visible ? 'Hide layer' : 'Show layer'}
+                  onActivate={() => session.toggleTextureLayer(layer.id)}
                 />
-                <label class="texture-opacity">
-                  <span>{Math.round(layer.opacity * 100)}%</span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={layer.opacity}
-                    aria-label={`${layer.name} opacity`}
-                    onchange={(event) =>
-                      session.setTextureLayerOpacity(layer.id, Number(event.currentTarget.value))}
-                  />
-                </label>
                 <button
                   type="button"
-                  class="texture-order"
-                  aria-label={`Move ${layer.name} up`}
-                  title={`Move ${layer.name} up`}
-                  disabled={index === textureLayers.length - 1}
-                  onclick={() => session.moveTextureLayer(layer.id, 1)}
-                ><Icon name="chevron-up" size={12} /></button>
-                <button
-                  type="button"
-                  class="texture-order"
-                  aria-label={`Move ${layer.name} down`}
-                  title={`Move ${layer.name} down`}
-                  disabled={index === 0}
-                  onclick={() => session.moveTextureLayer(layer.id, -1)}
-                ><Icon name="chevron-down" size={12} /></button>
+                  class="texture-layer-select"
+                  aria-pressed={session.snapshot.textureActiveId === layer.id}
+                  onclick={() => session.setActiveTextureLayer(layer.id)}
+                >
+                  <span class="texture-layer-swatch" style:background={layer.color}></span>
+                  <span class="texture-layer-name">{layer.name}</span>
+                  <span class="texture-layer-meta">
+                    {layer.kind === 'raster' ? 'raster' : layer.pattern} · {layer.role}
+                  </span>
+                  <span class="texture-layer-opacity">{Math.round(layer.opacity * 100)}%</span>
+                </button>
               </div>
-              <div class="texture-row texture-row--blend">
-                <label class="texture-blend">
-                  <span>Blend</span>
-                  <select
-                    value={layer.blendMode}
-                    aria-label={`${layer.name} blend mode`}
-                    onchange={(event) =>
-                      session.setTextureLayerBlendMode(
-                        layer.id,
-                        event.currentTarget.value as 'normal' | 'multiply' | 'screen'
-                      )}
-                  >
-                    <option value="normal">Normal</option>
-                    <option value="multiply">Multiply</option>
-                    <option value="screen">Screen</option>
-                  </select>
-                </label>
-                <label class="texture-blend">
-                  <span>Role</span>
-                  <select
-                    value={layer.role}
-                    aria-label={`${layer.name} layer role`}
-                    onchange={(event) =>
-                      session.setTextureLayerRole(
-                        layer.id,
-                        event.currentTarget.value as 'color' | 'detail' | 'lighting'
-                      )}
-                  >
-                    <option value="color">Color</option>
-                    <option value="detail">Detail</option>
-                    <option value="lighting">Lighting</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-          {/each}
+            {/each}
+          </div>
         </div>
-        <p class="hint">
-          Each asset uploads one GPU texture. PNG chunks save in `.lpoly` v3 and
-          are captured by the v3 autosave checkpoint.
-        </p>
+
+        {#if activeTextureLayer}
+          <div class="texture-block">
+            <div class="texture-selected-head">
+              <input
+                class="texture-name-input"
+                value={activeTextureLayer.name}
+                maxlength="64"
+                aria-label={`${activeTextureLayer.name} layer name`}
+                onchange={(event) =>
+                  session.renameTextureLayer(
+                    activeTextureLayer.id,
+                    event.currentTarget.value
+                  )}
+              />
+              <span class="texture-kind">
+                {activeTextureLayer.kind === 'raster' ? 'raster' : activeTextureLayer.pattern}
+              </span>
+            </div>
+            <SliderField
+              label="Opacity"
+              value={activeTextureLayer.opacity}
+              percent
+              onChange={(value) =>
+                session.setTextureLayerOpacity(activeTextureLayer.id, value)}
+            />
+            <SelectField
+              label="Blend"
+              value={activeTextureLayer.blendMode}
+              options={[
+                { value: 'normal', label: 'Normal' },
+                { value: 'multiply', label: 'Multiply' },
+                { value: 'screen', label: 'Screen' }
+              ]}
+              onChange={(value) =>
+                session.setTextureLayerBlendMode(
+                  activeTextureLayer.id,
+                  value as 'normal' | 'multiply' | 'screen'
+                )}
+            />
+            <SelectField
+              label="Role"
+              value={activeTextureLayer.role}
+              options={[
+                { value: 'color', label: 'Color' },
+                { value: 'detail', label: 'Detail' },
+                { value: 'lighting', label: 'Lighting' }
+              ]}
+              onChange={(value) =>
+                session.setTextureLayerRole(
+                  activeTextureLayer.id,
+                  value as 'color' | 'detail' | 'lighting'
+                )}
+            />
+            <ColorField
+              label="Fill"
+              value={activeTextureLayer.color}
+              onChange={(value) =>
+                session.setTextureLayerColor(activeTextureLayer.id, value)}
+            />
+            <ActionRow>
+              <IconButton
+                label="Move layer up"
+                icon="chevron-up"
+                tooltip="Move layer up"
+                disabled={
+                  textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) >=
+                  textureLayers.length - 1
+                }
+                onActivate={() => session.moveTextureLayer(activeTextureLayer.id, 1)}
+              />
+              <IconButton
+                label="Move layer down"
+                icon="chevron-down"
+                tooltip="Move layer down"
+                disabled={
+                  textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) <= 0
+                }
+                onActivate={() => session.moveTextureLayer(activeTextureLayer.id, -1)}
+              />
+              <ActionButton
+                label="Delete"
+                icon="trash"
+                variant="danger"
+                disabled={textureLayers.length <= 1}
+                onActivate={() => session.removeTextureLayer(activeTextureLayer.id)}
+              />
+            </ActionRow>
+          </div>
+        {/if}
       </div>
     </InspectorSection>
 
@@ -2047,53 +2119,23 @@
     gap: var(--space-2);
   }
 
-  .texture-import {
-    position: relative;
-    cursor: pointer;
-  }
-
-  .texture-import input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .texture-asset-controls,
-  .texture-toolbar {
+  .texture-block {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: var(--space-1);
-    flex-wrap: wrap;
+    padding-bottom: var(--space-2);
+    border-bottom: var(--hairline) solid var(--border-subtle);
   }
 
-  .texture-asset-select,
-  .texture-size-select {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: var(--hit-min);
+  .texture-block:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .texture-usage {
     color: var(--text-tertiary);
+    font-family: var(--font-mono);
     font-size: var(--text-2xs);
-  }
-
-  .texture-asset-select select,
-  .texture-size-select {
-    min-height: var(--hit-min);
-    padding: 0 var(--space-2);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background: var(--bg-input);
-    color: var(--text-primary);
-    font: inherit;
-  }
-
-  .texture-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
   }
 
   .texture-note {
@@ -2102,95 +2144,85 @@
     font-size: var(--text-2xs);
   }
 
-  .texture-list {
+  .texture-layer-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: 2px;
   }
 
-  .texture-layer {
-    padding: var(--space-1);
-    border: var(--hairline) solid var(--border-subtle);
+  .texture-layer-row {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-height: var(--hit-min);
+    border: var(--hairline) solid transparent;
     border-radius: var(--radius-sm);
     background: var(--bg-input);
   }
 
-  .texture-layer.active {
+  .texture-layer-row.active {
     border-color: var(--accent-primary);
     background: var(--bg-selected);
   }
 
-  .texture-row {
-    display: flex;
+  .texture-layer-select {
+    display: grid;
+    flex: 1;
+    grid-template-columns: 12px minmax(0, 1fr) auto auto;
     align-items: center;
+    min-width: 0;
+    min-height: var(--hit-min);
     gap: var(--space-1);
-    min-height: var(--hit-min);
-  }
-
-  .texture-row--controls {
-    min-height: var(--control-h);
-    padding: 0 2px;
-  }
-
-  @media (pointer: coarse) {
-    .texture-row--controls {
-      min-height: var(--hit-min);
-    }
-  }
-
-  .texture-icon,
-  .texture-order {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
+    padding: 0 var(--space-1);
     border: 0;
-    border-radius: var(--radius-xs);
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--text-primary);
+    text-align: left;
     cursor: pointer;
   }
 
-  .texture-delete {
-    gap: 4px;
-    width: auto;
-    padding: 0 var(--space-1);
+  .texture-layer-swatch {
+    width: 12px;
+    height: 12px;
+    border: var(--hairline) solid var(--border-strong);
+    border-radius: 2px;
+  }
+
+  .texture-layer-name {
+    overflow: hidden;
     font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .texture-layer-meta,
+  .texture-layer-opacity {
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
     font-size: var(--text-2xs);
   }
 
-  .texture-icon:hover,
-  .texture-order:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
+  .texture-layer-opacity {
+    font-variant-numeric: tabular-nums;
   }
 
-  .texture-icon:disabled,
-  .texture-order:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-
-  .texture-name-group {
+  .texture-selected-head {
     display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: stretch;
-    min-width: 0;
-    gap: 1px;
+    align-items: center;
+    gap: var(--space-2);
   }
 
   .texture-name-input {
-    width: 100%;
+    flex: 1;
     min-width: 0;
-    height: 24px;
+    min-height: var(--hit-min);
     padding: 0 var(--space-1);
     border: 0;
     background: transparent;
     color: var(--text-primary);
     font-family: var(--font-mono);
-    font-size: var(--text-2xs);
+    font-size: var(--text-xs);
     line-height: 1.2;
   }
 
@@ -2199,70 +2231,12 @@
     outline-offset: 1px;
   }
 
-  .texture-pattern {
-    padding: 0 var(--space-1);
+  .texture-kind {
+    flex: 0 0 auto;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
-    font-size: 9px;
-    letter-spacing: 0.05em;
+    font-size: var(--text-2xs);
     text-transform: uppercase;
-  }
-
-  .texture-color {
-    width: var(--hit-min);
-    height: var(--control-h);
-    padding: 2px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .texture-opacity {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: var(--space-1);
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-  }
-
-  .texture-opacity input {
-    flex: 1;
-    min-width: 48px;
-    accent-color: var(--accent-primary);
-  }
-
-  .texture-order {
-    min-width: 30px;
-    min-height: var(--control-h);
-  }
-
-  .texture-row--blend {
-    min-height: var(--control-h);
-  }
-
-  .texture-blend {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    gap: var(--space-2);
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-  }
-
-  .texture-blend select {
-    flex: 1;
-    min-height: var(--control-h);
-    padding: 0 var(--space-1);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: var(--bg-input);
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
   }
 
   .module-body {

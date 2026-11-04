@@ -315,6 +315,11 @@ export class TextureAsset {
     return true;
   }
 
+  /** Refresh the composite so live paint previews are visible. */
+  refreshPreview(): void {
+    this.compositeLayers();
+  }
+
   /** Context for an active raster paint transaction. */
   getPaintContext(layerId: string): OffscreenCanvasRenderingContext2D | null {
     if (this.paintLayerId !== layerId) {

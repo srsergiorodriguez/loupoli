@@ -6,6 +6,8 @@ import {
   type UvProjection,
   type UvViewState
 } from './uvView';
+import type { TextureAsset } from '../texture/TextureAsset';
+import { drawTextureSurface, prepareTextureSurface } from '../texture/TextureSurface';
 
 function cssToken(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement)
@@ -39,7 +41,7 @@ export function drawUvCanvas(
   pinned: ReadonlySet<number>,
   width: number,
   height: number,
-  backgroundImage: CanvasImageSource | null = null,
+  textureAsset: TextureAsset | null = null,
   view?: UvViewState,
   selectionMode: UvSelectionMode = 'vertex',
   projectionOverride?: UvProjection
@@ -47,41 +49,30 @@ export function drawUvCanvas(
   if (width <= 0 || height <= 0) {
     return;
   }
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.max(1, Math.round(width * dpr));
-  canvas.height = Math.max(1, Math.round(height * dpr));
-  const context = canvas.getContext('2d');
-  if (!context) {
+  const prepared = prepareTextureSurface(canvas, width, height);
+  if (!prepared) {
     return;
   }
-  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const { context } = prepared;
 
-  const background = cssToken('--bg-panel-strong', '#1a1a1f');
   const border = cssToken('--border-subtle', 'rgba(255,255,255,.08)');
+  const background = cssToken('--bg-panel-strong', '#1a1a1f');
   const wire = cssToken('--wireframe-edge', 'rgba(242,239,230,.26)');
   const seam = cssToken('--accent-warning', '#ffb45e');
   const accent = cssToken('--accent-primary', '#c9f45c');
   const pin = cssToken('--accent-secondary', '#8f8ff8');
   const text = cssToken('--text-tertiary', '#8e8c96');
 
-  context.clearRect(0, 0, width, height);
-  context.fillStyle = background;
-  context.fillRect(0, 0, width, height);
-
   const projection =
     projectionOverride ?? computeUvProjection(mesh, width, height, 26, view);
-  if (backgroundImage) {
+  if (textureAsset) {
     const imageOrigin = uvToCanvas([0, 1], projection);
-    context.save();
-    context.globalAlpha = 0.58;
-    context.drawImage(
-      backgroundImage,
-      imageOrigin.x,
-      imageOrigin.y,
-      projection.scale,
-      projection.scale
-    );
-    context.restore();
+    drawTextureSurface(context, textureAsset, {
+      x: imageOrigin.x,
+      y: imageOrigin.y,
+      width: projection.scale,
+      height: projection.scale
+    });
   }
   const toPoint = (u: number, v: number): [number, number] => {
     const point = uvToCanvas([u, v], projection);

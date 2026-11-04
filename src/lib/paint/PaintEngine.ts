@@ -69,6 +69,7 @@ export class PaintEngine {
     } else if (this.settings.tool === 'brush' || this.settings.tool === 'eraser') {
       this.stamp(sample, sample);
     }
+    this.asset.refreshPreview();
     return true;
   }
 
@@ -81,6 +82,7 @@ export class PaintEngine {
     const tool = this.settings.tool;
     if (tool === 'brush' || tool === 'eraser') {
       this.stamp(this.filtered ?? this.start, sample);
+      this.asset.refreshPreview();
       return;
     }
     if (tool === 'fill') {
@@ -89,6 +91,7 @@ export class PaintEngine {
     this.asset.restorePaintSnapshot();
     this.bounds = emptyBounds();
     this.drawPreview(sample);
+    this.asset.refreshPreview();
   }
 
   /** Finish the gesture and return the dirty bounds, if anything changed. */
@@ -108,6 +111,7 @@ export class PaintEngine {
       }
     }
     this.changed = this.changed || this.bounds.minX !== Infinity;
+    this.asset.refreshPreview();
     this.context = null;
     return this.changed ? this.bounds : null;
   }

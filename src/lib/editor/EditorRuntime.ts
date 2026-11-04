@@ -69,6 +69,7 @@ import {
 import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
 import { PaintEngine } from '../paint/PaintEngine';
+import { drawTextureSurface, prepareTextureSurface } from '../texture/TextureSurface';
 import type { PaintGradient, PaintTool } from '../paint/types';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
@@ -392,6 +393,9 @@ export class EditorRuntime {
   private paintNoise = 0;
   private paintShapeFilled = true;
   private paintGradient: PaintGradient = 'linear';
+  private paintZoom = 1;
+  private paintPanX = 0;
+  private paintPanY = 0;
   private uvDrag: UvDrag | null = null;
   private pointerSelectionHit = false;
   private uvPendingClick: {
@@ -584,6 +588,9 @@ export class EditorRuntime {
       paintNoise: this.paintNoise,
       paintShapeFilled: this.paintShapeFilled,
       paintGradient: this.paintGradient,
+      paintZoom: this.paintZoom,
+      paintPanX: this.paintPanX,
+      paintPanY: this.paintPanY,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
       textureAssets: this.textureLibrary.summaries(),
@@ -1726,6 +1733,52 @@ export class EditorRuntime {
     this.publish();
   }
 
+  zoomPaint(
+    factor: number,
+    anchorX: number,
+    anchorY: number,
+    width: number,
+    height: number
+  ): void {
+    const next = Math.min(8, Math.max(0.5, this.paintZoom * factor));
+    if (next === this.paintZoom) {
+      return;
+    }
+    const current = paintBounds(width, height, 24, this.paintViewState());
+    const u = (anchorX - current.x) / current.size;
+    const v = (anchorY - current.y) / current.size;
+    const baseSize = Math.max(1, Math.min(width, height) - 48);
+    this.paintZoom = next;
+    const size = baseSize * next;
+    this.paintPanX = anchorX - u * size - (width - size) / 2;
+    this.paintPanY = anchorY - v * size - (height - size) / 2;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  panPaint(dx: number, dy: number): void {
+    this.paintPanX += dx;
+    this.paintPanY += dy;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  resetPaintView(): void {
+    this.paintZoom = 1;
+    this.paintPanX = 0;
+    this.paintPanY = 0;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  private paintViewState(): { zoom: number; panX: number; panY: number } {
+    return {
+      zoom: this.paintZoom,
+      panX: this.paintPanX,
+      panY: this.paintPanY
+    };
+  }
+
   /** Start painting on the active layer at panel-local coordinates. */
   beginUvPaint(
     x: number,
@@ -1905,7 +1958,7 @@ export class EditorRuntime {
       this.uvPins,
       width,
       height,
-      this.textureStack.image,
+      this.textureStack,
       this.uvViewState(),
       this.uvSelectionMode,
       projection
@@ -1918,35 +1971,22 @@ export class EditorRuntime {
     width: number,
     height: number
   ): void {
-    if (width <= 0 || height <= 0) {
+    const prepared = prepareTextureSurface(canvas, width, height);
+    if (!prepared) {
       return;
     }
-    const context = canvas.getContext('2d');
-    if (!context) {
-      return;
-    }
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const targetWidth = Math.max(1, Math.round(width * dpr));
-    const targetHeight = Math.max(1, Math.round(height * dpr));
-    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-      canvas.width = targetWidth;
-      canvas.height = targetHeight;
-    }
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, width, height);
-    context.fillStyle = getComputedStyle(document.documentElement)
-      .getPropertyValue('--bg-panel-strong')
-      .trim() || '#1a1a1f';
-    context.fillRect(0, 0, width, height);
-    const bounds = paintBounds(width, height);
-    const image = this.textureStack.image;
-    context.imageSmoothingEnabled = false;
-    if (image) {
-      context.drawImage(image, bounds.x, bounds.y, bounds.size, bounds.size);
-    }
-    context.strokeStyle = getComputedStyle(document.documentElement)
-      .getPropertyValue('--border-subtle')
-      .trim() || 'rgba(255,255,255,.12)';
+    const { context } = prepared;
+    const bounds = paintBounds(width, height, 24, this.paintViewState());
+    drawTextureSurface(context, this.textureStack, {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.size,
+      height: bounds.size
+    });
+    context.strokeStyle =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue('--border-subtle')
+        .trim() || 'rgba(255,255,255,.12)';
     context.lineWidth = 1;
     context.strokeRect(bounds.x, bounds.y, bounds.size, bounds.size);
   }
@@ -1973,7 +2013,9 @@ export class EditorRuntime {
       width,
       height,
       asset.width,
-      asset.height
+      asset.height,
+      24,
+      this.paintViewState()
     );
     if (!layerId || !point) {
       return false;
@@ -1982,7 +2024,9 @@ export class EditorRuntime {
       this.uvBrushSize,
       width,
       height,
-      asset.width
+      asset.width,
+      24,
+      this.paintViewState()
     );
     const engine = new PaintEngine(asset, layerId, {
       tool: this.paintTool,
@@ -2025,7 +2069,9 @@ export class EditorRuntime {
       width,
       height,
       asset.width,
-      asset.height
+      asset.height,
+      24,
+      this.paintViewState()
     );
     if (!point) {
       return;

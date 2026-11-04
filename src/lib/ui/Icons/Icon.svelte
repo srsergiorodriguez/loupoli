@@ -131,6 +131,27 @@
   {:else if name === 'lasso'}
     <path d="M19.2 12.8c1.1 1.5.3 3.4-1.7 4.4-2.8 1.4-7.5 1.2-10.4-.5-2.2-1.3-2.6-3.5-.9-5.1 1.8-1.7 5.5-2.2 8.4-1.2 2.3.8 3.6 2.3 3.2 3.8-.3 1.2-1.8 2.1-3.6 2.1-1.8 0-3.3-.9-3.6-2.1" stroke-dasharray="2.5 2.5" />
     <path d="m14.5 15.8 4.8 4.7" />
+  {:else if name === 'brush'}
+    <path d="M5 19c2.6-.3 3.8-2.1 5.4-3.7L20 5.7a1.4 1.4 0 0 0-2-2l-9.6 9.6C6.8 14.9 5 16.1 5 19Z" />
+    <path d="M5 19c2.6.2 4.2-1.4 5.4-3.7" />
+  {:else if name === 'eraser'}
+    <path d="m4 15 6.5-6.5a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L12 19H7l-3-3.2a1.5 1.5 0 0 1 0-1.8Z" />
+    <path d="m10 9 6 6M12 19h8" />
+  {:else if name === 'line'}
+    <path d="M5 19 19 5" />
+    <circle cx="5" cy="19" r="1.4" fill="currentColor" />
+    <circle cx="19" cy="5" r="1.4" fill="currentColor" />
+  {:else if name === 'rectangle'}
+    <rect x="4.5" y="6.5" width="15" height="11" rx="1" />
+  {:else if name === 'ellipse'}
+    <ellipse cx="12" cy="12" rx="7.5" ry="5.5" />
+  {:else if name === 'gradient'}
+    <rect x="4.5" y="5.5" width="15" height="13" rx="1" />
+    <path d="M4.5 16.5h15M4.5 12h15M4.5 7.5h15" opacity=".35" />
+    <path d="M4.5 18.5h5M17.5 5.5h-5" />
+  {:else if name === 'fill'}
+    <path d="m7 4 9 9-5 5-7-7 3-7Z" />
+    <path d="M13.5 19.5c2.3 0 3.5-1.2 3.5-2.8 0-1.2-1.1-2.6-1.7-3.2l-1.8 1.7c-.8 1-1.5 2.3-1.5 3.2 0 1.6 1.2 2.1 1.5 1.1Z" />
   {:else if name === 'eye-off'}
     <path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.4 2.9M6.2 7.1C4 8.8 2.5 12 2.5 12s3.5 6 9.5 6c1.5 0 2.8-.4 4-1" />
     <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />

@@ -1,7 +1,7 @@
 import { shortcut, type ShortcutId } from './shortcuts';
 
 /** The region or editor that owns a command. */
-export type CommandScope = 'global' | 'active' | '3d' | 'uv' | 'shell';
+export type CommandScope = 'global' | 'active' | '3d' | 'uv' | 'paint' | 'shell';
 
 /** Stable command ids. New UI actions must register here first. */
 export type CommandId =
@@ -38,7 +38,14 @@ export type CommandId =
   | 'uv.axisV'
   | 'uv.fine'
   | 'uv.fit'
-  | 'uv.clamp';
+  | 'uv.clamp'
+  | 'paint.brush'
+  | 'paint.eraser'
+  | 'paint.line'
+  | 'paint.rectangle'
+  | 'paint.ellipse'
+  | 'paint.gradient'
+  | 'paint.fill';
 
 /** One command's presentation and ownership metadata. */
 /** One keyboard binding attached to a command. */
@@ -93,7 +100,14 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'uv.axisV': { label: 'V axis lock', scope: 'uv', presentation: 'text', bindings: [{ key: 'v' }] },
   'uv.fine': { label: 'Fine', scope: 'uv', presentation: 'text' },
   'uv.fit': { label: 'Fit', scope: 'uv', presentation: 'text' },
-  'uv.clamp': { label: 'Clamp', scope: 'uv', presentation: 'text' }
+  'uv.clamp': { label: 'Clamp', scope: 'uv', presentation: 'text' },
+  'paint.brush': { label: 'Brush', scope: 'paint', presentation: 'icon', bindings: [{ key: 'b' }] },
+  'paint.eraser': { label: 'Eraser', scope: 'paint', presentation: 'icon', bindings: [{ key: 'e' }] },
+  'paint.line': { label: 'Line', scope: 'paint', presentation: 'icon', bindings: [{ key: 'l' }] },
+  'paint.rectangle': { label: 'Rectangle', scope: 'paint', presentation: 'icon', bindings: [{ key: 'r' }] },
+  'paint.ellipse': { label: 'Ellipse', scope: 'paint', presentation: 'icon', bindings: [{ key: 'o' }] },
+  'paint.gradient': { label: 'Gradient', scope: 'paint', presentation: 'icon', bindings: [{ key: 'g' }] },
+  'paint.fill': { label: 'Fill', scope: 'paint', presentation: 'icon', bindings: [{ key: 'f' }] }
 };
 
 /** Look up one command definition. */

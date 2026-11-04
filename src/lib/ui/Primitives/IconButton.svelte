@@ -8,6 +8,7 @@
     icon: IconName;
     onActivate?: () => void;
     disabled?: boolean;
+    active?: boolean;
     tooltip?: string;
     shortcut?: string;
     tooltipPlacement?: 'bottom' | 'right';
@@ -18,6 +19,7 @@
     icon,
     onActivate,
     disabled = false,
+    active = false,
     tooltip,
     shortcut = '',
     tooltipPlacement = 'bottom'
@@ -27,6 +29,7 @@
 <button
   type="button"
   class="icon-button"
+  class:active
   aria-label={label}
   aria-keyshortcuts={shortcut || undefined}
   {disabled}
@@ -52,6 +55,11 @@
       background-color var(--motion-instant) var(--ease-out),
       color var(--motion-instant) var(--ease-out),
       opacity var(--motion-instant) var(--ease-out);
+  }
+
+  .icon-button.active {
+    color: var(--accent-primary);
+    background: var(--bg-selected);
   }
 
   .icon-button:hover:not(:disabled) {

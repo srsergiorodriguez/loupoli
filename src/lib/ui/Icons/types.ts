@@ -35,4 +35,11 @@ export type IconName =
   | 'lasso'
   | 'home'
   | 'columns'
-  | 'rows';
+  | 'rows'
+  | 'brush'
+  | 'eraser'
+  | 'line'
+  | 'rectangle'
+  | 'ellipse'
+  | 'gradient'
+  | 'fill';

@@ -169,6 +169,9 @@ export interface EditorSnapshot {
   readonly paintNoise: number;
   readonly paintShapeFilled: boolean;
   readonly paintGradient: PaintGradient;
+  readonly paintZoom: number;
+  readonly paintPanX: number;
+  readonly paintPanY: number;
   readonly uvRevision: number;
   readonly uvError: string | null;
   readonly textureAssets: readonly TextureAssetSummary[];

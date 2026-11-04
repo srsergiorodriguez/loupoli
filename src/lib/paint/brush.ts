@@ -1,5 +1,7 @@
 import type { PaintSettings } from './types';
 
+type BrushContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 /** Clamp a value into a closed numeric range. */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -22,7 +24,7 @@ export function strokeRandom(seed: number): () => number {
  * blend mode. Eraser uses destination-out with the same mask.
  */
 export function drawStamp(
-  context: OffscreenCanvasRenderingContext2D,
+  context: BrushContext,
   x: number,
   y: number,
   radius: number,
@@ -76,7 +78,7 @@ export function drawStamp(
 
 /** Draw a stamped line between two texture-space points. */
 export function drawStampLine(
-  context: OffscreenCanvasRenderingContext2D,
+  context: BrushContext,
   fromX: number,
   fromY: number,
   toX: number,

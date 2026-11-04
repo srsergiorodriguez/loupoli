@@ -57,6 +57,9 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   paintNoise: 0,
   paintShapeFilled: true,
   paintGradient: 'linear',
+  paintZoom: 1,
+  paintPanX: 0,
+  paintPanY: 0,
   uvRevision: 0,
   uvError: null,
   textureAssets: [],
@@ -467,6 +470,18 @@ export class EditorSession {
 
   setPaintGradient(value: 'linear' | 'radial'): void {
     this.runtime?.setPaintGradient(value);
+  }
+
+  zoomPaint(factor: number, anchorX: number, anchorY: number, width: number, height: number): void {
+    this.runtime?.zoomPaint(factor, anchorX, anchorY, width, height);
+  }
+
+  panPaint(dx: number, dy: number): void {
+    this.runtime?.panPaint(dx, dy);
+  }
+
+  resetPaintView(): void {
+    this.runtime?.resetPaintView();
   }
 
   beginUvPaint(
