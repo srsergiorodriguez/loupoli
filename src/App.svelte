@@ -16,6 +16,7 @@
   import PaintShapePreview from './lib/ui/Paint/PaintShapePreview.svelte';
   import PaneHost from './lib/ui/Panels/PaneHost.svelte';
   import IconButton from './lib/ui/Primitives/IconButton.svelte';
+  import TooltipLayer from './lib/ui/Primitives/TooltipLayer.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
@@ -270,6 +271,7 @@
   {/if}
   <Inspector {session} />
   <StatusBar {session} />
+  <TooltipLayer />
 </div>
 
 <style>

@@ -12,6 +12,7 @@ import { DeleteMeshNodeCommand } from './DeleteMeshNodeCommand';
 import { MoveVertexCommand } from './MoveVertexCommand';
 import { TransformNodeCommand } from './TransformNodeCommand';
 import { SetModifiersCommand } from './SetModifiersCommand';
+import { RenameGroupCommand, RenameNodeCommand } from './RenameCommands';
 import {
   ReorderNodeCommand,
   SetNodeVisibilityCommand
@@ -478,5 +479,30 @@ describe('scene commands and journal', () => {
     }
 
     expect(history.getState().retainedBytes).toBeLessThan(32 * 1024 * 1024);
+  });
+
+  it('renames objects and groups with undo and journal replay', () => {
+    const document = SceneDocument.createDefault();
+    const history = new History();
+    const node = document.nodes[0];
+    const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    const renameNode = new RenameNodeCommand(node, node.name, 'Body');
+    history.execute(renameNode);
+    expect(document.nodes[0].name).toBe('Body');
+    applyJournalPatch(replay, renameNode.journalPatch('forward'));
+    expect(replay.nodes[0].name).toBe('Body');
+    history.undo();
+    expect(document.nodes[0].name).toBe('QuadSphere');
+
+    const group = document.createGroup();
+    document.insertGroup(group, 0);
+    const groupReplay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    const renameGroup = new RenameGroupCommand(group, group.name, 'Props');
+    history.execute(renameGroup);
+    expect(document.groups[0].name).toBe('Props');
+    applyJournalPatch(groupReplay, renameGroup.journalPatch('forward'));
+    expect(groupReplay.groups[0].name).toBe('Props');
+    history.undo();
+    expect(document.groups[0].name).toBe(group.name);
   });
 });

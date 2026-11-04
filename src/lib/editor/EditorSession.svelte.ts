@@ -762,6 +762,10 @@ export class EditorSession {
     this.runtime?.createPrimitive(kind);
   }
 
+  renameActiveObject(name: string): void {
+    this.runtime?.renameActiveObject(name);
+  }
+
   deleteActiveNode(): void {
     this.runtime?.deleteActiveNode();
   }

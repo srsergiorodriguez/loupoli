@@ -121,6 +121,7 @@ import {
   type ReplaceMeshLoopTransition
 } from './commands/ReplaceMeshCommand';
 import { SetModifiersCommand } from './commands/SetModifiersCommand';
+import { RenameGroupCommand, RenameNodeCommand } from './commands/RenameCommands';
 import { JoinNodesCommand, type JoinedSource } from './commands/JoinNodesCommand';
 import { joinMeshNodes } from './joinMeshes';
 import {
@@ -3719,6 +3720,29 @@ export class EditorRuntime {
     this.selection.setContext(node.id, 'vertex');
     this.history.execute(new CreateMeshNodeCommand(this.document, node, index));
     this.renderer.frameActiveNode();
+    this.publish();
+  }
+
+  /** Rename the active object or group. */
+  renameActiveObject(name: string): void {
+    const trimmed = name.trim();
+    if (trimmed.length === 0 || trimmed.length > 64) {
+      return;
+    }
+    const group = this.getActiveGroup();
+    if (group) {
+      if (group.name === trimmed) {
+        return;
+      }
+      this.history.execute(new RenameGroupCommand(group, group.name, trimmed));
+      this.publish();
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node || node.name === trimmed) {
+      return;
+    }
+    this.history.execute(new RenameNodeCommand(node, node.name, trimmed));
     this.publish();
   }
 

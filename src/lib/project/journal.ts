@@ -91,6 +91,11 @@ export type JournalPatch =
       readonly visible: boolean;
     }
   | {
+      readonly type: 'set-node-name';
+      readonly nodeId: string;
+      readonly name: string;
+    }
+  | {
       readonly type: 'set-node-texture';
       readonly nodeId: string;
       readonly textureId: string | null;
@@ -99,6 +104,11 @@ export type JournalPatch =
       readonly type: 'set-group-visible';
       readonly groupId: string;
       readonly visible: boolean;
+    }
+  | {
+      readonly type: 'set-group-name';
+      readonly groupId: string;
+      readonly name: string;
     };
 
 /** Apply one journal patch to a reconstructed scene document. */
@@ -208,6 +218,14 @@ export function applyJournalPatch(
       node.visible = patch.visible;
       return;
     }
+    case 'set-node-name': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.name = patch.name;
+      return;
+    }
     case 'set-node-texture': {
       const node = document.getNode(patch.nodeId);
       if (!node) {
@@ -222,6 +240,14 @@ export function applyJournalPatch(
         throw new Error(`Autosave references missing group ${patch.groupId}.`);
       }
       group.visible = patch.visible;
+      return;
+    }
+    case 'set-group-name': {
+      const group = document.getGroup(patch.groupId);
+      if (!group) {
+        throw new Error(`Autosave references missing group ${patch.groupId}.`);
+      }
+      group.name = patch.name;
       return;
     }
     case 'set-modifiers': {
@@ -245,11 +271,17 @@ export function journalPatchBytes(patch: JournalPatch): number {
   if (patch.type === 'set-node-visible') {
     return patch.nodeId.length * 2 + 24;
   }
+  if (patch.type === 'set-node-name') {
+    return patch.nodeId.length * 2 + patch.name.length * 2 + 16;
+  }
   if (patch.type === 'set-node-texture') {
     return patch.nodeId.length * 2 + (patch.textureId?.length ?? 0) * 2 + 24;
   }
   if (patch.type === 'set-group-visible') {
     return patch.groupId.length * 2 + 24;
+  }
+  if (patch.type === 'set-group-name') {
+    return patch.groupId.length * 2 + patch.name.length * 2 + 16;
   }
   if (patch.type === 'remove-node') {
     return patch.nodeId.length * 2 + 16;

@@ -13,8 +13,7 @@
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import ThreeDotMenu from '../Primitives/ThreeDotMenu.svelte';
   import InlineNameField from '../Primitives/InlineNameField.svelte';
-  import OutlinerDragHandle from '../Primitives/OutlinerDragHandle.svelte';
-  import OutlinerVisibility from '../Primitives/OutlinerVisibility.svelte';
+  import OutlinerRow from '../Primitives/OutlinerRow.svelte';
   import {
     defaultInspectorOpen,
     inspectorSectionsFor,
@@ -73,6 +72,25 @@
   const activeNodeId = $derived(session.snapshot.activeNodeId);
   const activeGroupId = $derived(session.snapshot.activeGroupId);
   const groups = $derived(session.snapshot.groups);
+  const activeNode = $derived(nodes.find((node) => node.id === activeNodeId) ?? null);
+  const activeGroup = $derived(groups.find((group) => group.id === activeGroupId) ?? null);
+  function objectCount(count: number): string {
+    return `${count} ${count === 1 ? 'object' : 'objects'}`;
+  }
+
+  const activeItemKind = $derived(
+    activeGroup
+      ? objectCount(nodes.filter((node) => node.parentId === activeGroup.id).length)
+      : activeNode
+        ? activeNode.primitive === 'quadsphere'
+          ? 'Sphere'
+          : activeNode.primitive === 'cube'
+            ? 'Cube'
+            : activeNode.primitive === 'cylinder'
+              ? 'Cylinder'
+              : 'Grid'
+        : ''
+  );
   const modifiers = $derived(session.snapshot.modifiers);
   const modifiersActive = $derived(session.snapshot.modifiersActive);
   const modifierError = $derived(session.snapshot.modifierError);
@@ -459,52 +477,41 @@
 </script>
 
       {#snippet objectRow(node: (typeof nodes)[number], child: boolean)}
-        <div
-          class="object-row"
-          class:active={node.id === activeNodeId}
-          class:selected={selectedNodeIds.includes(node.id)}
-          class:child
-          class:is-hidden={!node.visible}
-          class:dragging={draggedNodeId === node.id}
-          class:drop-target={dropTargetId === node.id}
-          class:drop-after={dropTargetId === node.id && dropAfter}
-          data-node-id={node.id}
-          aria-current={node.id === activeNodeId ? 'true' : undefined}
+        <OutlinerRow
+          active={node.id === activeNodeId}
+          selected={selectedNodeIds.includes(node.id)}
+          {child}
+          hidden={!node.visible}
+          dragging={draggedNodeId === node.id}
+          dropTarget={dropTargetId === node.id}
+          dropAfter={dropAfter}
+          nodeId={node.id}
+          dragLabel={`Drag to reorder ${node.name}`}
+          dragTitle={canEdit3d ? 'Drag to reorder' : 'Reordering is available in Model'}
+          dragDisabled={!canEdit3d}
+          onDragStart={(event) => beginReorder(event, node.id)}
+          visible={node.visible}
+          visibilityLabel={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
+          onToggleVisibility={(event) => toggleNodeVisibility(event, node.id, node.visible)}
+          selectLabel={`Select ${node.name}`}
+          onSelect={(event) =>
+            session.selectNode(
+              node.id,
+              event.shiftKey || event.metaKey || event.ctrlKey
+            )}
         >
-          <OutlinerDragHandle
-            label={`Drag to reorder ${node.name}`}
-            title={canEdit3d ? 'Drag to reorder' : 'Reordering is available in Model'}
-            disabled={!canEdit3d}
-            onDragStart={(event) => beginReorder(event, node.id)}
-          />
-          <button
-            type="button"
-            class="object-select"
-            aria-pressed={selectedNodeIds.includes(node.id)}
-            onclick={(event) =>
-              session.selectNode(
-                node.id,
-                event.shiftKey || event.metaKey || event.ctrlKey
-              )}
-          >
-            <span class="object-glyph"><Icon name="solid" size={14} /></span>
-            <span class="object-name">{node.name}</span>
-            <span class="object-kind">
-              {node.primitive === 'quadsphere'
-                ? 'Sphere'
-                : node.primitive === 'cube'
-                  ? 'Cube'
-                  : node.primitive === 'cylinder'
-                    ? 'Cylinder'
-                    : 'Grid'}
-            </span>
-          </button>
-          <OutlinerVisibility
-            label={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
-            visible={node.visible}
-            onToggle={(event) => toggleNodeVisibility(event, node.id, node.visible)}
-          />
-        </div>
+          <span class="object-glyph"><Icon name="solid" size={14} /></span>
+          <span class="object-name">{node.name}</span>
+          <span class="object-kind">
+            {node.primitive === 'quadsphere'
+              ? 'Sphere'
+              : node.primitive === 'cube'
+                ? 'Cube'
+                : node.primitive === 'cylinder'
+                  ? 'Cylinder'
+                  : 'Grid'}
+          </span>
+        </OutlinerRow>
       {/snippet}
 
 <aside
@@ -532,34 +539,23 @@
 
       <div class="object-list">
         {#each groups as group (group.id)}
-          <div
-            class="object-row group-row"
-            class:active={group.id === activeGroupId}
-            class:is-hidden={!group.visible}
-            aria-current={group.id === activeGroupId ? 'true' : undefined}
+          <OutlinerRow
+            group
+            active={group.id === activeGroupId}
+            hidden={!group.visible}
+            visible={group.visible}
+            visibilityLabel={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
+            onToggleVisibility={(event) =>
+              toggleGroupVisibility(event, group.id, group.visible)}
+            selectLabel={`Select ${group.name}`}
+            onSelect={() => session.selectGroup(group.id)}
           >
-            <button
-              type="button"
-              class="object-select"
-              onclick={() => session.selectGroup(group.id)}
-            >
-              <span class="object-glyph"><Icon name="folder" size={14} /></span>
-              <span class="object-name">{group.name}</span>
-              <span class="object-kind">
-                {nodes.filter((node) => node.parentId === group.id).length} objects
-              </span>
-            </button>
-            <button
-              type="button"
-              class="object-visibility"
-              aria-label={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
-              aria-pressed={group.visible}
-              title={group.visible ? `Hide ${group.name}` : `Show ${group.name}`}
-              onclick={(event) => toggleGroupVisibility(event, group.id, group.visible)}
-            >
-              <Icon name={group.visible ? 'eye' : 'eye-off'} size={14} />
-            </button>
-          </div>
+            <span class="object-glyph"><Icon name="folder" size={14} /></span>
+            <span class="object-name">{group.name}</span>
+            <span class="object-kind">
+              {objectCount(nodes.filter((node) => node.parentId === group.id).length)}
+            </span>
+          </OutlinerRow>
           {#each nodes.filter((node) => node.parentId === group.id) as node (node.id)}
             {@render objectRow(node, true)}
           {/each}
@@ -569,7 +565,16 @@
         {/each}
       </div>
 
-
+      {#if activeGroup || activeNode}
+        <div class="selected-name-row">
+          <InlineNameField
+            label={activeGroup ? 'Group name' : 'Object name'}
+            value={session.snapshot.objectName}
+            onCommit={(value) => session.renameActiveObject(value)}
+          />
+          <span class="texture-kind">{activeItemKind}</span>
+        </div>
+      {/if}
 
       {#if canEdit3d}
         <div class="scene-actions">
@@ -582,72 +587,49 @@
               <option value={kind}>{PRIMITIVE_LABELS[kind]}</option>
             {/each}
           </select>
-          <button type="button" class="scene-button" onclick={addPrimitive}>
-            <Icon name="plus" size={14} />
-            <span>Add</span>
-          </button>
+          <ActionButton label="Add" icon="plus" onActivate={addPrimitive} />
         </div>
       {/if}
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
         <div class="scene-action-row">
-          <button
-            type="button"
-            class="compact-action"
-            class:is-active={session.snapshot.additiveNodeSelection}
-            aria-pressed={session.snapshot.additiveNodeSelection}
-            aria-label="Multi-select objects"
-            title="Add to object selection"
-            onclick={() =>
+          <ActionButton
+            label="Multi"
+            icon="plus"
+            active={session.snapshot.additiveNodeSelection}
+            onActivate={() =>
               session.setAdditiveNodeSelection(
                 !session.snapshot.additiveNodeSelection
               )}
-          >
-            <Icon name="plus" size={13} />
-            <span>Multi</span>
-          </button>
+          />
           {#if selectedNodeIds.length > 0 && activeGroupId === null}
-            <button
-              type="button"
-              class="compact-action"
-              aria-label="Group selected objects"
-              onclick={() => session.groupSelectedNodes()}
-            >
-              <Icon name="folder" size={13} />
-              <span>Group</span>
-            </button>
+            <ActionButton
+              label="Group"
+              icon="folder"
+              onActivate={() => session.groupSelectedNodes()}
+            />
           {/if}
           {#if selectedNodeIds.length > 1 && activeGroupId === null}
-            <button
-              type="button"
-              class="compact-action"
-              aria-label="Join selected objects"
-              onclick={() => session.joinSelectedNodes()}
-            >
-              <Icon name="merge" size={13} />
-              <span>Join</span>
-            </button>
+            <ActionButton
+              label="Join"
+              icon="merge"
+              onActivate={() => session.joinSelectedNodes()}
+            />
           {/if}
           {#if activeGroupId !== null}
-            <button
-              type="button"
-              class="compact-action"
-              aria-label="Ungroup active group"
-              onclick={() => session.ungroupActiveGroup()}
-            >
-              <Icon name="folder" size={13} />
-              <span>Ungroup</span>
-            </button>
+            <ActionButton
+              label="Ungroup"
+              icon="folder"
+              onActivate={() => session.ungroupActiveGroup()}
+            />
           {:else if activeNodeId !== null}
-            <button
-              type="button"
-              class="compact-action compact-action--danger"
-              aria-label="Delete active object"
-              onclick={deleteObject}
-            >
-              <Icon name="trash" size={13} />
-              <span>Delete</span>
-            </button>
+            <span class="scene-action-spacer"></span>
+            <ActionButton
+              label="Delete object"
+              icon="trash"
+              variant="danger"
+              onActivate={deleteObject}
+            />
           {/if}
         </div>
       {/if}
@@ -1048,14 +1030,11 @@
                 <option value={kind}>{MODIFIER_LABELS[kind]}</option>
               {/each}
             </select>
-            <button
-              type="button"
-              class="scene-button"
-              onclick={() => session.addModifier(modifierKind)}
-            >
-              <Icon name="plus" size={14} />
-              <span>Add</span>
-            </button>
+            <ActionButton
+              label="Add"
+              icon="plus"
+              onActivate={() => session.addModifier(modifierKind)}
+            />
           </div>
 
           {#if modifierError}
@@ -1259,7 +1238,7 @@
             }))}
             onChange={(value) => session.setActiveTextureAsset(value)}
           />
-          <div class="texture-selected-head">
+          <div class="selected-name-row">
             <InlineNameField
               label="Texture name"
               value={activeTextureAsset?.name ?? ''}
@@ -1378,50 +1357,49 @@
           </ActionRow>
           <div class="texture-layer-list" role="list">
             {#each textureLayersTopFirst as { layer } (layer.id)}
-              <div
-                class="texture-layer-row"
-                class:active={session.snapshot.textureActiveId === layer.id}
-                class:is-hidden={!layer.visible}
-                class:dragging={draggedLayerId === layer.id}
-                class:drop-target={layerDropTargetId === layer.id}
-                class:drop-after={layerDropTargetId === layer.id && layerDropAfter}
-                data-texture-layer-id={layer.id}
+              <OutlinerRow
+                active={session.snapshot.textureActiveId === layer.id}
+                hidden={!layer.visible}
+                dragging={draggedLayerId === layer.id}
+                dropTarget={layerDropTargetId === layer.id}
+                dropAfter={layerDropAfter}
+                textureLayerId={layer.id}
+                dragLabel={`Drag to reorder ${layer.name}`}
+                onDragStart={(event) => beginLayerReorder(event, layer.id)}
+                visible={layer.visible}
+                visibilityLabel={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
+                onToggleVisibility={() => session.toggleTextureLayer(layer.id)}
+                selectLabel={`Select ${layer.name}`}
+                onSelect={() => session.setActiveTextureLayer(layer.id)}
               >
-                <OutlinerDragHandle
-                  label={`Drag to reorder ${layer.name}`}
-                  onDragStart={(event) => beginLayerReorder(event, layer.id)}
-                />
-                <button
-                  type="button"
-                  class="texture-layer-select"
-                  aria-pressed={session.snapshot.textureActiveId === layer.id}
-                  onclick={() => session.setActiveTextureLayer(layer.id)}
-                >
-                  <span
-                    class="texture-layer-swatch"
-                    class:transparent={layer.pattern === 'transparent'}
-                    class:checker={layer.pattern === 'checker'}
-                    class:raster={layer.kind === 'raster'}
-                    style:background={layer.pattern === 'solid' ? layer.color : undefined}
-                  ></span>
-                  <span class="texture-layer-name">{layer.name}</span>
-                  <span class="texture-layer-meta">
-                    {layer.kind === 'raster' ? 'raster' : layer.pattern} · {layer.role}
-                  </span>
-                </button>
-                <OutlinerVisibility
-                  label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
-                  visible={layer.visible}
-                  onToggle={() => session.toggleTextureLayer(layer.id)}
-                />
-              </div>
+                <span
+                  class="texture-layer-swatch"
+                  class:transparent={layer.pattern === 'transparent'}
+                  class:checker={layer.pattern === 'checker'}
+                  class:raster={layer.kind === 'raster'}
+                  style:background={layer.pattern === 'solid' ? layer.color : undefined}
+                ></span>
+                <span class="texture-layer-name">{layer.name}</span>
+                <span class="texture-layer-meta">
+                  {layer.kind === 'raster' ? 'raster' : layer.pattern} · {layer.role}
+                </span>
+              </OutlinerRow>
             {/each}
+          </div>
+          <div class="texture-action-row">
+            <ActionButton
+              label="Delete layer"
+              icon="trash"
+              variant="danger"
+              disabled={textureLayers.length <= 1}
+              onActivate={() => session.removeTextureLayer(activeTextureLayer?.id ?? '')}
+            />
           </div>
         </div>
 
         {#if activeTextureLayer}
           <div class="texture-block">
-            <div class="texture-selected-head">
+            <div class="selected-name-row">
               <InlineNameField
                 label={`${activeTextureLayer.name} layer name`}
                 value={activeTextureLayer.name}
@@ -1494,15 +1472,6 @@
                   session.setTextureLayerColor(activeTextureLayer.id, value)}
               />
             {/if}
-            <ActionRow>
-              <ActionButton
-                label="Delete layer"
-                icon="trash"
-                variant="danger"
-                disabled={textureLayers.length <= 1}
-                onActivate={() => session.removeTextureLayer(activeTextureLayer.id)}
-              />
-            </ActionRow>
           </div>
         {/if}
       </div>
@@ -1631,91 +1600,6 @@
     gap: 2px;
   }
 
-  .object-row {
-    display: flex;
-    align-items: stretch;
-    width: 100%;
-    min-height: var(--control-h);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    color: var(--text-primary);
-    font: inherit;
-    text-align: left;
-    overflow: hidden;
-  }
-
-  .object-select {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    min-width: 0;
-    min-height: var(--control-h);
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .object-row:hover {
-    background: var(--bg-hover);
-  }
-
-  .object-row.is-hidden {
-    opacity: 0.52;
-  }
-
-  .object-row.dragging {
-    opacity: 0.4;
-  }
-
-  .object-row.drop-target {
-    box-shadow: inset 0 2px 0 var(--accent-primary);
-  }
-
-  .object-row.drop-target.drop-after {
-    box-shadow: inset 0 -2px 0 var(--accent-primary);
-  }
-
-  .object-row.active {
-    border-color: var(--border-strong);
-    background: var(--bg-selected);
-  }
-
-  .object-row.active .object-glyph {
-    color: var(--accent-primary);
-    background: var(--bg-selected);
-  }
-
-  .object-row.selected {
-    border-color: var(--accent-primary);
-  }
-
-  .object-row.child .object-select {
-    padding-left: calc(var(--space-2) + 14px);
-  }
-
-  .object-row.group-row {
-    color: var(--text-primary);
-  }
-
-  .object-row.group-row .object-glyph {
-    color: var(--accent-primary);
-  }
-
-  .object-row.selected::after {
-    content: '';
-    width: 5px;
-    height: 5px;
-    flex: 0 0 auto;
-    border-radius: 50%;
-    background: var(--accent-primary);
-  }
-
   .scene-actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1723,8 +1607,7 @@
     margin-top: var(--space-2);
   }
 
-  .primitive-select,
-  .scene-button {
+  .primitive-select {
     min-height: var(--control-h);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -1746,70 +1629,19 @@
     margin-top: var(--space-2);
   }
 
-  .compact-action {
-    display: inline-flex;
+  .scene-action-row {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
-    min-height: var(--control-h);
-    gap: 5px;
-    padding: 0 var(--space-2);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    color: var(--text-secondary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-    cursor: pointer;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
   }
 
-  .compact-action.is-active {
-    border-color: var(--accent-primary);
-    background: var(--bg-selected);
-    color: var(--accent-primary);
+  .scene-action-spacer {
+    flex: 1;
   }
 
-  .compact-action:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  .compact-action--danger {
-    flex: 0 0 auto;
-    margin-left: auto;
-    color: var(--text-tertiary);
-  }
-
-  .compact-action--danger:hover {
-    color: var(--accent-warning);
-  }
-
-  .scene-button,
-  .delete-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    padding: 0 var(--space-3);
-    cursor: pointer;
-  }
-
-  .scene-button {
-    color: var(--text-primary);
-  }
-
-  .scene-button:hover,
   .primitive-select:hover {
-    background: var(--bg-hover);
-  }
-
-  .delete-button {
-    width: 100%;
-    margin-top: var(--space-1);
-    color: var(--text-tertiary);
-  }
-
-  .delete-button:hover {
-    color: var(--accent-warning);
     background: var(--bg-hover);
   }
 
@@ -2198,7 +2030,7 @@
   }
 
   .delete-selection:hover {
-    color: var(--accent-warning);
+    color: var(--accent-danger);
     background: var(--bg-hover);
   }
 
@@ -2282,51 +2114,10 @@
     gap: 2px;
   }
 
-  .texture-layer-row {
+  .texture-action-row {
     display: flex;
-    align-items: center;
-    gap: 2px;
-    min-height: var(--control-h);
-    border: var(--hairline) solid transparent;
-    border-radius: var(--radius-sm);
-    background: var(--bg-input);
-  }
-
-  .texture-layer-row.active {
-    border-color: var(--accent-primary);
-    background: var(--bg-selected);
-  }
-
-  .texture-layer-row.is-hidden {
-    opacity: 0.52;
-  }
-
-  .texture-layer-row.dragging {
-    opacity: 0.4;
-  }
-
-  .texture-layer-row.drop-target {
-    box-shadow: inset 0 2px 0 var(--accent-primary);
-  }
-
-  .texture-layer-row.drop-target.drop-after {
-    box-shadow: inset 0 -2px 0 var(--accent-primary);
-  }
-
-  .texture-layer-select {
-    display: grid;
-    flex: 1;
-    grid-template-columns: 16px minmax(0, 1fr) auto auto;
-    align-items: center;
-    min-width: 0;
-    min-height: var(--control-h);
-    gap: var(--space-1);
-    padding: 0 var(--space-1);
-    border: 0;
-    background: transparent;
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
+    justify-content: flex-end;
+    margin-top: var(--space-1);
   }
 
   .texture-layer-swatch {
@@ -2348,6 +2139,8 @@
   }
 
   .texture-layer-name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     font-family: var(--font-ui);
     font-size: var(--text-xs);
@@ -2362,7 +2155,7 @@
     white-space: nowrap;
   }
 
-  .texture-selected-head {
+  .selected-name-row {
     display: flex;
     align-items: center;
     gap: var(--space-2);
