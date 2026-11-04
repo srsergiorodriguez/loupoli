@@ -158,22 +158,29 @@
         <span class="context-separator" aria-hidden="true">/</span>
         <span class="context-object">{session.snapshot.objectName}</span>
         <span class="selection-badge">
-          {session.snapshot.selectionMode === 'vertex'
-            ? 'Vertex'
-            : session.snapshot.selectionMode === 'edge'
-              ? 'Edge'
-              : 'Face'}{session.snapshot.selectedElements.length > 1
-            ? ` · ${session.snapshot.selectedElements.length}`
-            : ''}
+          {#if session.snapshot.workspace === 'paint'}
+            Paint
+          {:else}
+            {session.snapshot.selectionMode === 'vertex'
+              ? 'Vertex'
+              : session.snapshot.selectionMode === 'edge'
+                ? 'Edge'
+                : 'Face'}{session.snapshot.selectedElements.length > 1
+              ? ` · ${session.snapshot.selectedElements.length}`
+              : ''}
+          {/if}
         </span>
       </div>
 
-      {#if session.snapshot.activeEditor !== 'paint'}
-        <div class="selection-mode-wrap">
+      <div
+        class="selection-mode-wrap"
+        class:no-selection-mode={session.snapshot.activeEditor === 'paint'}
+      >
+        {#if session.snapshot.activeEditor !== 'paint'}
           <SelectionModeControl {session} />
-          <ShadingControl {session} />
-        </div>
-      {/if}
+        {/if}
+        <ShadingControl {session} />
+      </div>
 
       <div class="viewport-hud">
         <div class="view-actions">
@@ -415,6 +422,10 @@
     align-items: flex-start;
     gap: var(--space-2);
     pointer-events: none;
+  }
+
+  .selection-mode-wrap.no-selection-mode {
+    left: calc(var(--safe-left) + var(--space-3));
   }
 
   .selection-mode-wrap :global(.selection-mode),

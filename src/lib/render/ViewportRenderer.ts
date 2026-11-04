@@ -275,7 +275,8 @@ export class ViewportRenderer {
     selectionMode: SelectionMode,
     selectedElements: readonly number[],
     transformMode: TransformMode,
-    transformOrientation: TransformOrientation
+    transformOrientation: TransformOrientation,
+    showEditHandles = true
   ): void {
     const incoming = new Set(nodes.map((node) => node.id));
 
@@ -342,7 +343,7 @@ export class ViewportRenderer {
         isActive,
         selectionMode,
         isActive ? selectedElements : [],
-        !evaluated.modifiersActive
+        showEditHandles && !evaluated.modifiersActive
       );
     }
 

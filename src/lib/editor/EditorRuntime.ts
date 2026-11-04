@@ -6271,7 +6271,8 @@ export class EditorRuntime {
         ? this.evaluatedSelectionValues()
         : [],
       workspaceCan(this.workspace, 'edit3d') ? this.transformMode : 'select',
-      this.transformOrientation
+      this.transformOrientation,
+      workspaceCan(this.workspace, 'select3d')
     );
   }
 
