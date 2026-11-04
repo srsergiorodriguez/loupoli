@@ -12,6 +12,9 @@ export type TextureLayerPattern = 'checker' | 'solid';
 /** Supported layer compositing modes. */
 export type TextureBlendMode = 'normal' | 'multiply' | 'screen';
 
+/** Authored content kind for one texture layer. */
+export type TextureLayerKind = 'fill' | 'raster';
+
 /** Small, rune-safe summary of one texture layer. */
 export interface TextureLayerSummary {
   readonly id: string;
@@ -21,6 +24,7 @@ export interface TextureLayerSummary {
   readonly color: string;
   readonly pattern: TextureLayerPattern;
   readonly blendMode: TextureBlendMode;
+  readonly kind: TextureLayerKind;
 }
 
 /** Serializable metadata for the complete layer stack. */
@@ -61,6 +65,7 @@ interface TextureLayer {
   color: string;
   pattern: TextureLayerPattern;
   blendMode: TextureBlendMode;
+  kind: TextureLayerKind;
   readonly canvas: OffscreenCanvas;
   readonly context: OffscreenCanvasRenderingContext2D;
 }
@@ -93,7 +98,8 @@ function sameState(a: TextureAssetState, b: TextureAssetState): boolean {
       layer.opacity === other.opacity &&
       layer.color === other.color &&
       layer.pattern === other.pattern &&
-      layer.blendMode === other.blendMode
+      layer.blendMode === other.blendMode &&
+      layer.kind === other.kind
     );
   });
 }
@@ -128,6 +134,7 @@ export class TextureAsset {
   readonly texture: CanvasTexture;
   private filter: TextureFilter;
   private readonly layers: TextureLayer[] = [];
+  private readonly archivedLayers = new Map<string, TextureLayer>();
   private readonly composite: HTMLCanvasElement;
   private readonly compositeContext: CanvasRenderingContext2D;
   private activeId: string | null = null;
@@ -215,7 +222,8 @@ export class TextureAsset {
         opacity: layer.opacity,
         color: layer.color,
         pattern: layer.pattern,
-        blendMode: layer.blendMode
+        blendMode: layer.blendMode,
+        kind: layer.kind
       })),
       activeId: this.activeId
     };
@@ -230,23 +238,35 @@ export class TextureAsset {
       opacity: layer.opacity,
       color: layer.color,
       pattern: layer.pattern,
-      blendMode: layer.blendMode
+      blendMode: layer.blendMode,
+      kind: layer.kind
     }));
   }
 
-  /** Apply a previous/next metadata snapshot by redrawing deterministic layers. */
+  /**
+   * Apply a metadata snapshot while preserving raster pixels.
+   *
+   * Fill layers are redrawn from their color/pattern metadata. Raster layers
+   * keep their canvases; detached layers are archived so removing and undoing
+   * a layer restores its pixels instead of recreating a blank fill.
+   */
   applyState(state: TextureAssetState): void {
     const byId = new Map(this.layers.map((layer) => [layer.id, layer]));
     const next: TextureLayer[] = [];
     for (const summary of state.layers) {
-      let layer = byId.get(summary.id);
+      let layer =
+        byId.get(summary.id) ??
+        this.archivedLayers.get(summary.id);
+      this.archivedLayers.delete(summary.id);
       if (!layer) {
         layer = this.createLayer(
           summary.name,
           summary.pattern,
           summary.color,
           summary.opacity,
-          summary.id
+          summary.id,
+          'normal',
+          summary.kind
         );
       }
       layer.visible = summary.visible;
@@ -254,9 +274,15 @@ export class TextureAsset {
       layer.color = summary.color;
       layer.pattern = summary.pattern;
       layer.blendMode = summary.blendMode;
-      this.drawLayer(layer);
+      layer.kind = summary.kind;
+      if (layer.kind === 'fill') {
+        this.drawLayer(layer);
+      }
       next.push(layer);
       byId.delete(summary.id);
+    }
+    for (const [id, layer] of byId) {
+      this.archivedLayers.set(id, layer);
     }
     this.layers.splice(0, this.layers.length, ...next);
     this.activeId = state.activeId;
@@ -269,6 +295,7 @@ export class TextureAsset {
     if (!layer || this.paintSnapshot) {
       return false;
     }
+    layer.kind = 'raster';
     this.paintSnapshot = {
       layerId,
       image: layer.context.getImageData(0, 0, this.width, this.height)
@@ -405,6 +432,41 @@ export class TextureAsset {
     this.compositeLayers();
   }
 
+  /** Add a raster layer from an imported image, fitted into the texture. */
+  async importImageLayer(blob: Blob, name: string): Promise<boolean> {
+    const bitmap = await createImageBitmap(blob);
+    const layer = this.createLayer(
+      name.trim() || 'Imported image',
+      'solid',
+      '#ffffff',
+      1,
+      layerId(),
+      'normal',
+      'raster'
+    );
+    const context = layer.context;
+    context.clearRect(0, 0, this.width, this.height);
+    context.imageSmoothingEnabled = this.filter === 'linear';
+    const scale = Math.min(
+      this.width / bitmap.width,
+      this.height / bitmap.height
+    );
+    const drawWidth = bitmap.width * scale;
+    const drawHeight = bitmap.height * scale;
+    context.drawImage(
+      bitmap,
+      (this.width - drawWidth) / 2,
+      (this.height - drawHeight) / 2,
+      drawWidth,
+      drawHeight
+    );
+    bitmap.close();
+    this.layers.push(layer);
+    this.activeId = layer.id;
+    this.compositeLayers();
+    return true;
+  }
+
   /** Encode every layer as a binary PNG project payload. */
   async exportData(): Promise<TextureAssetData> {
     const layers: TextureLayerRecord[] = [];
@@ -418,6 +480,7 @@ export class TextureAsset {
         color: layer.color,
         pattern: layer.pattern,
         blendMode: layer.blendMode,
+        kind: layer.kind,
         png: new Uint8Array(await blob.arrayBuffer())
       });
     }
@@ -460,6 +523,7 @@ export class TextureAsset {
         color: record.color,
         pattern: record.pattern,
         blendMode: record.blendMode ?? 'normal',
+        kind: record.kind ?? 'fill',
         canvas,
         context
       });
@@ -468,6 +532,7 @@ export class TextureAsset {
       this.reset();
       return;
     }
+    this.archivedLayers.clear();
     this.layers.splice(0, this.layers.length, ...imported);
     for (const layer of imported) {
       const match = /^texlayer-(\d+)$/.exec(layer.id);
@@ -484,6 +549,7 @@ export class TextureAsset {
 
   /** Reset to a single checker base layer after loading a project. */
   reset(): void {
+    this.archivedLayers.clear();
     this.layers.length = 0;
     const base = this.createLayer('Base', 'checker', '#c8c2ad', 1);
     this.layers.push(base);
@@ -549,7 +615,10 @@ export class TextureAsset {
     if (index < 0) {
       return false;
     }
-    this.layers.splice(index, 1);
+    const [removed] = this.layers.splice(index, 1);
+    if (removed) {
+      this.archivedLayers.set(removed.id, removed);
+    }
     if (this.activeId === id) {
       this.activeId =
         this.layers[Math.min(index, this.layers.length - 1)]?.id ?? null;
@@ -602,6 +671,7 @@ export class TextureAsset {
     }
     layer.color = color;
     layer.pattern = 'solid';
+    layer.kind = 'fill';
     this.drawLayer(layer);
     this.compositeLayers();
     return true;
@@ -611,6 +681,7 @@ export class TextureAsset {
   dispose(): void {
     this.texture.dispose();
     this.layers.length = 0;
+    this.archivedLayers.clear();
     this.composite.width = 1;
     this.composite.height = 1;
   }
@@ -628,7 +699,8 @@ export class TextureAsset {
     color: string,
     opacity: number,
     id = layerId(),
-    blendMode: TextureBlendMode = 'normal'
+    blendMode: TextureBlendMode = 'normal',
+    kind: TextureLayerKind = 'fill'
   ): TextureLayer {
     const canvas = createLayerCanvas(this.width, this.height);
     const context = canvas.getContext('2d');
@@ -643,6 +715,7 @@ export class TextureAsset {
       color,
       pattern,
       blendMode,
+      kind,
       canvas,
       context
     };

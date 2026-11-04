@@ -86,6 +86,7 @@ describe('.lpoly v3', () => {
             color: '#c8c2ad',
             pattern: 'checker',
             blendMode: 'normal',
+            kind: 'fill',
             png
           }
         ]
@@ -208,6 +209,7 @@ describe('.lpoly v3', () => {
       color: '#ffffff',
       pattern: 'solid' as const,
       blendMode: 'normal' as const,
+      kind: 'fill' as const,
       png
     });
     const bytes = encodeLpoly(document, SETTINGS, [

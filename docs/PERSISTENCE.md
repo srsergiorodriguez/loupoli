@@ -186,6 +186,7 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
             "color": "#c8c2ad",
             "pattern": "checker",
             "blendMode": "normal",
+            "kind": "fill",
             "pngLength": 24692
           }
         ]
@@ -241,7 +242,7 @@ Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edg
 
 ### 3.4 v3 texture asset chunks
 
-After all mesh columns, v3 writes each asset layer's binary PNG in manifest order. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
+After all mesh columns, v3 writes each asset layer's binary PNG in manifest order. Raster layers are authoritative; fill layers retain their deterministic color/pattern metadata. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
 
 - v1 files open with no texture set.
 - v3 files restore texture assets and node bindings on open; a project without textures resets to one default asset.

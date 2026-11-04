@@ -127,6 +127,7 @@ interface TextureLayerManifest {
   readonly color: string;
   readonly pattern: 'checker' | 'solid';
   readonly blendMode?: TextureBlendMode;
+  readonly kind?: 'fill' | 'raster';
   readonly pngLength: number;
 }
 
@@ -441,6 +442,7 @@ function buildTextureManifest(
         color: layer.color,
         pattern: layer.pattern,
         blendMode: layer.blendMode,
+        kind: layer.kind,
         pngLength: layer.png.byteLength
       };
     });
@@ -648,6 +650,9 @@ function validateTextureManifest(value: unknown): TextureManifest {
         typeof layer.color !== 'string' ||
         layer.color.length > 32 ||
         (layer.pattern !== 'checker' && layer.pattern !== 'solid') ||
+        (layer.kind !== undefined &&
+          layer.kind !== 'fill' &&
+          layer.kind !== 'raster') ||
         (layer.blendMode !== undefined &&
           layer.blendMode !== 'normal' &&
           layer.blendMode !== 'multiply' &&
@@ -667,6 +672,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
         color: layer.color,
         pattern: layer.pattern,
         blendMode: layer.blendMode ?? 'normal',
+        kind: layer.kind === 'raster' ? 'raster' : 'fill',
         pngLength: layer.pngLength as number
       };
     });
@@ -878,6 +884,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
           color: layer.color,
           pattern: layer.pattern,
           blendMode: layer.blendMode ?? 'normal',
+          kind: layer.kind ?? 'fill',
           png: bytes.slice(cursor, cursor + layer.pngLength)
         });
         cursor += layer.pngLength;

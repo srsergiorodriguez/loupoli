@@ -484,6 +484,10 @@ export class EditorSession {
     this.runtime?.assignTextureToSelection(textureId);
   }
 
+  importTextureImage(blob: Blob, name: string): Promise<void> {
+    return this.runtime?.importTextureImage(blob, name) ?? Promise.resolve();
+  }
+
   setTextureAssetFilter(filter: 'nearest' | 'linear'): void {
     this.runtime?.setTextureAssetFilter(filter);
   }

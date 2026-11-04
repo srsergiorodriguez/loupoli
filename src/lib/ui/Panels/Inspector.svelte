@@ -72,6 +72,16 @@
   );
   let newTextureSize = $state(512);
   const textureLayers = $derived(session.snapshot.textureLayers);
+
+  async function importTextureImage(event: Event): Promise<void> {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+    await session.importTextureImage(file, file.name.replace(/\.[^.]+$/, ''));
+    input.value = '';
+  }
   const textureLayersTopFirst = $derived(
     textureLayers
       .map((layer, index) => ({ layer, index }))
@@ -1107,6 +1117,16 @@
             <Icon name="open" size={13} />
             <span>Duplicate</span>
           </button>
+          <label class="compact-action texture-import">
+            <Icon name="new-file" size={13} />
+            <span>Import image</span>
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Import image as a texture layer"
+              onchange={importTextureImage}
+            />
+          </label>
           <button
             type="button"
             class="compact-action"
@@ -1191,7 +1211,7 @@
                     onchange={(event) =>
                       session.renameTextureLayer(layer.id, event.currentTarget.value)}
                   />
-                  <span class="texture-pattern">{layer.pattern} · {layer.blendMode}</span>
+                  <span class="texture-pattern">{layer.kind === 'raster' ? 'image' : layer.pattern} · {layer.blendMode}</span>
                 </div>
                 <button
                   type="button"
@@ -2009,6 +2029,19 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .texture-import {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .texture-import input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .texture-asset-controls,

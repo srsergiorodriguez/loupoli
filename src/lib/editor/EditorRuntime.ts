@@ -649,6 +649,24 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Import an image as a new raster layer on the active texture asset. */
+  async importTextureImage(blob: Blob, name: string): Promise<void> {
+    const asset = this.textureLibrary.active;
+    if (!asset) {
+      return;
+    }
+    const before = asset.snapshot();
+    if (!(await asset.importImageLayer(blob, name))) {
+      return;
+    }
+    const after = asset.snapshot();
+    this.history.execute(
+      new TextureAssetCommand(asset, before, after, 'Import image layer')
+    );
+    this.autosave.markTextureDirty();
+    this.publish();
+  }
+
   /** Assign the active texture asset to the object selection. */
   assignTextureToSelection(textureId: string | null): void {
     const nodes = this.document.nodes.filter((node) =>
