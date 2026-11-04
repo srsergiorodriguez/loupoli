@@ -754,6 +754,28 @@ export class TextureAsset {
     return true;
   }
 
+  /** Move a layer relative to another in display order (top-first). */
+  moveLayerTo(id: string, targetId: string, after: boolean): boolean {
+    const sourceIndex = this.layers.findIndex((layer) => layer.id === id);
+    if (sourceIndex < 0 || id === targetId) {
+      return false;
+    }
+    const [layer] = this.layers.splice(sourceIndex, 1);
+    if (!layer) {
+      return false;
+    }
+    const targetIndex = this.layers.findIndex((item) => item.id === targetId);
+    if (targetIndex < 0) {
+      this.layers.splice(sourceIndex, 0, layer);
+      return false;
+    }
+    // The Inspector renders top-first; underlying layers are bottom-to-top.
+    const insertAt = after ? targetIndex : targetIndex + 1;
+    this.layers.splice(insertAt, 0, layer);
+    this.compositeLayers();
+    return true;
+  }
+
   /** Set layer visibility. */
   setVisible(id: string, visible: boolean): boolean {
     const layer = this.layers.find((item) => item.id === id);

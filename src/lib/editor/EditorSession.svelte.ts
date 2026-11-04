@@ -624,8 +624,8 @@ export class EditorSession {
     this.runtime?.toggleTextureLayer(id);
   }
 
-  moveTextureLayer(id: string, direction: -1 | 1): void {
-    this.runtime?.moveTextureLayer(id, direction);
+  reorderTextureLayer(id: string, targetId: string, after: boolean): void {
+    this.runtime?.reorderTextureLayer(id, targetId, after);
   }
 
   setTextureLayerOpacity(id: string, opacity: number): void {

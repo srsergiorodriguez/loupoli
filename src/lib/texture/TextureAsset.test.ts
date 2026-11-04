@@ -136,6 +136,12 @@ describe('TextureAsset', () => {
     const top = stack.summaries()[1];
     expect(stack.moveLayer(top.id, -1)).toBe(true);
     expect(stack.summaries()[0].id).toBe(top.id);
+    stack.addLayer('Middle');
+    const middle = stack.summaries()[1];
+    const latest = stack.summaries()[2];
+    expect(stack.moveLayerTo(latest.id, middle.id, true)).toBe(true);
+    expect(stack.summaries()[1].id).toBe(latest.id);
+    expect(stack.summaries()[2].id).toBe(middle.id);
     expect(stack.setVisible(base.id, false)).toBe(true);
     expect(stack.summaries().find((layer) => layer.id === base.id)?.visible).toBe(false);
     while (stack.addLayer()) {

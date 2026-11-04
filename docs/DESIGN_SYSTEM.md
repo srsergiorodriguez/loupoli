@@ -439,7 +439,8 @@ Implemented component files and local patterns:
 | `ActionDock` | 3 | One-shot mesh actions | Bottom-left 2×2 grid, 64×44 minimum targets, contextual disabled states |
 | `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
 | `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, 44px action |
-| `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Body-mounted fixed menu so inspector overflow cannot clip it |
+| `ThreeDotMenu` / `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Standard icon-only overflow wrapper; body-mounted fixed menu so inspector overflow cannot clip it |
+| `OutlinerDragHandle` / `OutlinerVisibility` | 1 | Scene and texture outliners | Shared left drag handle and right visibility control |
 | `TextField` | 1 | Inspector text fields | Labeled inline text commit |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
 | `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, 44px actions, one composite texture per asset, `.lpoly` v3 PNG chunks |

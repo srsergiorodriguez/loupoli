@@ -882,9 +882,9 @@ export class EditorRuntime {
     );
   }
 
-  moveTextureLayer(id: string, direction: -1 | 1): void {
+  reorderTextureLayer(id: string, targetId: string, after: boolean): void {
     this.commitTextureMutation('Reorder texture layer', () => {
-      this.textureStack.moveLayer(id, direction);
+      this.textureStack.moveLayerTo(id, targetId, after);
     });
   }
 

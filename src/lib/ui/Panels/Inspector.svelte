@@ -11,7 +11,10 @@
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
+  import ThreeDotMenu from '../Primitives/ThreeDotMenu.svelte';
   import TextField from '../Primitives/TextField.svelte';
+  import OutlinerDragHandle from '../Primitives/OutlinerDragHandle.svelte';
+  import OutlinerVisibility from '../Primitives/OutlinerVisibility.svelte';
   import {
     defaultInspectorOpen,
     inspectorSectionsFor,
@@ -195,8 +198,15 @@
   let dropTargetId = $state<string | null>(null);
   let dropAfter = $state(false);
   let reorderPointerId: number | null = null;
+  let draggedLayerId = $state<string | null>(null);
+  let layerDropTargetId = $state<string | null>(null);
+  let layerDropAfter = $state(false);
+  let layerReorderPointerId: number | null = null;
 
-  onDestroy(cleanupReorder);
+  onDestroy(() => {
+    cleanupReorder();
+    cleanupLayerReorder();
+  });
 
   function beginReorder(event: PointerEvent, nodeId: string): void {
     if (!canEdit3d || (event.pointerType === 'mouse' && event.button !== 0)) {
@@ -254,6 +264,64 @@
     draggedNodeId = null;
     dropTargetId = null;
     dropAfter = false;
+  }
+
+  function beginLayerReorder(event: PointerEvent, layerId: string): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    draggedLayerId = layerId;
+    layerDropTargetId = null;
+    layerReorderPointerId = event.pointerId;
+    window.addEventListener('pointermove', reorderLayerMove);
+    window.addEventListener('pointerup', reorderLayerEnd);
+    window.addEventListener('pointercancel', cleanupLayerReorder);
+  }
+
+  function reorderLayerMove(event: PointerEvent): void {
+    if (event.pointerId !== layerReorderPointerId || !draggedLayerId) {
+      return;
+    }
+    event.preventDefault();
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-texture-layer-id]');
+    if (!target) {
+      layerDropTargetId = null;
+      return;
+    }
+    const id = target.dataset.textureLayerId ?? null;
+    if (!id || id === draggedLayerId) {
+      layerDropTargetId = null;
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    layerDropTargetId = id;
+    layerDropAfter = event.clientY > rect.top + rect.height / 2;
+  }
+
+  function reorderLayerEnd(event: PointerEvent): void {
+    if (event.pointerId !== layerReorderPointerId) {
+      return;
+    }
+    const source = draggedLayerId;
+    const target = layerDropTargetId;
+    const after = layerDropAfter;
+    cleanupLayerReorder();
+    if (source && target) {
+      session.reorderTextureLayer(source, target, after);
+    }
+  }
+
+  function cleanupLayerReorder(): void {
+    window.removeEventListener('pointermove', reorderLayerMove);
+    window.removeEventListener('pointerup', reorderLayerEnd);
+    window.removeEventListener('pointercancel', cleanupLayerReorder);
+    layerReorderPointerId = null;
+    draggedLayerId = null;
+    layerDropTargetId = null;
+    layerDropAfter = false;
   }
 
   function toggleNodeVisibility(
@@ -403,14 +471,12 @@
           data-node-id={node.id}
           aria-current={node.id === activeNodeId ? 'true' : undefined}
         >
-          <button
-            type="button"
-            class="object-drag-handle"
-            aria-label={`Drag to reorder ${node.name}`}
+          <OutlinerDragHandle
+            label={`Drag to reorder ${node.name}`}
             title={canEdit3d ? 'Drag to reorder' : 'Reordering is available in Model'}
             disabled={!canEdit3d}
-            onpointerdown={(event) => beginReorder(event, node.id)}
-          ><span aria-hidden="true">⠿</span></button>
+            onDragStart={(event) => beginReorder(event, node.id)}
+          />
           <button
             type="button"
             class="object-select"
@@ -433,16 +499,11 @@
                     : 'Grid'}
             </span>
           </button>
-          <button
-            type="button"
-            class="object-visibility"
-            aria-label={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
-            aria-pressed={node.visible}
-            title={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
-            onclick={(event) => toggleNodeVisibility(event, node.id, node.visible)}
-          >
-            <Icon name={node.visible ? 'eye' : 'eye-off'} size={14} />
-          </button>
+          <OutlinerVisibility
+            label={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
+            visible={node.visible}
+            onToggle={(event) => toggleNodeVisibility(event, node.id, node.visible)}
+          />
         </div>
       {/snippet}
 
@@ -1218,10 +1279,8 @@
                 onSelect: () => session.createTextureAsset(size, size)
               }))}
             />
-            <ActionMenu
-              icon="more"
+            <ThreeDotMenu
               menuTitle="Texture actions"
-              align="end"
               options={[
                 {
                   label: 'Duplicate',
@@ -1318,12 +1377,15 @@
               <div
                 class="texture-layer-row"
                 class:active={session.snapshot.textureActiveId === layer.id}
+                class:is-hidden={!layer.visible}
+                class:dragging={draggedLayerId === layer.id}
+                class:drop-target={layerDropTargetId === layer.id}
+                class:drop-after={layerDropTargetId === layer.id && layerDropAfter}
+                data-texture-layer-id={layer.id}
               >
-                <IconButton
-                  label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
-                  icon={layer.visible ? 'eye' : 'eye-off'}
-                  tooltip={layer.visible ? 'Hide layer' : 'Show layer'}
-                  onActivate={() => session.toggleTextureLayer(layer.id)}
+                <OutlinerDragHandle
+                  label={`Drag to reorder ${layer.name}`}
+                  onDragStart={(event) => beginLayerReorder(event, layer.id)}
                 />
                 <button
                   type="button"
@@ -1342,8 +1404,12 @@
                   <span class="texture-layer-meta">
                     {layer.kind === 'raster' ? 'raster' : layer.pattern} · {layer.role}
                   </span>
-                  <span class="texture-layer-opacity">{Math.round(layer.opacity * 100)}%</span>
                 </button>
+                <OutlinerVisibility
+                  label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
+                  visible={layer.visible}
+                  onToggle={() => session.toggleTextureLayer(layer.id)}
+                />
               </div>
             {/each}
           </div>
@@ -1366,36 +1432,7 @@
               <span class="texture-kind">
                 {activeTextureLayer.kind === 'raster' ? 'raster' : activeTextureLayer.pattern}
               </span>
-              <ActionMenu
-                icon="more"
-                menuTitle="Layer actions"
-                align="end"
-                options={[
-                  {
-                    label: 'Move up',
-                    icon: 'chevron-up',
-                    disabled:
-                      textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) >=
-                      textureLayers.length - 1,
-                    onSelect: () => session.moveTextureLayer(activeTextureLayer.id, 1)
-                  },
-                  {
-                    label: 'Move down',
-                    icon: 'chevron-down',
-                    disabled:
-                      textureLayers.findIndex((layer) => layer.id === activeTextureLayer.id) <= 0,
-                    onSelect: () => session.moveTextureLayer(activeTextureLayer.id, -1)
-                  },
-                  {
-                    label: 'Delete layer',
-                    icon: 'trash',
-                    destructive: true,
-                    separatorBefore: true,
-                    disabled: textureLayers.length <= 1,
-                    onSelect: () => session.removeTextureLayer(activeTextureLayer.id)
-                  }
-                ]}
-              />
+
             </div>
             {#if activeTextureLayer.kind === 'fill'}
               <SelectField
@@ -1458,7 +1495,15 @@
                   session.setTextureLayerColor(activeTextureLayer.id, value)}
               />
             {/if}
-
+            <ActionRow>
+              <ActionButton
+                label="Delete layer"
+                icon="trash"
+                variant="danger"
+                disabled={textureLayers.length <= 1}
+                onActivate={() => session.removeTextureLayer(activeTextureLayer.id)}
+              />
+            </ActionRow>
           </div>
         {/if}
       </div>
@@ -1621,39 +1666,6 @@
     background: var(--bg-hover);
   }
 
-  .object-drag-handle,
-  .object-visibility {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
-    border: 0;
-    background: transparent;
-    color: var(--text-tertiary);
-    cursor: pointer;
-    touch-action: none;
-  }
-
-  .object-drag-handle {
-    min-width: 28px;
-    cursor: grab;
-    font-family: var(--font-mono);
-    font-size: 13px;
-    letter-spacing: -2px;
-  }
-
-  .object-drag-handle:active {
-    cursor: grabbing;
-  }
-
-  .object-visibility:hover,
-  .object-drag-handle:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
   .object-row.is-hidden {
     opacity: 0.52;
   }
@@ -1733,12 +1745,6 @@
     flex-wrap: wrap;
     gap: var(--space-1);
     margin-top: var(--space-2);
-  }
-
-  @media (pointer: coarse) {
-    .object-drag-handle {
-      min-width: var(--hit-min);
-    }
   }
 
   .compact-action {
@@ -2286,10 +2292,26 @@
     background: var(--bg-selected);
   }
 
+  .texture-layer-row.is-hidden {
+    opacity: 0.52;
+  }
+
+  .texture-layer-row.dragging {
+    opacity: 0.4;
+  }
+
+  .texture-layer-row.drop-target {
+    box-shadow: inset 0 2px 0 var(--accent-primary);
+  }
+
+  .texture-layer-row.drop-target.drop-after {
+    box-shadow: inset 0 -2px 0 var(--accent-primary);
+  }
+
   .texture-layer-select {
     display: grid;
     flex: 1;
-    grid-template-columns: 12px minmax(0, 1fr) auto auto;
+    grid-template-columns: 16px minmax(0, 1fr) auto auto;
     align-items: center;
     min-width: 0;
     min-height: var(--hit-min);
@@ -2328,15 +2350,11 @@
     white-space: nowrap;
   }
 
-  .texture-layer-meta,
-  .texture-layer-opacity {
+  .texture-layer-meta {
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
-  }
-
-  .texture-layer-opacity {
-    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .texture-selected-head {
