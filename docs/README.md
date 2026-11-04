@@ -15,7 +15,8 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 9. [Phase 4 exit audit](./PHASE4_AUDIT.md) — gate-by-gate result and deferrals.
 10. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
 11. [Render workspace and camera](./RENDER.md) — scene cameras, virtual resolution, and clean still rendering.
-12. [Root README](../README.md) — product overview, setup, and current capabilities.
+12. [Animation workspace](./ANIMATION.md) — transform tracks, timeline, playback, and persistence.
+13. [Root README](../README.md) — product overview, setup, and current capabilities.
 
 ## Document ownership
 
@@ -32,6 +33,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [Phase 4 exit audit](./PHASE4_AUDIT.md) | Gate results, evidence, and accepted deferrals | New feature design |
 | [Phase 5A lighting](./PHASE5_LIGHTING.md) | Light model, Light workspace, direct-light bake, and v4 lighting metadata | Shadows/AO or shape-key design |
 | [Render workspace](./RENDER.md) | Scene camera model, Render workspace, virtual resolution, and still export | Frame/video export or camera animation |
+| [Animation workspace](./ANIMATION.md) | Transform tracks, timeline, playback, and persistence | Camera/shape-key animation design |
 | [Root README](../README.md) | Product overview and quick start | Canonical rules or format specifications |
 
 ## Canonical cross-links
@@ -43,6 +45,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 - Phase 4 exit state: [Phase 4 exit audit](./PHASE4_AUDIT.md).
 - Lighting and bake: [Phase 5A lighting](./PHASE5_LIGHTING.md).
 - Camera and still rendering: [Render workspace](./RENDER.md).
+- Animation: [Animation workspace](./ANIMATION.md).
 
 ## Maintenance rules
 

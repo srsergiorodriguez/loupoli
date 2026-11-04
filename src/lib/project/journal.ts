@@ -2,6 +2,7 @@ import type { Vec2, Vec3 } from '../geometry/HalfEdgeMesh';
 import type { NodeTransform } from '../scene/MeshNode';
 import type { LightSnapshot } from '../scene/SceneLight';
 import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
+import { SceneAnimation, type AnimationSnapshot } from '../scene/SceneAnimation';
 import { validateModifiers, type Modifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
 import { SceneLight } from '../scene/SceneLight';
@@ -144,6 +145,10 @@ export type JournalPatch =
   | {
       readonly type: 'update-camera';
       readonly camera: CameraSnapshot;
+    }
+  | {
+      readonly type: 'set-animation';
+      readonly animation: AnimationSnapshot;
     };
 
 /** Apply one journal patch to a reconstructed scene document. */
@@ -323,6 +328,10 @@ export function applyJournalPatch(
       camera.apply(patch.camera);
       return;
     }
+    case 'set-animation': {
+      document.replaceAnimation(SceneAnimation.fromSnapshot(patch.animation));
+      return;
+    }
     case 'set-modifiers': {
       const node = document.getNode(patch.nodeId);
       if (!node) {
@@ -368,6 +377,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
     patch.type === 'update-camera'
   ) {
     return patch.camera.id.length * 2 + patch.camera.name.length * 2 + 96;
+  }
+  if (patch.type === 'set-animation') {
+    return patch.animation.tracks.length * 256 + 96;
   }
   if (patch.type === 'remove-node') {
     return patch.nodeId.length * 2 + 16;

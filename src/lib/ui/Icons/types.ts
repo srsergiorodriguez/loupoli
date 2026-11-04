@@ -54,4 +54,6 @@ export type IconName =
   | 'transparent'
   | 'image'
   | 'sync'
-  | 'lock';
+  | 'lock'
+  | 'play'
+  | 'pause';

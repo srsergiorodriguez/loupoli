@@ -100,6 +100,7 @@ import {
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
+import { SetAnimationCommand } from './commands/AnimationCommands';
 import {
   CreateCameraCommand,
   DeleteCameraCommand,
@@ -164,7 +165,16 @@ import {
 } from './commands/LightCommands';
 import type { LightKind, LightSnapshot } from '../scene/SceneLight';
 import type { SceneCamera } from '../scene/SceneCamera';
+import type {
+  AnimationInterpolation,
+  AnimationTrack
+} from '../scene/SceneAnimation';
 import { upscaleRenderImage, canvasToPng } from '../render/renderImage';
+import {
+  videoExtension,
+  videoLabel,
+  videoMimeFor
+} from '../render/videoExport';
 import type { RenderShading, RenderUpscale } from '../render/renderSettings';
 import type { SceneLight } from '../scene/SceneLight';
 import {
@@ -176,6 +186,7 @@ import {
 import {
   openProjectFile,
   saveBinaryFile,
+  saveFrameSequence,
   saveProjectFile
 } from '../platform/projectFiles';
 import {
@@ -506,6 +517,9 @@ export class EditorRuntime {
   private fileBusy = false;
   private bakeBusy = false;
   private renderBusy = false;
+  private renderKind: 'still' | 'sequence' | 'webm' | 'mp4' = 'still';
+  private renderStartFrame = 0;
+  private renderEndFrame = 48;
   private renderVirtualWidth = 320;
   private renderVirtualHeight = 180;
   private renderOutputWidth = 1280;
@@ -514,6 +528,14 @@ export class EditorRuntime {
   private renderShading: RenderShading = 'lit';
   private renderTransparent = false;
   private renderBackground = '#121214';
+  private animationFrame = 0;
+  private animationPlaying = false;
+  private animationLoop = true;
+  private animationInterpolation: AnimationInterpolation = 'linear';
+  private animationPose = new Map<string, NodeTransform>();
+  private animationRaf = 0;
+  private animationClockStart = 0;
+  private animationClockFrame = 0;
   private projectError: string | null = null;
 
   /** Active texture asset used by texture and paint tools. */
@@ -768,6 +790,9 @@ export class EditorRuntime {
       fileBusy: this.fileBusy,
       bakeBusy: this.bakeBusy,
       renderBusy: this.renderBusy,
+      renderKind: this.renderKind,
+      renderStartFrame: this.renderStartFrame,
+      renderEndFrame: this.renderEndFrame,
       renderVirtualWidth: this.renderVirtualWidth,
       renderVirtualHeight: this.renderVirtualHeight,
       renderOutputWidth: this.renderOutputWidth,
@@ -776,6 +801,14 @@ export class EditorRuntime {
       renderShading: this.renderShading,
       renderTransparent: this.renderTransparent,
       renderBackground: this.renderBackground,
+      animationFrame: this.animationFrame,
+      animationStartFrame: this.document.animation.startFrame,
+      animationEndFrame: this.document.animation.endFrame,
+      animationFps: this.document.animation.fps,
+      animationLoop: this.animationLoop,
+      animationPlaying: this.animationPlaying,
+      animationTracks: this.animationTrackSummaries(),
+      animationInterpolation: this.animationInterpolation,
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
     };
@@ -1244,6 +1277,11 @@ export class EditorRuntime {
     this.document.replaceGroups([]);
     this.document.replaceLights(fresh.lights);
     this.document.replaceCameras(fresh.cameras);
+    this.document.replaceAnimation(fresh.animation);
+    this.stopAnimationLoop();
+    this.animationFrame = 0;
+    this.animationPose.clear();
+    this.animationLoop = true;
     this.document.ambientColor = fresh.ambientColor;
     this.document.ambientIntensity = fresh.ambientIntensity;
     this.projectName = 'Untitled';
@@ -1296,7 +1334,9 @@ export class EditorRuntime {
   }
 
   /** Switch Model, Light, UV, and Paint without duplicating open/close logic. */
-  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint' | 'render'): void {
+  setWorkspace(
+    workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'
+  ): void {
     if (workspace !== 'paint') {
       this.cancelProjectionPaint();
       this.surfaceCursor = null;
@@ -1308,7 +1348,15 @@ export class EditorRuntime {
       this.renderer.setGridVisible(true);
     }
     this.workspace = workspace;
-    if (workspace === 'model' || workspace === 'light' || workspace === 'render') {
+    if (workspace !== 'animation') {
+      this.pauseAnimation();
+    }
+    if (
+      workspace === 'model' ||
+      workspace === 'light' ||
+      workspace === 'animation' ||
+      workspace === 'render'
+    ) {
       this.activeEditor = '3d';
       if (this.uvOpen) {
         this.closeUvView();
@@ -1317,7 +1365,7 @@ export class EditorRuntime {
         this.renderer.setSeamOverlayVisible(false);
         this.syncScene();
       }
-      if (workspace === 'render') {
+      if (workspace === 'render' || workspace === 'animation') {
         if (this.shading !== 'lit') {
           this.shading = 'lit';
           this.renderer.setShadingMode('lit');
@@ -1341,6 +1389,11 @@ export class EditorRuntime {
       }
       if (workspace === 'render') {
         this.syncRenderCameraView();
+      }
+      if (workspace === 'animation') {
+        this.applyAnimationPose();
+      } else if (workspace !== 'render') {
+        this.clearAnimationPose();
       }
       this.publish();
       return;
@@ -3792,6 +3845,9 @@ export class EditorRuntime {
       renderShading: RenderShading;
       renderTransparent: boolean;
       renderBackground: string;
+      renderKind: 'still' | 'sequence' | 'webm' | 'mp4';
+      renderStartFrame: number;
+      renderEndFrame: number;
     }>
   ): void {
     const clampDimension = (value: number): number =>
@@ -3819,6 +3875,15 @@ export class EditorRuntime {
     }
     if (patch.renderBackground !== undefined) {
       this.renderBackground = patch.renderBackground;
+    }
+    if (patch.renderKind !== undefined) {
+      this.renderKind = patch.renderKind;
+    }
+    if (patch.renderStartFrame !== undefined) {
+      this.renderStartFrame = Math.max(0, Math.round(patch.renderStartFrame));
+    }
+    if (patch.renderEndFrame !== undefined) {
+      this.renderEndFrame = Math.max(1, Math.round(patch.renderEndFrame));
     }
     this.publish();
   }
@@ -3866,6 +3931,404 @@ export class EditorRuntime {
     } catch (error) {
       this.projectError = this.errorMessage(error);
     } finally {
+      this.renderBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Reactive-safe animation track summaries with resolved target names. */
+  private animationTrackSummaries() {
+    return this.document.animation.tracks.map((track) => ({
+      id: track.id,
+      targetId: track.targetId,
+      targetKind: track.targetKind,
+      targetName:
+        track.targetKind === 'node'
+          ? (this.document.getNode(track.targetId)?.name ?? 'Missing object')
+          : (this.document.getGroup(track.targetId)?.name ?? 'Missing group'),
+      keyframes: track.keyframes.map((key) => ({
+        frame: key.frame,
+        interpolation: key.interpolation
+      }))
+    }));
+  }
+
+  /** Return the animation track for the active node/group, if any. */
+  getActiveAnimationTrack(): AnimationTrack | null {
+    const target = this.getActiveGroup() ?? this.getActiveNode();
+    return target ? this.document.animation.getTrack(target.id) : null;
+  }
+
+  /** Evaluate and apply the current animation pose to the viewport. */
+  private applyAnimationPose(): void {
+    const pose = new Map<string, NodeTransform>();
+    for (const track of this.document.animation.tracks) {
+      const transform = track.evaluate(this.animationFrame);
+      if (!transform) {
+        continue;
+      }
+      if (
+        track.targetKind === 'node'
+          ? this.document.getNode(track.targetId) !== undefined
+          : this.document.getGroup(track.targetId) !== undefined
+      ) {
+        pose.set(track.targetId, transform);
+      }
+    }
+    this.animationPose = pose;
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Move the playhead and evaluate the animation pose. */
+  setAnimationFrame(frame: number): void {
+    this.stopAnimationLoop();
+    const start = this.document.animation.startFrame;
+    const end = this.document.animation.endFrame;
+    this.animationFrame = Math.max(start, Math.min(end, frame));
+    this.applyAnimationPose();
+  }
+
+  /** Set the animation frame rate and range as one undoable document edit. */
+  setAnimationSettings(
+    patch: Partial<{
+      fps: number;
+      startFrame: number;
+      endFrame: number;
+    }>
+  ): void {
+    const before = this.document.animation.snapshot();
+    const next = {
+      ...before,
+      ...(patch.fps !== undefined
+        ? { fps: Math.max(1, Math.min(120, Math.round(patch.fps))) }
+        : {}),
+      ...(patch.startFrame !== undefined
+        ? { startFrame: Math.max(0, Math.round(patch.startFrame)) }
+        : {}),
+      ...(patch.endFrame !== undefined
+        ? { endFrame: Math.max(1, Math.round(patch.endFrame)) }
+        : {})
+    };
+    if (next.endFrame <= next.startFrame) {
+      next.endFrame = next.startFrame + 1;
+    }
+    if (JSON.stringify(before) === JSON.stringify(next)) {
+      return;
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        next,
+        'Change animation settings'
+      )
+    );
+    this.animationFrame = Math.max(
+      next.startFrame,
+      Math.min(next.endFrame, this.animationFrame)
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Set whether playback loops at the end of the range. */
+  setAnimationLoop(loop: boolean): void {
+    this.animationLoop = loop;
+    this.publish();
+  }
+
+  /** Choose the interpolation used by newly added keys. */
+  setAnimationInterpolation(interpolation: AnimationInterpolation): void {
+    this.animationInterpolation = interpolation;
+    this.publish();
+  }
+
+  /** Key the active object or group transform at the current frame. */
+  keyActiveTransform(): void {
+    const group = this.getActiveGroup();
+    const node = group ? null : this.getActiveNode();
+    const target = group ?? node;
+    if (!target) {
+      return;
+    }
+    const before = this.document.animation.snapshot();
+    const track = this.document.animation.ensureTrack(
+      target.id,
+      group ? 'group' : 'node'
+    );
+    track.setKey(
+      Math.round(this.animationFrame),
+      target.transform,
+      this.animationInterpolation
+    );
+    const after = this.document.animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        after,
+        'Key transform'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Delete the key at the current frame for the active target. */
+  deleteActiveAnimationKey(): void {
+    const track = this.getActiveAnimationTrack();
+    if (!track) {
+      return;
+    }
+    const before = this.document.animation.snapshot();
+    track.removeKey(Math.round(this.animationFrame));
+    if (track.keyframes.length === 0) {
+      this.document.animation.removeTrack(track.targetId);
+    }
+    const after = this.document.animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        after,
+        'Delete keyframe'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Start scheduler-driven animation playback. */
+  playAnimation(): void {
+    if (this.animationPlaying || this.document.animation.tracks.length === 0) {
+      return;
+    }
+    const settings = this.document.animation;
+    if (this.animationFrame >= settings.endFrame) {
+      this.animationFrame = settings.startFrame;
+    }
+    this.animationPlaying = true;
+    this.animationClockStart = performance.now();
+    this.animationClockFrame = this.animationFrame;
+    this.publish();
+    const tick = (now: number): void => {
+      if (!this.animationPlaying) {
+        return;
+      }
+      const elapsed = (now - this.animationClockStart) / 1000;
+      let next =
+        this.animationClockFrame + elapsed * this.document.animation.fps;
+      const duration =
+        this.document.animation.endFrame - this.document.animation.startFrame;
+      if (next > this.document.animation.endFrame) {
+        if (this.animationLoop && duration > 0) {
+          next =
+            this.document.animation.startFrame +
+            ((next - this.document.animation.startFrame) % duration);
+        } else {
+          next = this.document.animation.endFrame;
+        }
+      }
+      this.animationFrame = next;
+      this.applyAnimationPose();
+      if (next >= this.document.animation.endFrame && !this.animationLoop) {
+        this.stopAnimationLoop();
+        this.publish();
+        return;
+      }
+      this.animationRaf = requestAnimationFrame(tick);
+    };
+    this.animationRaf = requestAnimationFrame(tick);
+  }
+
+  /** Stop animation playback and release its scheduler frame. */
+  pauseAnimation(): void {
+    const wasPlaying = this.animationPlaying;
+    this.stopAnimationLoop();
+    if (wasPlaying) {
+      this.publish();
+    }
+  }
+
+  private stopAnimationLoop(): void {
+    if (this.animationRaf) {
+      cancelAnimationFrame(this.animationRaf);
+      this.animationRaf = 0;
+    }
+    this.animationPlaying = false;
+  }
+
+  /** Clear the preview pose when leaving animation-oriented views. */
+  private clearAnimationPose(): void {
+    if (this.animationPose.size === 0) {
+      return;
+    }
+    this.animationPose.clear();
+    this.syncScene();
+  }
+
+  /** Render a deterministic PNG frame sequence over the render range. */
+  async renderFrames(): Promise<void> {
+    if (this.renderBusy) {
+      return;
+    }
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      this.projectError = 'Add a camera before rendering.';
+      this.publish();
+      return;
+    }
+    const start = Math.min(this.renderStartFrame, this.renderEndFrame);
+    const end = Math.max(this.renderStartFrame, this.renderEndFrame);
+    if (end - start + 1 > 1200) {
+      this.projectError = 'The frame sequence is limited to 1200 frames.';
+      this.publish();
+      return;
+    }
+    this.renderBusy = true;
+    this.projectError = null;
+    this.pauseAnimation();
+    const originalFrame = this.animationFrame;
+    this.publish();
+    const frames: { name: string; bytes: Uint8Array }[] = [];
+    try {
+      const base = (this.projectName || 'render')
+        .replace(/[^a-z0-9_-]+/gi, '-')
+        .replace(/^-+|-+$/g, '') || 'render';
+      for (let frame = start; frame <= end; frame += 1) {
+        this.setAnimationFrame(frame);
+        const image = this.renderer.renderStill({
+          width: this.renderVirtualWidth,
+          height: this.renderVirtualHeight,
+          shading: this.renderShading,
+          camera: {
+            position: camera.position,
+            target: camera.target,
+            fov: camera.fov
+          },
+          transparent: this.renderTransparent,
+          backgroundColor: this.renderBackground
+        });
+        const canvas = upscaleRenderImage(
+          image,
+          this.renderOutputWidth,
+          this.renderOutputHeight,
+          this.renderUpscale
+        );
+        frames.push({
+          name: `${base}_${String(frame - start).padStart(4, '0')}.png`,
+          bytes: await canvasToPng(canvas)
+        });
+      }
+      await saveFrameSequence(frames, `${base}-frames.zip`);
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.setAnimationFrame(originalFrame);
+      this.renderBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Encode the render range to WebM or MP4 through the platform recorder. */
+  async renderVideo(): Promise<void> {
+    if (this.renderBusy) {
+      return;
+    }
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      this.projectError = 'Add a camera before rendering.';
+      this.publish();
+      return;
+    }
+    const format = this.renderKind === 'mp4' ? 'mp4' : 'webm';
+    const mime = videoMimeFor(format);
+    if (!mime) {
+      this.projectError = `${videoLabel(format)} recording is not supported by this WebView. Use a PNG frame sequence instead.`;
+      this.publish();
+      return;
+    }
+    const start = Math.min(this.renderStartFrame, this.renderEndFrame);
+    const end = Math.max(this.renderStartFrame, this.renderEndFrame);
+    if (end - start + 1 > 1200) {
+      this.projectError = 'The video is limited to 1200 frames.';
+      this.publish();
+      return;
+    }
+    this.renderBusy = true;
+    this.projectError = null;
+    this.pauseAnimation();
+    const originalFrame = this.animationFrame;
+    this.publish();
+    const output = document.createElement('canvas');
+    output.width = this.renderOutputWidth;
+    output.height = this.renderOutputHeight;
+    const context = output.getContext('2d');
+    if (!context) {
+      this.projectError = 'The video canvas could not be created.';
+      this.renderBusy = false;
+      this.publish();
+      return;
+    }
+    try {
+      const fps = Math.max(1, this.document.animation.fps);
+      const stream = output.captureStream(fps);
+      const recorder = new MediaRecorder(stream, {
+        mimeType: mime,
+        videoBitsPerSecond: 8_000_000
+      });
+      const chunks: Blob[] = [];
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      });
+      const stopped = new Promise<void>((resolve, reject) => {
+        recorder.addEventListener('stop', () => resolve());
+        recorder.addEventListener('error', () =>
+          reject(new Error('The video recorder failed.'))
+        );
+      });
+      recorder.start();
+      for (let frame = start; frame <= end; frame += 1) {
+        this.setAnimationFrame(frame);
+        const image = this.renderer.renderStill({
+          width: this.renderVirtualWidth,
+          height: this.renderVirtualHeight,
+          shading: this.renderShading,
+          camera: {
+            position: camera.position,
+            target: camera.target,
+            fov: camera.fov
+          },
+          transparent: false,
+          backgroundColor: this.renderBackground
+        });
+        const frameCanvas = upscaleRenderImage(
+          image,
+          this.renderOutputWidth,
+          this.renderOutputHeight,
+          this.renderUpscale
+        );
+        context.drawImage(frameCanvas, 0, 0);
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, 1000 / fps)
+        );
+      }
+      recorder.stop();
+      await stopped;
+      const bytes = new Uint8Array(await new Blob(chunks, { type: mime }).arrayBuffer());
+      const base = (this.projectName || 'render')
+        .replace(/[^a-z0-9_-]+/gi, '-')
+        .replace(/^-+|-+$/g, '') || 'render';
+      await saveBinaryFile(
+        bytes,
+        `${base}.${videoExtension(format)}`,
+        videoExtension(format),
+        `${videoLabel(format)} video`
+      );
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
       this.publish();
     }
@@ -7555,7 +8018,8 @@ export class EditorRuntime {
         : [],
       workspaceCan(this.workspace, 'edit3d') ? this.transformMode : 'select',
       this.transformOrientation,
-      workspaceCan(this.workspace, 'select3d')
+      workspaceCan(this.workspace, 'select3d'),
+      this.animationPose
     );
   }
 
@@ -7632,6 +8096,10 @@ export class EditorRuntime {
     this.document.replaceGroups(decoded.document.groups);
     this.document.replaceLights(decoded.document.lights);
     this.document.replaceCameras(decoded.document.cameras);
+    this.document.replaceAnimation(decoded.document.animation);
+    this.stopAnimationLoop();
+    this.animationFrame = decoded.document.animation.startFrame;
+    this.animationPose.clear();
     this.document.ambientColor = decoded.document.ambientColor;
     this.document.ambientIntensity = decoded.document.ambientIntensity;
     this.projectName = name;

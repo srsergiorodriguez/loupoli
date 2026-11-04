@@ -17,6 +17,11 @@ import { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { SceneLight, type LightKind, type LightSnapshot } from '../scene/SceneLight';
 import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
+import {
+  type AnimationInterpolation,
+  type AnimationSnapshot,
+  type AnimationTargetKind
+} from '../scene/SceneAnimation';
 import type {
   TextureBlendMode,
   TextureLayerRecord,
@@ -33,6 +38,8 @@ const MAX_NODES = 1024;
 const MAX_GROUPS = 512;
 const MAX_LIGHTS = 64;
 const MAX_CAMERAS = 32;
+const MAX_ANIMATION_TRACKS = 256;
+const MAX_ANIMATION_KEYS = 4096;
 const MAX_VERTICES = 1_000_000;
 const MAX_HALF_EDGES = 4_000_000;
 const MAX_EDGES = 2_000_000;
@@ -172,6 +179,7 @@ interface Manifest {
   readonly textures?: TextureManifest;
   readonly lighting?: LightingManifest;
   readonly cameras?: readonly CameraSnapshot[];
+  readonly animation?: AnimationSnapshot;
 }
 
 const TYPED_COLUMNS = [
@@ -621,6 +629,97 @@ function validateCamerasManifest(value: unknown): CameraSnapshot[] {
   return cameras;
 }
 
+function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
+  if (value === undefined) {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('The .lpoly animation manifest is invalid.');
+  }
+  const animation = value as Partial<AnimationSnapshot>;
+  const fps = typeof animation.fps === 'number' ? animation.fps : NaN;
+  const startFrame =
+    typeof animation.startFrame === 'number' ? animation.startFrame : NaN;
+  const endFrame =
+    typeof animation.endFrame === 'number' ? animation.endFrame : NaN;
+  if (
+    !Number.isFinite(fps) ||
+    fps < 1 ||
+    fps > 120 ||
+    !Number.isInteger(startFrame) ||
+    !Number.isInteger(endFrame) ||
+    startFrame < 0 ||
+    endFrame < startFrame ||
+    !Array.isArray(animation.tracks) ||
+    animation.tracks.length > MAX_ANIMATION_TRACKS
+  ) {
+    throw new Error('The .lpoly animation settings are invalid.');
+  }
+  const trackIds = new Set<string>();
+  const targetIds = new Set<string>();
+  let keyTotal = 0;
+  const tracks = animation.tracks.map((track) => {
+    if (typeof track !== 'object' || track === null) {
+      throw new Error('The .lpoly animation contains an invalid track.');
+    }
+    const raw = track as {
+      id?: unknown;
+      targetId?: unknown;
+      targetKind?: unknown;
+      keyframes?: unknown;
+    };
+    if (
+      typeof raw.id !== 'string' ||
+      raw.id.length === 0 ||
+      trackIds.has(raw.id) ||
+      typeof raw.targetId !== 'string' ||
+      raw.targetId.length === 0 ||
+      targetIds.has(raw.targetId) ||
+      (raw.targetKind !== 'node' && raw.targetKind !== 'group') ||
+      !Array.isArray(raw.keyframes)
+    ) {
+      throw new Error('The .lpoly animation contains invalid track metadata.');
+    }
+    trackIds.add(raw.id);
+    targetIds.add(raw.targetId);
+    const frames = new Set<number>();
+    const keyframes = raw.keyframes.map((key) => {
+      if (typeof key !== 'object' || key === null) {
+        throw new Error('The .lpoly animation contains an invalid keyframe.');
+      }
+      const item = key as {
+        frame?: unknown;
+        interpolation?: unknown;
+        transform?: unknown;
+      };
+      if (
+        !Number.isInteger(item.frame) ||
+        frames.has(item.frame as number) ||
+        (item.interpolation !== 'step' && item.interpolation !== 'linear')
+      ) {
+        throw new Error('The .lpoly animation contains invalid keyframes.');
+      }
+      frames.add(item.frame as number);
+      keyTotal += 1;
+      return {
+        frame: item.frame as number,
+        transform: validateTransform(item.transform),
+        interpolation: item.interpolation as AnimationInterpolation
+      };
+    }).sort((a, b) => a.frame - b.frame);
+    return {
+      id: raw.id,
+      targetId: raw.targetId,
+      targetKind: raw.targetKind as AnimationTargetKind,
+      keyframes
+    };
+  });
+  if (keyTotal > MAX_ANIMATION_KEYS) {
+    throw new Error('The .lpoly animation contains too many keyframes.');
+  }
+  return { fps, startFrame, endFrame, tracks };
+}
+
 /** Encode a project with a texture asset library. */
 export function encodeLpoly(
   document: SceneDocument,
@@ -677,6 +776,7 @@ function encodeInternal(
     nodes: manifestNodes,
     groups: manifestGroups,
     cameras: document.cameras.map((camera) => camera.snapshot()),
+    animation: document.animation.snapshot(),
     lighting: {
       ambientColor: document.ambientColor,
       ambientIntensity: document.ambientIntensity,
@@ -1034,6 +1134,11 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     for (const snapshot of cameras) {
       document.insertCamera(SceneCamera.fromSnapshot(snapshot));
     }
+  }
+
+  const animation = validateAnimationManifest(manifest.animation);
+  if (animation) {
+    document.animation.apply(animation);
   }
 
   const lighting = validateLightingManifest(manifest.lighting, version);

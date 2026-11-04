@@ -68,6 +68,16 @@ describe('inspector layout', () => {
     ]);
   });
 
+  it('gives Animation its own timeline section', () => {
+    expect(workspaceCan('animation', 'editAnimation')).toBe(true);
+    expect(workspaceCan('animation', 'edit3d')).toBe(false);
+    expect(inspectorSectionsFor('animation')).toEqual([
+      'scene',
+      'animation',
+      'controls'
+    ]);
+  });
+
   it('opens Scene, Selection, Brush, and Texture by default', () => {
     const defaults = defaultInspectorOpen();
     expect(defaults.scene).toBe(true);

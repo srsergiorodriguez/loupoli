@@ -26,7 +26,7 @@ import {
   type WebGLRendererParameters
 } from 'three';
 import type { Theme } from '../../design/theme';
-import type { MeshNode, SelectionMode } from '../scene/MeshNode';
+import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { LightSummary } from '../scene/SceneLight';
 import type { RenderStillOptions } from './renderSettings';
@@ -303,7 +303,8 @@ export class ViewportRenderer {
     selectedElements: readonly number[],
     transformMode: TransformMode,
     transformOrientation: TransformOrientation,
-    showEditHandles = true
+    showEditHandles = true,
+    animationPose: ReadonlyMap<string, NodeTransform> = new Map()
   ): void {
     const incoming = new Set(nodes.map((node) => node.id));
 
@@ -330,9 +331,10 @@ export class ViewportRenderer {
         this.groupViews.set(group.id, wrapper);
         this.scene.add(wrapper);
       }
-      wrapper.position.set(...group.transform.position);
-      wrapper.rotation.set(...group.transform.rotation);
-      wrapper.scale.set(...group.transform.scale);
+      const transform = animationPose.get(group.id) ?? group.transform;
+      wrapper.position.set(...transform.position);
+      wrapper.rotation.set(...transform.rotation);
+      wrapper.scale.set(...transform.scale);
       wrapper.visible = group.visible;
       wrapper.updateMatrixWorld(true);
     }
@@ -361,7 +363,7 @@ export class ViewportRenderer {
         parent.add(view.group);
       }
 
-      view.setTransform(node.transform);
+      view.setTransform(animationPose.get(node.id) ?? node.transform);
       view.setVisible(node.visible);
       view.refreshMesh();
       const isActive =

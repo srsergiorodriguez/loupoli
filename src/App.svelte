@@ -17,6 +17,7 @@
   import PaneHost from './lib/ui/Panels/PaneHost.svelte';
   import IconButton from './lib/ui/Primitives/IconButton.svelte';
   import TooltipLayer from './lib/ui/Primitives/TooltipLayer.svelte';
+  import AnimationTimeline from './lib/ui/Animation/AnimationTimeline.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
@@ -164,6 +165,8 @@
             Paint
           {:else if session.snapshot.workspace === 'light'}
             Light
+          {:else if session.snapshot.workspace === 'animation'}
+            Animate
           {:else if session.snapshot.workspace === 'render'}
             Render
           {:else}
@@ -182,11 +185,13 @@
         class="selection-mode-wrap"
         class:no-selection-mode={session.snapshot.activeEditor === 'paint' ||
           session.snapshot.workspace === 'light' ||
-          session.snapshot.workspace === 'render'}
+          session.snapshot.workspace === 'render' ||
+          session.snapshot.workspace === 'animation'}
       >
         {#if session.snapshot.activeEditor !== 'paint' &&
           session.snapshot.workspace !== 'light' &&
-          session.snapshot.workspace !== 'render'}
+          session.snapshot.workspace !== 'render' &&
+          session.snapshot.workspace !== 'animation'}
           <SelectionModeControl {session} />
         {/if}
         {#if session.snapshot.workspace !== 'render'}
@@ -231,10 +236,14 @@
       <TransformHud modal={session.snapshot.modalTransform} />
       {#if !session.snapshot.uvOpen &&
         session.snapshot.workspace !== 'light' &&
-        session.snapshot.workspace !== 'render'}
+        session.snapshot.workspace !== 'render' &&
+        session.snapshot.workspace !== 'animation'}
         <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />
+      {#if session.snapshot.workspace === 'animation'}
+        <AnimationTimeline {session} />
+      {/if}
     {:else}
       <section class="startup-error loupoli-panel" role="alert">
         <p class="error-kicker">Graphics unavailable</p>
@@ -282,7 +291,8 @@
   <ProjectBanner {session} />
   {#if session.snapshot.activeEditor !== 'paint' &&
     session.snapshot.workspace !== 'light' &&
-    session.snapshot.workspace !== 'render'}
+    session.snapshot.workspace !== 'render' &&
+    session.snapshot.workspace !== 'animation'}
     <ToolRail {session} onFocusViewport={focusViewport} />
   {/if}
   <Inspector {session} />

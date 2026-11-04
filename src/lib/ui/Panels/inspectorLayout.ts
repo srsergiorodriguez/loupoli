@@ -10,6 +10,7 @@ export type InspectorSectionId =
   | 'transform'
   | 'light'
   | 'camera'
+  | 'animation'
   | 'render'
   | 'selection'
   | 'mesh'
@@ -31,6 +32,7 @@ export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'scene', order: 10, defaultOpen: true },
   { id: 'light', requires: 'bakeLighting', order: 15, defaultOpen: true },
   { id: 'camera', requires: 'editCamera', order: 20, defaultOpen: true },
+  { id: 'animation', requires: 'editAnimation', order: 22, defaultOpen: true },
   { id: 'render', requires: 'editCamera', order: 25, defaultOpen: true },
   { id: 'transform', requires: 'edit3d', order: 20, defaultOpen: false },
   { id: 'selection', requires: 'select3d', order: 30, defaultOpen: true },

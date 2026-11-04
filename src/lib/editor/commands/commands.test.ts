@@ -5,6 +5,7 @@ import { SceneDocument } from '../../scene/SceneDocument';
 import { History } from '../History';
 import { deleteSelectedElements } from '../../geometry/topology';
 import { CreateMeshNodeCommand } from './CreateMeshNodeCommand';
+import { SetAnimationCommand } from './AnimationCommands';
 import {
   CreateCameraCommand,
   DeleteCameraCommand,
@@ -585,5 +586,34 @@ describe('scene commands and journal', () => {
     expect(document.cameras.some((item) => item.id === camera.id)).toBe(false);
     history.undo();
     expect(document.cameras.some((item) => item.id === camera.id)).toBe(true);
+  });
+
+  it('edits and replays animation tracks', () => {
+    const document = SceneDocument.createDefault();
+    const history = new History();
+    const before = document.animation.snapshot();
+    const track = document.animation.ensureTrack(document.nodes[0].id, 'node');
+    track.setKey(0, document.nodes[0].transform, 'linear');
+    track.setKey(12, {
+      position: [2, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1]
+    }, 'step');
+    const after = document.animation.snapshot();
+    const command = new SetAnimationCommand(
+      document.animation,
+      before,
+      after,
+      'Key transform'
+    );
+    history.execute(command);
+    expect(document.animation.getTrack(document.nodes[0].id)?.keyframes).toHaveLength(2);
+    expect(document.animation.getTrack(document.nodes[0].id)?.evaluate(12)?.position).toEqual([2, 0, 0]);
+    history.undo();
+    expect(document.animation.tracks).toHaveLength(0);
+    history.redo();
+    const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    applyJournalPatch(replay, command.journalPatch('forward'));
+    expect(replay.animation.getTrack(document.nodes[0].id)?.keyframes).toHaveLength(2);
   });
 });

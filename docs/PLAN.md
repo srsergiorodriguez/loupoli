@@ -1,6 +1,6 @@
 # loupoli — Master Delivery Plan
 
-**Status:** Phase 2, Phase 3, and Phase 4 are implemented for browser and native desktop builds; Phase 4 has a [conditional exit audit](./PHASE4_AUDIT.md). Phase 5A lighting, per-light hard/soft shadows, and direct-light texture baking are implemented in the dedicated Light workspace; see [Phase 5 lighting](./PHASE5_LIGHTING.md). Physical-iPad/WKWebView validation, soft shadows/AO, shape keys, and interchange remain.
+**Status:** Phase 2, Phase 3, and Phase 4 are implemented for browser and native desktop builds; Phase 4 has a [conditional exit audit](./PHASE4_AUDIT.md). Phase 5A lighting, per-light hard/soft shadows, and direct-light texture baking are implemented in the dedicated Light workspace; see [Phase 5 lighting](./PHASE5_LIGHTING.md). Physical-iPad/WKWebView validation, soft shadows/AO, shape keys, and interchange remain. Animation foundation and render still/frames/video capability are implemented.
 **Brand rule:** the name is always written `loupoli`, lowercase.
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.
 **Companion docs:** [Docs index](./README.md) ·  [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
@@ -257,7 +257,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 ### Phase 5 — Lighting, baking, shape keys, and interchange
 
-**5A implemented:** editable directional/point/ambient lighting, per-light hard shadows, Lit document-light preview, dedicated Light workspace, and direct-light texture baking. AO, shape keys, and interchange remain. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
+**5A implemented:** editable directional/point/ambient lighting, per-light hard shadows, Lit document-light preview, dedicated Light workspace, and direct-light texture baking. AO, shape keys, and interchange remain. Animation foundation and render still/frames/video capability are implemented. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 
 **Goal:** finish the asset loop: light it, animate it, move it in and out.
 
@@ -288,14 +288,14 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 ### Phase 6 — Render and publish
 
-**Status:** foundation implemented. Scene cameras, Render workspace, camera-driven clean preview, virtual/output resolution, nearest/smooth upscaling, and PNG still export are implemented. PNG sequence, WebM, and MP4 remain.
+**Status:** foundation implemented. Scene cameras, Render workspace, camera-driven clean preview, virtual/output resolution, nearest/smooth upscaling, PNG stills and frame sequences, and WebM/MP4 recording where the codec is supported are implemented. Native MP4 and camera animation remain.
 
 - Render workspace after Animation.
 - Document cameras with position, target, and FOV.
 - Virtual render target independent of viewport size.
 - Output resolution and upscaling.
 - Clean render pass with shadows and baked textures.
-- Still PNG first; frame sequence and video next.
+- Still PNG, PNG frame sequence, and capability-gated WebM/MP4.
 
 AO remains out of scope for now.
 

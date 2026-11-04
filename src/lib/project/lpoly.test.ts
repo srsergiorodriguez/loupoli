@@ -164,6 +164,23 @@ describe('.lpoly v4', () => {
     expect(decoded.document.cameras[0].fov).toBe(55);
   });
 
+  it('round-trips animation tracks and keys', () => {
+    const document = makeDocument();
+    const track = document.animation.ensureTrack(document.nodes[0].id, 'node');
+    track.setKey(0, document.nodes[0].transform, 'linear');
+    track.setKey(12, {
+      position: [3, 0, 1],
+      rotation: [0, 0.4, 0],
+      scale: [1, 1, 1]
+    }, 'step');
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    const restored = decoded.document.animation.getTrack(document.nodes[0].id);
+    expect(restored?.keyframes).toHaveLength(2);
+    expect(restored?.keyframes[1].frame).toBe(12);
+    expect(restored?.keyframes[1].interpolation).toBe('step');
+    expect(restored?.keyframes[1].transform.position).toEqual([3, 0, 1]);
+  });
+
   it('round-trips document lights and ambient settings', () => {
     const document = makeDocument();
     document.ambientColor = '#20242c';

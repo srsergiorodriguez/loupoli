@@ -190,6 +190,10 @@
   {:else if name === 'sync'}
     <path d="M20 7v5h-5M4 17v-5h5" />
     <path d="M6.2 8a7 7 0 0 1 11.5-1.5L20 9M4 15l2.3 2.5A7 7 0 0 0 17.8 16" />
+  {:else if name === 'play'}
+    <path d="M8 5l10 7-10 7z" fill="currentColor" stroke="none" />
+  {:else if name === 'pause'}
+    <path d="M8 5v14M16 5v14" />
   {:else if name === 'lock'}
     <rect x="5" y="10" width="14" height="10" rx="2" />
     <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />

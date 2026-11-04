@@ -47,6 +47,7 @@
     { id: 'uv', label: 'UV' },
     { id: 'paint', label: 'Paint' },
     { id: 'light', label: 'Light' },
+    { id: 'animation', label: 'Animate' },
     { id: 'render', label: 'Render' }
   ] as const;
 
@@ -56,6 +57,7 @@
       next === 'light' ||
       next === 'uv' ||
       next === 'paint' ||
+      next === 'animation' ||
       next === 'render'
     ) {
       session.setWorkspace(next);

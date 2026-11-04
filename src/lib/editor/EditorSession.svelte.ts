@@ -106,6 +106,9 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   ambientIntensity: 0.22,
   bakeBusy: false,
   renderBusy: false,
+  renderKind: 'still',
+  renderStartFrame: 0,
+  renderEndFrame: 48,
   renderVirtualWidth: 320,
   renderVirtualHeight: 180,
   renderOutputWidth: 1280,
@@ -114,6 +117,14 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   renderShading: 'lit',
   renderTransparent: false,
   renderBackground: '#121214',
+  animationFrame: 0,
+  animationStartFrame: 0,
+  animationEndFrame: 48,
+  animationFps: 24,
+  animationLoop: true,
+  animationPlaying: false,
+  animationTracks: [],
+  animationInterpolation: 'linear',
   groups: [],
   selectedNodeIds: [],
   additiveNodeSelection: false,
@@ -294,7 +305,7 @@ export class EditorSession {
     writePreference(UV_LAYOUT_STORAGE_KEY, this.snapshot.uvLayout);
   }
 
-  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint' | 'render'): void {
+  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'): void {
     this.runtime?.setWorkspace(workspace);
     writePreference(WORKSPACE_STORAGE_KEY, workspace);
   }
@@ -788,12 +799,57 @@ export class EditorSession {
     renderShading: 'lit' | 'texture' | 'solid';
     renderTransparent: boolean;
     renderBackground: string;
+    renderKind: 'still' | 'sequence' | 'webm' | 'mp4';
+    renderStartFrame: number;
+    renderEndFrame: number;
   }>): void {
     this.runtime?.updateRenderSettings(patch);
   }
 
   renderStill(): Promise<void> {
     return this.runtime?.renderStill() ?? Promise.resolve();
+  }
+
+  renderFrames(): Promise<void> {
+    return this.runtime?.renderFrames() ?? Promise.resolve();
+  }
+
+  renderVideo(): Promise<void> {
+    return this.runtime?.renderVideo() ?? Promise.resolve();
+  }
+
+  setAnimationFrame(frame: number): void {
+    this.runtime?.setAnimationFrame(frame);
+  }
+
+  setAnimationSettings(
+    patch: Partial<{ fps: number; startFrame: number; endFrame: number }>
+  ): void {
+    this.runtime?.setAnimationSettings(patch);
+  }
+
+  setAnimationLoop(loop: boolean): void {
+    this.runtime?.setAnimationLoop(loop);
+  }
+
+  setAnimationInterpolation(interpolation: 'step' | 'linear'): void {
+    this.runtime?.setAnimationInterpolation(interpolation);
+  }
+
+  keyActiveTransform(): void {
+    this.runtime?.keyActiveTransform();
+  }
+
+  deleteActiveAnimationKey(): void {
+    this.runtime?.deleteActiveAnimationKey();
+  }
+
+  playAnimation(): void {
+    this.runtime?.playAnimation();
+  }
+
+  pauseAnimation(): void {
+    this.runtime?.pauseAnimation();
   }
 
   setLightEnabled(id: string, enabled: boolean): void {

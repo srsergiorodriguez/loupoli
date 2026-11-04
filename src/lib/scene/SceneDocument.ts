@@ -12,6 +12,7 @@ import {
   SceneCamera,
   type CameraSummary
 } from './SceneCamera';
+import { SceneAnimation } from './SceneAnimation';
 import {
   createLightId,
   SceneLight,
@@ -31,6 +32,7 @@ export class SceneDocument {
   readonly groups: SceneGroup[] = [];
   readonly lights: SceneLight[] = [];
   readonly cameras: SceneCamera[] = [];
+  readonly animation = new SceneAnimation();
   ambientColor = '#ffffff';
   ambientIntensity = 0.22;
 
@@ -186,6 +188,11 @@ export class SceneDocument {
   /** Reactive-safe camera summaries. */
   cameraSummaries(): CameraSummary[] {
     return this.cameras.map((camera) => camera.snapshot());
+  }
+
+  /** Replace all animation state on project load or recovery. */
+  replaceAnimation(animation: SceneAnimation): void {
+    this.animation.apply(animation.snapshot());
   }
 
   /** Whether the document has no editable objects. */

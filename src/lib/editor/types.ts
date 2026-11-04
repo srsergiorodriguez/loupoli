@@ -3,6 +3,10 @@ import type { NodeSummary, NodeTransform, SelectionMode } from '../scene/MeshNod
 import type { GroupSummary } from '../scene/SceneGroup';
 import type { LightSummary } from '../scene/SceneLight';
 import type { CameraSummary } from '../scene/SceneCamera';
+import type {
+  AnimationInterpolation,
+  AnimationTargetKind
+} from '../scene/SceneAnimation';
 import type { RenderShading, RenderUpscale } from '../render/renderSettings';
 import type {
   Modifier,
@@ -75,7 +79,13 @@ export type UvSelectionMode = 'vertex' | 'edge' | 'face' | 'island';
 export type UvLayout = 'bottom' | 'side';
 
 /** The top-level modeling workspace. */
-export type Workspace = 'model' | 'light' | 'uv' | 'paint' | 'render';
+export type Workspace =
+  | 'model'
+  | 'light'
+  | 'uv'
+  | 'paint'
+  | 'animation'
+  | 'render';
 
 /** The pane that currently owns contextual selection and tool commands. */
 export type EditorPane = '3d' | 'uv' | 'paint';
@@ -145,6 +155,18 @@ export interface ProjectionPreview {
 }
 
 /** The complete small UI-facing projection of the plain editor runtime. */
+/** Reactive-safe animation track projection. */
+export interface AnimationTrackSummary {
+  readonly id: string;
+  readonly targetId: string;
+  readonly targetKind: AnimationTargetKind;
+  readonly targetName: string;
+  readonly keyframes: readonly {
+    readonly frame: number;
+    readonly interpolation: AnimationInterpolation;
+  }[];
+}
+
 export interface EditorSnapshot {
   readonly shading: ShadingMode;
   readonly transformMode: TransformMode;
@@ -229,6 +251,9 @@ export interface EditorSnapshot {
   readonly ambientIntensity: number;
   readonly bakeBusy: boolean;
   readonly renderBusy: boolean;
+  readonly renderKind: 'still' | 'sequence' | 'webm' | 'mp4';
+  readonly renderStartFrame: number;
+  readonly renderEndFrame: number;
   readonly renderVirtualWidth: number;
   readonly renderVirtualHeight: number;
   readonly renderOutputWidth: number;
@@ -237,6 +262,14 @@ export interface EditorSnapshot {
   readonly renderShading: RenderShading;
   readonly renderTransparent: boolean;
   readonly renderBackground: string;
+  readonly animationFrame: number;
+  readonly animationStartFrame: number;
+  readonly animationEndFrame: number;
+  readonly animationFps: number;
+  readonly animationLoop: boolean;
+  readonly animationPlaying: boolean;
+  readonly animationTracks: readonly AnimationTrackSummary[];
+  readonly animationInterpolation: AnimationInterpolation;
   readonly groups: readonly GroupSummary[];
   readonly selectedNodeIds: readonly string[];
   readonly additiveNodeSelection: boolean;

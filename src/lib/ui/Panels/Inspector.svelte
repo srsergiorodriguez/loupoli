@@ -33,6 +33,9 @@
     type ModifierKind
   } from '../../geometry/modifiers';
   import {
+    videoMimeFor
+  } from '../../render/videoExport';
+  import {
     PRIMITIVE_KINDS,
     PRIMITIVE_LABELS,
     type PrimitiveKind
@@ -78,6 +81,31 @@
   const cameras = $derived(session.snapshot.cameras);
   const activeCamera = $derived(
     cameras.find((camera) => camera.id === session.snapshot.activeCameraId) ?? null
+  );
+  const animationTracks = $derived(session.snapshot.animationTracks);
+  const renderKindOptions = $derived.by(() => {
+    const options: { value: string; label: string }[] = [
+      { value: 'still', label: 'Still PNG' },
+      { value: 'sequence', label: 'PNG frame sequence' }
+    ];
+    if (videoMimeFor('webm')) options.push({ value: 'webm', label: 'WebM video' });
+    if (videoMimeFor('mp4')) options.push({ value: 'mp4', label: 'MP4 video' });
+    return options;
+  });
+  const renderKindLabel = $derived(
+    renderKindOptions.find((option) => option.value === session.snapshot.renderKind)?.label ??
+      'Still PNG'
+  );
+  const animationTargetId = $derived(
+    session.snapshot.activeGroupId ?? session.snapshot.activeNodeId
+  );
+  const activeAnimationTrack = $derived(
+    animationTracks.find((track) => track.targetId === animationTargetId) ?? null
+  );
+  const currentKey = $derived(
+    activeAnimationTrack?.keyframes.find(
+      (key) => key.frame === Math.round(session.snapshot.animationFrame)
+    ) ?? null
   );
   const activeLight = $derived(
     lights.find((light) => light.id === session.snapshot.activeLightId) ?? null
@@ -644,6 +672,123 @@
     </InspectorSection>
 {/snippet}
 
+    {#snippet animationSection()}
+<InspectorSection
+      title="Animation"
+      meta={`${animationTracks.length} track${animationTracks.length === 1 ? '' : 's'}`}
+      open={sections.animation}
+      onToggle={(open) => setSection('animation', open)}
+    >
+      <div class="module-body">
+        <div class="render-field">
+          <span>Frames per second</span>
+          <NumberField
+            label="Frames per second"
+            value={session.snapshot.animationFps}
+            step={1}
+            precision={0}
+            min={1}
+            max={120}
+            onCommit={(value) => session.setAnimationSettings({ fps: value })}
+          />
+        </div>
+        <div class="render-field">
+          <span>Start frame</span>
+          <NumberField
+            label="Start frame"
+            value={session.snapshot.animationStartFrame}
+            step={1}
+            precision={0}
+            min={0}
+            onCommit={(value) => session.setAnimationSettings({ startFrame: value })}
+          />
+        </div>
+        <div class="render-field">
+          <span>End frame</span>
+          <NumberField
+            label="End frame"
+            value={session.snapshot.animationEndFrame}
+            step={1}
+            precision={0}
+            min={1}
+            onCommit={(value) => session.setAnimationSettings({ endFrame: value })}
+          />
+        </div>
+        <Switch
+          label="Loop playback"
+          checked={session.snapshot.animationLoop}
+          onChange={(value) => session.setAnimationLoop(value)}
+        />
+        <SelectField
+          label="New key interpolation"
+          value={session.snapshot.animationInterpolation}
+          options={[
+            { value: 'linear', label: 'Linear' },
+            { value: 'step', label: 'Step' }
+          ]}
+          onChange={(value) =>
+            session.setAnimationInterpolation(value as 'linear' | 'step')}
+        />
+        {#if animationTargetId}
+          <div class="texture-action-row">
+            <ActionButton
+              label="Key transform"
+              icon="plus"
+              onActivate={() => session.keyActiveTransform()}
+            />
+            <ActionButton
+              label="Delete key"
+              icon="trash"
+              variant="danger"
+              disabled={currentKey === null}
+              onActivate={() => session.deleteActiveAnimationKey()}
+            />
+          </div>
+        {:else}
+          <p class="hint">Select an object or group to key its transform.</p>
+        {/if}
+        {#if animationTracks.length > 0}
+          <div class="light-divider"></div>
+          <div class="animation-track-list">
+            {#each animationTracks as track (track.id)}
+              <OutlinerRow
+                active={activeAnimationTrack?.id === track.id}
+                showVisibility={false}
+                visible={true}
+                visibilityLabel={track.targetName}
+                selectLabel={`Select ${track.targetName}`}
+                onToggleVisibility={() => {}}
+                onSelect={() => {
+                  if (track.targetKind === 'node') session.selectNode(track.targetId);
+                  else session.selectGroup(track.targetId);
+                }}
+              >
+                <span class="object-glyph"><Icon name="play" size={12} /></span>
+                <span class="object-name">{track.targetName}</span>
+                <span class="object-kind">{track.keyframes.length} keys</span>
+              </OutlinerRow>
+            {/each}
+          </div>
+        {/if}
+        {#if activeAnimationTrack && activeAnimationTrack.keyframes.length > 0}
+          <div class="animation-keys">
+            {#each activeAnimationTrack.keyframes as key (key.frame)}
+              <button
+                type="button"
+                class="animation-key"
+                class:selected={key.frame === Math.round(session.snapshot.animationFrame)}
+                onclick={() => session.setAnimationFrame(key.frame)}
+              >
+                {key.frame}
+                <span>{key.interpolation}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </InspectorSection>
+    {/snippet}
+
     {#snippet cameraSection()}
 <InspectorSection
       title="Camera"
@@ -741,9 +886,18 @@
     >
       <div class="module-body">
         <div class="light-subhead">
-          <span>Still image</span>
-          <span class="texture-note">PNG</span>
+          <span>{renderKindLabel}</span>
+          <span class="texture-note">{session.snapshot.renderKind === 'still' ? 'PNG' : session.snapshot.renderKind.toUpperCase()}</span>
         </div>
+        <SelectField
+          label="Output kind"
+          value={session.snapshot.renderKind}
+          options={renderKindOptions}
+          onChange={(value) =>
+            session.updateRenderSettings({
+              renderKind: value as 'still' | 'sequence' | 'webm' | 'mp4'
+            })}
+        />
         <div class="render-field">
           <span>Virtual width</span>
           <NumberField
@@ -792,6 +946,35 @@
             onCommit={(value) => session.updateRenderSettings({ renderOutputHeight: value })}
           />
         </div>
+        {#if !videoMimeFor('mp4')}
+          <p class="texture-note">MP4 is not available in this WebView; use WebM or frames.</p>
+        {/if}
+        {#if session.snapshot.renderKind !== 'still'}
+          <div class="render-field">
+            <span>Start frame</span>
+            <NumberField
+              label="Render start frame"
+              value={session.snapshot.renderStartFrame}
+              step={1}
+              precision={0}
+              min={0}
+              onCommit={(value) =>
+                session.updateRenderSettings({ renderStartFrame: value })}
+            />
+          </div>
+          <div class="render-field">
+            <span>End frame</span>
+            <NumberField
+              label="Render end frame"
+              value={session.snapshot.renderEndFrame}
+              step={1}
+              precision={0}
+              min={1}
+              onCommit={(value) =>
+                session.updateRenderSettings({ renderEndFrame: value })}
+            />
+          </div>
+        {/if}
         <SelectField
           label="Upscale"
           value={session.snapshot.renderUpscale}
@@ -838,10 +1021,28 @@
         {/if}
         <div class="texture-action-row">
           <ActionButton
-            label={session.snapshot.renderBusy ? 'Rendering…' : 'Render PNG'}
+            label={session.snapshot.renderBusy
+              ? 'Rendering…'
+              : session.snapshot.renderKind === 'sequence'
+                ? 'Render frames'
+                : session.snapshot.renderKind === 'webm' ||
+                    session.snapshot.renderKind === 'mp4'
+                  ? `Render ${session.snapshot.renderKind.toUpperCase()}`
+                  : 'Render PNG'}
             icon="camera"
             disabled={activeCamera === null || session.snapshot.renderBusy}
-            onActivate={() => void session.renderStill()}
+            onActivate={() => {
+              if (session.snapshot.renderKind === 'sequence') {
+                void session.renderFrames();
+              } else if (
+                session.snapshot.renderKind === 'webm' ||
+                session.snapshot.renderKind === 'mp4'
+              ) {
+                void session.renderVideo();
+              } else {
+                void session.renderStill();
+              }
+            }}
           />
         </div>
       </div>
@@ -1904,6 +2105,7 @@
 
       {#each visibleSections as section (section)}
         {#if section === 'scene'}{@render sceneSection()}
+        {:else if section === 'animation'}{@render animationSection()}
         {:else if section === 'camera'}{@render cameraSection()}
         {:else if section === 'render'}{@render renderSection()}
         {:else if section === 'light'}{@render lightSection()}
@@ -2592,6 +2794,45 @@
 
   .render-field :global(.number-field) {
     max-width: 96px;
+  }
+
+  .animation-track-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .animation-keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: 112px;
+    overflow-y: auto;
+  }
+
+  .animation-key {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: var(--control-h);
+    padding: 0 7px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .animation-key span {
+    color: var(--text-tertiary);
+    font-size: 9px;
+  }
+
+  .animation-key.selected {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
   }
 
   .module-body {

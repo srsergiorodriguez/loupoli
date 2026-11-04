@@ -465,6 +465,7 @@ Implemented component files and local patterns:
 | `InlineNameField` | 4 | Scene, texture asset, and layer names | Shared borderless rename field with Enter/Escape handling |
 | `RenameNodeCommand` / `RenameGroupCommand` | 4 | Scene object and group rename | Undoable and journaled through `set-node-name` / `set-group-name` |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
+| `Animation` module | 5 | Dedicated Animate workspace | Transform keyframes, timeline, playback, and explicit animation Inspector |
 | `Camera and Render` module | 6 | Dedicated Render workspace | Scene-camera Inspector, virtual/output resolution, clean still render, camera-driven preview |
 | `Lighting` module | 5 | Dedicated Light workspace | Ambient + directional/point lights, viewport position/direction markers with arrow-tip aiming, shared outliner/naming/actions, hard/soft shadows in Lit and bake; AO deferred |
 | `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoly` v4 PNG chunks |

@@ -11,6 +11,7 @@ export type WorkspaceCapability =
   | 'paintProjected'
   | 'editRender'
   | 'editCamera'
+  | 'editAnimation'
   | 'editLighting'
   | 'bakeLighting'
   | 'navigate3d';
@@ -35,6 +36,7 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
     'navigate3d'
   ]),
   paint: new Set(['paintTexture', 'paintProjected', 'navigate3d']),
+  animation: new Set(['editAnimation', 'navigate3d']),
   render: new Set(['editCamera', 'navigate3d'])
 };
 

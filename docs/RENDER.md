@@ -1,6 +1,6 @@
 # Render workspace and camera
 
-**Status:** Foundation implemented. Scene cameras, camera-driven preview, virtual/output resolution, nearest/smooth upscaling, and a clean PNG still render are implemented. Frame sequences and WebM/MP4 video are the next Render milestones.
+**Status:** Camera and render foundation implemented. Scene cameras, camera-driven preview, virtual/output resolution, nearest/smooth upscaling, PNG stills, deterministic PNG frame sequences, and WebM/MP4 recording where the WebView supports the codec are implemented.
 
 ## Contents
 
@@ -8,7 +8,8 @@
 2. [Render workspace](#2-render-workspace)
 3. [Virtual resolution](#3-virtual-resolution)
 4. [Still output](#4-still-output)
-5. [Next](#5-next)
+5. [Video and sequences](#5-video-and-sequences)
+6. [Next](#6-next)
 
 ## 1. Camera
 
@@ -81,12 +82,18 @@ The still path:
 
 Rendered focus shadows are baked by the renderer's current light state; baked lighting remains a static-texture result.
 
-## 5. Next
+## 5. Video and sequences
 
-- Animation workspace and timeline
-- PNG frame sequence
-- WebM where `MediaRecorder` is available
-- MP4 through a platform encoder, with capability detection
-- Animation frame-range rendering
+- **PNG frame sequence:** renders each frame at the exact animation time, upscales it, and saves a folder on native platforms or a ZIP in the browser. Verified with a 64×36 sequence and valid PNG entries.
+- **WebM:** uses `MediaRecorder` on a canvas capture and is enabled only when the WebView reports support.
+- **MP4:** also uses `MediaRecorder` when the WebView supports an MP4 codec; otherwise the UI omits it and points to WebM/frames. Native AVFoundation encoding remains the reliable path for iPad production.
+- Video rendering is real-time driven by the animation FPS; it is not a production-grade offline encoder yet.
+- The Frame range is explicit and separate from the animation range.
+
+## 6. Next
+
+- Camera animation tracks
+- Native iPad/macOS MP4 encoder
+- Render progress/cancel UI and progress reporting
 
 AO remains deferred. Hard/soft shadows are already bakeable.
