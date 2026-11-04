@@ -19,7 +19,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Workspace Tabs** | Switch the working context | Model, UV, Paint, Light. Reserved IDs: Animation, Export |
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale |
 | **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), Loop (3D Edge only), All, Add, Sub |
-| **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock |
+| **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock; Light workspace adds selectable/draggable light markers |
 | **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, UV and Paint now; Animation later |
 | **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV and Paint |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |

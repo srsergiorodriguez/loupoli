@@ -713,6 +713,13 @@
             step={0.01}
             onChange={(value) => session.updateActiveLight({ intensity: value })}
           />
+          <Vector3Field
+            label="Position"
+            values={activeLight.position}
+            step={0.1}
+            precision={2}
+            onCommit={(value) => session.updateActiveLight({ position: value })}
+          />
           {#if activeLight.kind === 'directional'}
             <Vector3Field
               label="Direction"
@@ -720,14 +727,6 @@
               step={0.01}
               precision={2}
               onCommit={(value) => session.updateActiveLight({ direction: value })}
-            />
-          {:else}
-            <Vector3Field
-              label="Position"
-              values={activeLight.position}
-              step={0.1}
-              precision={2}
-              onCommit={(value) => session.updateActiveLight({ position: value })}
             />
           {/if}
           <div class="texture-action-row">

@@ -465,7 +465,7 @@ Implemented component files and local patterns:
 | `InlineNameField` | 4 | Scene, texture asset, and layer names | Shared borderless rename field with Enter/Escape handling |
 | `RenameNodeCommand` / `RenameGroupCommand` | 4 | Scene object and group rename | Undoable and journaled through `set-node-name` / `set-group-name` |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
-| `Lighting` module | 5 | Dedicated Light workspace | Ambient + directional/point lights, shared outliner/naming/actions, bake to a lighting texture layer; no shadows/AO yet |
+| `Lighting` module | 5 | Dedicated Light workspace | Ambient + directional/point lights, viewport position/direction markers, shared outliner/naming/actions, bake to a lighting texture layer; no shadows/AO yet |
 | `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoly` v4 PNG chunks |
 | `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, Paint toggle, brush color/size/opacity controls, and failure banner |
 | `TransformHud` | 2 | G/R/S readout | Bottom-center pill with target, axis, exact value, key hints |

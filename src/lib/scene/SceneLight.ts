@@ -69,7 +69,7 @@ export class SceneLight {
       color: '#fff4e0',
       intensity: 2.4,
       enabled: true,
-      position: [4, 4, 8],
+      position: [2, 2, 4],
       direction: [-0.35, 0.25, -1]
     });
   }

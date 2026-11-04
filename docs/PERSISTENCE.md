@@ -214,7 +214,7 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
         "color": "#fff4e0",
         "intensity": 2.4,
         "enabled": true,
-        "position": [4, 4, 8],
+        "position": [2, 2, 4],
         "direction": [-0.32, 0.23, -0.92]
       }
     ]

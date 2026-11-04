@@ -36,6 +36,7 @@ import type { SurfaceHit } from './SurfaceHit';
 import { CameraRig, type AxisProjection, type AxisName } from './CameraRig';
 import { ViewportGrid } from './Grid';
 import { MeshNodeView } from './MeshNodeView';
+import { LightGizmos } from './LightGizmos';
 import {
   createViewportMaterials,
   disposeViewportMaterials,
@@ -79,6 +80,7 @@ export class ViewportRenderer {
   private readonly resolveNodeAlphaMode: (node: MeshNode) => 'opaque' | 'cutout' | 'blend';
   private readonly groupViews = new Map<string, ThreeGroup>();
   private readonly objectGizmo: ObjectGizmo;
+  private readonly lightGizmos = new LightGizmos();
 
   private readonly vertexMaterial: PointsMaterial;
   private readonly selectedVertexMaterial: PointsMaterial;
@@ -268,6 +270,7 @@ export class ViewportRenderer {
       this.sceneAmbient,
       this.documentLightGroup
     );
+    this.scene.add(this.lightGizmos.group);
 
     this.resizeObserver = new ResizeObserver(this.handleWindowResize);
     // Observe the canvas itself, not its parent: the UV split changes the
@@ -477,6 +480,22 @@ export class ViewportRenderer {
     }
   }
 
+  /** Frame the active object together with visible light markers. */
+  frameLightWorkspace(): void {
+    const bounds = new Box3();
+    const view = this.activeView();
+    if (view) {
+      bounds.union(view.getWorldBounds());
+    }
+    if (this.lightGizmos.group.visible && this.lightGizmos.group.children.length > 0) {
+      bounds.union(new Box3().setFromObject(this.lightGizmos.group));
+    }
+    if (!bounds.isEmpty()) {
+      this.cameraRig.frame(bounds);
+      this.markCameraChanged();
+    }
+  }
+
   /** Orbit the camera by a CSS-pixel pointer delta. */
   orbit(dx: number, dy: number): void {
     this.cameraRig.orbit(dx, dy);
@@ -552,8 +571,11 @@ export class ViewportRenderer {
   setLighting(
     lights: readonly LightSummary[],
     ambientColor: string,
-    ambientIntensity: number
+    ambientIntensity: number,
+    activeLightId: string | null = null,
+    showLightGizmos = false
   ): void {
+    this.lightGizmos.sync(lights, activeLightId, showLightGizmos);
     for (const entry of this.documentLights) {
       entry.light.removeFromParent();
       entry.target?.removeFromParent();
@@ -667,6 +689,14 @@ export class ViewportRenderer {
       this.cameraRig.camera.position.distanceTo(origin) * 0.16
     );
     return { origin, quaternion, size };
+  }
+
+  /** Pick one visible light marker in the Light workspace. */
+  pickLight(clientX: number, clientY: number): string | null {
+    if (!this.setRayFromPointer(clientX, clientY)) {
+      return null;
+    }
+    return this.lightGizmos.pick(this.raycaster);
   }
 
   /** Pointer ray in world space for axis-constrained gizmo drags. */
@@ -913,6 +943,7 @@ export class ViewportRenderer {
     this.groupViews.clear();
     this.scene.remove(this.objectGizmo.group);
     this.objectGizmo.dispose();
+    this.lightGizmos.dispose();
 
     this.vertexMaterial.dispose();
     this.selectedVertexMaterial.dispose();

@@ -63,14 +63,20 @@ Light creation, deletion, editing, and ambient changes are undoable commands wit
 
 ![Light workspace](media/light-mode.png)
 
+Light markers show each light’s editor position in the viewport. Directional lights also show a direction arrow; their position is a marker anchor, while only their direction affects lighting. Point-light position affects lighting directly. Markers are billboard sprites: click one to select it, drag it to move the light position, and press Escape while dragging to cancel. The Light workspace frames the active object together with every visible marker.
+
+![Light markers and drag](media/light-markers.png)
+
 `Light` is a first-class workspace tab after `Paint`.
 
-- 3D viewport
+- 3D viewport with light markers
 - Lit preview by default
 - Tool Rail, Selection Bar, ActionDock, and mesh-edit Inspector sections are hidden
 - Scene outliner remains available to choose the bake target object
 - Lighting Inspector owns add/edit/delete and ambient controls
 - Visibility uses the shared outliner eye
+- Light markers show position; directional markers add a direction arrow
+- Point/directional marker drag updates position as one undoable command
 - Naming uses `InlineNameField`
 - Actions use shared `ActionButton`/`ActionMenu` primitives
 

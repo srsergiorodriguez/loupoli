@@ -158,6 +158,7 @@ import {
   type AmbientLightSnapshot
 } from './commands/LightCommands';
 import type { LightKind, LightSnapshot } from '../scene/SceneLight';
+import type { SceneLight } from '../scene/SceneLight';
 import {
   decodeLpoly,
   encodeLpoly,
@@ -201,6 +202,15 @@ interface VertexDrag {
   readonly startClientX: number;
   readonly startClientY: number;
   readonly plane: Plane;
+  readonly offset: Vector3;
+}
+
+/** Active drag of a light marker in the Light workspace. */
+interface LightDrag {
+  readonly pointerId: number;
+  readonly light: SceneLight;
+  readonly before: LightSnapshot;
+  readonly plane: import('three').Plane;
   readonly offset: Vector3;
 }
 
@@ -459,6 +469,7 @@ export class EditorRuntime {
   private lastUvSourceSignature = '';
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
+  private lightDrag: LightDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
   private selectionGizmoDrag: SelectionGizmoDrag | null = null;
   private disposed = false;
@@ -1262,6 +1273,9 @@ export class EditorRuntime {
       // Light workspace after closing a pane that was open on entry.
       this.workspace = workspace;
       this.syncScene();
+      if (workspace === 'light') {
+        this.renderer.frameLightWorkspace();
+      }
       this.publish();
       return;
     }
@@ -3549,6 +3563,7 @@ export class EditorRuntime {
     if (this.activeNodeId === null && this.selectedNodeIds.size > 0) {
       this.activeNodeId = [...this.selectedNodeIds][0] ?? null;
     }
+    this.syncScene();
     this.publish();
   }
 
@@ -3560,6 +3575,8 @@ export class EditorRuntime {
     );
     this.activeLightId = light.id;
     this.activeGroupId = null;
+    this.syncScene();
+    this.renderer.frameLightWorkspace();
     this.publish();
   }
 
@@ -4856,6 +4873,13 @@ export class EditorRuntime {
     clientY: number,
     additive = false
   ): void {
+    if (this.workspace === 'light') {
+      const lightId = this.renderer.pickLight(clientX, clientY);
+      if (lightId) {
+        this.selectLight(lightId);
+        return;
+      }
+    }
     const before = this.captureSelection();
     const node = this.getActiveNode();
     if (!node) {
@@ -4992,6 +5016,76 @@ export class EditorRuntime {
     this.selection.setValues(edges);
   }
 
+  private beginLightDrag(sample: PointerSample): boolean {
+    const lightId = this.renderer.pickLight(sample.clientX, sample.clientY);
+    if (!lightId) {
+      return false;
+    }
+    const light = this.document.getLight(lightId);
+    if (!light) {
+      return false;
+    }
+    this.selectLight(light.id);
+    const point = new Vector3(
+      light.position[0],
+      light.position[1],
+      light.position[2]
+    );
+    const plane = this.renderer.createCameraFacingPlane(point);
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      plane
+    );
+    if (!hit) {
+      return false;
+    }
+    this.lightDrag = {
+      pointerId: sample.pointerId,
+      light,
+      before: light.snapshot(),
+      plane,
+      offset: point.sub(hit)
+    };
+    return true;
+  }
+
+  private moveLightDrag(sample: PointerSample): void {
+    const drag = this.lightDrag;
+    if (!drag || drag.pointerId !== sample.pointerId) {
+      return;
+    }
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      drag.plane
+    );
+    if (!hit) {
+      return;
+    }
+    hit.add(drag.offset);
+    drag.light.position = [hit.x, hit.y, hit.z];
+    this.syncScene();
+    this.publish();
+  }
+
+  private finishLightDrag(): void {
+    const drag = this.lightDrag;
+    if (!drag) {
+      return;
+    }
+    this.lightDrag = null;
+    const after = drag.light.snapshot();
+    if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      this.history.execute(
+        new UpdateLightCommand(drag.light, drag.before, after)
+      );
+    } else {
+      this.syncScene();
+      this.publish();
+    }
+  }
+
   private beginToolPointer(sample: PointerSample): boolean {
     this.pointerSelectionHit = false;
     const before = this.captureSelection();
@@ -5001,8 +5095,12 @@ export class EditorRuntime {
   }
 
   private beginToolPointerInternal(sample: PointerSample): boolean {
-    if (this.drag || this.gizmoDrag) {
+    if (this.drag || this.gizmoDrag || this.lightDrag) {
       this.cancelToolPointer();
+    }
+
+    if (this.workspace === 'light') {
+      return this.beginLightDrag(sample);
     }
 
     if (this.workspace === 'paint') {
@@ -5188,6 +5286,10 @@ export class EditorRuntime {
   }
 
   private moveToolPointer(sample: PointerSample): void {
+    if (this.lightDrag && this.lightDrag.pointerId === sample.pointerId) {
+      this.moveLightDrag(sample);
+      return;
+    }
     if (this.projectedPaint || this.projectedShape) {
       this.updateProjectionPaint(sample);
       return;
@@ -5327,6 +5429,10 @@ export class EditorRuntime {
   }
 
   private endToolPointer(sample: PointerSample): void {
+    if (this.lightDrag && this.lightDrag.pointerId === sample.pointerId) {
+      this.finishLightDrag();
+      return;
+    }
     if (this.projectedPaint || this.projectedShape) {
       this.finishProjectionPaint();
       return;
@@ -5377,6 +5483,14 @@ export class EditorRuntime {
   }
 
   private cancelToolPointer(): void {
+    if (this.lightDrag) {
+      const drag = this.lightDrag;
+      this.lightDrag = null;
+      drag.light.apply(drag.before);
+      this.syncScene();
+      this.publish();
+      return;
+    }
     if (this.projectedPaint || this.projectedShape) {
       this.cancelProjectionPaint();
       return;
@@ -7029,7 +7143,9 @@ export class EditorRuntime {
     this.renderer.setLighting(
       this.document.lightSummaries(),
       this.document.ambientColor,
-      this.document.ambientIntensity
+      this.document.ambientIntensity,
+      this.activeLightId,
+      this.workspace === 'light'
     );
     this.renderer.syncScene(
       this.document.nodes,
