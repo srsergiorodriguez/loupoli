@@ -237,6 +237,7 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
       "primitive": "quadsphere",
       "visible": true,
       "textureId": "texasset-1",
+      "materialPalette": ["#c8c2ad"],
       "transform": {
         "position": [0, 0, 0],
         "rotation": [0, 0, 0],
@@ -273,7 +274,7 @@ For each node, in order:
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, lights, ambient settings, and render cameras are part of `.lpoly` v4 and the v4 autosave checkpoint.
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, simple material palettes, lights, ambient settings, render cameras, and animation are part of `.lpoly` v4 and the v4 autosave checkpoint.
 
 Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip.
 

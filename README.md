@@ -6,7 +6,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Documentation:** Start with the [documentation index](docs/README.md) for ownership and reading order.
 
-**Status:** Phase 2, the Phase 3 foundations, and Phase 4 texturing are feature-complete. Phase 4 has a conditional exit audit. Phase 5A lighting, per-light hard/soft shadows, direct-light texture baking, scene cameras, Render workspace stills/frames/video capability, and transform animation are implemented; camera animation, AO, shape keys, and interchange remain.
+**Status:** Phase 2, the Phase 3 foundations, and Phase 4 texturing are feature-complete. Phase 4 has a conditional exit audit. Phase 5A lighting, per-light hard/soft shadows, direct-light texture baking, scene cameras, Render workspace stills/frames/video capability, transform animation, and OBJ/GLB interchange are implemented; camera animation, AO, shape keys, and richer interchange remain.
 
 ![Current loupoli desktop viewport with the selection gizmo and ActionDock](docs/media/desktop-overview.png)
 
