@@ -2311,7 +2311,9 @@ export class EditorRuntime {
     y: number,
     width: number,
     height: number,
-    pressure: number
+    pressure: number,
+    tiltX = 0,
+    tiltY = 0
   ): boolean {
     if (!this.uvOpen || !this.uvPaintMode) {
       return false;
@@ -2343,7 +2345,7 @@ export class EditorRuntime {
       this.paintViewState()
     );
     const engine = new PaintEngine(asset, layerId, this.paintSettings(radius));
-    if (!engine.begin({ x: point.x, y: point.y, pressure })) {
+    if (!engine.begin({ x: point.x, y: point.y, pressure, tiltX, tiltY })) {
       return false;
     }
     this.paintEngine = engine;
@@ -2451,7 +2453,9 @@ export class EditorRuntime {
     const point = {
       x: hit.uv[0] * asset.width,
       y: (1 - hit.uv[1]) * asset.height,
-      pressure: sample.pressure
+      pressure: sample.pressure,
+      tiltX: sample.tiltX,
+      tiltY: sample.tiltY
     };
     if (!engine.begin(point)) {
       return false;
@@ -2582,7 +2586,9 @@ export class EditorRuntime {
     const point = {
       x: hit.uv[0] * state.asset.width,
       y: (1 - hit.uv[1]) * state.asset.height,
-      pressure: sample.pressure
+      pressure: sample.pressure,
+      tiltX: sample.tiltX,
+      tiltY: sample.tiltY
     };
     this.surfaceCursor = {
       x: sample.clientX,
@@ -2642,7 +2648,9 @@ export class EditorRuntime {
     y: number,
     width: number,
     height: number,
-    pressure: number
+    pressure: number,
+    tiltX = 0,
+    tiltY = 0
   ): void {
     if (!this.paintEngine) {
       return;
@@ -2661,7 +2669,7 @@ export class EditorRuntime {
     if (!point) {
       return;
     }
-    this.paintEngine.update({ x: point.x, y: point.y, pressure });
+    this.paintEngine.update({ x: point.x, y: point.y, pressure, tiltX, tiltY });
     this.uvRevision += 1;
     this.renderer.refreshTexture();
     this.publish();

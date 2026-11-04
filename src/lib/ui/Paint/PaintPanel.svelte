@@ -88,6 +88,12 @@
       : 1;
   }
 
+  function tiltOf(event: PointerEvent): { x: number; y: number } {
+    return event.pointerType === 'pen'
+      ? { x: event.tiltX, y: event.tiltY }
+      : { x: 0, y: 0 };
+  }
+
   function pointerDown(event: PointerEvent): void {
     if (event.pointerType === 'touch') {
       const point = localPoint(event);
@@ -119,6 +125,7 @@
     session.setActiveEditor('paint');
     canvas.focus({ preventScroll: true });
     const point = localPoint(event);
+    const tilt = tiltOf(event);
     brushX = point.x;
     brushY = point.y;
     brushVisible = true;
@@ -128,7 +135,9 @@
         point.y,
         width,
         height,
-        pressureOf(event)
+        pressureOf(event),
+        tilt.x,
+        tilt.y
       )
     ) {
       return;
@@ -157,6 +166,7 @@
     }
     event.preventDefault();
     const point = localPoint(event);
+    const tilt = tiltOf(event);
     brushX = point.x;
     brushY = point.y;
     session.updateTexturePaint(
@@ -164,7 +174,9 @@
       point.y,
       width,
       height,
-      pressureOf(event)
+      pressureOf(event),
+      tilt.x,
+      tilt.y
     );
   }
 

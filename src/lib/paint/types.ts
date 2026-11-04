@@ -31,4 +31,6 @@ export interface PaintSample {
   readonly x: number;
   readonly y: number;
   readonly pressure: number;
+  readonly tiltX?: number;
+  readonly tiltY?: number;
 }

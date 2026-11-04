@@ -298,10 +298,20 @@ export class EditorSession {
     y: number,
     width: number,
     height: number,
-    pressure: number
+    pressure: number,
+    tiltX = 0,
+    tiltY = 0
   ): boolean {
     return (
-      this.runtime?.beginTexturePaint(x, y, width, height, pressure) ?? false
+      this.runtime?.beginTexturePaint(
+        x,
+        y,
+        width,
+        height,
+        pressure,
+        tiltX,
+        tiltY
+      ) ?? false
     );
   }
 
@@ -310,9 +320,19 @@ export class EditorSession {
     y: number,
     width: number,
     height: number,
-    pressure: number
+    pressure: number,
+    tiltX = 0,
+    tiltY = 0
   ): void {
-    this.runtime?.updateTexturePaint(x, y, width, height, pressure);
+    this.runtime?.updateTexturePaint(
+      x,
+      y,
+      width,
+      height,
+      pressure,
+      tiltX,
+      tiltY
+    );
   }
 
   finishTexturePaint(): void {

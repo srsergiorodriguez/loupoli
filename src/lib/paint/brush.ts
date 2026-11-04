@@ -2,6 +2,12 @@ import type { PaintSettings } from './types';
 
 type BrushContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
+/** Pen tilt in degrees, used to squash the stamp into an ellipse. */
+export interface BrushTilt {
+  readonly x: number;
+  readonly y: number;
+}
+
 /** Clamp a value into a closed numeric range. */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -31,7 +37,8 @@ export function drawStamp(
   settings: PaintSettings,
   pressure: number,
   random: () => number,
-  erase = false
+  erase = false,
+  tilt?: BrushTilt
 ): { minX: number; minY: number; maxX: number; maxY: number } {
   const pressureScale = 0.35 + clamp(pressure, 0, 1) * 0.65;
   const noise = clamp(settings.noise, 0, 1);
@@ -47,24 +54,45 @@ export function drawStamp(
   const cy = y + jitterY;
   const hardness = clamp(settings.hardness, 0.01, 1);
   const inner = r * Math.max(0.01, hardness * 0.96);
+  const tiltMagnitude = clamp(
+    Math.hypot(tilt?.x ?? 0, tilt?.y ?? 0) / 90,
+    0,
+    1
+  );
+  const tiltAspect = 1 - tiltMagnitude * 0.55;
+  const tiltAngle = Math.atan2(tilt?.y ?? 0, tilt?.x ?? 0);
 
   context.save();
   context.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
   context.globalAlpha = clamp(alpha, 0, 1);
+  if (tiltMagnitude > 0.01) {
+    context.translate(cx, cy);
+    context.rotate(tiltAngle);
+    context.scale(1, tiltAspect);
+  }
+  const stampX = tiltMagnitude > 0.01 ? 0 : cx;
+  const stampY = tiltMagnitude > 0.01 ? 0 : cy;
   if (hardness >= 0.995) {
     context.fillStyle = erase ? '#000000' : settings.color;
     context.beginPath();
-    context.arc(cx, cy, r, 0, Math.PI * 2);
+    context.arc(stampX, stampY, r, 0, Math.PI * 2);
     context.fill();
   } else {
-    const gradient = context.createRadialGradient(cx, cy, inner, cx, cy, r);
+    const gradient = context.createRadialGradient(
+      stampX,
+      stampY,
+      inner,
+      stampX,
+      stampY,
+      r
+    );
     const color = erase ? '0,0,0' : hexRgb(settings.color);
     gradient.addColorStop(0, `rgba(${color},${alpha})`);
     gradient.addColorStop(1, `rgba(${color},0)`);
     context.globalAlpha = 1;
     context.fillStyle = gradient;
     context.beginPath();
-    context.arc(cx, cy, r, 0, Math.PI * 2);
+    context.arc(stampX, stampY, r, 0, Math.PI * 2);
     context.fill();
   }
   context.restore();
@@ -87,7 +115,8 @@ export function drawStampLine(
   settings: PaintSettings,
   pressure: number,
   random: () => number,
-  erase = false
+  erase = false,
+  tilt?: BrushTilt
 ): { minX: number; minY: number; maxX: number; maxY: number } {
   const length = Math.hypot(toX - fromX, toY - fromY);
   const spacing = Math.max(1, radius * 2 * clamp(settings.spacing, 0.02, 1));
@@ -108,7 +137,8 @@ export function drawStampLine(
       settings,
       pressure,
       random,
-      erase
+      erase,
+      tilt
     );
     bounds = {
       minX: Math.min(bounds.minX, stamp.minX),

@@ -261,7 +261,9 @@ export class PaintEngine {
     const filtered: PaintSample = {
       x: target.x + (to.x - target.x) * (1 - smoothing),
       y: target.y + (to.y - target.y) * (1 - smoothing),
-      pressure: to.pressure
+      pressure: to.pressure,
+      tiltX: to.tiltX,
+      tiltY: to.tiltY
     };
     const last = this.lastStamp ?? from;
     const margin = this.settings.radius * (1 + this.settings.noise) + 2;
@@ -281,7 +283,8 @@ export class PaintEngine {
       this.settings,
       to.pressure,
       this.random,
-      this.settings.tool === 'eraser'
+      this.settings.tool === 'eraser',
+      { x: to.tiltX ?? 0, y: to.tiltY ?? 0 }
     );
     this.lastStamp = filtered;
     this.filtered = filtered;
