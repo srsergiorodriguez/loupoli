@@ -1,5 +1,6 @@
 /** The local icon registry. No icon package is used. */
 export type IconName =
+  | 'camera'
   | 'cursor'
   | 'frame'
   | 'undo'

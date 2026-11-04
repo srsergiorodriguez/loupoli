@@ -12,6 +12,7 @@ export interface LightSnapshot {
   readonly intensity: number;
   readonly enabled: boolean;
   readonly castShadows: boolean;
+  readonly shadowSoftness: number;
   readonly position: Vec3;
   readonly direction: Vec3;
 }
@@ -48,6 +49,7 @@ export class SceneLight {
   intensity = 1;
   enabled = true;
   castShadows = true;
+  shadowSoftness = 0.35;
   position: Vec3 = [0, 0, 4];
   direction: Vec3 = [0, 0, -1];
 
@@ -55,6 +57,7 @@ export class SceneLight {
     snapshot: Omit<LightSnapshot, 'direction' | 'castShadows'> & {
       direction?: Vec3;
       castShadows?: boolean;
+      shadowSoftness?: number;
     }
   ) {
     this.id = snapshot.id;
@@ -64,6 +67,7 @@ export class SceneLight {
     this.intensity = snapshot.intensity;
     this.enabled = snapshot.enabled;
     this.castShadows = snapshot.castShadows ?? true;
+    this.shadowSoftness = snapshot.shadowSoftness ?? 0.35;
     this.position = cloneVec3(snapshot.position);
     this.direction = normalizeLightDirection(snapshot.direction ?? [0, 0, -1]);
   }
@@ -78,6 +82,7 @@ export class SceneLight {
       intensity: 2.4,
       enabled: true,
       castShadows: true,
+      shadowSoftness: 0.35,
       position: [2, 2, 4],
       direction: [-0.35, 0.25, -1]
     });
@@ -98,6 +103,7 @@ export class SceneLight {
       intensity: this.intensity,
       enabled: this.enabled,
       castShadows: this.castShadows,
+      shadowSoftness: this.shadowSoftness,
       position: cloneVec3(this.position),
       direction: cloneVec3(this.direction)
     };
@@ -110,6 +116,7 @@ export class SceneLight {
     this.intensity = snapshot.intensity;
     this.enabled = snapshot.enabled;
     this.castShadows = snapshot.castShadows ?? true;
+    this.shadowSoftness = snapshot.shadowSoftness ?? 0.35;
     this.position = cloneVec3(snapshot.position);
     this.direction = normalizeLightDirection(snapshot.direction);
   }

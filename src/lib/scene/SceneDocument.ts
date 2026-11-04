@@ -8,6 +8,11 @@ import { applyDefaultSeams } from '../geometry/defaultSeams';
 import { MeshNode, type NodeSummary } from './MeshNode';
 import { SceneGroup, type GroupSummary } from './SceneGroup';
 import {
+  createCameraId,
+  SceneCamera,
+  type CameraSummary
+} from './SceneCamera';
+import {
   createLightId,
   SceneLight,
   type LightKind,
@@ -24,6 +29,7 @@ export class SceneDocument {
   readonly nodes: MeshNode[] = [];
   readonly groups: SceneGroup[] = [];
   readonly lights: SceneLight[] = [];
+  readonly cameras: SceneCamera[] = [];
   ambientColor = '#ffffff';
   ambientIntensity = 0.22;
 
@@ -39,6 +45,7 @@ export class SceneDocument {
       new MeshNode(mesh, kind, PRIMITIVE_LABELS[kind], undefined, textureId)
     );
     document.insertLight(SceneLight.sun());
+    document.insertCamera(SceneCamera.default());
     return document;
   }
 
@@ -84,6 +91,7 @@ export class SceneDocument {
       intensity: kind === 'directional' ? 2.2 : 3.5,
       enabled: true,
       castShadows: true,
+      shadowSoftness: 0.35,
       position: kind === 'point' ? [0, 0, 4] : [4, 4, 8],
       direction: [0, 0, -1]
     });
@@ -119,6 +127,64 @@ export class SceneDocument {
   /** Reactive-safe light summaries. */
   lightSummaries(): LightSummary[] {
     return this.lights.map((light) => light.snapshot());
+  }
+
+  /** Find one render camera by id. */
+  getCamera(id: string | null): SceneCamera | null {
+    if (id === null) {
+      return null;
+    }
+    return this.cameras.find((camera) => camera.id === id) ?? null;
+  }
+
+  /** Create a uniquely named camera without inserting it. */
+  createCamera(name = `Camera ${this.cameras.length + 1}`): SceneCamera {
+    const names = new Set(this.cameras.map((camera) => camera.name));
+    let candidate = name;
+    let index = 2;
+    while (names.has(candidate)) {
+      candidate = `${name} ${index}`;
+      index += 1;
+    }
+    return new SceneCamera({
+      id: createCameraId(),
+      name: candidate,
+      position: [4, -6, 4],
+      target: [0, 0, 0],
+      fov: 42
+    });
+  }
+
+  /** Insert one camera at a stable index. */
+  insertCamera(camera: SceneCamera, index = this.cameras.length): void {
+    if (this.getCamera(camera.id)) {
+      throw new Error(`Scene already contains camera ${camera.id}.`);
+    }
+    const clamped = Math.max(0, Math.min(index, this.cameras.length));
+    this.cameras.splice(clamped, 0, camera);
+  }
+
+  /** Remove one camera and return its prior index for localized undo. */
+  removeCamera(id: string): { camera: SceneCamera; index: number } | null {
+    const index = this.cameras.findIndex((camera) => camera.id === id);
+    if (index < 0) {
+      return null;
+    }
+    const [camera] = this.cameras.splice(index, 1);
+    return { camera, index };
+  }
+
+  /** Replace the camera collection, used by project load and recovery. */
+  replaceCameras(cameras: readonly SceneCamera[]): void {
+    this.cameras.length = 0;
+    for (const camera of cameras) {
+      this.cameras.push(camera);
+    }
+  }
+
+  /** Reactive-safe camera summaries. */
+  cameraSummaries(): CameraSummary[] {
+    return this.cameras.map((camera) => camera.snapshot());
   }
 
   /** Whether the document has no editable objects. */

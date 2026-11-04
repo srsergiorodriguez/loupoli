@@ -5,6 +5,11 @@ import { SceneDocument } from '../../scene/SceneDocument';
 import { History } from '../History';
 import { deleteSelectedElements } from '../../geometry/topology';
 import { CreateMeshNodeCommand } from './CreateMeshNodeCommand';
+import {
+  CreateCameraCommand,
+  DeleteCameraCommand,
+  UpdateCameraCommand
+} from './CameraCommands';
 import { ReplaceMeshCommand } from './ReplaceMeshCommand';
 import { JoinNodesCommand } from './JoinNodesCommand';
 import { joinMeshNodes } from '../joinMeshes';
@@ -525,7 +530,8 @@ describe('scene commands and journal', () => {
       name: 'Key lamp',
       intensity: 4,
       color: '#ff8844',
-      castShadows: false
+      castShadows: false,
+      shadowSoftness: 0.6
     };
     const update = new UpdateLightCommand(light, before, after);
     history.execute(update);
@@ -534,6 +540,7 @@ describe('scene commands and journal', () => {
     applyJournalPatch(replay, update.journalPatch('forward'));
     expect(replay.lights.at(-1)?.name).toBe('Key lamp');
     expect(replay.lights.at(-1)?.castShadows).toBe(false);
+    expect(replay.lights.at(-1)?.shadowSoftness).toBeCloseTo(0.6);
     const remove = new DeleteLightCommand(document, light, document.lights.length - 1);
     history.execute(remove);
     expect(document.lights.some((item) => item.id === light.id)).toBe(false);
@@ -548,5 +555,35 @@ describe('scene commands and journal', () => {
     expect(document.ambientColor).toBe('#ffeedd');
     applyJournalPatch(replay, ambient.journalPatch('forward'));
     expect(replay.ambientIntensity).toBe(0.4);
+  });
+
+  it('creates, edits, deletes, and replays cameras', () => {
+    const document = SceneDocument.createDefault();
+    const history = new History();
+    const camera = document.createCamera();
+    camera.name = 'Hero';
+    const create = new CreateCameraCommand(
+      document,
+      camera,
+      document.cameras.length
+    );
+    history.execute(create);
+    expect(document.cameras.at(-1)?.id).toBe(camera.id);
+    const before = camera.snapshot();
+    const after = { ...before, fov: 62, name: 'Hero cam' };
+    history.execute(new UpdateCameraCommand(camera, before, after));
+    expect(camera.fov).toBe(62);
+    const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    applyJournalPatch(
+      replay,
+      new UpdateCameraCommand(camera, before, after).journalPatch('forward')
+    );
+    expect(replay.cameras.at(-1)?.name).toBe('Hero cam');
+    history.execute(
+      new DeleteCameraCommand(document, camera, document.cameras.length - 1)
+    );
+    expect(document.cameras.some((item) => item.id === camera.id)).toBe(false);
+    history.undo();
+    expect(document.cameras.some((item) => item.id === camera.id)).toBe(true);
   });
 });

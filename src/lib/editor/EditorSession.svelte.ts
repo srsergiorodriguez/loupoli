@@ -100,9 +100,20 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   activeGroupId: null,
   activeLightId: null,
   lights: [],
+  activeCameraId: null,
+  cameras: [],
   ambientColor: '#ffffff',
   ambientIntensity: 0.22,
   bakeBusy: false,
+  renderBusy: false,
+  renderVirtualWidth: 320,
+  renderVirtualHeight: 180,
+  renderOutputWidth: 1280,
+  renderOutputHeight: 720,
+  renderUpscale: 'nearest',
+  renderShading: 'lit',
+  renderTransparent: false,
+  renderBackground: '#121214',
   groups: [],
   selectedNodeIds: [],
   additiveNodeSelection: false,
@@ -283,7 +294,7 @@ export class EditorSession {
     writePreference(UV_LAYOUT_STORAGE_KEY, this.snapshot.uvLayout);
   }
 
-  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint'): void {
+  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint' | 'render'): void {
     this.runtime?.setWorkspace(workspace);
     writePreference(WORKSPACE_STORAGE_KEY, workspace);
   }
@@ -745,6 +756,46 @@ export class EditorSession {
     return this.runtime?.bakeLighting() ?? Promise.resolve();
   }
 
+  selectCamera(id: string): void {
+    this.runtime?.selectCamera(id);
+  }
+
+  addCameraFromCurrentView(): void {
+    this.runtime?.addCameraFromCurrentView();
+  }
+
+  updateActiveCamera(
+    patch: Partial<{
+      name: string;
+      position: [number, number, number];
+      target: [number, number, number];
+      fov: number;
+    }>
+  ): void {
+    this.runtime?.updateActiveCamera(patch);
+  }
+
+  deleteActiveCamera(): void {
+    this.runtime?.deleteActiveCamera();
+  }
+
+  updateRenderSettings(patch: Partial<{
+    renderVirtualWidth: number;
+    renderVirtualHeight: number;
+    renderOutputWidth: number;
+    renderOutputHeight: number;
+    renderUpscale: 'nearest' | 'smooth';
+    renderShading: 'lit' | 'texture' | 'solid';
+    renderTransparent: boolean;
+    renderBackground: string;
+  }>): void {
+    this.runtime?.updateRenderSettings(patch);
+  }
+
+  renderStill(): Promise<void> {
+    return this.runtime?.renderStill() ?? Promise.resolve();
+  }
+
   setLightEnabled(id: string, enabled: boolean): void {
     this.runtime?.setLightEnabled(id, enabled);
   }
@@ -756,6 +807,7 @@ export class EditorSession {
       intensity: number;
       enabled: boolean;
       castShadows: boolean;
+      shadowSoftness: number;
       position: [number, number, number];
       direction: [number, number, number];
     }>

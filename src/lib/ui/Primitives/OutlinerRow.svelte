@@ -16,6 +16,8 @@
     nodeId?: string;
     textureLayerId?: string;
     lightId?: string;
+    cameraId?: string;
+    showVisibility?: boolean;
     dragLabel?: string;
     dragTitle?: string;
     dragDisabled?: boolean;
@@ -40,6 +42,8 @@
     nodeId = undefined,
     textureLayerId = undefined,
     lightId = undefined,
+    cameraId = undefined,
+    showVisibility = true,
     dragLabel = 'Drag to reorder',
     dragTitle = 'Drag to reorder',
     dragDisabled = false,
@@ -66,6 +70,7 @@
   data-node-id={nodeId}
   data-texture-layer-id={textureLayerId}
   data-light-id={lightId}
+  data-camera-id={cameraId}
   aria-current={active ? 'true' : undefined}
 >
   {#if onDragStart}
@@ -87,11 +92,13 @@
   >
     {@render children()}
   </button>
-  <OutlinerVisibility
-    label={visibilityLabel}
-    {visible}
-    onToggle={onToggleVisibility}
-  />
+  {#if showVisibility}
+    <OutlinerVisibility
+      label={visibilityLabel}
+      {visible}
+      onToggle={onToggleVisibility}
+    />
+  {/if}
 </div>
 
 <style>

@@ -10,6 +10,7 @@ export type WorkspaceCapability =
   | 'paintTexture'
   | 'paintProjected'
   | 'editRender'
+  | 'editCamera'
   | 'editLighting'
   | 'bakeLighting'
   | 'navigate3d';
@@ -33,7 +34,8 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
     'seamAuthoring',
     'navigate3d'
   ]),
-  paint: new Set(['paintTexture', 'paintProjected', 'navigate3d'])
+  paint: new Set(['paintTexture', 'paintProjected', 'navigate3d']),
+  render: new Set(['editCamera', 'navigate3d'])
 };
 
 /** True when the workspace grants a capability. */

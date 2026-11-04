@@ -75,6 +75,10 @@
   const activeNode = $derived(nodes.find((node) => node.id === activeNodeId) ?? null);
   const activeGroup = $derived(groups.find((group) => group.id === activeGroupId) ?? null);
   const lights = $derived(session.snapshot.lights);
+  const cameras = $derived(session.snapshot.cameras);
+  const activeCamera = $derived(
+    cameras.find((camera) => camera.id === session.snapshot.activeCameraId) ?? null
+  );
   const activeLight = $derived(
     lights.find((light) => light.id === session.snapshot.activeLightId) ?? null
   );
@@ -640,6 +644,210 @@
     </InspectorSection>
 {/snippet}
 
+    {#snippet cameraSection()}
+<InspectorSection
+      title="Camera"
+      meta={`${cameras.length} camera${cameras.length === 1 ? '' : 's'}`}
+      open={sections.camera}
+      onToggle={(open) => setSection('camera', open)}
+    >
+      <div class="module-body">
+        <ActionRow align="between">
+          <ActionButton
+            label="Add from view"
+            icon="plus"
+            onActivate={() => session.addCameraFromCurrentView()}
+          />
+          <span class="texture-note">{cameras.length} {cameras.length === 1 ? 'camera' : 'cameras'}</span>
+        </ActionRow>
+        <div class="light-list">
+          {#each cameras as camera (camera.id)}
+            <OutlinerRow
+              active={activeCamera?.id === camera.id}
+              hidden={false}
+              cameraId={camera.id}
+              showVisibility={false}
+              visible={true}
+              visibilityLabel={`Camera ${camera.name}`}
+              onToggleVisibility={() => session.selectCamera(camera.id)}
+              selectLabel={`Select ${camera.name}`}
+              onSelect={() => session.selectCamera(camera.id)}
+            >
+              <span class="object-glyph">
+                <Icon name="camera" size={14} />
+              </span>
+              <span class="object-name">{camera.name}</span>
+              <span class="object-kind">fov {camera.fov.toFixed(0)}</span>
+            </OutlinerRow>
+          {/each}
+        </div>
+        {#if cameras.length === 0}
+          <p class="hint">Add a camera from the current viewport view for rendering.</p>
+        {/if}
+        {#if activeCamera}
+          <div class="selected-name-row">
+            <InlineNameField
+              label="Camera name"
+              value={activeCamera.name}
+              onCommit={(value) => session.updateActiveCamera({ name: value })}
+            />
+            <span class="texture-kind">perspective</span>
+          </div>
+          <Vector3Field
+            label="Position"
+            values={activeCamera.position}
+            step={0.1}
+            precision={2}
+            onCommit={(value) => session.updateActiveCamera({ position: value })}
+          />
+          <Vector3Field
+            label="Target"
+            values={activeCamera.target}
+            step={0.1}
+            precision={2}
+            onCommit={(value) => session.updateActiveCamera({ target: value })}
+          />
+          <div class="render-field">
+            <span>Field of view</span>
+            <NumberField
+              label="Field of view"
+              value={activeCamera.fov}
+              step={1}
+              precision={1}
+              min={5}
+              max={160}
+              onCommit={(value) => session.updateActiveCamera({ fov: value })}
+            />
+          </div>
+          <div class="texture-action-row">
+            <ActionButton
+              label="Delete camera"
+              icon="trash"
+              variant="danger"
+              onActivate={() => session.deleteActiveCamera()}
+            />
+          </div>
+        {/if}
+      </div>
+    </InspectorSection>
+    {/snippet}
+
+    {#snippet renderSection()}
+<InspectorSection
+      title="Render"
+      meta={`${session.snapshot.renderVirtualWidth} × ${session.snapshot.renderVirtualHeight} → ${session.snapshot.renderOutputWidth} × ${session.snapshot.renderOutputHeight}`}
+      open={sections.render}
+      onToggle={(open) => setSection('render', open)}
+    >
+      <div class="module-body">
+        <div class="light-subhead">
+          <span>Still image</span>
+          <span class="texture-note">PNG</span>
+        </div>
+        <div class="render-field">
+          <span>Virtual width</span>
+          <NumberField
+            label="Virtual width"
+            value={session.snapshot.renderVirtualWidth}
+            step={1}
+            precision={0}
+            min={1}
+            max={4096}
+            onCommit={(value) => session.updateRenderSettings({ renderVirtualWidth: value })}
+          />
+        </div>
+        <div class="render-field">
+          <span>Virtual height</span>
+          <NumberField
+            label="Virtual height"
+            value={session.snapshot.renderVirtualHeight}
+            step={1}
+            precision={0}
+            min={1}
+            max={4096}
+            onCommit={(value) => session.updateRenderSettings({ renderVirtualHeight: value })}
+          />
+        </div>
+        <div class="render-field">
+          <span>Output width</span>
+          <NumberField
+            label="Output width"
+            value={session.snapshot.renderOutputWidth}
+            step={1}
+            precision={0}
+            min={1}
+            max={4096}
+            onCommit={(value) => session.updateRenderSettings({ renderOutputWidth: value })}
+          />
+        </div>
+        <div class="render-field">
+          <span>Output height</span>
+          <NumberField
+            label="Output height"
+            value={session.snapshot.renderOutputHeight}
+            step={1}
+            precision={0}
+            min={1}
+            max={4096}
+            onCommit={(value) => session.updateRenderSettings({ renderOutputHeight: value })}
+          />
+        </div>
+        <SelectField
+          label="Upscale"
+          value={session.snapshot.renderUpscale}
+          options={[
+            { value: 'nearest', label: 'Nearest' },
+            { value: 'smooth', label: 'Smooth' }
+          ]}
+          onChange={(value) =>
+            session.updateRenderSettings({
+              renderUpscale: value as 'nearest' | 'smooth'
+            })}
+        />
+        <SelectField
+          label="Shading"
+          value={session.snapshot.renderShading}
+          options={[
+            { value: 'lit', label: 'Lit + realtime shadows' },
+            { value: 'texture', label: 'Texture / baked' },
+            { value: 'solid', label: 'Solid' }
+          ]}
+          onChange={(value) =>
+            session.updateRenderSettings({
+              renderShading: value as 'lit' | 'texture' | 'solid'
+            })}
+        />
+        <Switch
+          label="Transparent background"
+          checked={session.snapshot.renderTransparent}
+          onChange={(value) =>
+            session.updateRenderSettings({ renderTransparent: value })}
+        />
+        {#if !session.snapshot.renderTransparent}
+          <ColorField
+            label="Background"
+            value={session.snapshot.renderBackground}
+            onChange={(value) =>
+              session.updateRenderSettings({ renderBackground: value })}
+          />
+        {/if}
+        {#if activeCamera}
+          <p class="texture-note">Rendering through {activeCamera.name}.</p>
+        {:else}
+          <p class="texture-note">Add a camera from the Camera section before rendering.</p>
+        {/if}
+        <div class="texture-action-row">
+          <ActionButton
+            label={session.snapshot.renderBusy ? 'Rendering…' : 'Render PNG'}
+            icon="camera"
+            disabled={activeCamera === null || session.snapshot.renderBusy}
+            onActivate={() => void session.renderStill()}
+          />
+        </div>
+      </div>
+    </InspectorSection>
+    {/snippet}
+
     {#snippet lightSection()}
 <InspectorSection
       title="Lighting"
@@ -731,10 +939,22 @@
           {/if}
           <Switch
             label="Cast shadows"
-            description="Hard shadow in Lit and baked lighting."
+            description="Hard or soft shadow in Lit and baked lighting."
             checked={activeLight.castShadows}
             onChange={(value) => session.updateActiveLight({ castShadows: value })}
           />
+          {#if activeLight.castShadows}
+            <SliderField
+              label="Shadow softness"
+              value={activeLight.shadowSoftness}
+              min={0}
+              max={1}
+              step={0.01}
+              precision={2}
+              onChange={(value) =>
+                session.updateActiveLight({ shadowSoftness: value })}
+            />
+          {/if}
           <div class="texture-action-row">
             <ActionButton
               label="Delete light"
@@ -1684,6 +1904,8 @@
 
       {#each visibleSections as section (section)}
         {#if section === 'scene'}{@render sceneSection()}
+        {:else if section === 'camera'}{@render cameraSection()}
+        {:else if section === 'render'}{@render renderSection()}
         {:else if section === 'light'}{@render lightSection()}
         {:else if section === 'transform'}{@render transformSection()}
         {:else if section === 'selection'}{@render selectionSection()}
@@ -2352,6 +2574,24 @@
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
     text-transform: uppercase;
+  }
+
+  .render-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: var(--control-h);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+  }
+
+  .render-field > span {
+    flex: 0 0 auto;
+  }
+
+  .render-field :global(.number-field) {
+    max-width: 96px;
   }
 
   .module-body {

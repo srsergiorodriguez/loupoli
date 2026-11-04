@@ -129,6 +129,11 @@ export class MeshNodeView {
   private readonly mesh: HalfEdgeMesh;
   private seamVisible = false;
   private shadingMode: ShadingMode = 'unlit';
+  private cleanRender = false;
+  private active = false;
+  private selectionMode: SelectionMode = 'vertex';
+  private selectedElements: readonly number[] = [];
+  private showHandles = true;
 
   private triangleGeometry = new BufferGeometry();
   private readonly wireGeometry = new BufferGeometry();
@@ -171,9 +176,6 @@ export class MeshNodeView {
   private readonly scratchDirection = new Vector3();
 
   private lastMeshRevision = -1;
-  private active = false;
-  private selectionMode: SelectionMode = 'vertex';
-  private selectedElements: readonly number[] = [];
   private readonly edgeMatrix = new Matrix4();
   private readonly edgePosition = new Vector3();
   private readonly edgeDirection = new Vector3();
@@ -381,6 +383,10 @@ export class MeshNodeView {
     this.active = active;
     this.selectionMode = mode;
     this.selectedElements = [...selectedElements];
+    this.showHandles = showHandles;
+    if (this.cleanRender) {
+      return;
+    }
 
     const hasSelection = active && selectedElements.length > 0;
     this.vertexPoints.visible = active && mode === 'vertex' && showHandles;
@@ -424,8 +430,44 @@ export class MeshNodeView {
   /** Show or hide the seam overlay without changing seam data. */
   setSeamVisible(visible: boolean): void {
     this.seamVisible = visible;
+    if (this.cleanRender) {
+      return;
+    }
     this.seamSegments.visible = visible;
     this.seamEdgeMesh.visible = visible && this.seamEdgeMesh.count > 0;
+  }
+
+  /** Hide all editor-only overlays for one clean render. */
+  setCleanRender(clean: boolean): void {
+    if (this.cleanRender === clean) {
+      return;
+    }
+    this.cleanRender = clean;
+    if (clean) {
+      this.vertexPoints.visible = false;
+      this.selectedVertexPoint.visible = false;
+      this.selectedEdgeMesh.visible = false;
+      this.selectedFaceMesh.visible = false;
+      this.selectedFaceOutline.visible = false;
+      this.seamSegments.visible = false;
+      this.seamEdgeMesh.visible = false;
+      this.wireSegments.visible = false;
+      this.wireTubeMesh.visible = false;
+      this.frontWireSegments.visible = false;
+      this.frontWireTubeMesh.visible = false;
+      this.previewLine.visible = false;
+      return;
+    }
+    this.setShadingMode(this.shadingMode);
+    this.seamSegments.visible = this.seamVisible;
+    this.seamEdgeMesh.visible =
+      this.seamVisible && this.seamEdgeMesh.count > 0;
+    this.setInteraction(
+      this.active,
+      this.selectionMode,
+      this.selectedElements,
+      this.showHandles
+    );
   }
 
   /** Write current DCEL data into the reusable render buffers. */

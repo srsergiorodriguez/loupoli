@@ -1,6 +1,6 @@
 # Phase 5A — Lighting and texture bake
 
-**Status:** Implemented. Direct-ambient/directional/point lighting, per-light hard shadows in Lit and the texture bake, Light workspace, Lit preview, and texture-layer bake are implemented. Soft shadows and AO are explicitly deferred.
+**Status:** Implemented. Direct-ambient/directional/point lighting, per-light hard/soft shadows in Lit and the texture bake, Light workspace, Lit preview, and texture-layer bake are implemented. AO is explicitly deferred; the bake is structured to accept a later AO pass.
 
 **Goal:** Light a low-poly scene with a deliberately small model, preview it in `Lit`, then bake direct light into a dedicated texture lighting layer for final textured display.
 
@@ -22,11 +22,10 @@ Supported:
 - document ambient color/intensity
 - enabled/disabled lights
 - flat-shaded Lit preview
-- per-light hard shadows in Lit and direct-light baking into a texture lighting layer
+- per-light hard/soft shadows in Lit and direct-light baking into a texture lighting layer
 
 Not supported:
 
-- soft/area shadows
 - AO / contact shadows
 - spot/area lights
 - HDRI/IBL
@@ -56,7 +55,7 @@ interface LightSnapshot {
 }
 ```
 
-New projects include a default `Sun`. Lights default to `castShadows: true`; the selected light has a **Cast shadows** switch. Ambient is document-level `ambientColor` + `ambientIntensity`.
+New projects include a default `Sun`. Lights default to `castShadows: true` and `shadowSoftness: 0.35`; the selected light has a **Cast shadows** switch and a **Shadow softness** slider. Ambient is document-level `ambientColor` + `ambientIntensity`.
 
 Light creation, deletion, editing, and ambient changes are undoable commands with autosave journal patches.
 
@@ -76,7 +75,7 @@ Light markers show each light’s editor position in the viewport. Directional l
 - Scene outliner remains available to choose the bake target object
 - Lighting Inspector owns add/edit/delete and ambient controls
 - Visibility uses the shared outliner eye
-- Per-light **Cast shadows** switch controls both Lit and bake
+- Per-light **Cast shadows** switch and **Shadow softness** slider control both Lit and bake
 - Light markers show position; directional markers add a cone-tipped direction arrow
 - Marker drag updates position; arrow-tip drag updates direction; each is one undoable command
 - Naming uses `InlineNameField`
@@ -86,7 +85,9 @@ Light markers show each light’s editor position in the viewport. Directional l
 
 ![Baked lighting preview](media/light-baked.png)
 
-![Hard shadows in Lit](media/light-shadows.png)
+![Hard/soft shadows in Lit](media/light-shadows.png)
+
+![Soft shadow preview](media/soft-shadows.png)
 
 The bake writes **direct light** into a dedicated lighting layer:
 
@@ -100,7 +101,7 @@ Algorithm:
 1. Rasterize source faces into texture space.
 2. Interpolate world position with flat face normals.
 3. Evaluate ambient + directional + point lights.
-4. For each shadow-enabled light, trace a hard ray through every visible scene mesh before adding its contribution.
+4. For each shadow-enabled light, trace deterministic visibility rays through every visible scene mesh before adding its contribution. Softness widens directional cones or point-light source disks.
 5. Write a transparent-backed RGBA lighting image.
 6. Commit one undoable `Bake lighting` command.
 
@@ -113,7 +114,7 @@ Safety rules:
 - Bake undo removes a newly created layer or restores prior layer pixels.
 - Baking marks the texture dirty and forces a v4 checkpoint with PNG chunks.
 
-Shadows are hard visibility tests against all visible scene meshes, including the active mesh. Soft shadows and AO are not evaluated in this pass.
+Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is not evaluated in this pass.
 
 ![Baked shadows](media/light-baked-shadow.png)
 
@@ -149,7 +150,7 @@ v3 files remain readable; they receive the default Sun because they predate the 
 
 ## 7. Deferred
 
-- Soft shadows / AO
+- AO / contact shadows
 - Shadow progress/cancel UI beyond the busy state
 - Physical-iPad performance and memory validation
 - Shape keys, animation, import/export (Phase 5B–5C)

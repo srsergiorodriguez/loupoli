@@ -46,7 +46,8 @@
     { id: 'model', label: 'Model' },
     { id: 'uv', label: 'UV' },
     { id: 'paint', label: 'Paint' },
-    { id: 'light', label: 'Light' }
+    { id: 'light', label: 'Light' },
+    { id: 'render', label: 'Render' }
   ] as const;
 
   function chooseWorkspace(next: string): void {
@@ -54,7 +55,8 @@
       next === 'model' ||
       next === 'light' ||
       next === 'uv' ||
-      next === 'paint'
+      next === 'paint' ||
+      next === 'render'
     ) {
       session.setWorkspace(next);
     }

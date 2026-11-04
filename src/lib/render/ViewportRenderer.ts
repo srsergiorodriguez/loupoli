@@ -8,7 +8,8 @@ import {
   LineBasicMaterial,
   MeshBasicMaterial,
   Object3D,
-  PCFShadowMap,
+  PCFSoftShadowMap,
+  PerspectiveCamera,
   Plane,
   PointLight,
   PointsMaterial,
@@ -21,12 +22,14 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
+  WebGLRenderTarget,
   type WebGLRendererParameters
 } from 'three';
 import type { Theme } from '../../design/theme';
 import type { MeshNode, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { LightSummary } from '../scene/SceneLight';
+import type { RenderStillOptions } from './renderSettings';
 import type {
   ShadingMode,
   TransformMode,
@@ -407,6 +410,15 @@ export class ViewportRenderer {
     this.schedule();
   }
 
+  /** Show or hide the modeling grid without touching the document. */
+  setGridVisible(visible: boolean): void {
+    if (this.grid.group.visible === visible) {
+      return;
+    }
+    this.grid.group.visible = visible;
+    this.schedule();
+  }
+
   /** Show the seam overlay only in contexts that explicitly opt in. */
   setSeamOverlayVisible(visible: boolean): void {
     if (this.seamOverlayVisible === visible) {
@@ -540,6 +552,115 @@ export class ViewportRenderer {
     this.schedule();
   }
 
+  /**
+   * Render one clean frame to a virtual-resolution image.
+   *
+   * Editor chrome, selection overlays, and the grid are hidden only for the
+   * duration of this call. The returned pixels are bottom-up flipped into
+   * ordinary ImageData order; upscaling and encoding live in the caller.
+   */
+  renderStill(options: RenderStillOptions): ImageData {
+    const width = Math.max(1, Math.min(4096, Math.round(options.width)));
+    const height = Math.max(1, Math.min(4096, Math.round(options.height)));
+    const previousMode = this.currentMode;
+    const previousGrid = this.grid.group.visible;
+    const previousGizmo = this.objectGizmo.group.visible;
+    const previousLights = this.lightGizmos.group.visible;
+    const previousClear = this.renderer.getClearColor(new Color());
+    const previousClearAlpha = this.renderer.getClearAlpha();
+    const views = [...this.nodeViews.values()];
+    for (const view of views) {
+      view.setCleanRender(true);
+    }
+    this.grid.group.visible = false;
+    this.objectGizmo.group.visible = false;
+    this.lightGizmos.group.visible = false;
+
+    const target = new WebGLRenderTarget(width, height, {
+      depthBuffer: true,
+      stencilBuffer: false
+    });
+    try {
+      this.setShadingMode(
+        options.shading === 'texture' ? 'unlit' : options.shading
+      );
+      const camera = new PerspectiveCamera(
+        options.camera.fov,
+        width / height,
+        0.01,
+        500
+      );
+      camera.up.set(0, 0, 1);
+      camera.position.set(...options.camera.position);
+      camera.lookAt(new Vector3(...options.camera.target));
+      camera.updateMatrixWorld(true);
+      this.renderer.setRenderTarget(target);
+      this.renderer.setViewport(0, 0, width, height);
+      this.renderer.setClearColor(
+        new Color(options.transparent ? '#000000' : options.backgroundColor),
+        options.transparent ? 0 : 1
+      );
+      this.renderer.clear(true, true, true);
+      this.renderer.render(this.scene, camera);
+      const raw = new Uint8Array(width * height * 4);
+      this.renderer.readRenderTargetPixels(target, 0, 0, width, height, raw);
+      const flipped = new Uint8ClampedArray(raw.length);
+      const rowBytes = width * 4;
+      for (let y = 0; y < height; y += 1) {
+        const source = (height - 1 - y) * rowBytes;
+        flipped.set(raw.subarray(source, source + rowBytes), y * rowBytes);
+      }
+      return new ImageData(flipped, width, height);
+    } finally {
+      this.renderer.setRenderTarget(null);
+      this.renderer.setViewport(
+        0,
+        0,
+        this.canvas.clientWidth,
+        this.canvas.clientHeight
+      );
+      this.renderer.setClearColor(previousClear, previousClearAlpha);
+      this.setShadingMode(previousMode);
+      this.grid.group.visible = previousGrid;
+      this.objectGizmo.group.visible = previousGizmo;
+      this.lightGizmos.group.visible = previousLights;
+      for (const view of views) {
+        view.setCleanRender(false);
+      }
+      target.dispose();
+      this.schedule();
+    }
+  }
+
+  /** Show an explicit document camera in the navigation viewport. */
+  setCameraView(
+    position: readonly [number, number, number],
+    target: readonly [number, number, number],
+    fov: number
+  ): void {
+    this.cameraRig.setView(
+      new Vector3(...position),
+      new Vector3(...target),
+      fov
+    );
+    this.markCameraChanged();
+  }
+
+  /** Capture the current navigation camera for a render camera preset. */
+  captureCameraView(): {
+    position: [number, number, number];
+    target: [number, number, number];
+    fov: number;
+  } {
+    const position = this.cameraRig.getPosition();
+    const target = this.cameraRig.getTarget();
+    return {
+      position: [position.x, position.y, position.z],
+      target: [target.x, target.y, target.z],
+      fov: this.cameraRig.getFov()
+    };
+  }
+
   /** Current camera-space axis projections for the orientation gizmo. */
   getOrientation(): readonly AxisProjection[] {
     return this.cameraRig.computeOrientation();
@@ -616,6 +737,7 @@ export class ViewportRenderer {
           light.shadow.camera.far = 50;
           light.shadow.bias = -0.0005;
           light.shadow.normalBias = 0.02;
+          light.shadow.radius = 1 + summary.shadowSoftness * 6;
         }
         this.documentLightGroup.add(light, target);
         this.documentLights.push({ light, target });
@@ -640,6 +762,7 @@ export class ViewportRenderer {
           light.shadow.camera.far = 30;
           light.shadow.bias = -0.001;
           light.shadow.normalBias = 0.02;
+          light.shadow.radius = 1 + summary.shadowSoftness * 6;
         }
         this.documentLightGroup.add(light);
         this.documentLights.push({ light, target: null });
@@ -1116,7 +1239,7 @@ export class ViewportRenderer {
 
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFShadowMap;
+    this.renderer.shadowMap.type = PCFSoftShadowMap;
     this.renderer.setSize(width, height, false);
 
     const camera = this.cameraRig.camera;

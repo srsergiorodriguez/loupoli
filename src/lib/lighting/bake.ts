@@ -16,6 +16,8 @@ export interface BakeLightingInput {
   readonly height: number;
   /** World-space triangle lists used for hard shadow rays. */
   readonly occluders?: readonly Float32Array[];
+  /** Soft-shadow visibility rays per light. Defaults to 8. */
+  readonly shadowSamples?: number;
 }
 
 interface Rgb {
@@ -213,12 +215,118 @@ function rayOccluded(
   return false;
 }
 
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+function tangentBasis(axis: Vector3): [Vector3, Vector3] {
+  const helper =
+    Math.abs(axis.z) < 0.9 ? new Vector3(0, 0, 1) : new Vector3(1, 0, 0);
+  const u = new Vector3().crossVectors(axis, helper).normalize();
+  const v = new Vector3().crossVectors(axis, u).normalize();
+  return [u, v];
+}
+
+/**
+ * Build one soft-shadow sample for a light.
+ *
+ * Directional lights sample a small cone around their direction; point lights
+ * sample a small disk around their position. A zero softness uses the exact
+ * hard-light ray.
+ */
+function shadowRayForSample(
+  light: {
+    readonly kind: 'directional' | 'point';
+    readonly direction: Vector3;
+    readonly position: Vector3;
+    readonly shadowSoftness: number;
+  },
+  origin: Vector3,
+  sampleIndex: number,
+  sampleCount: number
+): { direction: Vector3; maxDistance: number } | null {
+  const softness = Math.max(0, Math.min(1, light.shadowSoftness));
+  if (light.kind === 'directional') {
+    const base = light.direction.clone().multiplyScalar(-1).normalize();
+    if (softness <= 0 || sampleCount <= 1) {
+      return { direction: base, maxDistance: Infinity };
+    }
+    const [u, v] = tangentBasis(base);
+    const radius = Math.tan(softness * 0.35) * Math.sqrt((sampleIndex + 0.5) / sampleCount);
+    const angle = sampleIndex * GOLDEN_ANGLE;
+    return {
+      direction: base
+        .addScaledVector(u, Math.cos(angle) * radius)
+        .addScaledVector(v, Math.sin(angle) * radius)
+        .normalize(),
+      maxDistance: Infinity
+    };
+  }
+
+  const toLight = light.position.clone().sub(origin);
+  const distance = toLight.length();
+  if (distance < 1e-4) {
+    return null;
+  }
+  if (softness <= 0 || sampleCount <= 1) {
+    return {
+      direction: toLight.multiplyScalar(1 / distance),
+      maxDistance: distance
+    };
+  }
+  const base = toLight.multiplyScalar(1 / distance);
+  const [u, v] = tangentBasis(base);
+  const sourceRadius = Math.min(distance * 0.8, softness * 1.5);
+  const radius = sourceRadius * Math.sqrt((sampleIndex + 0.5) / sampleCount);
+  const angle = sampleIndex * GOLDEN_ANGLE;
+  const sampledLight = light.position
+    .clone()
+    .addScaledVector(u, Math.cos(angle) * radius)
+    .addScaledVector(v, Math.sin(angle) * radius);
+  const sampledDirection = sampledLight.sub(origin);
+  const sampledDistance = sampledDirection.length();
+  if (sampledDistance < 1e-4) {
+    return null;
+  }
+  return {
+    direction: sampledDirection.multiplyScalar(1 / sampledDistance),
+    maxDistance: sampledDistance
+  };
+}
+
+/** Average hard-ray visibility over a light's soft-shadow samples. */
+function shadowVisibility(
+  light: {
+    readonly kind: 'directional' | 'point';
+    readonly direction: Vector3;
+    readonly position: Vector3;
+    readonly shadowSoftness: number;
+  },
+  origin: Vector3,
+  sampleCount: number,
+  occluders: readonly Float32Array[]
+): number {
+  const count =
+    light.shadowSoftness > 0
+      ? Math.max(1, Math.min(32, Math.floor(sampleCount)))
+      : 1;
+  let visible = 0;
+  for (let i = 0; i < count; i += 1) {
+    const ray = shadowRayForSample(light, origin, i, count);
+    if (!ray) {
+      continue;
+    }
+    if (!rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
+      visible += 1;
+    }
+  }
+  return visible / count;
+}
+
 /**
  * Bake direct ambient/directional/point light into an RGBA lighting image.
  *
  * The result is a black-transparent image outside the UV-covered surface. The
  * caller stores it in a lighting-role layer and composites it with multiply.
- * Flat face normals match the low-poly Lit path. Hard shadows use the supplied
+ * Flat face normals match the low-poly Lit path. Soft shadows average visibility rays through the supplied
  * world-space occluders; ambient is never shadowed.
  */
 export function bakeLighting(input: BakeLightingInput): ImageData | null {
@@ -242,6 +350,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
     : nodeMatrix;
   const ambient = parseColor(input.ambientColor);
   const occluders = input.occluders ?? [];
+  const shadowSamples = Math.max(1, Math.min(32, Math.floor(input.shadowSamples ?? 8)));
   const lights = input.lights
     .filter((light) => light.enabled && light.intensity > 0)
     .map((light) => ({
@@ -338,38 +447,35 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
           for (const light of lights) {
             let ndotl: number;
             let attenuation = 1;
-            let shadowDirection: Vector3 | null = null;
-            let shadowDistance = Infinity;
             if (light.kind === 'directional') {
-              shadowDirection = light.direction.clone().multiplyScalar(-1);
-              ndotl = normal.dot(shadowDirection);
+              ndotl = normal.dot(light.direction.clone().multiplyScalar(-1));
             } else {
               const toLight = light.position.clone().sub(worldPosition);
               const distance = toLight.length();
               if (distance < 1e-4) {
                 continue;
               }
-              shadowDirection = toLight.multiplyScalar(1 / distance);
-              shadowDistance = distance;
-              ndotl = normal.dot(shadowDirection);
+              toLight.multiplyScalar(1 / distance);
+              ndotl = normal.dot(toLight);
               attenuation = 1 / (1 + distance * distance);
             }
             if (ndotl <= 0) {
               continue;
             }
-            if (
-              light.castShadows &&
-              shadowDirection &&
-              rayOccluded(
+            let visibility = 1;
+            if (light.castShadows) {
+              visibility = shadowVisibility(
+                light,
                 worldPosition.clone().addScaledVector(normal, 0.003),
-                shadowDirection,
-                shadowDistance,
+                shadowSamples,
                 occluders
-              )
-            ) {
-              continue;
+              );
+              if (visibility <= 0) {
+                continue;
+              }
             }
-            const energy = maxZero(ndotl) * light.intensity * attenuation;
+            const energy =
+              maxZero(ndotl) * light.intensity * attenuation * visibility;
             r += light.rgb.r * energy;
             g += light.rgb.g * energy;
             bl += light.rgb.b * energy;

@@ -1,6 +1,7 @@
 import type { Vec2, Vec3 } from '../geometry/HalfEdgeMesh';
 import type { NodeTransform } from '../scene/MeshNode';
 import type { LightSnapshot } from '../scene/SceneLight';
+import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import { validateModifiers, type Modifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
 import { SceneLight } from '../scene/SceneLight';
@@ -129,6 +130,20 @@ export type JournalPatch =
   | {
       readonly type: 'set-ambient-light';
       readonly ambient: { readonly color: string; readonly intensity: number };
+    }
+  | {
+      readonly type: 'insert-camera';
+      readonly index: number;
+      readonly camera: CameraSnapshot;
+    }
+  | {
+      readonly type: 'remove-camera';
+      readonly index: number;
+      readonly camera: CameraSnapshot;
+    }
+  | {
+      readonly type: 'update-camera';
+      readonly camera: CameraSnapshot;
     };
 
 /** Apply one journal patch to a reconstructed scene document. */
@@ -292,6 +307,22 @@ export function applyJournalPatch(
       document.ambientIntensity = patch.ambient.intensity;
       return;
     }
+    case 'insert-camera': {
+      document.insertCamera(SceneCamera.fromSnapshot(patch.camera), patch.index);
+      return;
+    }
+    case 'remove-camera': {
+      document.removeCamera(patch.camera.id);
+      return;
+    }
+    case 'update-camera': {
+      const camera = document.getCamera(patch.camera.id);
+      if (!camera) {
+        throw new Error(`Autosave references missing camera ${patch.camera.id}.`);
+      }
+      camera.apply(patch.camera);
+      return;
+    }
     case 'set-modifiers': {
       const node = document.getNode(patch.nodeId);
       if (!node) {
@@ -330,6 +361,13 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'set-ambient-light') {
     return 48;
+  }
+  if (
+    patch.type === 'insert-camera' ||
+    patch.type === 'remove-camera' ||
+    patch.type === 'update-camera'
+  ) {
+    return patch.camera.id.length * 2 + patch.camera.name.length * 2 + 96;
   }
   if (patch.type === 'remove-node') {
     return patch.nodeId.length * 2 + 16;

@@ -88,6 +88,46 @@ export async function openProjectFile(): Promise<OpenedProjectFile | null> {
 }
 
 /**
+ * Save arbitrary bytes through a native save dialog or a browser download.
+ */
+export async function saveBinaryFile(
+  bytes: Uint8Array,
+  suggestedName: string,
+  extension: string,
+  filterName: string
+): Promise<boolean> {
+  const name = suggestedName.toLowerCase().endsWith(`.${extension}`)
+    ? suggestedName
+    : `${suggestedName}.${extension}`;
+  if (isTauriRuntime()) {
+    const [{ save }, { invoke }] = await Promise.all([
+      import('@tauri-apps/plugin-dialog'),
+      import('@tauri-apps/api/core')
+    ]);
+    const path = await save({
+      defaultPath: name,
+      filters: [{ name: filterName, extensions: [extension] }]
+    });
+    if (!path) {
+      return false;
+    }
+    await invoke('write_project_file', { path, data: Array.from(bytes) });
+    return true;
+  }
+  const blob = new Blob([bytes.slice().buffer], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
+}
+
+/**
  * Save `.lpoly` bytes through the Tauri save dialog or a browser download.
  * Returns false when the user cancels.
  */

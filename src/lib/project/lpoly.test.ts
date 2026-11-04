@@ -149,6 +149,21 @@ describe('.lpoly v4', () => {
     expect(asset?.layers[7].role).toBe('lighting');
   });
 
+  it('round-trips render cameras', () => {
+    const document = makeDocument();
+    const camera = document.cameras[0];
+    camera.name = 'Hero';
+    camera.position = [3, -5, 6];
+    camera.target = [0.5, 0, 1];
+    camera.fov = 55;
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    expect(decoded.document.cameras).toHaveLength(1);
+    expect(decoded.document.cameras[0].name).toBe('Hero');
+    expect(decoded.document.cameras[0].position).toEqual([3, -5, 6]);
+    expect(decoded.document.cameras[0].target).toEqual([0.5, 0, 1]);
+    expect(decoded.document.cameras[0].fov).toBe(55);
+  });
+
   it('round-trips document lights and ambient settings', () => {
     const document = makeDocument();
     document.ambientColor = '#20242c';
@@ -159,6 +174,7 @@ describe('.lpoly v4', () => {
     point.intensity = 3.2;
     point.position = [2, -1, 3];
     point.castShadows = false;
+    point.shadowSoftness = 0.72;
     document.insertLight(point);
     const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
     expect(decoded.document.ambientColor).toBe('#20242c');
@@ -168,6 +184,7 @@ describe('.lpoly v4', () => {
     expect(decoded.document.lights[1].position).toEqual([2, -1, 3]);
     expect(decoded.document.lights[1].kind).toBe('point');
     expect(decoded.document.lights[1].castShadows).toBe(false);
+    expect(decoded.document.lights[1].shadowSoftness).toBeCloseTo(0.72);
   });
 
   it('round-trips a modifier stack', () => {

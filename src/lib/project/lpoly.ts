@@ -16,6 +16,7 @@ import { MeshNode, type NodeTransform } from '../scene/MeshNode';
 import { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { SceneLight, type LightKind, type LightSnapshot } from '../scene/SceneLight';
+import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import type {
   TextureBlendMode,
   TextureLayerRecord,
@@ -31,6 +32,7 @@ const MAX_FILE_BYTES = 128 * 1024 * 1024;
 const MAX_NODES = 1024;
 const MAX_GROUPS = 512;
 const MAX_LIGHTS = 64;
+const MAX_CAMERAS = 32;
 const MAX_VERTICES = 1_000_000;
 const MAX_HALF_EDGES = 4_000_000;
 const MAX_EDGES = 2_000_000;
@@ -122,8 +124,9 @@ interface GroupManifest {
   readonly transform: NodeTransform;
 }
 
-interface LightManifest extends Omit<LightSnapshot, 'castShadows'> {
+interface LightManifest extends Omit<LightSnapshot, 'castShadows' | 'shadowSoftness'> {
   readonly castShadows?: boolean;
+  readonly shadowSoftness?: number;
 }
 
 interface LightingManifest {
@@ -168,6 +171,7 @@ interface Manifest {
   readonly groups?: readonly GroupManifest[];
   readonly textures?: TextureManifest;
   readonly lighting?: LightingManifest;
+  readonly cameras?: readonly CameraSnapshot[];
 }
 
 const TYPED_COLUMNS = [
@@ -306,7 +310,12 @@ function validateLightingManifest(
       !Number.isFinite(light.intensity) ||
       light.intensity < 0 ||
       typeof light.enabled !== 'boolean' ||
-      (light.castShadows !== undefined && typeof light.castShadows !== 'boolean')
+      (light.castShadows !== undefined && typeof light.castShadows !== 'boolean') ||
+      (light.shadowSoftness !== undefined &&
+        (typeof light.shadowSoftness !== 'number' ||
+          !Number.isFinite(light.shadowSoftness) ||
+          light.shadowSoftness < 0 ||
+          light.shadowSoftness > 1))
     ) {
       throw new Error('The .lpoly contains invalid light metadata.');
     }
@@ -321,6 +330,7 @@ function validateLightingManifest(
       intensity: light.intensity,
       enabled: light.enabled,
       castShadows: light.castShadows ?? true,
+      shadowSoftness: light.shadowSoftness ?? 0.35,
       position,
       direction
     });
@@ -571,7 +581,47 @@ function buildTextureManifest(
   return { manifest: { assets: manifests }, totalPngBytes };
 }
 
-/** Encode a v3 project with a texture asset library. */
+function validateCamerasManifest(value: unknown): CameraSnapshot[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value) || value.length > MAX_CAMERAS) {
+    throw new Error('The .lpoly camera manifest is invalid.');
+  }
+  const ids = new Set<string>();
+  const cameras: CameraSnapshot[] = [];
+  for (const raw of value) {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoly contains an invalid camera.');
+    }
+    const camera = raw as Partial<CameraSnapshot>;
+    if (
+      typeof camera.id !== 'string' ||
+      camera.id.length === 0 ||
+      ids.has(camera.id) ||
+      typeof camera.name !== 'string' ||
+      camera.name.length === 0 ||
+      camera.name.length > MAX_NAME_LENGTH ||
+      typeof camera.fov !== 'number' ||
+      !Number.isFinite(camera.fov) ||
+      camera.fov < 5 ||
+      camera.fov > 160
+    ) {
+      throw new Error('The .lpoly contains invalid camera metadata.');
+    }
+    ids.add(camera.id);
+    cameras.push({
+      id: camera.id,
+      name: camera.name,
+      position: validateVec3(camera.position, 'camera position'),
+      target: validateVec3(camera.target, 'camera target'),
+      fov: camera.fov
+    });
+  }
+  return cameras;
+}
+
+/** Encode a project with a texture asset library. */
 export function encodeLpoly(
   document: SceneDocument,
   settings: ProjectSettings,
@@ -626,6 +676,7 @@ function encodeInternal(
     settings,
     nodes: manifestNodes,
     groups: manifestGroups,
+    cameras: document.cameras.map((camera) => camera.snapshot()),
     lighting: {
       ambientColor: document.ambientColor,
       ambientIntensity: document.ambientIntensity,
@@ -976,6 +1027,15 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     document.insertGroup(group);
   }
 
+  const cameras = validateCamerasManifest(manifest.cameras);
+  if (cameras.length === 0) {
+    document.insertCamera(SceneCamera.default());
+  } else {
+    for (const snapshot of cameras) {
+      document.insertCamera(SceneCamera.fromSnapshot(snapshot));
+    }
+  }
+
   const lighting = validateLightingManifest(manifest.lighting, version);
   if (lighting) {
     document.ambientColor = lighting.ambientColor;
@@ -984,7 +1044,8 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
       document.insertLight(
         SceneLight.fromSnapshot({
           ...snapshot,
-          castShadows: snapshot.castShadows ?? true
+          castShadows: snapshot.castShadows ?? true,
+          shadowSoftness: snapshot.shadowSoftness ?? 0.35
         })
       );
     }

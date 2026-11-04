@@ -57,6 +57,17 @@ describe('inspector layout', () => {
     ]);
   });
 
+  it('gives Render its own camera and render sections', () => {
+    expect(workspaceCan('render', 'editCamera')).toBe(true);
+    expect(workspaceCan('render', 'edit3d')).toBe(false);
+    expect(inspectorSectionsFor('render')).toEqual([
+      'scene',
+      'camera',
+      'render',
+      'controls'
+    ]);
+  });
+
   it('opens Scene, Selection, Brush, and Texture by default', () => {
     const defaults = defaultInspectorOpen();
     expect(defaults.scene).toBe(true);

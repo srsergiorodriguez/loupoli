@@ -100,6 +100,11 @@ import {
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
+import {
+  CreateCameraCommand,
+  DeleteCameraCommand,
+  UpdateCameraCommand
+} from './commands/CameraCommands';
 import { DeleteMeshNodeCommand } from './commands/DeleteMeshNodeCommand';
 import {
   ReorderNodeCommand,
@@ -158,6 +163,9 @@ import {
   type AmbientLightSnapshot
 } from './commands/LightCommands';
 import type { LightKind, LightSnapshot } from '../scene/SceneLight';
+import type { SceneCamera } from '../scene/SceneCamera';
+import { upscaleRenderImage, canvasToPng } from '../render/renderImage';
+import type { RenderShading, RenderUpscale } from '../render/renderSettings';
 import type { SceneLight } from '../scene/SceneLight';
 import {
   decodeLpoly,
@@ -165,7 +173,11 @@ import {
   type DecodedProject,
   type ProjectSettings
 } from '../project/lpoly';
-import { openProjectFile, saveProjectFile } from '../platform/projectFiles';
+import {
+  openProjectFile,
+  saveBinaryFile,
+  saveProjectFile
+} from '../platform/projectFiles';
 import {
   DEFAULT_PS1_AFFINE,
   DEFAULT_PS1_SNAP,
@@ -396,6 +408,7 @@ export class EditorRuntime {
   private activeNodeId: string | null;
   private activeGroupId: string | null = null;
   private activeLightId: string | null = null;
+  private activeCameraId: string | null = null;
   private readonly selectedNodeIds = new Set<string>();
   private additiveNodeSelection = false;
   private readonly selection = new ElementSelection('vertex');
@@ -492,6 +505,15 @@ export class EditorRuntime {
   private recovered = false;
   private fileBusy = false;
   private bakeBusy = false;
+  private renderBusy = false;
+  private renderVirtualWidth = 320;
+  private renderVirtualHeight = 180;
+  private renderOutputWidth = 1280;
+  private renderOutputHeight = 720;
+  private renderUpscale: RenderUpscale = 'nearest';
+  private renderShading: RenderShading = 'lit';
+  private renderTransparent = false;
+  private renderBackground = '#121214';
   private projectError: string | null = null;
 
   /** Active texture asset used by texture and paint tools. */
@@ -517,6 +539,7 @@ export class EditorRuntime {
       this.textureLibrary.activeAssetId
     );
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
+    this.activeCameraId = this.document.cameras[0]?.id ?? null;
     if (this.activeNodeId) {
       this.selectedNodeIds.add(this.activeNodeId);
     }
@@ -535,9 +558,15 @@ export class EditorRuntime {
     this.inputHost = {
       activateEditor: (editor) => this.setActiveEditor(editor),
       isUvActive: () => this.activeEditor !== '3d',
-      orbit: (dx, dy) => this.renderer.orbit(dx, dy),
-      pan: (dx, dy) => this.renderer.pan(dx, dy),
-      zoom: (factor) => this.renderer.zoom(factor),
+      orbit: (dx, dy) => {
+        if (this.workspace !== 'render') this.renderer.orbit(dx, dy);
+      },
+      pan: (dx, dy) => {
+        if (this.workspace !== 'render') this.renderer.pan(dx, dy);
+      },
+      zoom: (factor) => {
+        if (this.workspace !== 'render') this.renderer.zoom(factor);
+      },
       beginToolPointer: (sample) => this.beginToolPointer(sample),
       hoverToolPointer: (sample) => this.hoverToolPointer(sample),
       moveToolPointer: (sample) => this.moveToolPointer(sample),
@@ -721,6 +750,8 @@ export class EditorRuntime {
       activeGroupId: this.activeGroupId,
       activeLightId: this.activeLightId,
       lights: this.document.lightSummaries(),
+      activeCameraId: this.activeCameraId,
+      cameras: this.document.cameraSummaries(),
       ambientColor: this.document.ambientColor,
       ambientIntensity: this.document.ambientIntensity,
       groups: this.document.groupSummaries(),
@@ -736,6 +767,15 @@ export class EditorRuntime {
       recovered: this.recovered,
       fileBusy: this.fileBusy,
       bakeBusy: this.bakeBusy,
+      renderBusy: this.renderBusy,
+      renderVirtualWidth: this.renderVirtualWidth,
+      renderVirtualHeight: this.renderVirtualHeight,
+      renderOutputWidth: this.renderOutputWidth,
+      renderOutputHeight: this.renderOutputHeight,
+      renderUpscale: this.renderUpscale,
+      renderShading: this.renderShading,
+      renderTransparent: this.renderTransparent,
+      renderBackground: this.renderBackground,
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
     };
@@ -1203,11 +1243,13 @@ export class EditorRuntime {
     this.document.replaceNodes(fresh.nodes);
     this.document.replaceGroups([]);
     this.document.replaceLights(fresh.lights);
+    this.document.replaceCameras(fresh.cameras);
     this.document.ambientColor = fresh.ambientColor;
     this.document.ambientIntensity = fresh.ambientIntensity;
     this.projectName = 'Untitled';
     this.activeGroupId = null;
     this.activeLightId = null;
+    this.activeCameraId = this.document.cameras[0]?.id ?? null;
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     this.selectedNodeIds.clear();
     if (this.activeNodeId) {
@@ -1219,6 +1261,7 @@ export class EditorRuntime {
     this.uvPaintMode = false;
     this.activeEditor = '3d';
     this.workspace = 'model';
+    this.renderer.setGridVisible(true);
     this.renderer.setSeamOverlayVisible(false);
     this.uvSelection.clear();
     this.uvPins.clear();
@@ -1253,14 +1296,19 @@ export class EditorRuntime {
   }
 
   /** Switch Model, Light, UV, and Paint without duplicating open/close logic. */
-  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint'): void {
+  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint' | 'render'): void {
     if (workspace !== 'paint') {
       this.cancelProjectionPaint();
       this.surfaceCursor = null;
       this.projectionPreview = null;
     }
+    if (workspace === 'render') {
+      this.renderer.setGridVisible(false);
+    } else {
+      this.renderer.setGridVisible(true);
+    }
     this.workspace = workspace;
-    if (workspace === 'model' || workspace === 'light') {
+    if (workspace === 'model' || workspace === 'light' || workspace === 'render') {
       this.activeEditor = '3d';
       if (this.uvOpen) {
         this.closeUvView();
@@ -1268,6 +1316,12 @@ export class EditorRuntime {
         this.uvPaintMode = false;
         this.renderer.setSeamOverlayVisible(false);
         this.syncScene();
+      }
+      if (workspace === 'render') {
+        if (this.shading !== 'lit') {
+          this.shading = 'lit';
+          this.renderer.setShadingMode('lit');
+        }
       }
       if (workspace === 'light') {
         if (this.shading !== 'lit') {
@@ -1284,6 +1338,9 @@ export class EditorRuntime {
       this.syncScene();
       if (workspace === 'light') {
         this.renderer.frameLightWorkspace();
+      }
+      if (workspace === 'render') {
+        this.syncRenderCameraView();
       }
       this.publish();
       return;
@@ -3632,6 +3689,188 @@ export class EditorRuntime {
     return occluders;
   }
 
+  /** Find the active render camera. */
+  getActiveCamera(): SceneCamera | null {
+    return this.document.getCamera(this.activeCameraId);
+  }
+
+  /** Select a render camera without changing the modeling selection. */
+  selectCamera(id: string): void {
+    if (!this.document.getCamera(id)) {
+      return;
+    }
+    this.activeCameraId = id;
+    this.syncRenderCameraView();
+    this.publish();
+  }
+
+  /** Push the active document camera into the Render workspace viewport. */
+  private syncRenderCameraView(): void {
+    if (this.workspace !== 'render') {
+      return;
+    }
+    const camera = this.getActiveCamera();
+    if (camera) {
+      this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+    }
+  }
+
+  /** Create a camera from the current navigation view. */
+  addCameraFromCurrentView(): void {
+    const view = this.renderer.captureCameraView();
+    const camera = this.document.createCamera();
+    camera.apply({
+      ...camera.snapshot(),
+      position: view.position,
+      target: view.target,
+      fov: view.fov
+    });
+    this.history.execute(
+      new CreateCameraCommand(this.document, camera, this.document.cameras.length)
+    );
+    this.activeCameraId = camera.id;
+    this.publish();
+  }
+
+  /** Edit one camera as a single undoable command. */
+  updateCamera(
+    id: string,
+    patch: Partial<Pick<import('../scene/SceneCamera').CameraSnapshot, 'name' | 'position' | 'target' | 'fov'>>
+  ): void {
+    const camera = this.document.getCamera(id);
+    if (!camera) {
+      return;
+    }
+    const before = camera.snapshot();
+    const after = {
+      ...before,
+      ...(patch.name !== undefined ? { name: patch.name.trim().slice(0, 64) } : {}),
+      ...(patch.position !== undefined ? { position: [...patch.position] as [number, number, number] } : {}),
+      ...(patch.target !== undefined ? { target: [...patch.target] as [number, number, number] } : {}),
+      ...(patch.fov !== undefined ? { fov: Math.max(5, Math.min(160, patch.fov)) } : {})
+    };
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return;
+    }
+    this.history.execute(new UpdateCameraCommand(camera, before, after));
+    this.syncRenderCameraView();
+    this.publish();
+  }
+
+  /** Edit the active render camera. */
+  updateActiveCamera(
+    patch: Partial<Pick<import('../scene/SceneCamera').CameraSnapshot, 'name' | 'position' | 'target' | 'fov'>>
+  ): void {
+    if (this.activeCameraId) {
+      this.updateCamera(this.activeCameraId, patch);
+    }
+  }
+
+  /** Delete the active render camera and select the next one. */
+  deleteActiveCamera(): void {
+    if (!this.activeCameraId) {
+      return;
+    }
+    const camera = this.document.getCamera(this.activeCameraId);
+    if (!camera) {
+      return;
+    }
+    const index = this.document.cameras.indexOf(camera);
+    this.history.execute(new DeleteCameraCommand(this.document, camera, index));
+    this.activeCameraId = this.document.cameras[Math.min(index, this.document.cameras.length - 1)]?.id ?? null;
+    this.publish();
+  }
+
+  /** Update render output settings without touching the document. */
+  updateRenderSettings(
+    patch: Partial<{
+      renderVirtualWidth: number;
+      renderVirtualHeight: number;
+      renderOutputWidth: number;
+      renderOutputHeight: number;
+      renderUpscale: RenderUpscale;
+      renderShading: RenderShading;
+      renderTransparent: boolean;
+      renderBackground: string;
+    }>
+  ): void {
+    const clampDimension = (value: number): number =>
+      Math.max(1, Math.min(4096, Math.round(value)));
+    if (patch.renderVirtualWidth !== undefined) {
+      this.renderVirtualWidth = clampDimension(patch.renderVirtualWidth);
+    }
+    if (patch.renderVirtualHeight !== undefined) {
+      this.renderVirtualHeight = clampDimension(patch.renderVirtualHeight);
+    }
+    if (patch.renderOutputWidth !== undefined) {
+      this.renderOutputWidth = clampDimension(patch.renderOutputWidth);
+    }
+    if (patch.renderOutputHeight !== undefined) {
+      this.renderOutputHeight = clampDimension(patch.renderOutputHeight);
+    }
+    if (patch.renderUpscale !== undefined) {
+      this.renderUpscale = patch.renderUpscale;
+    }
+    if (patch.renderShading !== undefined) {
+      this.renderShading = patch.renderShading;
+    }
+    if (patch.renderTransparent !== undefined) {
+      this.renderTransparent = patch.renderTransparent;
+    }
+    if (patch.renderBackground !== undefined) {
+      this.renderBackground = patch.renderBackground;
+    }
+    this.publish();
+  }
+
+  /** Render one still from the active camera and save it as a PNG. */
+  async renderStill(): Promise<void> {
+    if (this.renderBusy) {
+      return;
+    }
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      this.projectError = 'Add a camera before rendering.';
+      this.publish();
+      return;
+    }
+    this.renderBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const image = this.renderer.renderStill({
+        width: this.renderVirtualWidth,
+        height: this.renderVirtualHeight,
+        shading: this.renderShading,
+        camera: {
+          position: camera.position,
+          target: camera.target,
+          fov: camera.fov
+        },
+        transparent: this.renderTransparent,
+        backgroundColor: this.renderBackground
+      });
+      const canvas = upscaleRenderImage(
+        image,
+        this.renderOutputWidth,
+        this.renderOutputHeight,
+        this.renderUpscale
+      );
+      const bytes = await canvasToPng(canvas);
+      await saveBinaryFile(
+        bytes,
+        `${this.projectName}-render.png`,
+        'png',
+        'PNG image'
+      );
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.renderBusy = false;
+      this.publish();
+    }
+  }
+
   /** Bake direct lights into the active object's texture lighting layer. */
   async bakeLighting(): Promise<void> {
     if (this.bakeBusy) {
@@ -3768,7 +4007,7 @@ export class EditorRuntime {
     patch: Partial<
       Pick<
         LightSnapshot,
-        'name' | 'color' | 'intensity' | 'enabled' | 'castShadows' | 'position' | 'direction'
+        'name' | 'color' | 'intensity' | 'enabled' | 'castShadows' | 'shadowSoftness' | 'position' | 'direction'
       >
     >
   ): void {
@@ -3786,6 +4025,9 @@ export class EditorRuntime {
         : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
       ...(patch.castShadows !== undefined ? { castShadows: patch.castShadows } : {}),
+      ...(patch.shadowSoftness !== undefined
+        ? { shadowSoftness: Math.max(0, Math.min(1, patch.shadowSoftness)) }
+        : {}),
       ...(patch.position !== undefined
         ? { position: [...patch.position] as [number, number, number] }
         : {}),
@@ -3805,7 +4047,7 @@ export class EditorRuntime {
     patch: Partial<
       Pick<
         LightSnapshot,
-        'name' | 'color' | 'intensity' | 'enabled' | 'castShadows' | 'position' | 'direction'
+        'name' | 'color' | 'intensity' | 'enabled' | 'castShadows' | 'shadowSoftness' | 'position' | 'direction'
       >
     >
   ): void {
@@ -7389,11 +7631,13 @@ export class EditorRuntime {
     this.document.replaceNodes(decoded.document.nodes);
     this.document.replaceGroups(decoded.document.groups);
     this.document.replaceLights(decoded.document.lights);
+    this.document.replaceCameras(decoded.document.cameras);
     this.document.ambientColor = decoded.document.ambientColor;
     this.document.ambientIntensity = decoded.document.ambientIntensity;
     this.projectName = name;
     this.activeGroupId = null;
     this.activeLightId = null;
+    this.activeCameraId = this.document.cameras[0]?.id ?? null;
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     this.selectedNodeIds.clear();
     if (this.activeNodeId) {

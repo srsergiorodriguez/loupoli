@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 4 persistence plus Phase 5A lighting. Autosave, `.lpoly` v4, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, and ambient settings round-trip. v4 stores the texture asset library and lighting metadata. v3 files remain readable; legacy v1/v2 compatibility is deferred. Shape keys remain later work. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
+**Status:** Phase 4 persistence plus Phase 5A lighting. Autosave, `.lpoly` v4, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, ambient settings, and render cameras round-trip. v4 stores the texture asset library and lighting metadata. v3 files remain readable; legacy v1/v2 compatibility is deferred. Shape keys remain later work. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 **Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
@@ -215,11 +215,21 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
         "intensity": 2.4,
         "enabled": true,
         "castShadows": true,
+        "shadowSoftness": 0.35,
         "position": [2, 2, 4],
         "direction": [-0.32, 0.23, -0.92]
       }
     ]
   },
+  "cameras": [
+    {
+      "id": "camera-1",
+      "name": "Camera",
+      "position": [4, -6, 4],
+      "target": [0, 0, 0],
+      "fov": 42
+    }
+  ],
   "nodes": [
     {
       "id": "uuid",

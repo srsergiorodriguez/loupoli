@@ -69,6 +69,41 @@ export class CameraRig {
     this.applyTransform();
   }
 
+  /** Snap the orbit rig to an explicit render camera. */
+  setView(position: Vector3, target: Vector3, fov: number): void {
+    this.cancelTransition();
+    this.target.copy(target);
+    const offset = new Vector3().subVectors(position, target);
+    const distance = offset.length();
+    if (distance > 1e-5) {
+      this.distance = MathUtils.clamp(distance, MIN_DISTANCE, MAX_DISTANCE);
+      this.azimuth = Math.atan2(offset.y, offset.x);
+      this.elevation = MathUtils.clamp(
+        Math.asin(offset.z / distance),
+        MIN_ELEVATION,
+        MAX_ELEVATION
+      );
+    }
+    this.camera.fov = MathUtils.clamp(fov, 5, 160);
+    this.camera.updateProjectionMatrix();
+    this.applyTransform();
+  }
+
+  /** Current camera position in world space. */
+  getPosition(out = new Vector3()): Vector3 {
+    return out.copy(this.camera.position);
+  }
+
+  /** Current orbit target in world space. */
+  getTarget(out = new Vector3()): Vector3 {
+    return out.copy(this.target);
+  }
+
+  /** Current vertical field of view in degrees. */
+  getFov(): number {
+    return this.camera.fov;
+  }
+
   /** Keep pan speed proportional to the current viewport height. */
   setViewportHeight(height: number): void {
     this.viewportHeight = Math.max(1, height);

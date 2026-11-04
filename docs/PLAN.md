@@ -1,6 +1,6 @@
 # loupoli — Master Delivery Plan
 
-**Status:** Phase 2, Phase 3, and Phase 4 are implemented for browser and native desktop builds; Phase 4 has a [conditional exit audit](./PHASE4_AUDIT.md). Phase 5A lighting, per-light hard shadows, and direct-light texture baking are implemented in the dedicated Light workspace; see [Phase 5 lighting](./PHASE5_LIGHTING.md). Physical-iPad/WKWebView validation, soft shadows/AO, shape keys, and interchange remain.
+**Status:** Phase 2, Phase 3, and Phase 4 are implemented for browser and native desktop builds; Phase 4 has a [conditional exit audit](./PHASE4_AUDIT.md). Phase 5A lighting, per-light hard/soft shadows, and direct-light texture baking are implemented in the dedicated Light workspace; see [Phase 5 lighting](./PHASE5_LIGHTING.md). Physical-iPad/WKWebView validation, soft shadows/AO, shape keys, and interchange remain.
 **Brand rule:** the name is always written `loupoli`, lowercase.
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.
 **Companion docs:** [Docs index](./README.md) ·  [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
@@ -257,7 +257,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 ### Phase 5 — Lighting, baking, shape keys, and interchange
 
-**5A implemented:** editable directional/point/ambient lighting, per-light hard shadows, Lit document-light preview, dedicated Light workspace, and direct-light texture baking. Soft shadows/AO, shape keys, and interchange remain. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
+**5A implemented:** editable directional/point/ambient lighting, per-light hard shadows, Lit document-light preview, dedicated Light workspace, and direct-light texture baking. AO, shape keys, and interchange remain. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 
 **Goal:** finish the asset loop: light it, animate it, move it in and out.
 
@@ -283,6 +283,21 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 6. Lit and Unlit/PS1 modes remain visually distinct, and the PS1 material never falls back to Three's default shader.
 7. Full Phase 1–5 project can be saved, relaunched cold, and restored with no visual topology regressions.
 8. Memory stays under the agreed ceiling throughout a 30-minute paint/animate/export session on the target iPad.
+
+---
+
+### Phase 6 — Render and publish
+
+**Status:** foundation implemented. Scene cameras, Render workspace, camera-driven clean preview, virtual/output resolution, nearest/smooth upscaling, and PNG still export are implemented. PNG sequence, WebM, and MP4 remain.
+
+- Render workspace after Animation.
+- Document cameras with position, target, and FOV.
+- Virtual render target independent of viewport size.
+- Output resolution and upscaling.
+- Clean render pass with shadows and baked textures.
+- Still PNG first; frame sequence and video next.
+
+AO remains out of scope for now.
 
 ---
 
