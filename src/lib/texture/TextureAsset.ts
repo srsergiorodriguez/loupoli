@@ -145,10 +145,8 @@ export class TextureAsset {
   private readonly compositeContext: CanvasRenderingContext2D;
   private activeId: string | null = null;
   private paintLayerId: string | null = null;
-  private readonly paintTiles = new Map<
-    string,
-    { x: number; y: number; width: number; height: number; image: ImageData }
-  >();
+  private previewCanvas: OffscreenCanvas | null = null;
+  private previewContext: OffscreenCanvasRenderingContext2D | null = null;
   private paintBounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
   private readonly checkerA: string;
   private readonly checkerB: string;
@@ -302,37 +300,51 @@ export class TextureAsset {
     this.compositeLayers();
   }
 
-  /** Start a tiled raster transaction on the active layer. */
+  /**
+   * Start a scratch-layer paint transaction.
+   *
+   * The committed layer is copied to a preview surface; painting happens there
+   * until the gesture commits. The composite substitutes this scratch layer,
+   * so previews and erasers look correct without mutating document pixels.
+   */
   beginPaint(layerId: string): boolean {
     const layer = this.layers.find((item) => item.id === layerId);
     if (!layer || this.paintLayerId !== null) {
       return false;
     }
+    const preview = new OffscreenCanvas(this.width, this.height);
+    const context = preview.getContext('2d');
+    if (!context) {
+      return false;
+    }
+    context.clearRect(0, 0, this.width, this.height);
+    context.drawImage(layer.canvas, 0, 0);
     layer.kind = 'raster';
     this.paintLayerId = layerId;
-    this.paintTiles.clear();
+    this.previewCanvas = preview;
+    this.previewContext = context;
     this.paintBounds = null;
     return true;
   }
 
-  /** Refresh the composite so live paint previews are visible. */
+  /** Refresh the composite from the scratch layer while a gesture is live. */
   refreshPreview(): void {
-    this.compositeLayers();
+    this.compositeLayers(true);
   }
 
-  /** Context for an active raster paint transaction. */
+  /** Scratch context used by paint tools; never the committed layer. */
   getPaintContext(layerId: string): OffscreenCanvasRenderingContext2D | null {
     if (this.paintLayerId !== layerId) {
       return null;
     }
-    return this.layers.find((layer) => layer.id === layerId)?.context ?? null;
+    return this.previewContext;
   }
 
   /**
-   * Capture untouched pixels for a region before a tool modifies them.
+   * Mark a region as dirty for the eventual undo patch.
    *
-   * Tiles are captured lazily, so a small brush stroke only snapshots the
-   * 128×128 tiles it actually touches rather than the whole texture.
+   * Preview drawing does not need before-tile snapshots because the committed
+   * layer is untouched. The dirty rectangle keeps the final undo patch local.
    */
   preparePaintRegion(
     minX: number,
@@ -359,56 +371,27 @@ export class TextureAsset {
           maxY: Math.max(bounds.maxY, bottom)
         }
       : { minX: left, minY: top, maxX: right, maxY: bottom };
-    const context = this.getPaintContext(this.paintLayerId);
-    if (!context) {
-      return;
-    }
-    const tileSize = 128;
-    for (let ty = Math.floor(top / tileSize); ty * tileSize < bottom; ty += 1) {
-      for (let tx = Math.floor(left / tileSize); tx * tileSize < right; tx += 1) {
-        const key = `${tx}:${ty}`;
-        if (this.paintTiles.has(key)) {
-          continue;
-        }
-        const x = tx * tileSize;
-        const y = ty * tileSize;
-        const width = Math.min(tileSize, this.width - x);
-        const height = Math.min(tileSize, this.height - y);
-        this.paintTiles.set(key, {
-          x,
-          y,
-          width,
-          height,
-          image: context.getImageData(x, y, width, height)
-        });
-      }
-    }
   }
 
-  /** Restore captured tiles while keeping the transaction open for a preview. */
+  /** Reset the scratch layer from the committed layer for a shape preview. */
   restorePaintSnapshot(): boolean {
     const layerId = this.paintLayerId;
-    if (layerId === null) {
-      return false;
-    }
     const layer = this.layers.find((item) => item.id === layerId);
-    if (!layer) {
+    if (!layer || !this.previewCanvas || !this.previewContext) {
       return false;
     }
-    for (const tile of this.paintTiles.values()) {
-      layer.context.putImageData(tile.image, tile.x, tile.y);
-    }
-    this.paintTiles.clear();
+    this.previewContext.clearRect(0, 0, this.width, this.height);
+    this.previewContext.drawImage(layer.canvas, 0, 0);
     this.paintBounds = null;
-    this.compositeLayers();
+    this.compositeLayers(true);
     return true;
   }
 
   /**
    * Paint a circular segment in texture pixels.
    *
-   * Legacy UV-pane painting path; the modern PaintEngine uses
-   * `preparePaintRegion` and a layer context directly.
+   * Legacy UV-pane painting path; it shares the same scratch preview as the
+   * modern PaintEngine.
    */
   paintSegment(
     layerId: string,
@@ -420,8 +403,8 @@ export class TextureAsset {
     color: string,
     opacity: number
   ): void {
-    const layer = this.layers.find((item) => item.id === layerId);
-    if (!layer || this.paintLayerId !== layerId) {
+    const context = this.getPaintContext(layerId);
+    if (!context) {
       return;
     }
     const safeRadius = Math.max(0.5, radius);
@@ -433,7 +416,6 @@ export class TextureAsset {
     );
     const distance = Math.hypot(toX - fromX, toY - fromY);
     const steps = Math.max(1, Math.ceil(distance / Math.max(1, safeRadius * 0.35)));
-    const context = layer.context;
     context.save();
     context.globalAlpha = Math.min(1, Math.max(0, opacity));
     context.fillStyle = color;
@@ -450,47 +432,32 @@ export class TextureAsset {
       context.fill();
     }
     context.restore();
-    this.compositeLayers();
+    this.compositeLayers(true);
   }
 
-  /** Crop the transaction's dirty rectangle into a command patch. */
+  /** Flatten the scratch layer into the document and return one undo patch. */
   endPaint(): TexturePaintPatch | null {
     const layerId = this.paintLayerId;
     const layer = this.layers.find((item) => item.id === layerId);
     const bounds = this.paintBounds;
-    const tiles = [...this.paintTiles.values()];
-    this.paintLayerId = null;
-    this.paintTiles.clear();
-    this.paintBounds = null;
-    if (!layer || !bounds || tiles.length === 0) {
+    const preview = this.previewCanvas;
+    if (!layer || !preview || !bounds) {
+      this.cancelPaint();
       return null;
     }
     const x = Math.max(0, bounds.minX);
     const y = Math.max(0, bounds.minY);
     const width = Math.min(this.width, bounds.maxX) - x;
     const height = Math.min(this.height, bounds.maxY) - y;
-    if (width <= 0 || height <= 0) {
-      return null;
-    }
+    const before = layer.context.getImageData(x, y, width, height);
+    layer.context.clearRect(0, 0, this.width, this.height);
+    layer.context.drawImage(preview, 0, 0);
     const after = layer.context.getImageData(x, y, width, height);
-    const before = new ImageData(width, height);
-    for (const tile of tiles) {
-      const ix = Math.max(tile.x, x);
-      const iy = Math.max(tile.y, y);
-      const iw = Math.min(tile.x + tile.width, x + width) - ix;
-      const ih = Math.min(tile.y + tile.height, y + height) - iy;
-      if (iw <= 0 || ih <= 0) {
-        continue;
-      }
-      for (let row = 0; row < ih; row += 1) {
-        const source = ((iy - tile.y + row) * tile.width + (ix - tile.x)) * 4;
-        const target = ((iy - y + row) * width + (ix - x)) * 4;
-        before.data.set(
-          tile.image.data.subarray(source, source + iw * 4),
-          target
-        );
-      }
-    }
+    this.paintLayerId = null;
+    this.previewCanvas = null;
+    this.previewContext = null;
+    this.paintBounds = null;
+    this.compositeLayers();
     return {
       layerId: layer.id,
       x,
@@ -502,19 +469,13 @@ export class TextureAsset {
     };
   }
 
-  /** Restore the pre-stroke tiles when a stroke is cancelled. */
+  /** Discard the scratch layer; committed pixels were never touched. */
   cancelPaint(): void {
-    const layerId = this.paintLayerId;
-    const layer = this.layers.find((item) => item.id === layerId);
-    if (layer) {
-      for (const tile of this.paintTiles.values()) {
-        layer.context.putImageData(tile.image, tile.x, tile.y);
-      }
-      this.compositeLayers();
-    }
     this.paintLayerId = null;
-    this.paintTiles.clear();
+    this.previewCanvas = null;
+    this.previewContext = null;
     this.paintBounds = null;
+    this.compositeLayers();
   }
 
   /** Apply a before/after pixel patch for paint undo and redo. */
@@ -863,7 +824,7 @@ export class TextureAsset {
     }
   }
 
-  private compositeLayers(): void {
+  private compositeLayers(usePreview = false): void {
     this.compositeContext.clearRect(0, 0, this.width, this.height);
     for (const layer of this.layers) {
       if (!layer.visible || layer.opacity <= 0) {
@@ -876,7 +837,13 @@ export class TextureAsset {
           : layer.blendMode === 'screen'
             ? 'screen'
             : 'source-over';
-      this.compositeContext.drawImage(layer.canvas, 0, 0);
+      this.compositeContext.drawImage(
+        usePreview && layer.id === this.paintLayerId && this.previewCanvas
+          ? this.previewCanvas
+          : layer.canvas,
+        0,
+        0
+      );
     }
     this.compositeContext.globalAlpha = 1;
     this.compositeContext.globalCompositeOperation = 'source-over';

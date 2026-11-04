@@ -24,6 +24,10 @@
   let panPointerId: number | null = null;
   let panLastX = 0;
   let panLastY = 0;
+  let pinchActive = false;
+  let pinchLastCenter = { x: 0, y: 0 };
+  let pinchLastDistance = 0;
+  const touchPointers = new Map<number, { x: number; y: number }>();
 
   const textureSize = $derived(session.snapshot.textureSize);
   const textureAssets = $derived(session.snapshot.textureAssets);
@@ -52,7 +56,10 @@
     return () => observer.disconnect();
   });
 
-  onDestroy(detachPointer);
+  onDestroy(() => {
+    detachPointer();
+    detachTouchTracking();
+  });
 
   $effect(() => {
     session.snapshot.uvRevision;
@@ -82,6 +89,24 @@
   }
 
   function pointerDown(event: PointerEvent): void {
+    if (event.pointerType === 'touch') {
+      const point = localPoint(event);
+      touchPointers.set(event.pointerId, point);
+      if (touchPointers.size === 1) {
+        attachTouchTracking();
+      } else if (touchPointers.size === 2) {
+        event.preventDefault();
+        if (painting) {
+          detachPointer();
+          painting = false;
+          session.cancelTexturePaint();
+        }
+        beginPinch();
+        return;
+      } else {
+        return;
+      }
+    }
     if (event.button === 1 || event.button === 2) {
       event.preventDefault();
       beginPaintPan(event);
@@ -123,7 +148,11 @@
   }
 
   function windowPointerMove(event: PointerEvent): void {
-    if (!painting || event.pointerId !== activePointerId) {
+    if (
+      !painting ||
+      event.pointerId !== activePointerId ||
+      (event.pointerType === 'touch' && touchPointers.size > 1)
+    ) {
       return;
     }
     event.preventDefault();
@@ -162,6 +191,90 @@
     window.removeEventListener('pointerup', windowPointerUp);
     window.removeEventListener('pointercancel', windowPointerCancel);
     activePointerId = null;
+  }
+
+  function attachTouchTracking(): void {
+    window.addEventListener('pointermove', windowTouchMove);
+    window.addEventListener('pointerup', windowTouchUp);
+    window.addEventListener('pointercancel', windowTouchUp);
+  }
+
+  function detachTouchTracking(): void {
+    window.removeEventListener('pointermove', windowTouchMove);
+    window.removeEventListener('pointerup', windowTouchUp);
+    window.removeEventListener('pointercancel', windowTouchUp);
+    touchPointers.clear();
+    pinchActive = false;
+  }
+
+  function touchPoints(): [{ x: number; y: number }, { x: number; y: number }] | null {
+    const points = [...touchPointers.values()];
+    return points.length >= 2 ? [points[0], points[1]] : null;
+  }
+
+  function beginPinch(): void {
+    const points = touchPoints();
+    if (!points) {
+      return;
+    }
+    pinchActive = true;
+    pinchLastCenter = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+    pinchLastDistance = Math.hypot(
+      points[1].x - points[0].x,
+      points[1].y - points[0].y
+    );
+    brushVisible = false;
+  }
+
+  function windowTouchMove(event: PointerEvent): void {
+    if (event.pointerType !== 'touch' || !touchPointers.has(event.pointerId)) {
+      return;
+    }
+    touchPointers.set(event.pointerId, localPoint(event));
+    const points = touchPoints();
+    if (!points || !pinchActive) {
+      return;
+    }
+    event.preventDefault();
+    const center = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+    const distance = Math.hypot(
+      points[1].x - points[0].x,
+      points[1].y - points[0].y
+    );
+    if (pinchLastDistance > 0) {
+      session.zoomPaint(
+        distance / pinchLastDistance,
+        center.x,
+        center.y,
+        width,
+        height
+      );
+    }
+    session.panPaint(
+      center.x - pinchLastCenter.x,
+      center.y - pinchLastCenter.y
+    );
+    pinchLastCenter = center;
+    pinchLastDistance = distance;
+  }
+
+  function windowTouchUp(event: PointerEvent): void {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    touchPointers.delete(event.pointerId);
+    if (touchPointers.size < 2) {
+      pinchActive = false;
+    }
+    if (touchPointers.size === 0) {
+      detachTouchTracking();
+    }
   }
 
   function beginPaintPan(event: PointerEvent): void {
