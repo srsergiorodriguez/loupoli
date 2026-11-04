@@ -691,6 +691,14 @@ export class ViewportRenderer {
     return { origin, quaternion, size };
   }
 
+  /** Pick one visible light direction handle in the Light workspace. */
+  pickLightDirection(clientX: number, clientY: number): string | null {
+    if (!this.setRayFromPointer(clientX, clientY)) {
+      return null;
+    }
+    return this.lightGizmos.pickDirection(this.raycaster);
+  }
+
   /** Pick one visible light marker in the Light workspace. */
   pickLight(clientX: number, clientY: number): string | null {
     if (!this.setRayFromPointer(clientX, clientY)) {

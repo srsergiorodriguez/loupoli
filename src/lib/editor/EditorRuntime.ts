@@ -110,7 +110,7 @@ import { SetEdgeSeamsCommand } from './commands/SetEdgeSeamsCommand';
 import { AssignTextureCommand } from './commands/AssignTextureCommand';
 import { BakeLightingCommand } from './commands/BakeLightingCommand';
 import { CompositeCommand } from './commands/CompositeCommand';
-import { bakeLighting, uvCoverage } from '../lighting/bake';
+import { bakeLighting, hasUvOverlap, uvCoverage } from '../lighting/bake';
 import {
   CreateTextureAssetCommand,
   DeleteTextureAssetCommand,
@@ -212,6 +212,14 @@ interface LightDrag {
   readonly before: LightSnapshot;
   readonly plane: import('three').Plane;
   readonly offset: Vector3;
+}
+
+/** Active drag of a directional light arrow tip. */
+interface LightDirectionDrag {
+  readonly pointerId: number;
+  readonly light: SceneLight;
+  readonly before: LightSnapshot;
+  readonly plane: import('three').Plane;
 }
 
 /** Active axis-constrained object gizmo drag. */
@@ -470,6 +478,7 @@ export class EditorRuntime {
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
   private lightDrag: LightDrag | null = null;
+  private lightDirectionDrag: LightDirectionDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
   private selectionGizmoDrag: SelectionGizmoDrag | null = null;
   private disposed = false;
@@ -3599,7 +3608,7 @@ export class EditorRuntime {
     }
     const bakeMesh = node.getEvaluatedMesh().mesh;
     const coverage = uvCoverage(bakeMesh);
-    if (coverage > 1.01) {
+    if (hasUvOverlap(bakeMesh)) {
       this.projectError =
         'UV islands overlap. Unwrap the object before baking lighting.';
       this.publish();
@@ -5017,6 +5026,13 @@ export class EditorRuntime {
   }
 
   private beginLightDrag(sample: PointerSample): boolean {
+    const directionLightId = this.renderer.pickLightDirection(
+      sample.clientX,
+      sample.clientY
+    );
+    if (directionLightId) {
+      return this.beginLightDirectionDrag(sample, directionLightId);
+    }
     const lightId = this.renderer.pickLight(sample.clientX, sample.clientY);
     if (!lightId) {
       return false;
@@ -5048,6 +5064,73 @@ export class EditorRuntime {
       offset: point.sub(hit)
     };
     return true;
+  }
+
+  private beginLightDirectionDrag(
+    sample: PointerSample,
+    lightId: string
+  ): boolean {
+    const light = this.document.getLight(lightId);
+    if (!light) {
+      return false;
+    }
+    this.selectLight(light.id);
+    const direction = new Vector3(...light.direction).normalize();
+    const tip = new Vector3(...light.position).addScaledVector(direction, 1.55);
+    const plane = this.renderer.createCameraFacingPlane(tip);
+    if (
+      !this.renderer.intersectPointerPlane(sample.clientX, sample.clientY, plane)
+    ) {
+      return false;
+    }
+    this.lightDirectionDrag = {
+      pointerId: sample.pointerId,
+      light,
+      before: light.snapshot(),
+      plane
+    };
+    return true;
+  }
+
+  private moveLightDirectionDrag(sample: PointerSample): void {
+    const drag = this.lightDirectionDrag;
+    if (!drag || drag.pointerId !== sample.pointerId) {
+      return;
+    }
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      drag.plane
+    );
+    if (!hit) {
+      return;
+    }
+    const origin = new Vector3(...drag.light.position);
+    const direction = hit.sub(origin);
+    if (direction.lengthSq() < 1e-8) {
+      return;
+    }
+    direction.normalize();
+    drag.light.direction = [direction.x, direction.y, direction.z];
+    this.syncScene();
+    this.publish();
+  }
+
+  private finishLightDirectionDrag(): void {
+    const drag = this.lightDirectionDrag;
+    if (!drag) {
+      return;
+    }
+    this.lightDirectionDrag = null;
+    const after = drag.light.snapshot();
+    if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      this.history.execute(
+        new UpdateLightCommand(drag.light, drag.before, after)
+      );
+    } else {
+      this.syncScene();
+      this.publish();
+    }
   }
 
   private moveLightDrag(sample: PointerSample): void {
@@ -5095,7 +5178,12 @@ export class EditorRuntime {
   }
 
   private beginToolPointerInternal(sample: PointerSample): boolean {
-    if (this.drag || this.gizmoDrag || this.lightDrag) {
+    if (
+      this.drag ||
+      this.gizmoDrag ||
+      this.lightDrag ||
+      this.lightDirectionDrag
+    ) {
       this.cancelToolPointer();
     }
 
@@ -5286,6 +5374,13 @@ export class EditorRuntime {
   }
 
   private moveToolPointer(sample: PointerSample): void {
+    if (
+      this.lightDirectionDrag &&
+      this.lightDirectionDrag.pointerId === sample.pointerId
+    ) {
+      this.moveLightDirectionDrag(sample);
+      return;
+    }
     if (this.lightDrag && this.lightDrag.pointerId === sample.pointerId) {
       this.moveLightDrag(sample);
       return;
@@ -5429,6 +5524,13 @@ export class EditorRuntime {
   }
 
   private endToolPointer(sample: PointerSample): void {
+    if (
+      this.lightDirectionDrag &&
+      this.lightDirectionDrag.pointerId === sample.pointerId
+    ) {
+      this.finishLightDirectionDrag();
+      return;
+    }
     if (this.lightDrag && this.lightDrag.pointerId === sample.pointerId) {
       this.finishLightDrag();
       return;
@@ -5483,6 +5585,14 @@ export class EditorRuntime {
   }
 
   private cancelToolPointer(): void {
+    if (this.lightDirectionDrag) {
+      const drag = this.lightDirectionDrag;
+      this.lightDirectionDrag = null;
+      drag.light.apply(drag.before);
+      this.syncScene();
+      this.publish();
+      return;
+    }
     if (this.lightDrag) {
       const drag = this.lightDrag;
       this.lightDrag = null;

@@ -63,7 +63,7 @@ Light creation, deletion, editing, and ambient changes are undoable commands wit
 
 ![Light workspace](media/light-mode.png)
 
-Light markers show each light’s editor position in the viewport. Directional lights also show a direction arrow; their position is a marker anchor, while only their direction affects lighting. Point-light position affects lighting directly. Markers are billboard sprites: click one to select it, drag it to move the light position, and press Escape while dragging to cancel. The Light workspace frames the active object together with every visible marker.
+Light markers show each light’s editor position in the viewport. Directional lights also show a cone-tipped direction arrow; their position is a marker anchor, while only their direction affects lighting. Point-light position affects lighting directly. Drag the marker to move a light, or drag the arrow tip to re-aim a directional light. Both edits commit as one undoable command. Markers are billboard sprites: click one to select it, drag it to move the light position, and press Escape while dragging to cancel. The Light workspace frames the active object together with every visible marker.
 
 ![Light markers and drag](media/light-markers.png)
 
@@ -75,8 +75,8 @@ Light markers show each light’s editor position in the viewport. Directional l
 - Scene outliner remains available to choose the bake target object
 - Lighting Inspector owns add/edit/delete and ambient controls
 - Visibility uses the shared outliner eye
-- Light markers show position; directional markers add a direction arrow
-- Point/directional marker drag updates position as one undoable command
+- Light markers show position; directional markers add a cone-tipped direction arrow
+- Marker drag updates position; arrow-tip drag updates direction; each is one undoable command
 - Naming uses `InlineNameField`
 - Actions use shared `ActionButton`/`ActionMenu` primitives
 
@@ -101,7 +101,7 @@ Algorithm:
 
 Safety rules:
 
-- UV islands must not overlap. The coverage guard rejects overlapping UVs with a clear message.
+- UV islands must not overlap. A per-face coverage raster rejects local overlaps even when total UV area is below 1.
 - If the active object’s texture is shared, bake into a new unique texture copy and assign it to the object. Never silently modify another object’s atlas.
 - If the texture has a free layer, reuse a `lighting` role layer; otherwise create `Baked lighting`.
 - The bake switches the viewport to `Texture`/Unlit for inspection.

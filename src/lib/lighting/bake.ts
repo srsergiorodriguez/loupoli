@@ -47,6 +47,77 @@ function positionAt(
   return new Vector3(x, y, z).applyMatrix4(matrix);
 }
 
+/**
+ * Detect overlapping UV faces with a conservative coverage raster.
+ *
+ * Face interiors are sampled at 512²; shared UV edges are excluded by a small
+ * barycentric epsilon. This catches local overlaps that total UV area alone
+ * misses while avoiding false positives on adjacent islands.
+ */
+export function hasUvOverlap(mesh: HalfEdgeMesh, resolution = 512): boolean {
+  const size = Math.max(32, Math.floor(resolution));
+  const occupied = new Uint8Array(size * size);
+  const stamp = new Uint32Array(size * size);
+  const edgeEpsilon = 1e-4;
+
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const first = mesh.faceHalfEdge[face];
+    const loop: number[] = [];
+    let h = first;
+    do {
+      loop.push(h);
+      h = mesh.heNext[h];
+    } while (h !== first && loop.length < 64);
+    if (loop.length < 3) {
+      continue;
+    }
+    const uv = loop.map((edge) => [
+      mesh.heUv[edge * 2],
+      mesh.heUv[edge * 2 + 1]
+    ] as const);
+    const faceStamp = face + 1;
+    for (let triangle = 1; triangle < uv.length - 1; triangle += 1) {
+      const [x0, y0] = uv[0];
+      const [x1, y1] = uv[triangle];
+      const [x2, y2] = uv[triangle + 1];
+      const denominator = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+      if (Math.abs(denominator) < 1e-10) {
+        continue;
+      }
+      const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2) * size));
+      const maxX = Math.min(size - 1, Math.ceil(Math.max(x0, x1, x2) * size));
+      const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2) * size));
+      const maxY = Math.min(size - 1, Math.ceil(Math.max(y0, y1, y2) * size));
+      for (let y = minY; y <= maxY; y += 1) {
+        const sampleY = (y + 0.5) / size;
+        for (let x = minX; x <= maxX; x += 1) {
+          const sampleX = (x + 0.5) / size;
+          const a =
+            ((y1 - y2) * (sampleX - x2) + (x2 - x1) * (sampleY - y2)) /
+            denominator;
+          const b =
+            ((y2 - y0) * (sampleX - x2) + (x0 - x2) * (sampleY - y2)) /
+            denominator;
+          const c = 1 - a - b;
+          if (a <= edgeEpsilon || b <= edgeEpsilon || c <= edgeEpsilon) {
+            continue;
+          }
+          const index = y * size + x;
+          if (stamp[index] === faceStamp) {
+            continue;
+          }
+          if (occupied[index] !== 0) {
+            return true;
+          }
+          stamp[index] = faceStamp;
+          occupied[index] = 1;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /** Sum of absolute source-face UV areas; values above 1 imply overlap. */
 export function uvCoverage(mesh: HalfEdgeMesh): number {
   let area = 0;

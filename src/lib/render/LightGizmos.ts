@@ -1,6 +1,7 @@
 import {
   BufferGeometry,
   CanvasTexture,
+  ConeGeometry,
   SphereGeometry,
   Color,
   DoubleSide,
@@ -19,11 +20,17 @@ interface LightMarker {
   readonly group: Group;
   readonly sprite: Sprite;
   readonly hit: Mesh;
-  readonly arrow: Line | null;
+  readonly arrow: Group | null;
+  readonly shaft: Line | null;
+  readonly head: Mesh | null;
+  readonly directionHandle: Mesh | null;
   readonly texture: CanvasTexture;
   readonly material: SpriteMaterial;
   readonly arrowMaterial: LineBasicMaterial | null;
-  readonly arrowGeometry: BufferGeometry | null;
+  readonly headMaterial: MeshBasicMaterial | null;
+  readonly handleMaterial: MeshBasicMaterial | null;
+  readonly headGeometry: ConeGeometry | null;
+  readonly handleGeometry: BufferGeometry | null;
   readonly hitMaterial: MeshBasicMaterial;
   readonly hitGeometry: BufferGeometry;
 }
@@ -123,8 +130,30 @@ export class LightGizmos {
       marker.sprite.scale.setScalar(active ? 0.75 : 0.52);
       marker.hit.scale.setScalar(active ? 1.35 : 1);
       marker.sprite.material.color.set(active ? '#ffffff' : '#d8d4c8');
-      if (marker.arrow) {
-        marker.arrow.visible = light.kind === 'directional' && light.enabled;
+      if (marker.arrow && marker.shaft && marker.head && marker.directionHandle) {
+        const visible = light.kind === 'directional' && light.enabled;
+        marker.arrow.visible = visible;
+        if (visible) {
+          const direction = new Vector3(...light.direction).normalize();
+          const tip = direction.clone().multiplyScalar(1.72);
+          marker.shaft.geometry.setFromPoints([
+            new Vector3(0, 0, 0),
+            direction.clone().multiplyScalar(1.18)
+          ]);
+          marker.head.position.copy(direction.clone().multiplyScalar(1.3));
+          marker.head.quaternion.setFromUnitVectors(
+            new Vector3(0, 1, 0),
+            direction
+          );
+          marker.directionHandle.position.copy(tip);
+          const arrowColor = active ? '#c8f078' : light.color;
+          marker.arrowMaterial?.color.set(arrowColor);
+          marker.headMaterial?.color.set(arrowColor);
+          marker.handleMaterial?.color.set(arrowColor);
+          const arrowScale = active ? 1.1 : 1;
+          marker.head.scale.setScalar(arrowScale);
+          marker.directionHandle.scale.setScalar(active ? 1.1 : 0.9);
+        }
       }
     }
   }
@@ -135,10 +164,25 @@ export class LightGizmos {
       return null;
     }
     const hits = raycaster.intersectObjects(
-      [...this.markers.values()].map((marker) => marker.hit),
+      [...this.markers.values()]
+        .filter((marker) => marker.group.visible)
+        .map((marker) => marker.hit),
       false
     );
     return (hits[0]?.object.userData.lightId as string | undefined) ?? null;
+  }
+
+  /** Pick a directional arrow tip for direction editing. */
+  pickDirection(raycaster: import('three').Raycaster): string | null {
+    if (!this.visible) {
+      return null;
+    }
+    const handles = [...this.markers.values()]
+      .filter((marker) => marker.arrow?.visible)
+      .map((marker) => marker.directionHandle)
+      .filter((handle): handle is Mesh => handle !== null);
+    const hits = raycaster.intersectObjects(handles, false);
+    return (hits[0]?.object.userData.lightDirectionId as string | undefined) ?? null;
   }
 
   /** Release every marker resource. */
@@ -178,28 +222,62 @@ export class LightGizmos {
     hit.renderOrder = 21;
     group.add(hit);
 
-    let arrow: Line | null = null;
+    let arrow: Group | null = null;
+    let shaft: Line | null = null;
+    let head: Mesh | null = null;
+    let directionHandle: Mesh | null = null;
     let arrowMaterial: LineBasicMaterial | null = null;
-    let arrowGeometry: BufferGeometry | null = null;
+    let headMaterial: MeshBasicMaterial | null = null;
+    let handleMaterial: MeshBasicMaterial | null = null;
+    let headGeometry: ConeGeometry | null = null;
+    let handleGeometry: BufferGeometry | null = null;
     if (light.kind === 'directional') {
-      arrowGeometry = new BufferGeometry().setFromPoints([
-        new Vector3(0, 0, 0),
-        new Vector3(
-          light.direction[0] * 1.5,
-          light.direction[1] * 1.5,
-          light.direction[2] * 1.5
-        )
-      ]);
+      arrow = new Group();
+      arrow.name = `loupoli-light-arrow-${light.id}`;
       arrowMaterial = new LineBasicMaterial({
         color: new Color(light.color),
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
         depthWrite: false,
         depthTest: false,
         toneMapped: false
       });
-      arrow = new Line(arrowGeometry, arrowMaterial);
-      arrow.renderOrder = 19;
+      shaft = new Line(
+        new BufferGeometry().setFromPoints([
+          new Vector3(0, 0, 0),
+          new Vector3(0, 0, 0)
+        ]),
+        arrowMaterial
+      );
+      shaft.renderOrder = 19;
+      arrow.add(shaft);
+
+      headGeometry = new ConeGeometry(0.17, 0.4, 12);
+      headMaterial = new MeshBasicMaterial({
+        color: new Color(light.color),
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+        depthTest: false,
+        toneMapped: false
+      });
+      head = new Mesh(headGeometry, headMaterial);
+      head.renderOrder = 19;
+      arrow.add(head);
+
+      handleGeometry = new SphereGeometry(0.13, 10, 8);
+      handleMaterial = new MeshBasicMaterial({
+        color: new Color(light.color),
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        depthTest: false,
+        toneMapped: false
+      });
+      directionHandle = new Mesh(handleGeometry, handleMaterial);
+      directionHandle.userData.lightDirectionId = light.id;
+      directionHandle.renderOrder = 22;
+      arrow.add(directionHandle);
       group.add(arrow);
     }
 
@@ -208,10 +286,16 @@ export class LightGizmos {
       sprite,
       hit,
       arrow,
+      shaft,
+      head,
+      directionHandle,
       texture,
       material,
       arrowMaterial,
-      arrowGeometry,
+      headMaterial,
+      handleMaterial,
+      headGeometry,
+      handleGeometry,
       hitMaterial,
       hitGeometry
     };
@@ -221,7 +305,11 @@ export class LightGizmos {
     marker.group.removeFromParent();
     marker.texture.dispose();
     marker.material.dispose();
-    marker.arrowGeometry?.dispose();
+    marker.shaft?.geometry.dispose();
+    marker.headGeometry?.dispose();
+    marker.headMaterial?.dispose();
+    marker.handleGeometry?.dispose();
+    marker.handleMaterial?.dispose();
     marker.arrowMaterial?.dispose();
     marker.hitGeometry.dispose();
     marker.hitMaterial.dispose();
