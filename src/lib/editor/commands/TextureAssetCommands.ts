@@ -1,4 +1,8 @@
-import type { TextureAsset, TextureFilter } from '../../texture/TextureAsset';
+import type {
+  TextureAlphaMode,
+  TextureAsset,
+  TextureFilter
+} from '../../texture/TextureAsset';
 import type { TextureLibrary } from '../../texture/TextureLibrary';
 import type { EditorCommand } from './EditorCommand';
 
@@ -62,5 +66,26 @@ export class SetTextureFilterCommand implements EditorCommand {
 
   undo(): void {
     this.asset.setFilter(this.before);
+  }
+}
+
+
+/** Change how one texture asset's composite alpha is interpreted in 3D. */
+export class SetTextureAlphaModeCommand implements EditorCommand {
+  readonly label = 'Change texture alpha mode';
+  readonly estimatedBytes = 64;
+
+  constructor(
+    private readonly asset: TextureAsset,
+    private readonly before: TextureAlphaMode,
+    private readonly after: TextureAlphaMode
+  ) {}
+
+  execute(): void {
+    this.asset.setAlphaMode(this.after);
+  }
+
+  undo(): void {
+    this.asset.setAlphaMode(this.before);
   }
 }

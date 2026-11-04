@@ -176,6 +176,7 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
         "width": 512,
         "height": 512,
         "filter": "nearest",
+        "alphaMode": "opaque",
         "activeId": "texlayer-1",
         "layers": [
           {
@@ -184,9 +185,10 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
             "visible": true,
             "opacity": 1,
             "color": "#c8c2ad",
-            "pattern": "checker",
+            "pattern": "solid",
             "blendMode": "normal",
             "kind": "fill",
+            "role": "color",
             "pngLength": 24692
           }
         ]

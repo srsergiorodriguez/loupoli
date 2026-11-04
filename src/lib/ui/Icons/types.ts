@@ -42,4 +42,13 @@ export type IconName =
   | 'rectangle'
   | 'ellipse'
   | 'gradient'
-  | 'fill';
+  | 'fill'
+  | 'more'
+  | 'pin'
+  | 'unwrap'
+  | 'stack'
+  | 'checker'
+  | 'transparent'
+  | 'image'
+  | 'sync'
+  | 'lock';

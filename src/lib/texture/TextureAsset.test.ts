@@ -52,7 +52,7 @@ describe('TextureAsset', () => {
     expect(stack.layerCount).toBe(1);
   });
 
-  it('starts with a checker base and adds a layer', () => {
+  it('starts with a solid base and adds a layer', () => {
     const stack = new TextureAsset({
       id: 'test-asset',
       name: 'Test',
@@ -62,7 +62,7 @@ describe('TextureAsset', () => {
       checkerB: '#ffffff'
     });
     expect(stack.layerCount).toBe(1);
-    expect(stack.summaries()[0].pattern).toBe('checker');
+    expect(stack.summaries()[0].pattern).toBe('solid');
     expect(stack.summaries()[0].name).toBe('Base');
     expect(stack.addLayer()).toBe(true);
     expect(stack.layerCount).toBe(2);
@@ -142,6 +142,21 @@ describe('TextureAsset', () => {
       // fill to the cap
     }
     expect(stack.layerCount).toBe(8);
+    stack.dispose();
+  });
+
+  it('supports transparent layers and alpha modes', () => {
+    const stack = new TextureAsset({
+      id: 'alpha-test',
+      name: 'Alpha',
+      width: 64,
+      height: 64
+    });
+    expect(stack.textureAlphaMode).toBe('opaque');
+    expect(stack.addLayer('Transparent', 'transparent')).toBe(true);
+    expect(stack.summaries().at(-1)?.pattern).toBe('transparent');
+    expect(stack.setAlphaMode('cutout')).toBe(true);
+    expect(stack.textureAlphaMode).toBe('cutout');
     stack.dispose();
   });
 });

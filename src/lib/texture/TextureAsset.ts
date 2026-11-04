@@ -7,13 +7,16 @@ import {
 } from 'three';
 
 /** A deterministic fill pattern for a texture layer. */
-export type TextureLayerPattern = 'checker' | 'solid';
+export type TextureLayerPattern = 'checker' | 'solid' | 'transparent';
 
 /** Supported layer compositing modes. */
 export type TextureBlendMode = 'normal' | 'multiply' | 'screen';
 
 /** Authored content kind for one texture layer. */
 export type TextureLayerKind = 'fill' | 'raster';
+
+/** How the asset's composite alpha is interpreted in 3D. */
+export type TextureAlphaMode = 'opaque' | 'cutout' | 'blend';
 
 /** Future lighting/bake role for one texture layer. */
 export type TextureLayerRole = 'color' | 'detail' | 'lighting';
@@ -124,6 +127,7 @@ export interface TextureAssetOptions {
   readonly width: number;
   readonly height: number;
   readonly filter?: TextureFilter;
+  readonly alphaMode?: TextureAlphaMode;
   readonly checkerA?: string;
   readonly checkerB?: string;
 }
@@ -139,6 +143,7 @@ export class TextureAsset {
   readonly height: number;
   readonly texture: CanvasTexture;
   private filter: TextureFilter;
+  private alphaMode: TextureAlphaMode;
   private readonly layers: TextureLayer[] = [];
   private readonly archivedLayers = new Map<string, TextureLayer>();
   private readonly composite: HTMLCanvasElement;
@@ -160,6 +165,7 @@ export class TextureAsset {
     this.width = width;
     this.height = height;
     this.filter = options.filter ?? 'nearest';
+    this.alphaMode = options.alphaMode ?? 'opaque';
     this.checkerA = options.checkerA ?? '#263129';
     this.checkerB = options.checkerB ?? '#c8c2ad';
     this.composite = document.createElement('canvas');
@@ -178,7 +184,7 @@ export class TextureAsset {
     this.texture.anisotropy = 1;
 
     const base = this.createLayer('Base', 'solid', '#c8c2ad', 1);
-    base.pattern = 'checker';
+    base.pattern = 'solid';
     this.layers.push(base);
     this.drawLayer(base);
     this.activeId = base.id;
@@ -203,6 +209,20 @@ export class TextureAsset {
   /** Current sampling filter. */
   get textureFilter(): TextureFilter {
     return this.filter;
+  }
+
+  /** Current 3D alpha interpretation. */
+  get textureAlphaMode(): TextureAlphaMode {
+    return this.alphaMode;
+  }
+
+  /** Change 3D alpha interpretation without touching pixels. */
+  setAlphaMode(mode: TextureAlphaMode): boolean {
+    if (this.alphaMode === mode) {
+      return false;
+    }
+    this.alphaMode = mode;
+    return true;
   }
 
   /** Change sampling without touching pixel content. */
@@ -632,16 +652,19 @@ export class TextureAsset {
     }
   }
 
-  /** Add a new solid layer at the top. Returns false at the layer cap. */
-  addLayer(name?: string): boolean {
+  /** Add a fill layer of the requested type at the top. */
+  addLayer(
+    name?: string,
+    pattern: TextureLayerPattern = 'solid'
+  ): boolean {
     if (this.layers.length >= 8) {
       return false;
     }
     const layer = this.createLayer(
       name ?? `Layer ${this.layers.length + 1}`,
-      'solid',
+      pattern,
       '#8f8ff8',
-      0.55
+      pattern === 'transparent' ? 1 : 0.55
     );
     this.layers.push(layer);
     this.activeId = layer.id;
@@ -758,6 +781,19 @@ export class TextureAsset {
     return true;
   }
 
+  /** Change the authored fill pattern of a non-raster layer. */
+  setPattern(id: string, pattern: TextureLayerPattern): boolean {
+    const layer = this.layers.find((item) => item.id === id);
+    if (!layer || layer.kind === 'raster' || layer.pattern === pattern) {
+      return false;
+    }
+    layer.pattern = pattern;
+    layer.kind = 'fill';
+    this.drawLayer(layer);
+    this.compositeLayers();
+    return true;
+  }
+
   /** Release the composite texture and layer canvases. */
   dispose(): void {
     this.texture.dispose();
@@ -808,6 +844,9 @@ export class TextureAsset {
   private drawLayer(layer: TextureLayer): void {
     const { context } = layer;
     context.clearRect(0, 0, this.width, this.height);
+    if (layer.pattern === 'transparent') {
+      return;
+    }
     if (layer.pattern === 'solid') {
       context.fillStyle = layer.color;
       context.fillRect(0, 0, this.width, this.height);

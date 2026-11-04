@@ -52,6 +52,37 @@ export function prepareTextureSurface(
   return { context, dpr, width, height };
 }
 
+/** Draw a neutral checker behind transparent texels in 2D previews. */
+export function drawTextureChecker(
+  context: CanvasRenderingContext2D,
+  rect: TextureSurfaceRect
+): void {
+  if (rect.width <= 0 || rect.height <= 0) {
+    return;
+  }
+  const styles = getComputedStyle(document.documentElement);
+  const light =
+    styles.getPropertyValue('--bg-raised').trim() || '#202027';
+  const dark =
+    styles.getPropertyValue('--bg-input').trim() || '#09090c';
+  const cell = 10;
+  context.save();
+  context.beginPath();
+  context.rect(rect.x, rect.y, rect.width, rect.height);
+  context.clip();
+  context.fillStyle = dark;
+  context.fillRect(rect.x, rect.y, rect.width, rect.height);
+  context.fillStyle = light;
+  for (let y = 0; y < rect.height; y += cell) {
+    for (let x = 0; x < rect.width; x += cell) {
+      if ((Math.floor(x / cell) + Math.floor(y / cell)) % 2 === 0) {
+        context.fillRect(rect.x + x, rect.y + y, cell, cell);
+      }
+    }
+  }
+  context.restore();
+}
+
 /**
  * Draw the asset composite with the asset's own sampling filter.
  *

@@ -82,7 +82,7 @@
 - Surface failures explicitly; never write NaN or silently discard a chart. **Closed charts, non-finite results, zero-area triangles, and mixed winding fail before applying.**
 - Two-corner pins and full triangle-overlap rejection are implemented; broader chart fixtures and pin editing remain open.
 
-### Slice 4 — Texture layer stack and format v2 (stack first pass)
+### Slice 4 — Texture layer stack and format v3 (implemented)
 
 - Layer add/delete/reorder/visibility/opacity/rename. **Implemented.**
 - Normal/Multiply/Screen blend modes. **Implemented and persisted in v2.**

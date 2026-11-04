@@ -139,6 +139,7 @@ interface TextureAssetManifest {
   readonly width: number;
   readonly height: number;
   readonly filter: 'nearest' | 'linear';
+  readonly alphaMode?: 'opaque' | 'cutout' | 'blend';
   readonly activeId: string | null;
   readonly layers: readonly TextureLayerManifest[];
 }
@@ -427,7 +428,7 @@ function buildTextureManifest(
         layer.opacity > 1 ||
         typeof layer.color !== 'string' ||
         layer.color.length > 32 ||
-        (layer.pattern !== 'checker' && layer.pattern !== 'solid') ||
+        (layer.pattern !== 'checker' && layer.pattern !== 'solid' && layer.pattern !== 'transparent') ||
         !(layer.png instanceof Uint8Array) ||
         layer.png.byteLength < 1 ||
         layer.png.byteLength > MAX_TEXTURE_PNG_BYTES
@@ -461,6 +462,7 @@ function buildTextureManifest(
       width: asset.width,
       height: asset.height,
       filter: asset.filter,
+      alphaMode: asset.alphaMode,
       activeId: asset.activeId,
       layers
     };
@@ -652,7 +654,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
         layer.opacity > 1 ||
         typeof layer.color !== 'string' ||
         layer.color.length > 32 ||
-        (layer.pattern !== 'checker' && layer.pattern !== 'solid') ||
+        (layer.pattern !== 'checker' && layer.pattern !== 'solid' && layer.pattern !== 'transparent') ||
         (layer.kind !== undefined &&
           layer.kind !== 'fill' &&
           layer.kind !== 'raster') ||
@@ -697,6 +699,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
       width: asset.width as number,
       height: asset.height as number,
       filter: asset.filter,
+      alphaMode: asset.alphaMode === 'cutout' || asset.alphaMode === 'blend' ? asset.alphaMode : 'opaque',
       activeId: asset.activeId,
       layers
     };
@@ -904,6 +907,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
         width: asset.width,
         height: asset.height,
         filter: asset.filter,
+        alphaMode: asset.alphaMode ?? 'opaque',
         activeId: asset.activeId,
         layers
       });

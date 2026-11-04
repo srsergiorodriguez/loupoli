@@ -4,6 +4,8 @@
   import { shortcutBus } from '../../input/ShortcutBus';
   import { commandForKeyboardEvent } from '../../input/commands';
   import NumberField from '../Primitives/NumberField.svelte';
+  import IconButton from '../Primitives/IconButton.svelte';
+  import ActionButton from '../Primitives/ActionButton.svelte';
   import PaneFrame from '../Panels/PaneFrame.svelte';
   import PaneHeader from '../Panels/PaneHeader.svelte';
   import { uvClickMoved } from '../../uv/uvView';
@@ -494,90 +496,107 @@
 {/snippet}
 
 {#snippet uvToolbar()}
-  <div class="uv-actions">
-      <div class="uv-group" role="group" aria-label="UV operations">
-        <button
-          type="button"
-          class="uv-chip"
-          disabled={transformMode === 'rotate'}
-          class:active={axisLock === 'u'}
-          aria-label="Constrain UV drag to U"
-          aria-pressed={axisLock === 'u'}
-          onclick={() => session.setUvAxisLock('u')}
-        >U</button>
-        <button
-          type="button"
-          class="uv-chip"
-          class:active={axisLock === 'v'}
-          aria-label="Constrain UV drag to V"
-          aria-pressed={axisLock === 'v'}
-          disabled={transformMode === 'rotate'}
-          onclick={() => session.setUvAxisLock('v')}
-        >V</button>
-        <button
-          type="button"
-          class="uv-chip"
-          class:active={fineMode}
-          aria-pressed={fineMode}
-          aria-label="Fine UV transforms"
-          title="Fine UV transforms (Shift while dragging)"
-          onclick={() => session.setUvFineMode(!fineMode)}
-        >Fine</button>
-        <button
-          type="button"
-          class="uv-action"
-          aria-label="Sync UV selection from 3D selection"
-          onclick={() => session.syncUvFrom3d()}
-        >Sync 3D</button>
-        <button
-          type="button"
-          class="uv-action"
-          aria-label={pinnedCount === 2 ? 'Clear UV pins' : 'Pin selected UV corners'}
-          disabled={pinnedCount !== 2 && selectedCount !== 2}
-          onclick={() => session.toggleUvPins()}
-        >{pinnedCount === 2 ? 'Unpin' : 'Pin'}</button>
-        <button
-          type="button"
-          class="uv-action"
-          aria-label="Unwrap UV charts"
-          onclick={() => session.unwrapUv()}
-        >Unwrap</button>
-        <button
-          type="button"
-          class="uv-action"
-          aria-label="Stack selected UV islands onto the active island"
-          onclick={() => session.stackUvIslands()}
-        >Stack</button>
-      </div>
-      <div class="uv-group" role="group" aria-label="UV view">
-        <button
-          type="button"
-          class="uv-action"
-          aria-label="Zoom UV out"
-          onclick={() => session.zoomUv(1 / 1.25, width, height)}
-        >−</button>
-        <button
-          type="button"
-          class="uv-action"
-          aria-label="Fit UV view"
-          onclick={() => session.resetUvView()}
-        >Fit</button>
-        <button
-          type="button"
-          class="uv-action"
-          aria-label="Zoom UV in"
-          onclick={() => session.zoomUv(1.25, width, height)}
-        >+</button>
-        <button
-          type="button"
-          class="uv-action"
-          class:active={clampMode}
-          aria-pressed={clampMode}
-          aria-label="Clamp direct UV transforms to the texture square"
-          onclick={() => session.setUvClampMode(!clampMode)}
-        >Clamp</button>
-      </div>
-      
+  <div class="uv-toolbar">
+    <div class="uv-group" role="group" aria-label="UV transform">
+      <IconButton
+        label="Move UVs"
+        icon="move"
+        tooltip="Move UVs (G)"
+        active={transformMode === 'move'}
+        onActivate={() => session.setUvTransformMode('move')}
+      />
+      <IconButton
+        label="Rotate UVs"
+        icon="rotate"
+        tooltip="Rotate UVs (R)"
+        active={transformMode === 'rotate'}
+        onActivate={() => session.setUvTransformMode('rotate')}
+      />
+      <IconButton
+        label="Scale UVs"
+        icon="scale"
+        tooltip="Scale UVs (S)"
+        active={transformMode === 'scale'}
+        onActivate={() => session.setUvTransformMode('scale')}
+      />
+    </div>
+    <span class="uv-divider" aria-hidden="true"></span>
+    <div class="uv-group" role="group" aria-label="UV constraints">
+      <ActionButton
+        label="U"
+        active={axisLock === 'u'}
+        disabled={transformMode === 'rotate'}
+        onActivate={() => session.setUvAxisLock('u')}
+      />
+      <ActionButton
+        label="V"
+        active={axisLock === 'v'}
+        disabled={transformMode === 'rotate'}
+        onActivate={() => session.setUvAxisLock('v')}
+      />
+      <ActionButton
+        label="Fine"
+        active={fineMode}
+        onActivate={() => session.setUvFineMode(!fineMode)}
+      />
+    </div>
+    <span class="uv-divider" aria-hidden="true"></span>
+    <div class="uv-group" role="group" aria-label="UV operations">
+      <IconButton
+        label="Sync UV selection"
+        icon="sync"
+        tooltip="Sync from 3D selection"
+        onActivate={() => session.syncUvFrom3d()}
+      />
+      <IconButton
+        label="Pin UVs"
+        icon="pin"
+        tooltip={pinnedCount === 2 ? 'Clear UV pins' : 'Pin selected corners'}
+        active={pinnedCount === 2}
+        disabled={pinnedCount !== 2 && selectedCount !== 2}
+        onActivate={() => session.toggleUvPins()}
+      />
+      <IconButton
+        label="Unwrap UVs"
+        icon="unwrap"
+        tooltip="Unwrap UV charts"
+        onActivate={() => session.unwrapUv()}
+      />
+      <IconButton
+        label="Stack islands"
+        icon="stack"
+        tooltip="Stack selected islands"
+        onActivate={() => session.stackUvIslands()}
+      />
+    </div>
+    <span class="uv-divider" aria-hidden="true"></span>
+    <div class="uv-group" role="group" aria-label="UV view">
+      <IconButton
+        label="Zoom out"
+        icon="minus"
+        tooltip="Zoom UV out"
+        onActivate={() => session.zoomUv(1 / 1.25, width, height)}
+      />
+      <IconButton
+        label="Fit UV view"
+        icon="frame"
+        tooltip="Fit UV view"
+        onActivate={() => session.resetUvView()}
+      />
+      <IconButton
+        label="Zoom in"
+        icon="plus"
+        tooltip="Zoom UV in"
+        onActivate={() => session.zoomUv(1.25, width, height)}
+      />
+      <IconButton
+        label="Clamp UVs"
+        icon="lock"
+        tooltip="Clamp direct transforms"
+        active={clampMode}
+        onActivate={() => session.setUvClampMode(!clampMode)}
+      />
+    </div>
   </div>
 {/snippet}
 
@@ -706,80 +725,26 @@
 
 
 
-  .uv-actions {
-    flex: 1 1 100%;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-  }
-
-  .uv-foot {
-    flex-wrap: wrap;
+  .uv-toolbar {
+    display: flex;
     align-items: center;
-    padding: var(--space-2);
-    white-space: normal;
-  }
-
-  .uv-numeric {
-    flex: 1 1 100%;
     flex-wrap: wrap;
+    gap: 2px;
+    min-height: var(--hit-min);
   }
 
-  .uv-foot-hint {
-    flex: 1 1 100%;
-    display: none;
+  .uv-divider {
+    width: 1px;
+    height: 24px;
+    margin: 0 2px;
+    background: var(--border-subtle);
   }
-
-
-
-
-
-
-
-
 
   .uv-group {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
-    padding-right: var(--space-1);
-    border-right: var(--hairline) solid var(--border-subtle);
+    gap: 2px;
   }
-
-  .uv-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) 0;
-  }
-
-  .uv-chip,
-  .uv-action,
-
-
-  .uv-chip:hover,
-  .uv-action:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .uv-chip.active,
-  .uv-action.active {
-    border-color: var(--accent-primary);
-    background: var(--bg-selected);
-    color: var(--accent-primary);
-  }
-
-  .uv-chip:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-
-  .uv-action {
-    padding: 0 var(--space-2);
-    white-space: nowrap;
-  }
-
 
   .uv-canvas {
     display: block;
@@ -889,8 +854,7 @@
     color: var(--accent-primary);
   }
 
-  .uv-apply:disabled,
-  .uv-action:disabled {
+  .uv-apply:disabled {
     opacity: 0.35;
     cursor: default;
   }
@@ -903,10 +867,6 @@
   @media (max-width: 720px) {
     .uv-foot-hint {
       display: none;
-    }
-
-    .uv-action {
-      padding: 0 6px;
     }
   }
 </style>

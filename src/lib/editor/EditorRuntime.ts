@@ -65,12 +65,18 @@ import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
 import {
   TextureAsset,
   TextureAssetCommand,
-  textureAssetStatesEqual
+  textureAssetStatesEqual,
+  type TextureAlphaMode,
+  type TextureLayerPattern
 } from '../texture/TextureAsset';
 import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
 import { PaintEngine } from '../paint/PaintEngine';
-import { drawTextureSurface, prepareTextureSurface } from '../texture/TextureSurface';
+import {
+  drawTextureChecker,
+  drawTextureSurface,
+  prepareTextureSurface
+} from '../texture/TextureSurface';
 import type { PaintGradient, PaintTool } from '../paint/types';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
@@ -105,6 +111,7 @@ import { AssignTextureCommand } from './commands/AssignTextureCommand';
 import {
   CreateTextureAssetCommand,
   DeleteTextureAssetCommand,
+  SetTextureAlphaModeCommand,
   SetTextureFilterCommand
 } from './commands/TextureAssetCommands';
 import { MoveUvCornersCommand } from './commands/MoveUvCornersCommand';
@@ -483,7 +490,9 @@ export class EditorRuntime {
         this.publish();
       },
       resolveNodeTexture: (node) =>
-        this.textureLibrary.get(node.textureId)?.texture ?? null
+        this.textureLibrary.get(node.textureId)?.texture ?? null,
+      resolveNodeAlphaMode: (node) =>
+        this.textureLibrary.get(node.textureId)?.textureAlphaMode ?? 'opaque'
     });
 
     this.inputHost = {
@@ -790,11 +799,30 @@ export class EditorRuntime {
     this.publish();
   }
 
-  /** Add a texture layer at the top, capped at eight layers. */
-  addTextureLayer(): void {
+  /** Add a typed texture layer at the top, capped at eight layers. */
+  addTextureLayer(pattern: TextureLayerPattern = 'solid'): void {
     this.commitTextureMutation('Add texture layer', () => {
-      this.textureStack.addLayer();
+      this.textureStack.addLayer(undefined, pattern);
     });
+  }
+
+  setTextureLayerPattern(id: string, pattern: TextureLayerPattern): void {
+    this.commitTextureMutation('Change layer type', () => {
+      this.textureStack.setPattern(id, pattern);
+    });
+  }
+
+  setTextureAlphaMode(mode: TextureAlphaMode): void {
+    const asset = this.textureStack;
+    const before = asset.textureAlphaMode;
+    if (before === mode) {
+      return;
+    }
+    this.history.execute(new SetTextureAlphaModeCommand(asset, before, mode));
+    this.renderer.clearTextureMaterials(asset.id);
+    this.autosave.markTextureDirty();
+    this.renderer.refreshTexture();
+    this.publish();
   }
 
   renameTextureLayer(id: string, name: string): void {
@@ -2024,12 +2052,14 @@ export class EditorRuntime {
     }
     const { context } = prepared;
     const bounds = paintBounds(width, height, 24, this.paintViewState());
-    drawTextureSurface(context, this.textureStack, {
+    const textureRect = {
       x: bounds.x,
       y: bounds.y,
       width: bounds.size,
       height: bounds.size
-    });
+    };
+    drawTextureChecker(context, textureRect);
+    drawTextureSurface(context, this.textureStack, textureRect);
     context.strokeStyle =
       getComputedStyle(document.documentElement)
         .getPropertyValue('--border-subtle')
@@ -6490,9 +6520,13 @@ export class EditorRuntime {
       event.command instanceof PaintTextureCommand ||
       event.command instanceof CreateTextureAssetCommand ||
       event.command instanceof DeleteTextureAssetCommand ||
-      event.command instanceof SetTextureFilterCommand
+      event.command instanceof SetTextureFilterCommand ||
+      event.command instanceof SetTextureAlphaModeCommand
     ) {
       this.autosave.markTextureDirty();
+    }
+    if (event.command instanceof SetTextureAlphaModeCommand) {
+      this.renderer.clearAllTextureMaterials();
     }
     this.uvRevision += 1;
     const loopContext =

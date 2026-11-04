@@ -1,6 +1,7 @@
 import {
   TextureAsset,
   type TextureAssetData,
+  type TextureAlphaMode,
   type TextureFilter
 } from './TextureAsset';
 
@@ -11,6 +12,7 @@ export interface TextureAssetSummary {
   readonly width: number;
   readonly height: number;
   readonly filter: TextureFilter;
+  readonly alphaMode: TextureAlphaMode;
 }
 
 /** One serializable texture asset record. */
@@ -79,7 +81,8 @@ export class TextureLibrary {
       name: asset.name,
       width: asset.width,
       height: asset.height,
-      filter: asset.textureFilter
+      filter: asset.textureFilter,
+      alphaMode: asset.textureAlphaMode
     }));
   }
 
@@ -188,6 +191,7 @@ export class TextureLibrary {
         width: asset.width,
         height: asset.height,
         filter: asset.textureFilter,
+        alphaMode: asset.textureAlphaMode,
         activeId: data.activeId,
         layers: data.layers
       });
@@ -219,6 +223,7 @@ export class TextureLibrary {
         width: record.width,
         height: record.height,
         filter: record.filter,
+        alphaMode: record.alphaMode,
         checkerA: this.checkerA,
         checkerB: this.checkerB
       });

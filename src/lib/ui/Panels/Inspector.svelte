@@ -10,6 +10,7 @@
   import ColorField from '../Primitives/ColorField.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
+  import ActionMenu from '../Primitives/ActionMenu.svelte';
   import {
     defaultInspectorOpen,
     inspectorSectionsFor,
@@ -77,10 +78,15 @@
     textureAssets.find((asset) => asset.id === session.snapshot.textureAssetId) ??
       null
   );
+  const selectionUsesActiveTexture = $derived(
+    selectedNodeIds.length > 0 &&
+      nodes
+        .filter((node) => selectedNodeIds.includes(node.id))
+        .every((node) => node.textureId === session.snapshot.textureAssetId)
+  );
   const textureUsage = $derived(
     nodes.filter((node) => node.textureId === session.snapshot.textureAssetId).length
   );
-  let newTextureSize = $state(512);
   let textureImportInput: HTMLInputElement;
   const textureLayers = $derived(session.snapshot.textureLayers);
   const activeTextureLayer = $derived(
@@ -1191,80 +1197,109 @@
             }))}
             onChange={(value) => session.setActiveTextureAsset(value)}
           />
-          <span class="texture-usage">
-            {textureUsage} object{textureUsage === 1 ? '' : 's'} · {activeTextureAsset?.filter ?? 'nearest'}
-          </span>
+          <div class="texture-asset-meta">
+            <span>{textureUsage} object{textureUsage === 1 ? '' : 's'}</span>
+            <span>{activeTextureAsset?.width ?? session.snapshot.textureSize}²</span>
+            <span>{activeTextureAsset?.filter ?? 'nearest'}</span>
+          </div>
           <ActionRow>
-            <ActionButton
+            <ActionMenu
               label="New"
               icon="plus"
+              options={[64, 128, 256, 512, 1024, 2048].map((size) => ({
+                label: `${size}² texture`,
+                onSelect: () => session.createTextureAsset(size, size)
+              }))}
+            />
+            <ActionMenu
+              icon="more"
+              align="end"
+              options={[
+                {
+                  label: 'Duplicate',
+                  icon: 'open',
+                  onSelect: () => session.duplicateActiveTextureAsset()
+                },
+                {
+                  label: 'Import image',
+                  icon: 'image',
+                  onSelect: () => textureImportInput?.click()
+                },
+                {
+                  label: 'Delete asset',
+                  icon: 'trash',
+                  disabled: textureUsage > 0 || textureAssets.length <= 1,
+                  onSelect: () => session.deleteActiveTextureAsset()
+                }
+              ]}
+            />
+            <ActionButton
+              label={selectionUsesActiveTexture ? 'Unassign' : 'Assign'}
+              icon={selectionUsesActiveTexture ? 'close' : 'texture-wire'}
               onActivate={() =>
-                session.createTextureAsset(newTextureSize, newTextureSize)}
-            />
-            <ActionButton
-              label="Duplicate"
-              icon="open"
-              onActivate={() => session.duplicateActiveTextureAsset()}
-            />
-            <ActionButton
-              label="Import"
-              icon="new-file"
-              onActivate={() => textureImportInput?.click()}
-            />
-            <ActionButton
-              label="Delete"
-              icon="trash"
-              variant="danger"
-              disabled={textureUsage > 0 || textureAssets.length <= 1}
-              onActivate={() => session.deleteActiveTextureAsset()}
+                session.assignTextureToSelection(
+                  selectionUsesActiveTexture
+                    ? null
+                    : session.snapshot.textureAssetId
+                )}
             />
           </ActionRow>
-          <SelectField
-            label="New size"
-            value={String(newTextureSize)}
-            options={[64, 128, 256, 512, 1024, 2048].map((size) => ({
-              value: String(size),
-              label: `${size}²`
-            }))}
-            onChange={(value) => (newTextureSize = Number(value))}
-          />
-        </div>
-
-        <div class="texture-block">
-          <SelectField
-            label="Filter"
-            value={activeTextureAsset?.filter ?? 'nearest'}
-            options={[
-              { value: 'nearest', label: 'Nearest' },
-              { value: 'linear', label: 'Linear' }
-            ]}
-            onChange={(value) =>
-              session.setTextureAssetFilter(value as 'nearest' | 'linear')}
-          />
-          <ActionRow>
-            <ActionButton
-              label="Assign"
-              icon="texture-wire"
-              onActivate={() =>
-                session.assignTextureToSelection(session.snapshot.textureAssetId)}
+          <div class="texture-property-pair">
+            <SelectField
+              label="Filter"
+              value={activeTextureAsset?.filter ?? 'nearest'}
+              options={[
+                { value: 'nearest', label: 'Nearest' },
+                { value: 'linear', label: 'Linear' }
+              ]}
+              onChange={(value) =>
+                session.setTextureAssetFilter(value as 'nearest' | 'linear')}
             />
-            <ActionButton
-              label="Unassign"
-              icon="close"
-              onActivate={() => session.assignTextureToSelection(null)}
+            <SelectField
+              label="Alpha"
+              value={activeTextureAsset?.alphaMode ?? 'opaque'}
+              options={[
+                { value: 'opaque', label: 'Opaque' },
+                { value: 'cutout', label: 'Cutout' },
+                { value: 'blend', label: 'Blend' }
+              ]}
+              onChange={(value) =>
+                session.setTextureAlphaMode(
+                  value as 'opaque' | 'cutout' | 'blend'
+                )}
             />
-          </ActionRow>
+          </div>
         </div>
 
         <div class="texture-block">
           <ActionRow align="between">
-            <ActionButton
+            <ActionMenu
               label="Add layer"
               icon="plus"
-              disabled={textureLayers.length >= 8}
-              onActivate={() => session.addTextureLayer()}
+              options={[
+                {
+                  label: 'Solid layer',
+                  icon: 'solid',
+                  onSelect: () => session.addTextureLayer('solid')
+                },
+                {
+                  label: 'Checker layer',
+                  icon: 'checker',
+                  onSelect: () => session.addTextureLayer('checker')
+                },
+                {
+                  label: 'Transparent layer',
+                  icon: 'transparent',
+                  onSelect: () => session.addTextureLayer('transparent')
+                },
+                {
+                  label: 'Import image layer',
+                  icon: 'image',
+                  onSelect: () => textureImportInput?.click()
+                }
+              ]}
             />
-            <span class="texture-note">PNG v3 · autosaved</span>
+            <span class="texture-note">{textureLayers.length}/8 layers</span>
           </ActionRow>
           <div class="texture-layer-list" role="list">
             {#each textureLayersTopFirst as { layer } (layer.id)}
@@ -1284,7 +1319,13 @@
                   aria-pressed={session.snapshot.textureActiveId === layer.id}
                   onclick={() => session.setActiveTextureLayer(layer.id)}
                 >
-                  <span class="texture-layer-swatch" style:background={layer.color}></span>
+                  <span
+                    class="texture-layer-swatch"
+                    class:transparent={layer.pattern === 'transparent'}
+                    class:checker={layer.pattern === 'checker'}
+                    class:raster={layer.kind === 'raster'}
+                    style:background={layer.pattern === 'solid' ? layer.color : undefined}
+                  ></span>
                   <span class="texture-layer-name">{layer.name}</span>
                   <span class="texture-layer-meta">
                     {layer.kind === 'raster' ? 'raster' : layer.pattern} · {layer.role}
@@ -1314,6 +1355,22 @@
                 {activeTextureLayer.kind === 'raster' ? 'raster' : activeTextureLayer.pattern}
               </span>
             </div>
+            {#if activeTextureLayer.kind === 'fill'}
+              <SelectField
+                label="Type"
+                value={activeTextureLayer.pattern}
+                options={[
+                  { value: 'solid', label: 'Solid' },
+                  { value: 'checker', label: 'Checker' },
+                  { value: 'transparent', label: 'Transparent' }
+                ]}
+                onChange={(value) =>
+                  session.setTextureLayerPattern(
+                    activeTextureLayer.id,
+                    value as 'solid' | 'checker' | 'transparent'
+                  )}
+              />
+            {/if}
             <SliderField
               label="Opacity"
               value={activeTextureLayer.opacity}
@@ -1321,40 +1378,44 @@
               onChange={(value) =>
                 session.setTextureLayerOpacity(activeTextureLayer.id, value)}
             />
-            <SelectField
-              label="Blend"
-              value={activeTextureLayer.blendMode}
-              options={[
-                { value: 'normal', label: 'Normal' },
-                { value: 'multiply', label: 'Multiply' },
-                { value: 'screen', label: 'Screen' }
-              ]}
-              onChange={(value) =>
-                session.setTextureLayerBlendMode(
-                  activeTextureLayer.id,
-                  value as 'normal' | 'multiply' | 'screen'
-                )}
-            />
-            <SelectField
-              label="Role"
-              value={activeTextureLayer.role}
-              options={[
-                { value: 'color', label: 'Color' },
-                { value: 'detail', label: 'Detail' },
-                { value: 'lighting', label: 'Lighting' }
-              ]}
-              onChange={(value) =>
-                session.setTextureLayerRole(
-                  activeTextureLayer.id,
-                  value as 'color' | 'detail' | 'lighting'
-                )}
-            />
-            <ColorField
-              label="Fill"
-              value={activeTextureLayer.color}
-              onChange={(value) =>
-                session.setTextureLayerColor(activeTextureLayer.id, value)}
-            />
+            <div class="texture-property-pair">
+              <SelectField
+                label="Blend"
+                value={activeTextureLayer.blendMode}
+                options={[
+                  { value: 'normal', label: 'Normal' },
+                  { value: 'multiply', label: 'Multiply' },
+                  { value: 'screen', label: 'Screen' }
+                ]}
+                onChange={(value) =>
+                  session.setTextureLayerBlendMode(
+                    activeTextureLayer.id,
+                    value as 'normal' | 'multiply' | 'screen'
+                  )}
+              />
+              <SelectField
+                label="Role"
+                value={activeTextureLayer.role}
+                options={[
+                  { value: 'color', label: 'Color' },
+                  { value: 'detail', label: 'Detail' },
+                  { value: 'lighting', label: 'Lighting' }
+                ]}
+                onChange={(value) =>
+                  session.setTextureLayerRole(
+                    activeTextureLayer.id,
+                    value as 'color' | 'detail' | 'lighting'
+                  )}
+              />
+            </div>
+            {#if activeTextureLayer.kind === 'fill' && activeTextureLayer.pattern === 'solid'}
+              <ColorField
+                label="Color"
+                value={activeTextureLayer.color}
+                onChange={(value) =>
+                  session.setTextureLayerColor(activeTextureLayer.id, value)}
+              />
+            {/if}
             <ActionRow>
               <IconButton
                 label="Move layer up"
@@ -2158,6 +2219,21 @@
     padding-bottom: 0;
   }
 
+  .texture-asset-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+  }
+
+  .texture-property-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
   .texture-usage {
     color: var(--text-tertiary);
     font-family: var(--font-mono);
@@ -2208,10 +2284,21 @@
   }
 
   .texture-layer-swatch {
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
     border: var(--hairline) solid var(--border-strong);
     border-radius: 2px;
+    background: var(--bg-input);
+  }
+
+  .texture-layer-swatch.checker,
+  .texture-layer-swatch.transparent {
+    background:
+      linear-gradient(45deg, var(--bg-raised) 25%, transparent 25%) 0 0 / 8px 8px,
+      linear-gradient(-45deg, var(--bg-raised) 25%, transparent 25%) 0 4px / 8px 8px,
+      linear-gradient(45deg, transparent 75%, var(--bg-raised) 75%) 4px -4px / 8px 8px,
+      linear-gradient(-45deg, transparent 75%, var(--bg-raised) 75%) -4px 0 / 8px 8px,
+      var(--bg-input);
   }
 
   .texture-layer-name {

@@ -7,7 +7,11 @@ import {
   type UvViewState
 } from './uvView';
 import type { TextureAsset } from '../texture/TextureAsset';
-import { drawTextureSurface, prepareTextureSurface } from '../texture/TextureSurface';
+import {
+  drawTextureChecker,
+  drawTextureSurface,
+  prepareTextureSurface
+} from '../texture/TextureSurface';
 
 function cssToken(name: string, fallback: string): string {
   const value = getComputedStyle(document.documentElement)
@@ -67,12 +71,14 @@ export function drawUvCanvas(
     projectionOverride ?? computeUvProjection(mesh, width, height, 26, view);
   if (textureAsset) {
     const imageOrigin = uvToCanvas([0, 1], projection);
-    drawTextureSurface(context, textureAsset, {
+    const imageRect = {
       x: imageOrigin.x,
       y: imageOrigin.y,
       width: projection.scale,
       height: projection.scale
-    });
+    };
+    drawTextureChecker(context, imageRect);
+    drawTextureSurface(context, textureAsset, imageRect);
   }
   const toPoint = (u: number, v: number): [number, number] => {
     const point = uvToCanvas([u, v], projection);

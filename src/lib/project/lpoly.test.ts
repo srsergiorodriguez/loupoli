@@ -76,6 +76,7 @@ describe('.lpoly v3', () => {
         width: 64,
         height: 64,
         filter: 'nearest',
+        alphaMode: 'cutout',
         activeId: 'texlayer-1',
         layers: [
           {
@@ -84,7 +85,7 @@ describe('.lpoly v3', () => {
             visible: true,
             opacity: 1,
             color: '#c8c2ad',
-            pattern: 'checker',
+            pattern: 'transparent',
             blendMode: 'normal',
             kind: 'fill',
             role: 'color',
@@ -97,6 +98,8 @@ describe('.lpoly v3', () => {
     expect(decoded.textures).toHaveLength(1);
     expect(decoded.textures?.[0].width).toBe(64);
     expect(decoded.textures?.[0].filter).toBe('nearest');
+    expect(decoded.textures?.[0].alphaMode).toBe('cutout');
+    expect(decoded.textures?.[0].layers[0].pattern).toBe('transparent');
     expect(decoded.textures?.[0].layers).toHaveLength(1);
     expect(decoded.textures?.[0].layers[0].png).toEqual(png);
     expect(decoded.textures?.[0].layers[0].blendMode).toBe('normal');
@@ -221,6 +224,7 @@ describe('.lpoly v3', () => {
         width: 64,
         height: 64,
         filter: 'nearest',
+        alphaMode: 'opaque',
         activeId: 'texlayer-a',
         layers: [makeLayer('texlayer-a', pngA)]
       },
@@ -230,6 +234,7 @@ describe('.lpoly v3', () => {
         width: 128,
         height: 128,
         filter: 'linear',
+        alphaMode: 'opaque',
         activeId: 'texlayer-b',
         layers: [makeLayer('texlayer-b', pngB)]
       }

@@ -575,8 +575,19 @@ export class EditorSession {
     this.runtime?.setActiveTextureLayer(id);
   }
 
-  addTextureLayer(): void {
-    this.runtime?.addTextureLayer();
+  addTextureLayer(pattern: 'solid' | 'checker' | 'transparent' = 'solid'): void {
+    this.runtime?.addTextureLayer(pattern);
+  }
+
+  setTextureLayerPattern(
+    id: string,
+    pattern: 'solid' | 'checker' | 'transparent'
+  ): void {
+    this.runtime?.setTextureLayerPattern(id, pattern);
+  }
+
+  setTextureAlphaMode(mode: 'opaque' | 'cutout' | 'blend'): void {
+    this.runtime?.setTextureAlphaMode(mode);
   }
 
   renameTextureLayer(id: string, name: string): void {

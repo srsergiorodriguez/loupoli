@@ -36,6 +36,8 @@ export interface Ps1Uniforms {
   uSnapResolution: { value: Vector2 };
   uSnapEnabled: { value: number };
   uAffineEnabled: { value: number };
+  uAlphaCutoff: { value: number };
+  uAlphaBlend: { value: number };
 }
 
 /**
@@ -130,6 +132,8 @@ function createPs1Material(texture: Texture): ShaderMaterial {
       uniform sampler2D uMap;
       uniform vec3 uTint;
       uniform float uAffineEnabled;
+      uniform float uAlphaCutoff;
+      uniform float uAlphaBlend;
 
       varying vec2 vUv;
       varying vec2 vAffineUv;
@@ -138,7 +142,11 @@ function createPs1Material(texture: Texture): ShaderMaterial {
       void main() {
         vec2 uv = uAffineEnabled > 0.5 ? vAffineUv / vAffineW : vUv;
         vec4 texel = texture2D(uMap, uv);
-        gl_FragColor = vec4(texel.rgb * uTint, 1.0);
+        if (uAlphaCutoff > 0.0 && texel.a < uAlphaCutoff) {
+          discard;
+        }
+        float outAlpha = uAlphaBlend > 0.5 ? texel.a : 1.0;
+        gl_FragColor = vec4(texel.rgb * uTint, outAlpha);
 
         #include <colorspace_fragment>
       }
@@ -148,7 +156,9 @@ function createPs1Material(texture: Texture): ShaderMaterial {
       uTint: { value: new Color(1, 1, 1) },
       uSnapResolution: { value: new Vector2(320, 240) },
       uSnapEnabled: { value: 0 },
-      uAffineEnabled: { value: 0 }
+      uAffineEnabled: { value: 0 },
+      uAlphaCutoff: { value: 0 },
+      uAlphaBlend: { value: 0 }
     } satisfies Ps1Uniforms & Record<string, unknown>
   });
 

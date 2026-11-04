@@ -50,6 +50,7 @@ const TOUCH_PIXEL_RATIO_CAP = 1.5;
 interface ViewportRendererOptions {
   readonly onViewChanged?: (orientation: readonly AxisProjection[]) => void;
   readonly resolveNodeTexture?: (node: MeshNode) => Texture | null;
+  readonly resolveNodeAlphaMode?: (node: MeshNode) => 'opaque' | 'cutout' | 'blend';
 }
 
 /**
@@ -69,9 +70,10 @@ export class ViewportRenderer {
   private readonly nodeViews = new Map<string, MeshNodeView>();
   private readonly textureMaterials = new Map<
     string,
-    { texture: Texture | null; materials: ViewportMaterials }
+    { texture: Texture | null; alphaMode: 'opaque' | 'cutout' | 'blend'; materials: ViewportMaterials }
   >();
   private readonly resolveNodeTexture: (node: MeshNode) => Texture | null;
+  private readonly resolveNodeAlphaMode: (node: MeshNode) => 'opaque' | 'cutout' | 'blend';
   private readonly groupViews = new Map<string, ThreeGroup>();
   private readonly objectGizmo: ObjectGizmo;
 
@@ -148,6 +150,7 @@ export class ViewportRenderer {
       powerPreference: 'high-performance'
     };
     this.resolveNodeTexture = options.resolveNodeTexture ?? (() => null);
+    this.resolveNodeAlphaMode = options.resolveNodeAlphaMode ?? (() => 'opaque');
     this.renderer = new WebGLRenderer(rendererParameters);
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setClearColor(theme.canvas.color, 1);
@@ -720,8 +723,13 @@ export class ViewportRenderer {
     if (!texture) {
       return this.materials;
     }
+    const alphaMode = this.resolveNodeAlphaMode(node);
     const existing = this.textureMaterials.get(id);
-    if (existing && existing.texture === texture) {
+    if (
+      existing &&
+      existing.texture === texture &&
+      existing.alphaMode === alphaMode
+    ) {
       return existing.materials;
     }
     if (existing) {
@@ -730,15 +738,24 @@ export class ViewportRenderer {
     }
     const lit = this.materials.lit.clone();
     lit.map = texture;
+    lit.alphaTest = alphaMode === 'cutout' ? 0.5 : 0;
+    lit.transparent = alphaMode === 'blend';
+    lit.depthWrite = alphaMode !== 'blend';
     lit.needsUpdate = true;
     const ps1 = this.materials.ps1.clone();
-    (ps1.uniforms as unknown as Ps1Uniforms).uMap.value = texture;
+    const uniforms = ps1.uniforms as unknown as Ps1Uniforms;
+    uniforms.uMap.value = texture;
+    uniforms.uAlphaCutoff.value = alphaMode === 'cutout' ? 0.5 : 0;
+    uniforms.uAlphaBlend.value = alphaMode === 'blend' ? 1 : 0;
+    ps1.transparent = alphaMode === 'blend';
+    ps1.depthWrite = alphaMode !== 'blend';
+    ps1.needsUpdate = true;
     const materials: ViewportMaterials = {
       ...this.materials,
       lit,
       ps1
     };
-    this.textureMaterials.set(id, { texture, materials });
+    this.textureMaterials.set(id, { texture, alphaMode, materials });
     return materials;
   }
 

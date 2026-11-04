@@ -152,6 +152,37 @@
   {:else if name === 'fill'}
     <path d="m7 4 9 9-5 5-7-7 3-7Z" />
     <path d="M13.5 19.5c2.3 0 3.5-1.2 3.5-2.8 0-1.2-1.1-2.6-1.7-3.2l-1.8 1.7c-.8 1-1.5 2.3-1.5 3.2 0 1.6 1.2 2.1 1.5 1.1Z" />
+  {:else if name === 'more'}
+    <circle cx="5" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+    <circle cx="19" cy="12" r="1.6" fill="currentColor" />
+  {:else if name === 'pin'}
+    <path d="m9 4 6 2-1.5 4 3.5 3.5-2 2L11.5 12 7 13.5 6 8l3-4Z" />
+    <path d="m10 14-4 6" />
+  {:else if name === 'unwrap'}
+    <rect x="3.5" y="4.5" width="7" height="6" rx=".8" />
+    <rect x="13.5" y="4.5" width="7" height="6" rx=".8" />
+    <rect x="8.5" y="13.5" width="7" height="6" rx=".8" />
+    <path d="M10.5 10.5v3M13.5 13.5l-2-2M17 10.5v3" />
+  {:else if name === 'stack'}
+    <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+    <path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
+  {:else if name === 'checker'}
+    <rect x="4" y="4" width="16" height="16" rx="1" />
+    <path d="M4 12h8V4M12 12h8v8M12 12v8H4" />
+  {:else if name === 'transparent'}
+    <rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3 3" />
+    <path d="m7 17 10-10M7 8h3v3M14 16h3v-3" />
+  {:else if name === 'image'}
+    <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+    <circle cx="9" cy="9" r="1.5" />
+    <path d="m5 17 5-5 3 3 2-2 4 4" />
+  {:else if name === 'sync'}
+    <path d="M20 7v5h-5M4 17v-5h5" />
+    <path d="M6.2 8a7 7 0 0 1 11.5-1.5L20 9M4 15l2.3 2.5A7 7 0 0 0 17.8 16" />
+  {:else if name === 'lock'}
+    <rect x="5" y="10" width="14" height="10" rx="2" />
+    <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
   {:else if name === 'eye-off'}
     <path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.4 2.9M6.2 7.1C4 8.8 2.5 12 2.5 12s3.5 6 9.5 6c1.5 0 2.8-.4 4-1" />
     <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
