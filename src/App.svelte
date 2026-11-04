@@ -13,6 +13,7 @@
   import ProjectBanner from './lib/ui/Chrome/ProjectBanner.svelte';
   import UvPanel from './lib/ui/Uv/UvPanel.svelte';
   import PaintPanel from './lib/ui/Paint/PaintPanel.svelte';
+  import PaintShapePreview from './lib/ui/Paint/PaintShapePreview.svelte';
   import PaneHost from './lib/ui/Panels/PaneHost.svelte';
   import IconButton from './lib/ui/Primitives/IconButton.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
@@ -246,6 +247,10 @@
       </PaneHost>
     {/if}
   </main>
+
+  {#if session.snapshot.projectionPreview}
+    <PaintShapePreview preview={session.snapshot.projectionPreview} />
+  {/if}
 
   {#if session.snapshot.surfaceCursor}
     <div

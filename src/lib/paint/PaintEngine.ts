@@ -1,5 +1,5 @@
 import type { TextureAsset } from '../texture/TextureAsset';
-import { drawStampLine, strokeRandom } from './brush';
+import { drawStamp, drawStampLine, strokeRandom } from './brush';
 import type { PaintSample, PaintSettings } from './types';
 
 interface PaintBounds {
@@ -43,6 +43,7 @@ export class PaintEngine {
   private lastStamp: PaintSample | null = null;
   private bounds = emptyBounds();
   private changed = false;
+  private manual = false;
 
   constructor(
     private readonly asset: TextureAsset,
@@ -52,6 +53,7 @@ export class PaintEngine {
 
   /** Start a gesture and return false when the target layer is unavailable. */
   begin(sample: PaintSample): boolean {
+    this.manual = false;
     if (!this.asset.beginPaint(this.layerId)) {
       return false;
     }
@@ -95,6 +97,66 @@ export class PaintEngine {
   }
 
   /**
+   * Start a manual projected gesture without drawing an initial dab.
+   *
+   * Line/shape/gradient tools sample their screen-space region on release and
+   * call `stampProjected` for each surface hit. `finish` must not add its own
+   * connecting brush segment for this transaction.
+   */
+  beginProjected(sample: PaintSample): boolean {
+    this.manual = true;
+    if (!this.asset.beginPaint(this.layerId)) {
+      return false;
+    }
+    this.context = this.asset.getPaintContext(this.layerId);
+    if (!this.context) {
+      this.asset.cancelPaint();
+      return false;
+    }
+    this.start = sample;
+    this.last = sample;
+    this.filtered = sample;
+    this.lastStamp = sample;
+    return true;
+  }
+
+  /** Stamp one independently sampled projected dab. */
+  stampProjected(
+    x: number,
+    y: number,
+    radius: number,
+    pressure: number,
+    color?: string
+  ): void {
+    if (!this.context) {
+      return;
+    }
+    const safeRadius = Math.max(0.5, radius);
+    const margin = safeRadius * (1 + this.settings.noise) + 2;
+    this.asset.preparePaintRegion(
+      x - margin,
+      y - margin,
+      x + margin,
+      y + margin
+    );
+    const settings = color
+      ? { ...this.settings, color }
+      : this.settings;
+    const bounds = drawStamp(
+      this.context,
+      x,
+      y,
+      safeRadius,
+      settings,
+      pressure,
+      this.random,
+      this.settings.tool === 'eraser'
+    );
+    this.bounds = include(this.bounds, bounds);
+    this.changed = true;
+  }
+
+  /**
    * Continue a projected surface stroke.
    *
    * `connect` is false across a face boundary or after the pointer left the
@@ -102,7 +164,7 @@ export class PaintEngine {
    * through unrelated UV-island space.
    */
   updateProjected(sample: PaintSample, connect: boolean): void {
-    if (!this.context || !this.start) {
+    if (!this.context || !this.start || this.manual) {
       return;
     }
     this.last = sample;
@@ -124,6 +186,12 @@ export class PaintEngine {
     if (!this.context || !this.start) {
       return null;
     }
+    if (this.manual) {
+      this.changed = this.changed || this.bounds.minX !== Infinity;
+      this.asset.refreshPreview();
+      this.context = null;
+      return this.changed ? this.bounds : null;
+    }
     const tool = this.settings.tool;
     if (tool !== 'fill' && tool !== 'brush' && tool !== 'eraser' && this.last) {
       this.asset.restorePaintSnapshot();
@@ -144,6 +212,7 @@ export class PaintEngine {
   /** Discard the transaction and restore pre-stroke pixels. */
   cancel(): void {
     this.context = null;
+    this.manual = false;
     this.asset.cancelPaint();
   }
 

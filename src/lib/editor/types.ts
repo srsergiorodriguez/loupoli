@@ -127,6 +127,20 @@ export interface ModifierPatch {
   readonly count?: number;
 }
 
+/** Screen-space preview for a projected line, shape, or gradient. */
+export interface ProjectionPreview {
+  readonly kind: 'line' | 'rectangle' | 'ellipse' | 'gradient';
+  readonly startX: number;
+  readonly startY: number;
+  readonly endX: number;
+  readonly endY: number;
+  readonly size: number;
+  readonly filled: boolean;
+  readonly gradient: 'linear' | 'radial';
+  readonly color: string;
+  readonly secondaryColor: string;
+}
+
 /** The complete small UI-facing projection of the plain editor runtime. */
 export interface EditorSnapshot {
   readonly shading: ShadingMode;
@@ -174,6 +188,7 @@ export interface EditorSnapshot {
   readonly paintPanX: number;
   readonly paintPanY: number;
   readonly surfaceCursor: { readonly x: number; readonly y: number; readonly size: number } | null;
+  readonly projectionPreview: ProjectionPreview | null;
   readonly uvRevision: number;
   readonly uvError: string | null;
   readonly textureAssets: readonly TextureAssetSummary[];

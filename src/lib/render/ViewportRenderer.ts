@@ -641,6 +641,11 @@ export class ViewportRenderer {
     );
   }
 
+  /** CSS bounds of the WebGL canvas, used for projected tool sampling. */
+  getCanvasRect(): DOMRect {
+    return this.canvas.getBoundingClientRect();
+  }
+
   /** Pick the frontmost surface point and interpolated UV on the active node. */
   pickSurface(clientX: number, clientY: number): SurfaceHit | null {
     const view = this.activeView();

@@ -157,6 +157,7 @@ import {
   type TransformMode,
   type TransformOrientation,
   type Workspace,
+  type ProjectionPreview,
   type ModalTransformKind,
   type ModalTransformSnapshot,
   type MeshActionKind,
@@ -407,6 +408,19 @@ export class EditorRuntime {
   private paintPanX = 0;
   private paintPanY = 0;
   private surfaceCursor: { x: number; y: number; size: number } | null = null;
+  private projectionPreview: ProjectionPreview | null = null;
+  private projectedShape: {
+    tool: 'line' | 'rectangle' | 'ellipse' | 'gradient';
+    asset: TextureAsset;
+    nodeId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    pressure: number;
+    pointerType: PointerSample['pointerType'];
+  } | null = null;
   private uvDrag: UvDrag | null = null;
   private pointerSelectionHit = false;
   private uvPendingClick: {
@@ -605,6 +619,7 @@ export class EditorRuntime {
       paintPanX: this.paintPanX,
       paintPanY: this.paintPanY,
       surfaceCursor: this.surfaceCursor,
+      projectionPreview: this.projectionPreview,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
       textureAssets: this.textureLibrary.summaries(),
@@ -1086,6 +1101,7 @@ export class EditorRuntime {
     this.cancelTexturePaint();
     this.cancelProjectionPaint();
     this.surfaceCursor = null;
+    this.projectionPreview = null;
     this.armedAction = null;
     this.renderer.setActionPreviewLine(null);
     this.cancelLasso();
@@ -1151,6 +1167,7 @@ export class EditorRuntime {
     if (workspace !== 'paint') {
       this.cancelProjectionPaint();
       this.surfaceCursor = null;
+      this.projectionPreview = null;
     }
     this.workspace = workspace;
     if (workspace === 'model') {
@@ -2032,7 +2049,12 @@ export class EditorRuntime {
     }
     const node = this.getActiveNode();
     const supported =
-      this.paintTool === 'brush' || this.paintTool === 'eraser';
+      this.paintTool === 'brush' ||
+      this.paintTool === 'eraser' ||
+      this.paintTool === 'line' ||
+      this.paintTool === 'rectangle' ||
+      this.paintTool === 'ellipse' ||
+      this.paintTool === 'gradient';
     const hasTexture =
       node !== null && this.textureLibrary.get(node.textureId) !== null;
     const hit =
@@ -2056,6 +2078,213 @@ export class EditorRuntime {
     }
     this.surfaceCursor = next;
     this.publish();
+  }
+
+  /** Commit the screen-space projected shape or gradient on release. */
+  private commitProjectedShape(): void {
+    const shape = this.projectedShape;
+    if (!shape) {
+      return;
+    }
+    this.projectedShape = null;
+    this.projectionPreview = null;
+    const asset = shape.asset;
+    const startHit = this.renderer.pickSurface(shape.startX, shape.startY);
+    if (!startHit || startHit.nodeId !== shape.nodeId || !asset.activeLayerId) {
+      this.surfaceCursor = null;
+      this.publish();
+      return;
+    }
+    const strokePressure =
+      shape.pointerType === 'pen' ? shape.pressure : 1;
+    const engine = new PaintEngine(
+      asset,
+      asset.activeLayerId,
+      this.paintSettings(1)
+    );
+    if (!engine.beginProjected({
+      x: startHit.uv[0] * asset.width,
+      y: (1 - startHit.uv[1]) * asset.height,
+      pressure: strokePressure
+    })) {
+      this.surfaceCursor = null;
+      this.publish();
+      return;
+    }
+    const nodeId = shape.nodeId;
+    const stamp = (
+      x: number,
+      y: number,
+      color?: string,
+      pressure = strokePressure
+    ): boolean => {
+      const hit = this.renderer.pickSurface(x, y);
+      if (!hit || hit.nodeId !== nodeId) {
+        return false;
+      }
+      engine.stampProjected(
+        hit.uv[0] * asset.width,
+        (1 - hit.uv[1]) * asset.height,
+        this.projectionRadius(hit, asset),
+        pressure,
+        color
+      );
+      return true;
+    };
+
+    if (shape.tool === 'line') {
+      const distance = Math.hypot(
+        shape.endX - shape.startX,
+        shape.endY - shape.startY
+      );
+      const step = Math.max(1.5, this.uvBrushSize * 0.1);
+      const steps = Math.max(1, Math.ceil(distance / step));
+      for (let index = 0; index <= steps; index += 1) {
+        const t = index / steps;
+        stamp(
+          shape.startX + (shape.endX - shape.startX) * t,
+          shape.startY + (shape.endY - shape.startY) * t
+        );
+      }
+    } else if (shape.tool === 'gradient') {
+      this.sampleScreenGradient(engine, asset, shape, stamp);
+    } else {
+      this.sampleScreenShape(engine, asset, shape, stamp);
+    }
+
+    engine.finish();
+    const patch = asset.endPaint();
+    if (patch) {
+      this.history.execute(new PaintTextureCommand(asset, patch));
+    }
+    this.surfaceCursor = null;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
+  /** Sample the visible surface inside a screen-space rectangle or ellipse. */
+  private sampleScreenShape(
+    _engine: PaintEngine,
+    _asset: TextureAsset,
+    shape: NonNullable<typeof this.projectedShape>,
+    stamp: (x: number, y: number, color?: string, pressure?: number) => boolean
+  ): void {
+    const minX = Math.min(shape.startX, shape.endX);
+    const maxX = Math.max(shape.startX, shape.endX);
+    const minY = Math.min(shape.startY, shape.endY);
+    const maxY = Math.max(shape.startY, shape.endY);
+    const step = Math.max(2, this.uvBrushSize * 0.18);
+    const ellipse = shape.tool === 'ellipse';
+    const filled = this.paintShapeFilled;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const radiusX = Math.max(0.5, (maxX - minX) / 2);
+    const radiusY = Math.max(0.5, (maxY - minY) / 2);
+    const scan = (x: number, y: number): void => {
+      if (ellipse) {
+        const nx = (x - centerX) / radiusX;
+        const ny = (y - centerY) / radiusY;
+        if (nx * nx + ny * ny > 1) {
+          return;
+        }
+      }
+      stamp(x, y);
+    };
+    if (filled) {
+      for (let y = minY; y <= maxY; y += step) {
+        for (let x = minX; x <= maxX; x += step) {
+          scan(x, y);
+        }
+      }
+      return;
+    }
+    if (ellipse) {
+      const circumference =
+        Math.PI * (3 * (radiusX + radiusY) -
+          Math.sqrt((3 * radiusX + radiusY) * (radiusX + 3 * radiusY)));
+      const steps = Math.max(8, Math.ceil(circumference / step));
+      for (let index = 0; index < steps; index += 1) {
+        const angle = (index / steps) * Math.PI * 2;
+        stamp(
+          centerX + Math.cos(angle) * radiusX,
+          centerY + Math.sin(angle) * radiusY
+        );
+      }
+      return;
+    }
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const perimeterSteps = Math.max(4, Math.ceil((width + height) * 2 / step));
+    for (let index = 0; index <= perimeterSteps; index += 1) {
+      const t = index / perimeterSteps;
+      const distance = t * (width + height) * 2;
+      let x = minX;
+      let y = minY;
+      if (distance < width) {
+        x = minX + distance;
+      } else if (distance < width + height) {
+        x = maxX;
+        y = minY + distance - width;
+      } else if (distance < width * 2 + height) {
+        x = maxX - (distance - width - height);
+        y = maxY;
+      } else {
+        x = minX;
+        y = maxY - (distance - width * 2 - height);
+      }
+      stamp(x, y);
+    }
+  }
+
+  /** Fill the visible active surface with a screen-space gradient. */
+  private sampleScreenGradient(
+    _engine: PaintEngine,
+    _asset: TextureAsset,
+    shape: NonNullable<typeof this.projectedShape>,
+    stamp: (x: number, y: number, color?: string, pressure?: number) => boolean
+  ): void {
+    const rect = this.renderer.getCanvasRect();
+    const step = Math.max(2, this.uvBrushSize * 0.18);
+    const dx = shape.endX - shape.startX;
+    const dy = shape.endY - shape.startY;
+    const lengthSq = dx * dx + dy * dy;
+    const maxDistance = Math.max(1, Math.sqrt(lengthSq));
+    for (let y = rect.top; y <= rect.bottom; y += step) {
+      for (let x = rect.left; x <= rect.right; x += step) {
+        const hit = this.renderer.pickSurface(x, y);
+        if (!hit || hit.nodeId !== shape.nodeId) {
+          continue;
+        }
+        const t = this.paintGradient === 'radial'
+          ? Math.min(1, Math.hypot(x - shape.startX, y - shape.startY) / maxDistance)
+          : Math.max(0, Math.min(1, lengthSq === 0
+              ? 0
+              : ((x - shape.startX) * dx + (y - shape.startY) * dy) / lengthSq));
+        stamp(x, y, this.mixHex(this.uvBrushColor, this.paintSecondaryColor, t));
+      }
+    }
+  }
+
+  /** Interpolate two hex colors in linear RGB for gradient dabs. */
+  private mixHex(from: string, to: string, t: number): string {
+    const parse = (value: string): [number, number, number] => {
+      const hex = value.replace('#', '');
+      if (hex.length !== 6) {
+        return [255, 255, 255];
+      }
+      return [
+        parseInt(hex.slice(0, 2), 16),
+        parseInt(hex.slice(2, 4), 16),
+        parseInt(hex.slice(4, 6), 16)
+      ];
+    };
+    const a = parse(from);
+    const b = parse(to);
+    const mix = (i: number): string =>
+      Math.round(a[i] + (b[i] - a[i]) * t)
+        .toString(16)
+        .padStart(2, '0');
+    return `#${mix(0)}${mix(1)}${mix(2)}`;
   }
 
   /** Shared paint settings for texture-space and projected strokes. */
@@ -2124,11 +2353,11 @@ export class EditorRuntime {
   }
 
   /**
-   * Start projection painting on the active object's bound texture.
+   * Start a latched projected gesture on the active object's bound texture.
    *
-   * A miss returns false so InputRouter falls through to camera orbit. The
-   * gesture is latched as a tool stroke, so crossing the silhouette never
-   * turns an active stroke into camera navigation.
+   * Brush/Eraser paint live; line/shape/gradient gestures show a screen preview
+   * and sample the projected surface on release. A miss returns false so
+   * InputRouter falls through to camera orbit.
    */
   private beginProjectionPaint(sample: PointerSample): boolean {
     if (this.workspace !== 'paint') {
@@ -2145,9 +2374,9 @@ export class EditorRuntime {
       this.publish();
       return false;
     }
-    if (this.paintTool !== 'brush' && this.paintTool !== 'eraser') {
+    if (this.paintTool === 'fill') {
       this.projectError =
-        '3D surface painting supports Brush and Eraser. Use the texture pane for shapes, gradients, and fill.';
+        '3D Fill is not implemented yet. Use the texture pane for fill.';
       this.publish();
       return false;
     }
@@ -2161,10 +2390,32 @@ export class EditorRuntime {
     if (this.paintEngine) {
       this.cancelTexturePaint();
     }
-    const radius = Math.max(
-      0.5,
-      Math.min(512, (this.uvBrushSize / 2) * hit.uvPerCssPixel * asset.width)
-    );
+    this.projectError = null;
+    this.surfaceCursor = {
+      x: sample.clientX,
+      y: sample.clientY,
+      size: this.uvBrushSize
+    };
+    if (this.paintTool === 'line' || this.paintTool === 'rectangle' ||
+        this.paintTool === 'ellipse' || this.paintTool === 'gradient') {
+      const shape = {
+        tool: this.paintTool,
+        asset,
+        nodeId: node.id,
+        pointerId: sample.pointerId,
+        startX: sample.clientX,
+        startY: sample.clientY,
+        endX: sample.clientX,
+        endY: sample.clientY,
+        pressure: sample.pressure,
+        pointerType: sample.pointerType
+      };
+      this.projectedShape = shape;
+      this.projectionPreview = this.shapePreview(shape);
+      this.publish();
+      return true;
+    }
+    const radius = this.projectionRadius(hit, asset);
     const engine = new PaintEngine(
       asset,
       asset.activeLayerId,
@@ -2178,7 +2429,6 @@ export class EditorRuntime {
     if (!engine.begin(point)) {
       return false;
     }
-    this.projectError = null;
     this.projectedPaint = {
       engine,
       asset,
@@ -2186,19 +2436,55 @@ export class EditorRuntime {
       pointerId: sample.pointerId,
       lastFace: hit.face
     };
-    this.surfaceCursor = {
-      x: sample.clientX,
-      y: sample.clientY,
-      size: this.uvBrushSize
-    };
     this.uvRevision += 1;
     this.renderer.refreshTexture();
     this.publish();
     return true;
   }
 
+  private shapePreview(shape: NonNullable<typeof this.projectedShape>): ProjectionPreview {
+    return {
+      kind: shape.tool,
+      startX: shape.startX,
+      startY: shape.startY,
+      endX: shape.endX,
+      endY: shape.endY,
+      size: this.uvBrushSize,
+      filled: this.paintShapeFilled,
+      gradient: this.paintGradient,
+      color: this.uvBrushColor,
+      secondaryColor: this.paintSecondaryColor
+    };
+  }
+
+  private projectionRadius(
+    hit: { uvPerCssPixel: number },
+    asset: TextureAsset
+  ): number {
+    return Math.max(
+      0.5,
+      Math.min(512, (this.uvBrushSize / 2) * hit.uvPerCssPixel * asset.width)
+    );
+  }
+
   /** Continue a latched projected stroke; misses simply add no samples. */
   private updateProjectionPaint(sample: PointerSample): void {
+    const shape = this.projectedShape;
+    if (shape) {
+      if (shape.pointerId !== sample.pointerId) {
+        return;
+      }
+      shape.endX = sample.clientX;
+      shape.endY = sample.clientY;
+      this.projectionPreview = this.shapePreview(shape);
+      this.surfaceCursor = {
+        x: sample.clientX,
+        y: sample.clientY,
+        size: this.uvBrushSize
+      };
+      this.publish();
+      return;
+    }
     const state = this.projectedPaint;
     if (!state || state.pointerId !== sample.pointerId) {
       return;
@@ -2231,6 +2517,10 @@ export class EditorRuntime {
   }
 
   private finishProjectionPaint(): void {
+    if (this.projectedShape) {
+      this.commitProjectedShape();
+      return;
+    }
     const state = this.projectedPaint;
     if (!state) {
       return;
@@ -2247,6 +2537,13 @@ export class EditorRuntime {
   }
 
   private cancelProjectionPaint(): void {
+    if (this.projectedShape) {
+      this.projectedShape = null;
+      this.projectionPreview = null;
+      this.surfaceCursor = null;
+      this.publish();
+      return;
+    }
     const state = this.projectedPaint;
     if (!state) {
       return;
@@ -4434,7 +4731,7 @@ export class EditorRuntime {
   }
 
   private moveToolPointer(sample: PointerSample): void {
-    if (this.projectedPaint) {
+    if (this.projectedPaint || this.projectedShape) {
       this.updateProjectionPaint(sample);
       return;
     }
@@ -4573,7 +4870,7 @@ export class EditorRuntime {
   }
 
   private endToolPointer(sample: PointerSample): void {
-    if (this.projectedPaint) {
+    if (this.projectedPaint || this.projectedShape) {
       this.finishProjectionPaint();
       return;
     }
@@ -4623,7 +4920,7 @@ export class EditorRuntime {
   }
 
   private cancelToolPointer(): void {
-    if (this.projectedPaint) {
+    if (this.projectedPaint || this.projectedShape) {
       this.cancelProjectionPaint();
       return;
     }

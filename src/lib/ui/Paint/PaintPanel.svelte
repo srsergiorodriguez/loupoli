@@ -369,10 +369,10 @@
     <span class="paint-hint">
       {#if !activeLayer}
         Add a texture layer in the Inspector
-      {:else if paintTool === 'brush' || paintTool === 'eraser'}
-        Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
+      {:else if paintTool === 'fill'}
+        Fill is texture-pane only · other tools paint the 3D surface too
       {:else}
-        This tool paints the texture pane · 3D surface uses Brush or Eraser
+        Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
       {/if}
     </span>
   </div>
