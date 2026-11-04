@@ -15,6 +15,9 @@ export type TextureBlendMode = 'normal' | 'multiply' | 'screen';
 /** Authored content kind for one texture layer. */
 export type TextureLayerKind = 'fill' | 'raster';
 
+/** Future lighting/bake role for one texture layer. */
+export type TextureLayerRole = 'color' | 'detail' | 'lighting';
+
 /** Small, rune-safe summary of one texture layer. */
 export interface TextureLayerSummary {
   readonly id: string;
@@ -25,6 +28,7 @@ export interface TextureLayerSummary {
   readonly pattern: TextureLayerPattern;
   readonly blendMode: TextureBlendMode;
   readonly kind: TextureLayerKind;
+  readonly role: TextureLayerRole;
 }
 
 /** Serializable metadata for the complete layer stack. */
@@ -66,6 +70,7 @@ interface TextureLayer {
   pattern: TextureLayerPattern;
   blendMode: TextureBlendMode;
   kind: TextureLayerKind;
+  role: TextureLayerRole;
   readonly canvas: OffscreenCanvas;
   readonly context: OffscreenCanvasRenderingContext2D;
 }
@@ -99,7 +104,8 @@ function sameState(a: TextureAssetState, b: TextureAssetState): boolean {
       layer.color === other.color &&
       layer.pattern === other.pattern &&
       layer.blendMode === other.blendMode &&
-      layer.kind === other.kind
+      layer.kind === other.kind &&
+      layer.role === other.role
     );
   });
 }
@@ -138,7 +144,11 @@ export class TextureAsset {
   private readonly composite: HTMLCanvasElement;
   private readonly compositeContext: CanvasRenderingContext2D;
   private activeId: string | null = null;
-  private paintSnapshot: { layerId: string; image: ImageData } | null = null;
+  private paintLayerId: string | null = null;
+  private readonly paintTiles = new Map<
+    string,
+    { x: number; y: number; width: number; height: number; image: ImageData }
+  >();
   private paintBounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
   private readonly checkerA: string;
   private readonly checkerB: string;
@@ -223,7 +233,8 @@ export class TextureAsset {
         color: layer.color,
         pattern: layer.pattern,
         blendMode: layer.blendMode,
-        kind: layer.kind
+        kind: layer.kind,
+        role: layer.role
       })),
       activeId: this.activeId
     };
@@ -239,7 +250,8 @@ export class TextureAsset {
       color: layer.color,
       pattern: layer.pattern,
       blendMode: layer.blendMode,
-      kind: layer.kind
+      kind: layer.kind,
+      role: layer.role
     }));
   }
 
@@ -275,6 +287,7 @@ export class TextureAsset {
       layer.pattern = summary.pattern;
       layer.blendMode = summary.blendMode;
       layer.kind = summary.kind;
+      layer.role = summary.role;
       if (layer.kind === 'fill') {
         this.drawLayer(layer);
       }
@@ -289,52 +302,42 @@ export class TextureAsset {
     this.compositeLayers();
   }
 
-  /** Capture the active layer before a raster paint stroke. */
+  /** Start a tiled raster transaction on the active layer. */
   beginPaint(layerId: string): boolean {
     const layer = this.layers.find((item) => item.id === layerId);
-    if (!layer || this.paintSnapshot) {
+    if (!layer || this.paintLayerId !== null) {
       return false;
     }
     layer.kind = 'raster';
-    this.paintSnapshot = {
-      layerId,
-      image: layer.context.getImageData(0, 0, this.width, this.height)
-    };
+    this.paintLayerId = layerId;
+    this.paintTiles.clear();
     this.paintBounds = null;
     return true;
   }
 
   /** Context for an active raster paint transaction. */
   getPaintContext(layerId: string): OffscreenCanvasRenderingContext2D | null {
-    if (this.paintSnapshot?.layerId !== layerId) {
+    if (this.paintLayerId !== layerId) {
       return null;
     }
     return this.layers.find((layer) => layer.id === layerId)?.context ?? null;
   }
 
-  /** Restore the pre-transaction pixels while keeping the transaction open. */
-  restorePaintSnapshot(): boolean {
-    const snapshot = this.paintSnapshot;
-    if (!snapshot) {
-      return false;
-    }
-    const layer = this.layers.find((item) => item.id === snapshot.layerId);
-    if (!layer) {
-      return false;
-    }
-    layer.context.putImageData(snapshot.image, 0, 0);
-    this.paintBounds = null;
-    this.compositeLayers();
-    return true;
-  }
-
-  /** Expand the transaction's dirty rectangle before endPaint crops it. */
-  markPaintBounds(
+  /**
+   * Capture untouched pixels for a region before a tool modifies them.
+   *
+   * Tiles are captured lazily, so a small brush stroke only snapshots the
+   * 128×128 tiles it actually touches rather than the whole texture.
+   */
+  preparePaintRegion(
     minX: number,
     minY: number,
     maxX: number,
     maxY: number
   ): void {
+    if (this.paintLayerId === null) {
+      return;
+    }
     const left = Math.max(0, Math.min(this.width, Math.floor(minX)));
     const top = Math.max(0, Math.min(this.height, Math.floor(minY)));
     const right = Math.max(0, Math.min(this.width, Math.ceil(maxX)));
@@ -351,13 +354,56 @@ export class TextureAsset {
           maxY: Math.max(bounds.maxY, bottom)
         }
       : { minX: left, minY: top, maxX: right, maxY: bottom };
+    const context = this.getPaintContext(this.paintLayerId);
+    if (!context) {
+      return;
+    }
+    const tileSize = 128;
+    for (let ty = Math.floor(top / tileSize); ty * tileSize < bottom; ty += 1) {
+      for (let tx = Math.floor(left / tileSize); tx * tileSize < right; tx += 1) {
+        const key = `${tx}:${ty}`;
+        if (this.paintTiles.has(key)) {
+          continue;
+        }
+        const x = tx * tileSize;
+        const y = ty * tileSize;
+        const width = Math.min(tileSize, this.width - x);
+        const height = Math.min(tileSize, this.height - y);
+        this.paintTiles.set(key, {
+          x,
+          y,
+          width,
+          height,
+          image: context.getImageData(x, y, width, height)
+        });
+      }
+    }
+  }
+
+  /** Restore captured tiles while keeping the transaction open for a preview. */
+  restorePaintSnapshot(): boolean {
+    const layerId = this.paintLayerId;
+    if (layerId === null) {
+      return false;
+    }
+    const layer = this.layers.find((item) => item.id === layerId);
+    if (!layer) {
+      return false;
+    }
+    for (const tile of this.paintTiles.values()) {
+      layer.context.putImageData(tile.image, tile.x, tile.y);
+    }
+    this.paintTiles.clear();
+    this.paintBounds = null;
+    this.compositeLayers();
+    return true;
   }
 
   /**
    * Paint a circular segment in texture pixels.
    *
-   * Stamps are interpolated so fast pointer moves do not leave gaps. The
-   * composite is refreshed once per segment, not once per stamp.
+   * Legacy UV-pane painting path; the modern PaintEngine uses
+   * `preparePaintRegion` and a layer context directly.
    */
   paintSegment(
     layerId: string,
@@ -370,10 +416,16 @@ export class TextureAsset {
     opacity: number
   ): void {
     const layer = this.layers.find((item) => item.id === layerId);
-    if (!layer || !this.paintSnapshot || this.paintSnapshot.layerId !== layerId) {
+    if (!layer || this.paintLayerId !== layerId) {
       return;
     }
     const safeRadius = Math.max(0.5, radius);
+    this.preparePaintRegion(
+      Math.min(fromX, toX) - safeRadius,
+      Math.min(fromY, toY) - safeRadius,
+      Math.max(fromX, toX) + safeRadius,
+      Math.max(fromY, toY) + safeRadius
+    );
     const distance = Math.hypot(toX - fromX, toY - fromY);
     const steps = Math.max(1, Math.ceil(distance / Math.max(1, safeRadius * 0.35)));
     const context = layer.context;
@@ -382,42 +434,30 @@ export class TextureAsset {
     context.fillStyle = color;
     for (let step = 0; step <= steps; step += 1) {
       const t = step / steps;
-      const x = fromX + (toX - fromX) * t;
-      const y = fromY + (toY - fromY) * t;
       context.beginPath();
-      context.arc(x, y, safeRadius, 0, Math.PI * 2);
+      context.arc(
+        fromX + (toX - fromX) * t,
+        fromY + (toY - fromY) * t,
+        safeRadius,
+        0,
+        Math.PI * 2
+      );
       context.fill();
-      const minX = Math.max(0, Math.floor(x - safeRadius));
-      const minY = Math.max(0, Math.floor(y - safeRadius));
-      const maxX = Math.min(this.width, Math.ceil(x + safeRadius));
-      const maxY = Math.min(this.height, Math.ceil(y + safeRadius));
-      if (maxX <= minX || maxY <= minY) {
-        continue;
-      }
-      const bounds = this.paintBounds;
-      this.paintBounds = bounds
-        ? {
-            minX: Math.min(bounds.minX, minX),
-            minY: Math.min(bounds.minY, minY),
-            maxX: Math.max(bounds.maxX, maxX),
-            maxY: Math.max(bounds.maxY, maxY)
-          }
-        : { minX, minY, maxX, maxY };
     }
     context.restore();
     this.compositeLayers();
   }
 
-  /** Crop the stroke's deterministic dirty rectangle into a command patch. */
+  /** Crop the transaction's dirty rectangle into a command patch. */
   endPaint(): TexturePaintPatch | null {
-    const layer = this.layers.find(
-      (item) => item.id === this.paintSnapshot?.layerId
-    );
-    const snapshot = this.paintSnapshot;
+    const layerId = this.paintLayerId;
+    const layer = this.layers.find((item) => item.id === layerId);
     const bounds = this.paintBounds;
-    this.paintSnapshot = null;
+    const tiles = [...this.paintTiles.values()];
+    this.paintLayerId = null;
+    this.paintTiles.clear();
     this.paintBounds = null;
-    if (!layer || !snapshot || !bounds) {
+    if (!layer || !bounds || tiles.length === 0) {
       return null;
     }
     const x = Math.max(0, bounds.minX);
@@ -429,13 +469,22 @@ export class TextureAsset {
     }
     const after = layer.context.getImageData(x, y, width, height);
     const before = new ImageData(width, height);
-    for (let row = 0; row < height; row += 1) {
-      const source = (y + row) * this.width + x;
-      const target = row * width;
-      before.data.set(
-        snapshot.image.data.subarray(source * 4, (source + width) * 4),
-        target * 4
-      );
+    for (const tile of tiles) {
+      const ix = Math.max(tile.x, x);
+      const iy = Math.max(tile.y, y);
+      const iw = Math.min(tile.x + tile.width, x + width) - ix;
+      const ih = Math.min(tile.y + tile.height, y + height) - iy;
+      if (iw <= 0 || ih <= 0) {
+        continue;
+      }
+      for (let row = 0; row < ih; row += 1) {
+        const source = ((iy - tile.y + row) * tile.width + (ix - tile.x)) * 4;
+        const target = ((iy - y + row) * width + (ix - x)) * 4;
+        before.data.set(
+          tile.image.data.subarray(source, source + iw * 4),
+          target
+        );
+      }
     }
     return {
       layerId: layer.id,
@@ -448,18 +497,19 @@ export class TextureAsset {
     };
   }
 
-  /** Restore the pre-stroke pixels when a stroke is cancelled. */
+  /** Restore the pre-stroke tiles when a stroke is cancelled. */
   cancelPaint(): void {
-    const layer = this.layers.find(
-      (item) => item.id === this.paintSnapshot?.layerId
-    );
-    const snapshot = this.paintSnapshot;
-    this.paintSnapshot = null;
-    this.paintBounds = null;
-    if (layer && snapshot) {
-      layer.context.putImageData(snapshot.image, 0, 0);
+    const layerId = this.paintLayerId;
+    const layer = this.layers.find((item) => item.id === layerId);
+    if (layer) {
+      for (const tile of this.paintTiles.values()) {
+        layer.context.putImageData(tile.image, tile.x, tile.y);
+      }
       this.compositeLayers();
     }
+    this.paintLayerId = null;
+    this.paintTiles.clear();
+    this.paintBounds = null;
   }
 
   /** Apply a before/after pixel patch for paint undo and redo. */
@@ -530,6 +580,7 @@ export class TextureAsset {
         pattern: layer.pattern,
         blendMode: layer.blendMode,
         kind: layer.kind,
+        role: layer.role,
         png: new Uint8Array(await blob.arrayBuffer())
       });
     }
@@ -573,6 +624,7 @@ export class TextureAsset {
         pattern: record.pattern,
         blendMode: record.blendMode ?? 'normal',
         kind: record.kind ?? 'fill',
+        role: record.role ?? 'color',
         canvas,
         context
       });
@@ -651,6 +703,20 @@ export class TextureAsset {
       return false;
     }
     layer.blendMode = blendMode;
+    this.compositeLayers();
+    return true;
+  }
+
+  /** Set a layer's future color/detail/lighting role. */
+  setRole(id: string, role: TextureLayerRole): boolean {
+    const layer = this.layers.find((item) => item.id === id);
+    if (!layer || layer.role === role) {
+      return false;
+    }
+    layer.role = role;
+    if (role === 'lighting' && layer.blendMode === 'normal') {
+      layer.blendMode = 'multiply';
+    }
     this.compositeLayers();
     return true;
   }
@@ -749,7 +815,8 @@ export class TextureAsset {
     opacity: number,
     id = layerId(),
     blendMode: TextureBlendMode = 'normal',
-    kind: TextureLayerKind = 'fill'
+    kind: TextureLayerKind = 'fill',
+    role: TextureLayerRole = 'color'
   ): TextureLayer {
     const canvas = createLayerCanvas(this.width, this.height);
     const context = canvas.getContext('2d');
@@ -765,6 +832,7 @@ export class TextureAsset {
       pattern,
       blendMode,
       kind,
+      role,
       canvas,
       context
     };

@@ -546,6 +546,13 @@ export class EditorSession {
     this.runtime?.setTextureLayerBlendMode(id, mode);
   }
 
+  setTextureLayerRole(
+    id: string,
+    role: 'color' | 'detail' | 'lighting'
+  ): void {
+    this.runtime?.setTextureLayerRole(id, role);
+  }
+
   removeTextureLayer(id: string): void {
     this.runtime?.removeTextureLayer(id);
   }

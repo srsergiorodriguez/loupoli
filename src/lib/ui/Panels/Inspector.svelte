@@ -1281,6 +1281,22 @@
                     <option value="screen">Screen</option>
                   </select>
                 </label>
+                <label class="texture-blend">
+                  <span>Role</span>
+                  <select
+                    value={layer.role}
+                    aria-label={`${layer.name} layer role`}
+                    onchange={(event) =>
+                      session.setTextureLayerRole(
+                        layer.id,
+                        event.currentTarget.value as 'color' | 'detail' | 'lighting'
+                      )}
+                  >
+                    <option value="color">Color</option>
+                    <option value="detail">Detail</option>
+                    <option value="lighting">Lighting</option>
+                  </select>
+                </label>
               </div>
             </div>
           {/each}

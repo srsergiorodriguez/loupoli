@@ -130,6 +130,13 @@ export class PaintEngine {
       pressure: to.pressure
     };
     const last = this.lastStamp ?? from;
+    const margin = this.settings.radius * (1 + this.settings.noise) + 2;
+    this.asset.preparePaintRegion(
+      Math.min(last.x, filtered.x) - margin,
+      Math.min(last.y, filtered.y) - margin,
+      Math.max(last.x, filtered.x) + margin,
+      Math.max(last.y, filtered.y) + margin
+    );
     const bounds = drawStampLine(
       this.context,
       last.x,
@@ -145,12 +152,6 @@ export class PaintEngine {
     this.lastStamp = filtered;
     this.filtered = filtered;
     this.bounds = include(this.bounds, bounds);
-    this.asset.markPaintBounds(
-      bounds.minX,
-      bounds.minY,
-      bounds.maxX,
-      bounds.maxY
-    );
     this.changed = true;
   }
 
@@ -160,6 +161,13 @@ export class PaintEngine {
     }
     const tool = this.settings.tool;
     if (tool === 'line') {
+      const margin = this.settings.radius * (1 + this.settings.noise) + 2;
+      this.asset.preparePaintRegion(
+        Math.min(this.start.x, sample.x) - margin,
+        Math.min(this.start.y, sample.y) - margin,
+        Math.max(this.start.x, sample.x) + margin,
+        Math.max(this.start.y, sample.y) + margin
+      );
       const bounds = drawStampLine(
         this.context,
         this.start.x,
@@ -197,6 +205,13 @@ export class PaintEngine {
     const minY = Math.min(from.y, to.y);
     const maxX = Math.max(from.x, to.x);
     const maxY = Math.max(from.y, to.y);
+    const margin = this.settings.radius * (1 + this.settings.noise) + 2;
+    this.asset.preparePaintRegion(
+      minX - margin,
+      minY - margin,
+      maxX + margin,
+      maxY + margin
+    );
     if (this.settings.shapeFilled) {
       context.save();
       context.globalAlpha = this.settings.opacity;
@@ -284,6 +299,7 @@ export class PaintEngine {
     const context = this.context;
     const width = this.asset.width;
     const height = this.asset.height;
+    this.asset.preparePaintRegion(0, 0, width, height);
     const gradient =
       this.settings.gradient === 'radial'
         ? context.createRadialGradient(
@@ -326,6 +342,7 @@ export class PaintEngine {
     ) {
       return false;
     }
+    this.asset.preparePaintRegion(0, 0, width, height);
     const stack: number[] = [x, y];
     const seen = new Uint8Array(width * height);
     let minX = x;
@@ -383,11 +400,5 @@ export class PaintEngine {
 
   private mark(bounds: PaintBounds): void {
     this.bounds = include(this.bounds, bounds);
-    this.asset.markPaintBounds(
-      bounds.minX,
-      bounds.minY,
-      bounds.maxX,
-      bounds.maxY
-    );
   }
 }

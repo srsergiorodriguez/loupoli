@@ -17,7 +17,8 @@ import { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import type {
   TextureBlendMode,
-  TextureLayerRecord
+  TextureLayerRecord,
+  TextureLayerRole
 } from '../texture/TextureAsset';
 import type { TextureAssetRecord } from '../texture/TextureLibrary';
 
@@ -128,6 +129,7 @@ interface TextureLayerManifest {
   readonly pattern: 'checker' | 'solid';
   readonly blendMode?: TextureBlendMode;
   readonly kind?: 'fill' | 'raster';
+  readonly role?: TextureLayerRole;
   readonly pngLength: number;
 }
 
@@ -443,6 +445,7 @@ function buildTextureManifest(
         pattern: layer.pattern,
         blendMode: layer.blendMode,
         kind: layer.kind,
+        role: layer.role,
         pngLength: layer.png.byteLength
       };
     });
@@ -653,6 +656,10 @@ function validateTextureManifest(value: unknown): TextureManifest {
         (layer.kind !== undefined &&
           layer.kind !== 'fill' &&
           layer.kind !== 'raster') ||
+        (layer.role !== undefined &&
+          layer.role !== 'color' &&
+          layer.role !== 'detail' &&
+          layer.role !== 'lighting') ||
         (layer.blendMode !== undefined &&
           layer.blendMode !== 'normal' &&
           layer.blendMode !== 'multiply' &&
@@ -673,6 +680,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
         pattern: layer.pattern,
         blendMode: layer.blendMode ?? 'normal',
         kind: layer.kind === 'raster' ? 'raster' : 'fill',
+        role: layer.role === 'lighting' || layer.role === 'detail' ? layer.role : 'color',
         pngLength: layer.pngLength as number
       };
     });
@@ -885,6 +893,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
           pattern: layer.pattern,
           blendMode: layer.blendMode ?? 'normal',
           kind: layer.kind ?? 'fill',
+          role: layer.role === 'lighting' || layer.role === 'detail' ? layer.role : 'color',
           png: bytes.slice(cursor, cursor + layer.pngLength)
         });
         cursor += layer.pngLength;

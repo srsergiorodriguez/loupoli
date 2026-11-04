@@ -773,6 +773,15 @@ export class EditorRuntime {
     });
   }
 
+  setTextureLayerRole(
+    id: string,
+    role: 'color' | 'detail' | 'lighting'
+  ): void {
+    this.commitTextureMutation('Change layer role', () => {
+      this.textureStack.setRole(id, role);
+    });
+  }
+
   removeTextureLayer(id: string): void {
     this.commitTextureMutation('Remove texture layer', () => {
       this.textureStack.removeLayer(id);
