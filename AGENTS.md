@@ -173,9 +173,10 @@ Phase 2, the Phase 3 foundations, and Phase 4 texturing are implemented for brow
 - `.lpoly` v4 binary codec with a CRC-checked manifest, aligned typed-array columns, texture asset records, binary PNG chunks, node texture bindings, file-size limits, and multi-node/asset round-trip tests. v3 read compatibility is retained; legacy v1/v2 compatibility is deferred until the MVP build.
 - Tauri native open/save dialogs and Rust atomic byte-level file I/O; browser download/file-picker fallbacks.
 - Tauri debug build and Rust tests pass. The native WKWebView window, physical iPad, and iOS packaging are not yet verified.
+- OBJ/GLB interchange is implemented with Y-up conversion, per-corner UVs, simple per-face material colors, undoable batch imports, OBJ/MTL bundle export, and binary GLB export. GLB textures/skins/animations and OBJ external MTL auto-loading remain future work.
 - Document render cameras are serialized; the navigation camera, render output settings, and active-object selection are session state.
 
-Phase 5A lighting and direct-light texture baking are implemented in the dedicated Light workspace. Next planned work is camera animation, native MP4 encoding, AO, shape keys, and interchange; texture pixel deltas, multi-angle projected-paint tolerance, and physical iPad/WKWebView validation remain explicit follow-ups.
+Phase 5A lighting and direct-light texture baking are implemented in the dedicated Light workspace. Next planned work is camera animation, native MP4 encoding, AO, shape keys, and richer interchange; texture pixel deltas, multi-angle projected-paint tolerance, and physical iPad/WKWebView validation remain explicit follow-ups.
 
 Approved decisions:
 

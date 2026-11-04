@@ -340,6 +340,11 @@ export class HalfEdgeMesh {
     return count;
   }
 
+  /** Render triangle count for one source face, including adaptive tessellation. */
+  renderTriangleCountForFace(face: number): number {
+    return this.faceRenderTriangleCount(face);
+  }
+
   /** Number of derived render triangles. */
   get triangleCount(): number {
     return this.triangleVertexCount / 3;

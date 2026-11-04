@@ -35,6 +35,7 @@ export class MeshNode {
   visible = true;
   parentId: string | null = null;
   textureId: string | null;
+  materialPalette: string[] = [];
   modifiers: Modifier[] = [];
   private modifierRevision = 0;
   private evaluationBase: HalfEdgeMesh | null = null;
@@ -52,13 +53,28 @@ export class MeshNode {
     primitive: PrimitiveKind,
     name: string,
     id = createNodeId(),
-    textureId: string | null = null
+    textureId: string | null = null,
+    materialPalette: readonly string[] = []
   ) {
     this.mesh = mesh;
     this.primitive = primitive;
     this.name = name;
     this.id = id;
     this.textureId = textureId;
+    this.setMaterialPalette(materialPalette);
+  }
+
+  /** Replace the simple per-face color palette. */
+  setMaterialPalette(colors: readonly string[]): void {
+    if (colors.length > 64) {
+      throw new Error('A node supports at most 64 material colors.');
+    }
+    for (const color of colors) {
+      if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+        throw new Error('Material colors must be six-digit hex values.');
+      }
+    }
+    this.materialPalette = colors.map((color) => color.toLowerCase());
   }
 
   /** Replace the document-space transform in one operation. */

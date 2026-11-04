@@ -100,6 +100,8 @@ import {
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
+import { exportObj, importObjNodes } from '../io/obj';
+import { exportGlb, importGlb } from '../io/gltf';
 import { SetAnimationCommand } from './commands/AnimationCommands';
 import {
   CreateCameraCommand,
@@ -184,6 +186,7 @@ import {
   type ProjectSettings
 } from '../project/lpoly';
 import {
+  openModelFile,
   openProjectFile,
   saveBinaryFile,
   saveFrameSequence,
@@ -4330,6 +4333,140 @@ export class EditorRuntime {
     } finally {
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Import a Wavefront OBJ as one undoable scene transaction. */
+  async importObj(): Promise<void> {
+    if (this.fileBusy) {
+      return;
+    }
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const file = await openModelFile(['obj'], 'Wavefront OBJ');
+      if (!file) {
+        return;
+      }
+      const text = new TextDecoder().decode(file.bytes);
+      const nodes = importObjNodes(text, '', { upAxis: 'y', scale: 1 });
+      const start = this.document.nodes.length;
+      const commands = nodes.map(
+        (node, index) =>
+          new CreateMeshNodeCommand(this.document, node, start + index)
+      );
+      this.history.execute(
+        new CompositeCommand('Import OBJ', commands)
+      );
+      this.activeGroupId = null;
+      this.activeNodeId = nodes[0]?.id ?? this.activeNodeId;
+      this.selectedNodeIds.clear();
+      if (this.activeNodeId) {
+        this.selectedNodeIds.add(this.activeNodeId);
+      }
+      this.selection.setContext(this.activeNodeId, 'vertex');
+      this.renderer.frameActiveNode();
+      this.publish();
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Import a binary glTF as one undoable scene transaction. */
+  async importGlb(): Promise<void> {
+    if (this.fileBusy) {
+      return;
+    }
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const file = await openModelFile(['glb'], 'Binary glTF');
+      if (!file) {
+        return;
+      }
+      const buffer = file.bytes.buffer.slice(
+        file.bytes.byteOffset,
+        file.bytes.byteOffset + file.bytes.byteLength
+      ) as ArrayBuffer;
+      const nodes = await importGlb(buffer);
+      const start = this.document.nodes.length;
+      const commands = nodes.map(
+        (node, index) =>
+          new CreateMeshNodeCommand(this.document, node, start + index)
+      );
+      this.history.execute(new CompositeCommand('Import GLB', commands));
+      this.activeGroupId = null;
+      this.activeNodeId = nodes[0]?.id ?? this.activeNodeId;
+      this.selectedNodeIds.clear();
+      if (this.activeNodeId) {
+        this.selectedNodeIds.add(this.activeNodeId);
+      }
+      this.selection.setContext(this.activeNodeId, 'vertex');
+      this.renderer.frameActiveNode();
+      this.publish();
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Export visible objects as a triangulated binary GLB. */
+  async exportGlb(): Promise<void> {
+    if (this.fileBusy) {
+      return;
+    }
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const bytes = await exportGlb(this.document.nodes, this.document.groups);
+      const base = (this.projectName || 'loupoli')
+        .replace(/[^a-z0-9_-]+/gi, '-')
+        .replace(/^-+|-+$/g, '') || 'loupoli';
+      await saveBinaryFile(bytes, `${base}.glb`, 'glb', 'Binary glTF');
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Export visible objects as OBJ/MTL in a folder or ZIP. */
+  async exportObj(): Promise<void> {
+    if (this.fileBusy) {
+      return;
+    }
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const base = (this.projectName || 'loupoli')
+        .replace(/[^a-z0-9_-]+/gi, '-')
+        .replace(/^-+|-+$/g, '') || 'loupoli';
+      const result = exportObj(this.document.nodes, this.document.groups, {
+        upAxis: 'y',
+        mtlName: `${base}.mtl`
+      });
+      await saveFrameSequence(
+        [
+          { name: `${base}.obj`, bytes: new TextEncoder().encode(result.obj) },
+          { name: `${base}.mtl`, bytes: new TextEncoder().encode(result.mtl) }
+        ],
+        `${base}-obj.zip`
+      );
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.fileBusy = false;
       this.publish();
     }
   }

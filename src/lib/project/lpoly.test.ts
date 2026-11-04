@@ -181,6 +181,19 @@ describe('.lpoly v4', () => {
     expect(restored?.keyframes[1].transform.position).toEqual([3, 0, 1]);
   });
 
+  it('round-trips simple node material palettes', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    node.setMaterialPalette(['#cc331a', '#1a33cc']);
+    node.mesh.faceMaterial[0] = 1;
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    expect(decoded.document.nodes[0].materialPalette).toEqual([
+      '#cc331a',
+      '#1a33cc'
+    ]);
+    expect(decoded.document.nodes[0].mesh.faceMaterial[0]).toBe(1);
+  });
+
   it('round-trips document lights and ambient settings', () => {
     const document = makeDocument();
     document.ambientColor = '#20242c';

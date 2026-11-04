@@ -105,6 +105,8 @@ function createPs1Material(texture: Texture): ShaderMaterial {
       varying vec2 vUv;
       varying vec2 vAffineUv;
       varying float vAffineW;
+      varying vec3 vColor;
+      attribute vec3 color;
 
       void main() {
         vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
@@ -120,6 +122,7 @@ function createPs1Material(texture: Texture): ShaderMaterial {
         }
 
         vUv = uv;
+        vColor = color;
         // Dividing these two perspective-correct varyings in the fragment
         // shader cancels perspective correction and yields affine UV mapping.
         vAffineUv = uv * clip.w;
@@ -138,6 +141,7 @@ function createPs1Material(texture: Texture): ShaderMaterial {
       varying vec2 vUv;
       varying vec2 vAffineUv;
       varying float vAffineW;
+      varying vec3 vColor;
 
       void main() {
         vec2 uv = uAffineEnabled > 0.5 ? vAffineUv / vAffineW : vUv;
@@ -146,7 +150,7 @@ function createPs1Material(texture: Texture): ShaderMaterial {
           discard;
         }
         float outAlpha = uAlphaBlend > 0.5 ? texel.a : 1.0;
-        gl_FragColor = vec4(texel.rgb * uTint, outAlpha);
+        gl_FragColor = vec4(texel.rgb * uTint * vColor, outAlpha);
 
         #include <colorspace_fragment>
       }
@@ -173,6 +177,7 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
   const solid = new MeshLambertMaterial({
     name: 'loupoli-solid',
     color: theme.solidMaterial.color,
+    vertexColors: true,
     flatShading: true,
     polygonOffset: true,
     polygonOffsetFactor: 1,
@@ -183,6 +188,7 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
     name: 'loupoli-lit',
     color: new Color(1, 1, 1),
     map: litTexture,
+    vertexColors: true,
     flatShading: true,
     polygonOffset: true,
     polygonOffsetFactor: 1,

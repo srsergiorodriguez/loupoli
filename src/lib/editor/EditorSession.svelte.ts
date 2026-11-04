@@ -818,6 +818,22 @@ export class EditorSession {
     return this.runtime?.renderVideo() ?? Promise.resolve();
   }
 
+  importObj(): Promise<void> {
+    return this.runtime?.importObj() ?? Promise.resolve();
+  }
+
+  exportObj(): Promise<void> {
+    return this.runtime?.exportObj() ?? Promise.resolve();
+  }
+
+  importGlb(): Promise<void> {
+    return this.runtime?.importGlb() ?? Promise.resolve();
+  }
+
+  exportGlb(): Promise<void> {
+    return this.runtime?.exportGlb() ?? Promise.resolve();
+  }
+
   setAnimationFrame(frame: number): void {
     this.runtime?.setAnimationFrame(frame);
   }

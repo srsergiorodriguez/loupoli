@@ -16,7 +16,8 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 10. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
 11. [Render workspace and camera](./RENDER.md) — scene cameras, virtual resolution, and clean still rendering.
 12. [Animation workspace](./ANIMATION.md) — transform tracks, timeline, playback, and persistence.
-13. [Root README](../README.md) — product overview, setup, and current capabilities.
+13. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, simple materials, and coordinate conversion.
+14. [Root README](../README.md) — product overview, setup, and current capabilities.
 
 ## Document ownership
 
@@ -34,6 +35,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [Phase 5A lighting](./PHASE5_LIGHTING.md) | Light model, Light workspace, direct-light bake, and v4 lighting metadata | Shadows/AO or shape-key design |
 | [Render workspace](./RENDER.md) | Scene camera model, Render workspace, virtual resolution, and still export | Frame/video export or camera animation |
 | [Animation workspace](./ANIMATION.md) | Transform tracks, timeline, playback, and persistence | Camera/shape-key animation design |
+| [Interchange](./INTERCHANGE.md) | OBJ/GLB import/export, simple material colors, Y-up conversion | Textures, skins, morph targets |
 | [Root README](../README.md) | Product overview and quick start | Canonical rules or format specifications |
 
 ## Canonical cross-links
@@ -46,6 +48,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 - Lighting and bake: [Phase 5A lighting](./PHASE5_LIGHTING.md).
 - Camera and still rendering: [Render workspace](./RENDER.md).
 - Animation: [Animation workspace](./ANIMATION.md).
+- Model interchange: [OBJ and GLB](./INTERCHANGE.md).
 
 ## Maintenance rules
 

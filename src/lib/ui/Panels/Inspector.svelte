@@ -545,7 +545,9 @@
                 ? 'Cube'
                 : node.primitive === 'cylinder'
                   ? 'Cylinder'
-                  : 'Grid'}
+                  : node.primitive === 'imported'
+                    ? 'Mesh'
+                    : 'Grid'}
           </span>
         </OutlinerRow>
       {/snippet}
@@ -626,6 +628,34 @@
           <ActionButton label="Add" icon="plus" onActivate={addPrimitive} />
         </div>
       {/if}
+
+      <div class="scene-action-row">
+        <ActionButton
+          label="Import OBJ"
+          icon="open"
+          disabled={session.snapshot.fileBusy}
+          onActivate={() => void session.importObj()}
+        />
+        <ActionButton
+          label="Export OBJ"
+          icon="save"
+          disabled={session.snapshot.fileBusy || nodes.length === 0}
+          onActivate={() => void session.exportObj()}
+        />
+        <ActionButton
+          label="Import GLB"
+          icon="open"
+          disabled={session.snapshot.fileBusy}
+          onActivate={() => void session.importGlb()}
+        />
+        <ActionButton
+          label="Export GLB"
+          icon="save"
+          disabled={session.snapshot.fileBusy || nodes.length === 0}
+          onActivate={() => void session.exportGlb()}
+        />
+      </div>
+      <p class="hint">OBJ and GLB use Y-up at the file boundary; geometry and UVs are preserved.</p>
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
         <div class="scene-action-row">

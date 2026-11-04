@@ -93,6 +93,7 @@ export interface NodeSnapshot {
   readonly transform: NodeTransform;
   readonly parentId: string | null;
   readonly textureId: string | null;
+  readonly materialPalette?: readonly string[];
   readonly modifiers: readonly Modifier[];
   readonly mesh: MeshSnapshot;
 }
@@ -120,6 +121,7 @@ interface NodeManifest {
   readonly transform: NodeTransform;
   readonly parentId?: string | null;
   readonly textureId?: string | null;
+  readonly materialPalette?: readonly string[];
   readonly modifiers?: readonly Modifier[];
   readonly mesh: MeshManifest;
 }
@@ -224,7 +226,7 @@ function align4(value: number): number {
 }
 
 function isPrimitiveKind(value: unknown): value is PrimitiveKind {
-  return typeof value === 'string' && (PRIMITIVE_KINDS as readonly string[]).includes(value);
+  return typeof value === 'string' && (value === 'imported' || (PRIMITIVE_KINDS as readonly string[]).includes(value));
 }
 
 function isShadingMode(value: unknown): value is ShadingMode {
@@ -424,6 +426,7 @@ export function snapshotNode(node: MeshNode): NodeSnapshot {
     },
     parentId: node.parentId,
     textureId: node.textureId,
+    materialPalette: node.materialPalette,
     modifiers: cloneModifiers(node.modifiers),
     mesh: snapshotMesh(node.mesh)
   };
@@ -480,6 +483,7 @@ export function restoreNode(snapshot: NodeSnapshot): MeshNode {
     snapshot.textureId ?? null
   );
   node.visible = snapshot.visible;
+  node.setMaterialPalette(snapshot.materialPalette ?? []);
   node.transform = validateTransform(snapshot.transform);
   node.parentId = snapshot.parentId ?? null;
   node.setModifiers(validateModifiers(snapshot.modifiers));
@@ -746,6 +750,7 @@ function encodeInternal(
     },
     parentId: node.parentId,
     textureId: node.textureId,
+    materialPalette: node.materialPalette,
     modifiers: cloneModifiers(node.modifiers),
     mesh: {
       vertexCount: node.mesh.vertexCount,
@@ -1086,7 +1091,13 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
       (node.textureId !== undefined &&
         node.textureId !== null &&
         (typeof node.textureId !== 'string' ||
-          !textureAssetIds.has(node.textureId)))
+          !textureAssetIds.has(node.textureId))) ||
+      (node.materialPalette !== undefined &&
+        (!Array.isArray(node.materialPalette) ||
+          node.materialPalette.length > 64 ||
+          node.materialPalette.some(
+            (color) => typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)
+          )))
     ) {
       throw new Error('The .lpoly contains invalid node metadata.');
     }
@@ -1119,6 +1130,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     restored.transform = transform;
     restored.parentId = node.parentId ?? null;
     restored.textureId = node.textureId ?? null;
+    restored.setMaterialPalette(node.materialPalette ?? []);
     restored.setModifiers(validateModifiers(node.modifiers));
     document.insertNode(restored);
   }

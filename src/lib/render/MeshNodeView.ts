@@ -159,6 +159,7 @@ export class MeshNodeView {
 
   private trianglePositions: Float32Array;
   private triangleNormals: Float32Array;
+  private triangleColors: Float32Array;
   private triangleUvs: Float32Array;
   private readonly wirePositions: Float32Array;
   private readonly seamPositions: Float32Array;
@@ -195,6 +196,7 @@ export class MeshNodeView {
 
     this.trianglePositions = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleNormals = new Float32Array(mesh.triangleVertexCount * 3);
+    this.triangleColors = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleUvs = new Float32Array(mesh.triangleVertexCount * 2);
     this.wirePositions = new Float32Array(mesh.edgeCount * 6);
     this.seamPositions = new Float32Array(mesh.edgeCount * 6);
@@ -213,6 +215,10 @@ export class MeshNodeView {
     this.triangleGeometry.setAttribute(
       'uv',
       new BufferAttribute(this.triangleUvs, 2).setUsage(DynamicDrawUsage)
+    );
+    this.triangleGeometry.setAttribute(
+      'color',
+      new BufferAttribute(this.triangleColors, 3).setUsage(DynamicDrawUsage)
     );
 
     this.wireGeometry.setAttribute(
@@ -487,6 +493,7 @@ export class MeshNodeView {
       this.triangleNormals,
       this.triangleUvs
     );
+    this.writeMaterialColors(mesh);
     mesh.writeEdgePositions(this.wirePositions);
     this.updateWireTubes();
     const seamCount = mesh.writeSeamEdgePositions(this.seamPositions);
@@ -498,6 +505,7 @@ export class MeshNodeView {
     this.triangleGeometry.getAttribute('position').needsUpdate = true;
     this.triangleGeometry.getAttribute('normal').needsUpdate = true;
     this.triangleGeometry.getAttribute('uv').needsUpdate = true;
+    this.triangleGeometry.getAttribute('color').needsUpdate = true;
     this.wireGeometry.getAttribute('position').needsUpdate = true;
     this.seamGeometry.getAttribute('position').needsUpdate = true;
     this.vertexGeometry.getAttribute('position').needsUpdate = true;
@@ -508,6 +516,31 @@ export class MeshNodeView {
     this.vertexGeometry.computeBoundingSphere();
     this.lastMeshRevision = mesh.meshRevision;
     this.updateSelectionGeometry();
+  }
+
+  /** Write one flat material color per render triangle. */
+  private writeMaterialColors(mesh: HalfEdgeMesh): void {
+    const palette = this.node.materialPalette;
+    let cursor = 0;
+    for (let face = 0; face < mesh.faceCount; face += 1) {
+      const material = mesh.faceMaterial[face];
+      const color =
+        material >= 0 && material < palette.length
+          ? palette[material]
+          : '#ffffff';
+      const hex = /^#([0-9a-fA-F]{6})$/.exec(color)?.[1] ?? 'ffffff';
+      const r = parseInt(hex.slice(0, 2), 16) / 255;
+      const g = parseInt(hex.slice(2, 4), 16) / 255;
+      const b = parseInt(hex.slice(4, 6), 16) / 255;
+      const count = mesh.renderTriangleCountForFace(face) * 3;
+      for (let i = 0; i < count; i += 1) {
+        const offset = (cursor + i) * 3;
+        this.triangleColors[offset] = r;
+        this.triangleColors[offset + 1] = g;
+        this.triangleColors[offset + 2] = b;
+      }
+      cursor += count;
+    }
   }
 
   /** World-space bounds of this node. */
@@ -1351,6 +1384,7 @@ export class MeshNodeView {
     const previousGeometry = this.triangleGeometry;
     this.trianglePositions = new Float32Array(vertexCount * 3);
     this.triangleNormals = new Float32Array(vertexCount * 3);
+    this.triangleColors = new Float32Array(vertexCount * 3);
     this.triangleUvs = new Float32Array(vertexCount * 2);
 
     const geometry = new BufferGeometry();
@@ -1365,6 +1399,10 @@ export class MeshNodeView {
     geometry.setAttribute(
       'uv',
       new BufferAttribute(this.triangleUvs, 2).setUsage(DynamicDrawUsage)
+    );
+    geometry.setAttribute(
+      'color',
+      new BufferAttribute(this.triangleColors, 3).setUsage(DynamicDrawUsage)
     );
 
     this.triangleGeometry = geometry;

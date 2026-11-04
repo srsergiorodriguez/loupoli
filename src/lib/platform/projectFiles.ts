@@ -181,6 +181,64 @@ function buildZip(files: readonly { name: string; bytes: Uint8Array }[]): Uint8A
 }
 
 /**
+ * Open a model/interchange file through the native dialog or browser picker.
+ */
+export async function openModelFile(
+  extensions: readonly string[],
+  filterName: string
+): Promise<OpenedProjectFile | null> {
+  if (isTauriRuntime()) {
+    const [{ open }, { invoke }] = await Promise.all([
+      import('@tauri-apps/plugin-dialog'),
+      import('@tauri-apps/api/core')
+    ]);
+    const path = await open({
+      multiple: false,
+      directory: false,
+      filters: [{ name: filterName, extensions: [...extensions] }]
+    });
+    if (typeof path !== 'string') {
+      return null;
+    }
+    const bytes = await invoke<number[]>('read_project_file', { path });
+    const name = path.split(/[\\/]/).pop() ?? `Imported.${extensions[0]}`;
+    return { name, bytes: Uint8Array.from(bytes) };
+  }
+
+  return new Promise((resolve, reject) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = extensions.map((extension) => `.${extension}`).join(',');
+    input.hidden = true;
+    document.body.appendChild(input);
+    let settled = false;
+    const finish = (value: OpenedProjectFile | null): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      input.remove();
+      resolve(value);
+    };
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) {
+        finish(null);
+        return;
+      }
+      file
+        .arrayBuffer()
+        .then((buffer) =>
+          finish({ name: file.name, bytes: new Uint8Array(buffer) })
+        )
+        .catch(reject);
+    });
+    input.addEventListener('cancel', () => finish(null));
+    input.click();
+  });
+}
+
+/**
  * Save a PNG frame sequence as a folder (native) or a ZIP (browser).
  */
 export async function saveFrameSequence(
