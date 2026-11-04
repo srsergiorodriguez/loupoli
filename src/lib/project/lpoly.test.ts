@@ -158,6 +158,7 @@ describe('.lpoly v4', () => {
     point.color = '#ff8844';
     point.intensity = 3.2;
     point.position = [2, -1, 3];
+    point.castShadows = false;
     document.insertLight(point);
     const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
     expect(decoded.document.ambientColor).toBe('#20242c');
@@ -166,6 +167,7 @@ describe('.lpoly v4', () => {
     expect(decoded.document.lights[1].name).toBe('Warm lamp');
     expect(decoded.document.lights[1].position).toEqual([2, -1, 3]);
     expect(decoded.document.lights[1].kind).toBe('point');
+    expect(decoded.document.lights[1].castShadows).toBe(false);
   });
 
   it('round-trips a modifier stack', () => {
@@ -326,10 +328,14 @@ describe('.lpoly v4', () => {
     delete manifest.lighting;
     manifest.version = 3;
     const nextManifest = new TextEncoder().encode(JSON.stringify(manifest));
+    const payloadStart = (28 + manifestLength + 3) & ~3;
     const nextPayloadStart = (28 + nextManifest.byteLength + 3) & ~3;
     const next = new Uint8Array(nextPayloadStart + payloadLength);
     next.set(v4.subarray(0, 8));
-    next.set(v4.subarray(28 + manifestLength), nextPayloadStart);
+    next.set(
+      v4.subarray(payloadStart, payloadStart + payloadLength),
+      nextPayloadStart
+    );
     next.set(nextManifest, 28);
     const nextView = new DataView(next.buffer);
     nextView.setUint16(8, 3, true);

@@ -729,6 +729,12 @@
               onCommit={(value) => session.updateActiveLight({ direction: value })}
             />
           {/if}
+          <Switch
+            label="Cast shadows"
+            description="Hard shadow in Lit and baked lighting."
+            checked={activeLight.castShadows}
+            onChange={(value) => session.updateActiveLight({ castShadows: value })}
+          />
           <div class="texture-action-row">
             <ActionButton
               label="Delete light"
@@ -767,7 +773,7 @@
               <strong>select an object first</strong>
             {/if}
           </span>
-          <span class="texture-note">Requires non-overlapping UVs.</span>
+          <span class="texture-note">Requires non-overlapping UVs. Hard shadows are included when enabled.</span>
           <ActionButton
             label={session.snapshot.bakeBusy ? 'Baking…' : 'Bake lighting'}
             icon="lit"

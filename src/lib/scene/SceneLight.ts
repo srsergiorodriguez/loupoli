@@ -11,6 +11,7 @@ export interface LightSnapshot {
   readonly color: string;
   readonly intensity: number;
   readonly enabled: boolean;
+  readonly castShadows: boolean;
   readonly position: Vec3;
   readonly direction: Vec3;
 }
@@ -46,16 +47,23 @@ export class SceneLight {
   color = '#ffffff';
   intensity = 1;
   enabled = true;
+  castShadows = true;
   position: Vec3 = [0, 0, 4];
   direction: Vec3 = [0, 0, -1];
 
-  constructor(snapshot: Omit<LightSnapshot, 'direction'> & { direction?: Vec3 }) {
+  constructor(
+    snapshot: Omit<LightSnapshot, 'direction' | 'castShadows'> & {
+      direction?: Vec3;
+      castShadows?: boolean;
+    }
+  ) {
     this.id = snapshot.id;
     this.name = snapshot.name;
     this.kind = snapshot.kind;
     this.color = snapshot.color;
     this.intensity = snapshot.intensity;
     this.enabled = snapshot.enabled;
+    this.castShadows = snapshot.castShadows ?? true;
     this.position = cloneVec3(snapshot.position);
     this.direction = normalizeLightDirection(snapshot.direction ?? [0, 0, -1]);
   }
@@ -69,6 +77,7 @@ export class SceneLight {
       color: '#fff4e0',
       intensity: 2.4,
       enabled: true,
+      castShadows: true,
       position: [2, 2, 4],
       direction: [-0.35, 0.25, -1]
     });
@@ -88,6 +97,7 @@ export class SceneLight {
       color: this.color,
       intensity: this.intensity,
       enabled: this.enabled,
+      castShadows: this.castShadows,
       position: cloneVec3(this.position),
       direction: cloneVec3(this.direction)
     };
@@ -99,6 +109,7 @@ export class SceneLight {
     this.color = snapshot.color;
     this.intensity = snapshot.intensity;
     this.enabled = snapshot.enabled;
+    this.castShadows = snapshot.castShadows ?? true;
     this.position = cloneVec3(snapshot.position);
     this.direction = normalizeLightDirection(snapshot.direction);
   }

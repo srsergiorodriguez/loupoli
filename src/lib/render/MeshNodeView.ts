@@ -236,6 +236,8 @@ export class MeshNodeView {
     this.triangleMesh = new Mesh(this.triangleGeometry, surfaceMaterials.solid);
     this.triangleMesh.name = 'loupoli-mesh';
     this.triangleMesh.frustumCulled = false;
+    this.triangleMesh.castShadow = true;
+    this.triangleMesh.receiveShadow = true;
 
     this.wireSegments = new LineSegments(
       this.wireGeometry,

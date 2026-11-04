@@ -3589,6 +3589,49 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Collect visible scene meshes as world-space triangles for bake shadows. */
+  private bakeOccluders(): Float32Array[] {
+    const occluders: Float32Array[] = [];
+    for (const node of this.document.nodes) {
+      if (!node.visible) {
+        continue;
+      }
+      const parent = this.document.getGroup(node.parentId);
+      if (parent && !parent.visible) {
+        continue;
+      }
+      const matrix = transformMatrix(
+        worldTransformForNode(node.transform, parent?.transform ?? null)
+      );
+      const mesh = node.getEvaluatedMesh().mesh;
+      const triangles: number[] = [];
+      for (let face = 0; face < mesh.faceCount; face += 1) {
+        const first = mesh.faceHalfEdge[face];
+        const loop: number[] = [];
+        let halfEdge = first;
+        do {
+          loop.push(mesh.heOrigin[halfEdge]);
+          halfEdge = mesh.heNext[halfEdge];
+        } while (halfEdge !== first && loop.length < 64);
+        if (loop.length < 3) {
+          continue;
+        }
+        for (let i = 1; i < loop.length - 1; i += 1) {
+          for (const vertex of [loop[0], loop[i], loop[i + 1]]) {
+            const point = new Vector3(
+              mesh.positions[vertex * 3],
+              mesh.positions[vertex * 3 + 1],
+              mesh.positions[vertex * 3 + 2]
+            ).applyMatrix4(matrix);
+            triangles.push(point.x, point.y, point.z);
+          }
+        }
+      }
+      occluders.push(new Float32Array(triangles));
+    }
+    return occluders;
+  }
+
   /** Bake direct lights into the active object's texture lighting layer. */
   async bakeLighting(): Promise<void> {
     if (this.bakeBusy) {
@@ -3664,7 +3707,8 @@ export class EditorRuntime {
         ambientColor: this.document.ambientColor,
         ambientIntensity: this.document.ambientIntensity,
         width: target.width,
-        height: target.height
+        height: target.height,
+        occluders: this.bakeOccluders()
       });
       if (!after) {
         throw new Error('The object has no UV-covered surface to bake.');
@@ -3724,7 +3768,7 @@ export class EditorRuntime {
     patch: Partial<
       Pick<
         LightSnapshot,
-        'name' | 'color' | 'intensity' | 'enabled' | 'position' | 'direction'
+        'name' | 'color' | 'intensity' | 'enabled' | 'castShadows' | 'position' | 'direction'
       >
     >
   ): void {
@@ -3741,6 +3785,7 @@ export class EditorRuntime {
         ? { intensity: Math.max(0, Math.min(20, patch.intensity)) }
         : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+      ...(patch.castShadows !== undefined ? { castShadows: patch.castShadows } : {}),
       ...(patch.position !== undefined
         ? { position: [...patch.position] as [number, number, number] }
         : {}),
@@ -3760,7 +3805,7 @@ export class EditorRuntime {
     patch: Partial<
       Pick<
         LightSnapshot,
-        'name' | 'color' | 'intensity' | 'enabled' | 'position' | 'direction'
+        'name' | 'color' | 'intensity' | 'enabled' | 'castShadows' | 'position' | 'direction'
       >
     >
   ): void {

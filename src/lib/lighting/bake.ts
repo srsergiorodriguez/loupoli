@@ -4,7 +4,7 @@ import type { LightSummary } from '../scene/SceneLight';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 
-/** Direct-light bake inputs. No realtime shadows are evaluated. */
+/** Direct-light bake inputs, including optional world-space shadow occluders. */
 export interface BakeLightingInput {
   readonly mesh: HalfEdgeMesh;
   readonly node: MeshNode;
@@ -14,6 +14,8 @@ export interface BakeLightingInput {
   readonly ambientIntensity: number;
   readonly width: number;
   readonly height: number;
+  /** World-space triangle lists used for hard shadow rays. */
+  readonly occluders?: readonly Float32Array[];
 }
 
 interface Rgb {
@@ -145,12 +147,79 @@ export function uvCoverage(mesh: HalfEdgeMesh): number {
   return area;
 }
 
+/** Moller-Trumbore ray/triangle test for hard shadow rays. */
+function rayHitsTriangle(
+  origin: Vector3,
+  direction: Vector3,
+  a: Vector3,
+  b: Vector3,
+  c: Vector3,
+  maxDistance: number
+): boolean {
+  const edge1 = new Vector3().subVectors(b, a);
+  const edge2 = new Vector3().subVectors(c, a);
+  const p = new Vector3().crossVectors(direction, edge2);
+  const determinant = edge1.dot(p);
+  if (Math.abs(determinant) < 1e-9) {
+    return false;
+  }
+  const inverse = 1 / determinant;
+  const t = new Vector3().subVectors(origin, a);
+  const u = t.dot(p) * inverse;
+  if (u < 0 || u > 1) {
+    return false;
+  }
+  const q = new Vector3().crossVectors(t, edge1);
+  const v = direction.dot(q) * inverse;
+  if (v < 0 || u + v > 1) {
+    return false;
+  }
+  const distance = edge2.dot(q) * inverse;
+  return distance > 1e-4 && distance < maxDistance;
+}
+
+/** Test a shadow ray against all visible world-space scene triangles. */
+function rayOccluded(
+  origin: Vector3,
+  direction: Vector3,
+  maxDistance: number,
+  occluders: readonly Float32Array[]
+): boolean {
+  const a = new Vector3();
+  const b = new Vector3();
+  const c = new Vector3();
+  for (const triangles of occluders) {
+    for (let offset = 0; offset + 8 < triangles.length; offset += 9) {
+      a.set(
+        triangles[offset],
+        triangles[offset + 1],
+        triangles[offset + 2]
+      );
+      b.set(
+        triangles[offset + 3],
+        triangles[offset + 4],
+        triangles[offset + 5]
+      );
+      c.set(
+        triangles[offset + 6],
+        triangles[offset + 7],
+        triangles[offset + 8]
+      );
+      if (rayHitsTriangle(origin, direction, a, b, c, maxDistance)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Bake direct ambient/directional/point light into an RGBA lighting image.
  *
  * The result is a black-transparent image outside the UV-covered surface. The
  * caller stores it in a lighting-role layer and composites it with multiply.
- * Flat face normals match the low-poly Lit path. No shadows are evaluated.
+ * Flat face normals match the low-poly Lit path. Hard shadows use the supplied
+ * world-space occluders; ambient is never shadowed.
  */
 export function bakeLighting(input: BakeLightingInput): ImageData | null {
   const { mesh, width, height } = input;
@@ -172,6 +241,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       ).multiply(nodeMatrix)
     : nodeMatrix;
   const ambient = parseColor(input.ambientColor);
+  const occluders = input.occluders ?? [];
   const lights = input.lights
     .filter((light) => light.enabled && light.intensity > 0)
     .map((light) => ({
@@ -268,17 +338,36 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
           for (const light of lights) {
             let ndotl: number;
             let attenuation = 1;
+            let shadowDirection: Vector3 | null = null;
+            let shadowDistance = Infinity;
             if (light.kind === 'directional') {
-              ndotl = normal.dot(light.direction.clone().multiplyScalar(-1));
+              shadowDirection = light.direction.clone().multiplyScalar(-1);
+              ndotl = normal.dot(shadowDirection);
             } else {
               const toLight = light.position.clone().sub(worldPosition);
               const distance = toLight.length();
               if (distance < 1e-4) {
                 continue;
               }
-              toLight.multiplyScalar(1 / distance);
-              ndotl = normal.dot(toLight);
+              shadowDirection = toLight.multiplyScalar(1 / distance);
+              shadowDistance = distance;
+              ndotl = normal.dot(shadowDirection);
               attenuation = 1 / (1 + distance * distance);
+            }
+            if (ndotl <= 0) {
+              continue;
+            }
+            if (
+              light.castShadows &&
+              shadowDirection &&
+              rayOccluded(
+                worldPosition.clone().addScaledVector(normal, 0.003),
+                shadowDirection,
+                shadowDistance,
+                occluders
+              )
+            ) {
+              continue;
             }
             const energy = maxZero(ndotl) * light.intensity * attenuation;
             r += light.rgb.r * energy;

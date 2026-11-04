@@ -122,7 +122,9 @@ interface GroupManifest {
   readonly transform: NodeTransform;
 }
 
-interface LightManifest extends LightSnapshot {}
+interface LightManifest extends Omit<LightSnapshot, 'castShadows'> {
+  readonly castShadows?: boolean;
+}
 
 interface LightingManifest {
   readonly ambientColor: string;
@@ -303,7 +305,8 @@ function validateLightingManifest(
       typeof light.intensity !== 'number' ||
       !Number.isFinite(light.intensity) ||
       light.intensity < 0 ||
-      typeof light.enabled !== 'boolean'
+      typeof light.enabled !== 'boolean' ||
+      (light.castShadows !== undefined && typeof light.castShadows !== 'boolean')
     ) {
       throw new Error('The .lpoly contains invalid light metadata.');
     }
@@ -317,6 +320,7 @@ function validateLightingManifest(
       color: light.color,
       intensity: light.intensity,
       enabled: light.enabled,
+      castShadows: light.castShadows ?? true,
       position,
       direction
     });
@@ -977,7 +981,12 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     document.ambientColor = lighting.ambientColor;
     document.ambientIntensity = lighting.ambientIntensity;
     for (const snapshot of lighting.lights) {
-      document.insertLight(SceneLight.fromSnapshot(snapshot));
+      document.insertLight(
+        SceneLight.fromSnapshot({
+          ...snapshot,
+          castShadows: snapshot.castShadows ?? true
+        })
+      );
     }
   } else {
     // v3 projects predate the light model; keep Lit readable with the default sun.

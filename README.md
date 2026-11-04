@@ -6,7 +6,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Documentation:** Start with the [documentation index](docs/README.md) for ownership and reading order.
 
-**Status:** Phase 2, the Phase 3 foundations, and Phase 4 texturing are feature-complete. Phase 4 has a conditional exit audit. Phase 5A lighting and direct-light texture baking are implemented in the dedicated Light workspace; shadow/AO baking, shape keys, and interchange remain.
+**Status:** Phase 2, the Phase 3 foundations, and Phase 4 texturing are feature-complete. Phase 4 has a conditional exit audit. Phase 5A lighting, hard shadows, and direct-light texture baking are implemented in the dedicated Light workspace; soft shadows/AO, shape keys, and interchange remain.
 
 ![Current loupoli desktop viewport with the selection gizmo and ActionDock](docs/media/desktop-overview.png)
 
@@ -57,7 +57,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Brush-size preview in the UV paint workspace](docs/media/brush-cursor.png)
 
-- **Dedicated Light workspace.** Choose **Light** after Paint to light the scene independently of modeling and painting. Directional and point lights plus document ambient drive the Lit viewport. Light markers show their positions; directional markers add a direction arrow. A directional marker position is only an editor anchor; its direction drives the light. Drag the marker to move a light, or drag the arrow tip to re-aim a directional light. Drag a marker to move that light, or select it in the Lighting outliner. The Lighting Inspector handles add/edit/delete and naming with the shared outliner and control system. **Bake lighting** rasterizes direct light into a dedicated multiply lighting layer on the active object’s texture; shared atlases are copied first and overlapping UV islands are rejected. Shadows and AO are deliberately deferred. `.lpoly` v4 persists lights and ambient, and reads v3 projects.
+- **Dedicated Light workspace.** Choose **Light** after Paint to light the scene independently of modeling and painting. Directional and point lights plus document ambient drive the Lit viewport. Light markers show their positions; directional markers add a direction arrow. A directional marker position is only an editor anchor; its direction drives the light. Drag the marker to move a light, drag the arrow tip to re-aim a directional light, or select it in the Lighting outliner. The Lighting Inspector handles add/edit/delete and naming with the shared outliner and control system. **Bake lighting** rasterizes direct light into a dedicated multiply lighting layer on the active object’s texture; shared atlases are copied first and overlapping UV islands are rejected. Per-light hard shadows are supported in Lit and in the bake; soft shadows and AO are deferred. `.lpoly` v4 persists lights and ambient, and reads v3 projects.
 - **Texture assets and bindings.** A project-level texture library owns independent assets with 64–2048 presets, nearest/linear filtering, and up to eight layers each. Meshes bind to assets by stable ID, so several objects can share one low-poly atlas. The Inspector exposes a compact asset header with a shared inline name field, New/shared overflow actions, stateful assignment, filtering, alpha mode, a typed Add-layer menu, and a selected-layer properties panel. Layers can be solid, checker, transparent, or raster. Each asset has one composite `CanvasTexture`, and the renderer caches material variants per asset so shared textures upload once. Paint transactions keep committed pixels untouched until commit and store one localized undo rectangle. Layers carry color/detail/lighting roles for the future bake pipeline and save as binary PNG chunks in `.lpoly` v4; texture edits are captured by v4 autosave checkpoints. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted. Layers carry color/detail/lighting roles for the future bake pipeline. Imported images become fitted raster layers with preserved aspect ratio. Checker is a preview backdrop; transparent texels preserve composite alpha, and assets can render as Opaque, Cutout, or Blend in 3D. Raster layers stay authoritative through opacity/blend/rename undo and save as PNG chunks; a raster brush paints the active asset layer directly in the UV view, and Brush/Eraser projection-paint the active object's bound asset in 3D.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
@@ -290,11 +290,11 @@ Not yet verified:
 - Nested groups and rename/reparent controls beyond the current one-level groups.
 - Direct base vertex dragging while the modifier stack is active (destructive topology actions and provenance selection work now).
 - UV viewport and transforms, chart extraction/LSCM unwrap, texture layers, and projected painting are implemented. Phase 4 has a [conditional exit audit](docs/PHASE4_AUDIT.md); multi-angle tolerance, physical-iPad memory, and texture pixel deltas remain follow-ups.
-- Phase 5 follow-ups: shadow/AO baking, shape keys/timeline, and OBJ/GLB import/export.
+- Phase 5 follow-ups: soft shadows/AO, shape keys/timeline, and OBJ/GLB import/export.
 - Touch element dragging. Touch taps select; one-finger drag remains camera orbit.
 - Camera state and active-object selection are not stored in `.lpoly` yet; node transforms and viewport settings are.
 
-Phase 3 topology polish and Phase 4 texturing are feature-complete. [Phase 4 has a conditional exit audit](docs/PHASE4_AUDIT.md). Phase 5A lighting and direct-light texture baking are implemented; optional shadow/AO, shape keys, and interchange remain.
+Phase 3 topology polish and Phase 4 texturing are feature-complete. [Phase 4 has a conditional exit audit](docs/PHASE4_AUDIT.md). Phase 5A lighting, hard shadows, and direct-light texture baking are implemented; soft shadows/AO, shape keys, and interchange remain.
 
 ---
 

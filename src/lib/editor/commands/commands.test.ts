@@ -520,13 +520,20 @@ describe('scene commands and journal', () => {
     history.execute(create);
     expect(document.lights.at(-1)?.id).toBe(light.id);
     const before = light.snapshot();
-    const after = { ...before, name: 'Key lamp', intensity: 4, color: '#ff8844' };
+    const after = {
+      ...before,
+      name: 'Key lamp',
+      intensity: 4,
+      color: '#ff8844',
+      castShadows: false
+    };
     const update = new UpdateLightCommand(light, before, after);
     history.execute(update);
     expect(light.name).toBe('Key lamp');
     const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
     applyJournalPatch(replay, update.journalPatch('forward'));
     expect(replay.lights.at(-1)?.name).toBe('Key lamp');
+    expect(replay.lights.at(-1)?.castShadows).toBe(false);
     const remove = new DeleteLightCommand(document, light, document.lights.length - 1);
     history.execute(remove);
     expect(document.lights.some((item) => item.id === light.id)).toBe(false);

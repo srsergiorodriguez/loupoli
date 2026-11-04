@@ -1,6 +1,6 @@
 # Phase 5A — Lighting and texture bake
 
-**Status:** Implemented. Direct-ambient/directional/point lighting, Light workspace, Lit preview, and texture-layer bake are implemented. Shadows and AO are explicitly deferred.
+**Status:** Implemented. Direct-ambient/directional/point lighting, per-light hard shadows in Lit and the texture bake, Light workspace, Lit preview, and texture-layer bake are implemented. Soft shadows and AO are explicitly deferred.
 
 **Goal:** Light a low-poly scene with a deliberately small model, preview it in `Lit`, then bake direct light into a dedicated texture lighting layer for final textured display.
 
@@ -22,11 +22,12 @@ Supported:
 - document ambient color/intensity
 - enabled/disabled lights
 - flat-shaded Lit preview
-- direct-light baking into a texture lighting layer
+- per-light hard shadows in Lit and direct-light baking into a texture lighting layer
 
 Not supported:
 
-- realtime shadows
+- soft/area shadows
+- AO / contact shadows
 - spot/area lights
 - HDRI/IBL
 - PBR
@@ -55,7 +56,7 @@ interface LightSnapshot {
 }
 ```
 
-New projects include a default `Sun`. Ambient is document-level `ambientColor` + `ambientIntensity`.
+New projects include a default `Sun`. Lights default to `castShadows: true`; the selected light has a **Cast shadows** switch. Ambient is document-level `ambientColor` + `ambientIntensity`.
 
 Light creation, deletion, editing, and ambient changes are undoable commands with autosave journal patches.
 
@@ -70,11 +71,12 @@ Light markers show each light’s editor position in the viewport. Directional l
 `Light` is a first-class workspace tab after `Paint`.
 
 - 3D viewport with light markers
-- Lit preview by default
+- Lit preview with hard shadow maps by default
 - Tool Rail, Selection Bar, ActionDock, and mesh-edit Inspector sections are hidden
 - Scene outliner remains available to choose the bake target object
 - Lighting Inspector owns add/edit/delete and ambient controls
 - Visibility uses the shared outliner eye
+- Per-light **Cast shadows** switch controls both Lit and bake
 - Light markers show position; directional markers add a cone-tipped direction arrow
 - Marker drag updates position; arrow-tip drag updates direction; each is one undoable command
 - Naming uses `InlineNameField`
@@ -83,6 +85,8 @@ Light markers show each light’s editor position in the viewport. Directional l
 ## 4. Bake
 
 ![Baked lighting preview](media/light-baked.png)
+
+![Hard shadows in Lit](media/light-shadows.png)
 
 The bake writes **direct light** into a dedicated lighting layer:
 
@@ -96,8 +100,9 @@ Algorithm:
 1. Rasterize source faces into texture space.
 2. Interpolate world position with flat face normals.
 3. Evaluate ambient + directional + point lights.
-4. Write a transparent-backed RGBA lighting image.
-5. Commit one undoable `Bake lighting` command.
+4. For each shadow-enabled light, trace a hard ray through every visible scene mesh before adding its contribution.
+5. Write a transparent-backed RGBA lighting image.
+6. Commit one undoable `Bake lighting` command.
 
 Safety rules:
 
@@ -108,7 +113,9 @@ Safety rules:
 - Bake undo removes a newly created layer or restores prior layer pixels.
 - Baking marks the texture dirty and forces a v4 checkpoint with PNG chunks.
 
-No shadow rays or AO are evaluated in this pass.
+Shadows are hard visibility tests against all visible scene meshes, including the active mesh. Soft shadows and AO are not evaluated in this pass.
+
+![Baked shadows](media/light-baked-shadow.png)
 
 ![Baked lighting layer](media/light-baked-layer.png)
 
@@ -134,7 +141,7 @@ v3 files remain readable; they receive the default Sun because they predate the 
 - Light edits are undoable and journaled.
 - Light workspace is separate from Paint.
 - Lit preview responds to document lights.
-- Baking into an unwrapped object writes a multiply lighting layer.
+- Baking into an unwrapped object writes a multiply lighting layer with hard shadows from visible scene geometry.
 - Baking a shared texture creates a unique copy and reassigns only the active object.
 - Bake undo/redo restores layer and texture assignment state.
 - Overlapping UVs are rejected with an actionable error.
@@ -142,8 +149,7 @@ v3 files remain readable; they receive the default Sun because they predate the 
 
 ## 7. Deferred
 
-- Shadow/AO bake pass
-- Soft shadows
-- Bake progress/cancel UI beyond the busy state
+- Soft shadows / AO
+- Shadow progress/cancel UI beyond the busy state
 - Physical-iPad performance and memory validation
 - Shape keys, animation, import/export (Phase 5B–5C)

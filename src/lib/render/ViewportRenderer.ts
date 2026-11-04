@@ -8,6 +8,7 @@ import {
   LineBasicMaterial,
   MeshBasicMaterial,
   Object3D,
+  PCFShadowMap,
   Plane,
   PointLight,
   PointsMaterial,
@@ -603,6 +604,19 @@ export class ViewportRenderer {
         target.position.set(0, 0, 0);
         light.target = target;
         light.visible = summary.enabled && summary.intensity > 0;
+        light.castShadow =
+          light.visible && summary.castShadows;
+        if (light.castShadow) {
+          light.shadow.mapSize.set(1024, 1024);
+          light.shadow.camera.left = -12;
+          light.shadow.camera.right = 12;
+          light.shadow.camera.top = 12;
+          light.shadow.camera.bottom = -12;
+          light.shadow.camera.near = 0.1;
+          light.shadow.camera.far = 50;
+          light.shadow.bias = -0.0005;
+          light.shadow.normalBias = 0.02;
+        }
         this.documentLightGroup.add(light, target);
         this.documentLights.push({ light, target });
       } else {
@@ -618,6 +632,15 @@ export class ViewportRenderer {
           summary.position[2]
         );
         light.visible = summary.enabled && summary.intensity > 0;
+        light.castShadow =
+          light.visible && summary.castShadows;
+        if (light.castShadow) {
+          light.shadow.mapSize.set(512, 512);
+          light.shadow.camera.near = 0.1;
+          light.shadow.camera.far = 30;
+          light.shadow.bias = -0.001;
+          light.shadow.normalBias = 0.02;
+        }
         this.documentLightGroup.add(light);
         this.documentLights.push({ light, target: null });
       }
@@ -1092,6 +1115,8 @@ export class ViewportRenderer {
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, cap);
 
     this.renderer.setPixelRatio(this.pixelRatio);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setSize(width, height, false);
 
     const camera = this.cameraRig.camera;

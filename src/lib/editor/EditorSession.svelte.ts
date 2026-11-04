@@ -755,6 +755,7 @@ export class EditorSession {
       color: string;
       intensity: number;
       enabled: boolean;
+      castShadows: boolean;
       position: [number, number, number];
       direction: [number, number, number];
     }>

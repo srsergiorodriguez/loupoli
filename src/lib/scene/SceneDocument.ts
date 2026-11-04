@@ -83,6 +83,7 @@ export class SceneDocument {
       color: kind === 'directional' ? '#fff4e0' : '#ffe0bd',
       intensity: kind === 'directional' ? 2.2 : 3.5,
       enabled: true,
+      castShadows: true,
       position: kind === 'point' ? [0, 0, 4] : [4, 4, 8],
       direction: [0, 0, -1]
     });
