@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a texture layer stack are implemented. Texture assets and node bindings save in `.lpoly` v3; per-asset layers use binary PNG chunks and are captured by v3 autosave checkpoints. Blend modes/rename and projection painting remain.
+**Status:** Phase 4 foundation in progress. UV seam authoring, overlay rendering, undo/autosave, `.lpoly` persistence, a resizable UV split with two-way linked corner editing, Move/Rotate/Scale, U/V locks, snap, and exact numeric entry are implemented. Seam chart extraction, a bespoke LSCM unwrap, interactive two-corner pins, overlap rejection, and a texture layer stack are implemented. Texture assets and node bindings save in `.lpoly` v3; per-asset layers use binary PNG chunks and are captured by v3 autosave checkpoints. Blend modes, rename, raster layers, and Brush/Eraser 3D projection painting are implemented; projected shape/gradient tools and tilt shaping remain.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -92,10 +92,10 @@
 - Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **First pass implemented as a fresh v2 checkpoint when texture pixels change; dedicated texture-only patches remain future work.**
 - Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery. **Dispose path exists; project load resets the session stack.**
 
-### Slice 5 — 3D projection painting (UV brush implemented)
+### Slice 5 — 3D projection painting (Brush/Eraser implemented)
 
-- Raycast-to-UV stamp with pressure/tilt input. **UV-canvas painting is implemented with pressure radius; 3D raycast projection and tilt shaping remain.**
-- Brush size/opacity/flow and eraser. **Size/opacity/color are implemented; flow and eraser remain.**
+- Raycast-to-UV stamp with pressure/tilt input. **UV-canvas painting and 3D raycast Brush/Eraser projection are implemented with pressure radius; tilt shaping and projected shape/gradient tools remain.**
+- Brush size/opacity/flow and eraser. **Size/opacity/color and eraser are implemented; flow remains.**
 - One command per stroke; undo restores the previous layer pixels (bounded by a stroke patch budget).
 - No continuous loop; at most one scheduled frame per changed stroke step.
 - Texture memory and paint history surfaced in the Inspector.

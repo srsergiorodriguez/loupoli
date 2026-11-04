@@ -62,6 +62,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   paintZoom: 1,
   paintPanX: 0,
   paintPanY: 0,
+  surfaceCursor: null,
   uvRevision: 0,
   uvError: null,
   textureAssets: [],

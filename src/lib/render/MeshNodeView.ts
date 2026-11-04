@@ -23,6 +23,7 @@ import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import type { ShadingMode } from '../editor/types';
 import type { ViewportMaterials } from './materials';
+import type { SurfaceHit } from './SurfaceHit';
 
 /** Shared materials supplied by the viewport to every node view. */
 export interface NodeViewSharedMaterials {
@@ -748,6 +749,101 @@ export class MeshNodeView {
       return null;
     }
     return this.mesh.faceFromRenderTriangle(triangle);
+  }
+
+  /**
+   * Pick the frontmost surface point and interpolate its texture UV.
+   *
+   * This is the shared hit primitive for 3D selection and projection painting.
+   * The returned UV density converts a screen-space brush diameter into a
+   * texture-space radius without assuming a fixed camera distance.
+   */
+  pickSurface(
+    clientX: number,
+    clientY: number,
+    camera: Camera,
+    canvas: HTMLCanvasElement
+  ): SurfaceHit | null {
+    if (!this.setRayFromPointer(clientX, clientY, camera, canvas)) {
+      return null;
+    }
+    const rect = canvas.getBoundingClientRect();
+    this.group.updateMatrixWorld(true);
+    const intersections = this.raycaster.intersectObject(this.pickingMesh, false);
+    const hit = intersections[0];
+    if (!hit || hit.faceIndex === undefined || hit.faceIndex === null) {
+      return null;
+    }
+    const triangle = hit.faceIndex;
+    const face = this.mesh.faceFromRenderTriangle(triangle);
+    const uv = hit.uv;
+    if (!uv) {
+      return null;
+    }
+    const worldNormal = (hit.face?.normal ?? new Vector3(0, 0, 1))
+      .clone()
+      .transformDirection(this.group.matrixWorld)
+      .normalize();
+    const viewDirection = hit.point.clone().sub(camera.position).normalize();
+    if (worldNormal.dot(viewDirection) > 0) {
+      return null;
+    }
+    const uvPerCssPixel = this.surfaceUvDensity(
+      triangle,
+      camera,
+      rect
+    );
+    return {
+      nodeId: this.node.id,
+      face,
+      triangle,
+      uv: [uv.x, uv.y],
+      point: [hit.point.x, hit.point.y, hit.point.z],
+      normal: [worldNormal.x, worldNormal.y, worldNormal.z],
+      distance: hit.distance,
+      uvPerCssPixel
+    };
+  }
+
+  /** Estimate local UV units per CSS pixel from one render triangle. */
+  private surfaceUvDensity(
+    triangle: number,
+    camera: Camera,
+    rect: DOMRect
+  ): number {
+    const base = triangle * 3;
+    const uvs = [
+      [this.triangleUvs[base * 2], this.triangleUvs[base * 2 + 1]],
+      [this.triangleUvs[base * 2 + 2], this.triangleUvs[base * 2 + 3]],
+      [this.triangleUvs[base * 2 + 4], this.triangleUvs[base * 2 + 5]]
+    ];
+    const points: { x: number; y: number }[] = [];
+    for (let corner = 0; corner < 3; corner += 1) {
+      const offset = (base + corner) * 3;
+      const local = new Vector3(
+        this.trianglePositions[offset],
+        this.trianglePositions[offset + 1],
+        this.trianglePositions[offset + 2]
+      );
+      this.group.localToWorld(local);
+      const projected = this.projectWorld(local, camera, rect);
+      if (!projected) {
+        return 0.002;
+      }
+      points.push(projected);
+    }
+    const uvArea = Math.abs(
+      (uvs[1][0] - uvs[0][0]) * (uvs[2][1] - uvs[0][1]) -
+        (uvs[2][0] - uvs[0][0]) * (uvs[1][1] - uvs[0][1])
+    ) / 2;
+    const screenArea = Math.abs(
+      (points[1].x - points[0].x) * (points[2].y - points[0].y) -
+        (points[2].x - points[0].x) * (points[1].y - points[0].y)
+    ) / 2;
+    if (uvArea <= 1e-12 || screenArea <= 0.25) {
+      return 0.002;
+    }
+    return Math.sqrt(uvArea / screenArea);
   }
 
   /** Release all GPU resources owned by this view. */

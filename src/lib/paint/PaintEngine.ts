@@ -94,6 +94,31 @@ export class PaintEngine {
     this.asset.refreshPreview();
   }
 
+  /**
+   * Continue a projected surface stroke.
+   *
+   * `connect` is false across a face boundary or after the pointer left the
+   * mesh. A disconnected sample still stamps one dab but never draws a line
+   * through unrelated UV-island space.
+   */
+  updateProjected(sample: PaintSample, connect: boolean): void {
+    if (!this.context || !this.start) {
+      return;
+    }
+    this.last = sample;
+    if (this.settings.tool !== 'brush' && this.settings.tool !== 'eraser') {
+      return;
+    }
+    if (connect) {
+      this.stamp(this.filtered ?? this.start, sample);
+    } else {
+      this.filtered = sample;
+      this.lastStamp = sample;
+      this.stamp(sample, sample);
+    }
+    this.asset.refreshPreview();
+  }
+
   /** Finish the gesture and return the dirty bounds, if anything changed. */
   finish(): PaintBounds | null {
     if (!this.context || !this.start) {

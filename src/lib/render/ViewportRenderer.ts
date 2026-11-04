@@ -29,6 +29,7 @@ import type {
   TransformOrientation
 } from '../editor/types';
 import { ObjectGizmo, type GizmoHit } from './ObjectGizmo';
+import type { SurfaceHit } from './SurfaceHit';
 import { CameraRig, type AxisProjection, type AxisName } from './CameraRig';
 import { ViewportGrid } from './Grid';
 import { MeshNodeView } from './MeshNodeView';
@@ -632,6 +633,20 @@ export class ViewportRenderer {
       return null;
     }
     return view.pickEdge(
+      clientX,
+      clientY,
+      this.cameraRig.camera,
+      this.canvas
+    );
+  }
+
+  /** Pick the frontmost surface point and interpolated UV on the active node. */
+  pickSurface(clientX: number, clientY: number): SurfaceHit | null {
+    const view = this.activeView();
+    if (!view) {
+      return null;
+    }
+    return view.pickSurface(
       clientX,
       clientY,
       this.cameraRig.camera,

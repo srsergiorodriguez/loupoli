@@ -385,6 +385,13 @@ export class EditorRuntime {
   private readonly uvPins = new Set<number>();
   private uvPaint: UvPaintStroke | null = null;
   private paintEngine: PaintEngine | null = null;
+  private projectedPaint: {
+    engine: PaintEngine;
+    asset: TextureAsset;
+    nodeId: string;
+    pointerId: number;
+    lastFace: number | null;
+  } | null = null;
   private uvPaintMode = false;
   private uvBrushColor = '#f2ffe0';
   private uvBrushSize = 36;
@@ -399,6 +406,7 @@ export class EditorRuntime {
   private paintZoom = 1;
   private paintPanX = 0;
   private paintPanY = 0;
+  private surfaceCursor: { x: number; y: number; size: number } | null = null;
   private uvDrag: UvDrag | null = null;
   private pointerSelectionHit = false;
   private uvPendingClick: {
@@ -471,6 +479,7 @@ export class EditorRuntime {
       pan: (dx, dy) => this.renderer.pan(dx, dy),
       zoom: (factor) => this.renderer.zoom(factor),
       beginToolPointer: (sample) => this.beginToolPointer(sample),
+      hoverToolPointer: (sample) => this.hoverToolPointer(sample),
       moveToolPointer: (sample) => this.moveToolPointer(sample),
       endToolPointer: (sample) => this.endToolPointer(sample),
       cancelToolPointer: () => this.cancelToolPointer(),
@@ -595,6 +604,7 @@ export class EditorRuntime {
       paintZoom: this.paintZoom,
       paintPanX: this.paintPanX,
       paintPanY: this.paintPanY,
+      surfaceCursor: this.surfaceCursor,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
       textureAssets: this.textureLibrary.summaries(),
@@ -1074,6 +1084,8 @@ export class EditorRuntime {
     this.cancelToolPointer();
     this.cancelUvPaint();
     this.cancelTexturePaint();
+    this.cancelProjectionPaint();
+    this.surfaceCursor = null;
     this.armedAction = null;
     this.renderer.setActionPreviewLine(null);
     this.cancelLasso();
@@ -1136,6 +1148,10 @@ export class EditorRuntime {
 
   /** Switch Model, UV, and Paint without duplicating open/close logic. */
   setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
+    if (workspace !== 'paint') {
+      this.cancelProjectionPaint();
+      this.surfaceCursor = null;
+    }
     this.workspace = workspace;
     if (workspace === 'model') {
       this.activeEditor = '3d';
@@ -2005,6 +2021,60 @@ export class EditorRuntime {
     context.strokeRect(bounds.x, bounds.y, bounds.size, bounds.size);
   }
 
+  /** Update the 3D surface brush cursor during hover. */
+  private hoverToolPointer(sample: PointerSample | null): void {
+    if (this.workspace !== 'paint' || !sample || sample.pointerType !== 'mouse') {
+      if (this.surfaceCursor !== null) {
+        this.surfaceCursor = null;
+        this.publish();
+      }
+      return;
+    }
+    const node = this.getActiveNode();
+    const supported =
+      this.paintTool === 'brush' || this.paintTool === 'eraser';
+    const hasTexture =
+      node !== null && this.textureLibrary.get(node.textureId) !== null;
+    const hit =
+      supported && hasTexture
+        ? this.renderer.pickSurface(sample.clientX, sample.clientY)
+        : null;
+    const next = hit
+      ? {
+          x: sample.clientX,
+          y: sample.clientY,
+          size: this.uvBrushSize
+        }
+      : null;
+    const current = this.surfaceCursor;
+    if (
+      current?.x === next?.x &&
+      current?.y === next?.y &&
+      current?.size === next?.size
+    ) {
+      return;
+    }
+    this.surfaceCursor = next;
+    this.publish();
+  }
+
+  /** Shared paint settings for texture-space and projected strokes. */
+  private paintSettings(radius: number) {
+    return {
+      tool: this.paintTool,
+      color: this.uvBrushColor,
+      secondaryColor: this.paintSecondaryColor,
+      radius,
+      opacity: this.uvBrushOpacity,
+      hardness: this.paintHardness,
+      smoothing: this.paintSmoothing,
+      noise: this.paintNoise,
+      spacing: 0.25,
+      shapeFilled: this.paintShapeFilled,
+      gradient: this.paintGradient
+    };
+  }
+
   /** Begin painting the active texture layer directly in texture space. */
   beginTexturePaint(
     x: number,
@@ -2042,19 +2112,7 @@ export class EditorRuntime {
       24,
       this.paintViewState()
     );
-    const engine = new PaintEngine(asset, layerId, {
-      tool: this.paintTool,
-      color: this.uvBrushColor,
-      secondaryColor: this.paintSecondaryColor,
-      radius,
-      opacity: this.uvBrushOpacity,
-      hardness: this.paintHardness,
-      smoothing: this.paintSmoothing,
-      noise: this.paintNoise,
-      spacing: 0.25,
-      shapeFilled: this.paintShapeFilled,
-      gradient: this.paintGradient
-    });
+    const engine = new PaintEngine(asset, layerId, this.paintSettings(radius));
     if (!engine.begin({ x: point.x, y: point.y, pressure })) {
       return false;
     }
@@ -2063,6 +2121,141 @@ export class EditorRuntime {
     this.renderer.refreshTexture();
     this.publish();
     return true;
+  }
+
+  /**
+   * Start projection painting on the active object's bound texture.
+   *
+   * A miss returns false so InputRouter falls through to camera orbit. The
+   * gesture is latched as a tool stroke, so crossing the silhouette never
+   * turns an active stroke into camera navigation.
+   */
+  private beginProjectionPaint(sample: PointerSample): boolean {
+    if (this.workspace !== 'paint') {
+      return false;
+    }
+    const node = this.getActiveNode();
+    if (!node) {
+      return false;
+    }
+    const asset = this.textureLibrary.get(node.textureId);
+    if (!asset || !asset.activeLayerId) {
+      this.projectError =
+        'Assign a texture to the active object before painting in 3D.';
+      this.publish();
+      return false;
+    }
+    if (this.paintTool !== 'brush' && this.paintTool !== 'eraser') {
+      this.projectError =
+        '3D surface painting supports Brush and Eraser. Use the texture pane for shapes, gradients, and fill.';
+      this.publish();
+      return false;
+    }
+    const hit = this.renderer.pickSurface(sample.clientX, sample.clientY);
+    if (!hit || hit.nodeId !== node.id) {
+      return false;
+    }
+    if (this.textureLibrary.activeAssetId !== asset.id) {
+      this.textureLibrary.setActive(asset.id);
+    }
+    if (this.paintEngine) {
+      this.cancelTexturePaint();
+    }
+    const radius = Math.max(
+      0.5,
+      Math.min(512, (this.uvBrushSize / 2) * hit.uvPerCssPixel * asset.width)
+    );
+    const engine = new PaintEngine(
+      asset,
+      asset.activeLayerId,
+      this.paintSettings(radius)
+    );
+    const point = {
+      x: hit.uv[0] * asset.width,
+      y: (1 - hit.uv[1]) * asset.height,
+      pressure: sample.pressure
+    };
+    if (!engine.begin(point)) {
+      return false;
+    }
+    this.projectError = null;
+    this.projectedPaint = {
+      engine,
+      asset,
+      nodeId: node.id,
+      pointerId: sample.pointerId,
+      lastFace: hit.face
+    };
+    this.surfaceCursor = {
+      x: sample.clientX,
+      y: sample.clientY,
+      size: this.uvBrushSize
+    };
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+    return true;
+  }
+
+  /** Continue a latched projected stroke; misses simply add no samples. */
+  private updateProjectionPaint(sample: PointerSample): void {
+    const state = this.projectedPaint;
+    if (!state || state.pointerId !== sample.pointerId) {
+      return;
+    }
+    const hit = this.renderer.pickSurface(sample.clientX, sample.clientY);
+    if (!hit || hit.nodeId !== state.nodeId) {
+      state.lastFace = null;
+      if (this.surfaceCursor !== null) {
+        this.surfaceCursor = null;
+        this.publish();
+      }
+      return;
+    }
+    const point = {
+      x: hit.uv[0] * state.asset.width,
+      y: (1 - hit.uv[1]) * state.asset.height,
+      pressure: sample.pressure
+    };
+    this.surfaceCursor = {
+      x: sample.clientX,
+      y: sample.clientY,
+      size: this.uvBrushSize
+    };
+    const connect = state.lastFace !== null && state.lastFace === hit.face;
+    state.engine.updateProjected(point, connect);
+    state.lastFace = hit.face;
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
+  private finishProjectionPaint(): void {
+    const state = this.projectedPaint;
+    if (!state) {
+      return;
+    }
+    this.projectedPaint = null;
+    state.engine.finish();
+    const patch = state.asset.endPaint();
+    if (patch) {
+      this.history.execute(new PaintTextureCommand(state.asset, patch));
+    }
+    this.surfaceCursor = null;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
+  private cancelProjectionPaint(): void {
+    const state = this.projectedPaint;
+    if (!state) {
+      return;
+    }
+    this.projectedPaint = null;
+    this.surfaceCursor = null;
+    state.engine.cancel();
+    this.renderer.refreshTexture();
+    this.publish();
   }
 
   /** Continue a texture-space paint stroke. */
@@ -2601,6 +2794,9 @@ export class EditorRuntime {
 
   /** Mark the pane that owns contextual selection and tool commands. */
   setActiveEditor(editor: EditorPane): void {
+    if (editor === '3d' && this.workspace === 'paint') {
+      return;
+    }
     if (editor === 'uv' && (!this.uvOpen || this.uvPaintMode)) {
       return;
     }
@@ -4055,8 +4251,10 @@ export class EditorRuntime {
       this.cancelToolPointer();
     }
 
+    if (this.workspace === 'paint') {
+      return this.beginProjectionPaint(sample);
+    }
     if (!workspaceCan(this.workspace, 'select3d')) {
-      // Projection-paint routing will intercept this in Paint later.
       return false;
     }
     const allowEdit = workspaceCan(this.workspace, 'edit3d');
@@ -4236,6 +4434,10 @@ export class EditorRuntime {
   }
 
   private moveToolPointer(sample: PointerSample): void {
+    if (this.projectedPaint) {
+      this.updateProjectionPaint(sample);
+      return;
+    }
     if (this.actionDrag) {
       this.updateActionPointer(sample);
       return;
@@ -4371,6 +4573,10 @@ export class EditorRuntime {
   }
 
   private endToolPointer(sample: PointerSample): void {
+    if (this.projectedPaint) {
+      this.finishProjectionPaint();
+      return;
+    }
     if (this.actionDrag) {
       this.finishActionGesture();
       return;
@@ -4417,6 +4623,10 @@ export class EditorRuntime {
   }
 
   private cancelToolPointer(): void {
+    if (this.projectedPaint) {
+      this.cancelProjectionPaint();
+      return;
+    }
     if (this.modalTransform) {
       this.cancelModalTransform();
       return;

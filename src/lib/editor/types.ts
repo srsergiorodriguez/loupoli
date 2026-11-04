@@ -173,6 +173,7 @@ export interface EditorSnapshot {
   readonly paintZoom: number;
   readonly paintPanX: number;
   readonly paintPanY: number;
+  readonly surfaceCursor: { readonly x: number; readonly y: number; readonly size: number } | null;
   readonly uvRevision: number;
   readonly uvError: string | null;
   readonly textureAssets: readonly TextureAssetSummary[];

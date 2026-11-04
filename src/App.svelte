@@ -240,6 +240,17 @@
     {/if}
   </main>
 
+  {#if session.snapshot.surfaceCursor}
+    <div
+      class="surface-paint-cursor"
+      style:left={`${session.snapshot.surfaceCursor.x}px`}
+      style:top={`${session.snapshot.surfaceCursor.y}px`}
+      style:width={`${session.snapshot.surfaceCursor.size}px`}
+      style:height={`${session.snapshot.surfaceCursor.size}px`}
+      aria-hidden="true"
+    ></div>
+  {/if}
+
   <TopBar {session} />
   <ProjectBanner {session} />
   {#if session.snapshot.activeEditor !== 'paint'}
@@ -266,6 +277,18 @@
     display: flex;
     overflow: hidden;
     background: var(--bg-canvas);
+  }
+
+  .surface-paint-cursor {
+    position: fixed;
+    z-index: var(--z-chrome);
+    border: var(--hairline) solid var(--accent-primary);
+    border-radius: 50%;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.65),
+      inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
   }
 
   .viewport-stage {

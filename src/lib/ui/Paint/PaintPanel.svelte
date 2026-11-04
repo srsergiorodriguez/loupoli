@@ -35,6 +35,7 @@
     textureAssets.find((asset) => asset.id === session.snapshot.textureAssetId) ?? null
   );
   const brushSize = $derived(session.snapshot.uvBrushSize);
+  const paintTool = $derived(session.snapshot.paintTool);
   const activeLayer = $derived(
     session.snapshot.textureLayers.find(
       (layer) => layer.id === session.snapshot.textureActiveId
@@ -366,9 +367,13 @@
 {#snippet paintFooter()}
   <div class="paint-foot">
     <span class="paint-hint">
-      {activeLayer
-        ? 'Paint the active layer · pen pressure · ⌘/Ctrl+Z undoes a gesture'
-        : 'Add a texture layer in the Inspector'}
+      {#if !activeLayer}
+        Add a texture layer in the Inspector
+      {:else if paintTool === 'brush' || paintTool === 'eraser'}
+        Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
+      {:else}
+        This tool paints the texture pane · 3D surface uses Brush or Eraser
+      {/if}
     </span>
   </div>
 {/snippet}

@@ -29,6 +29,7 @@ export interface InputRouterHost {
   activateEditor(editor: '3d' | 'uv'): void;
   isUvActive(): boolean;
   beginToolPointer(sample: PointerSample): boolean;
+  hoverToolPointer(sample: PointerSample | null): void;
   moveToolPointer(sample: PointerSample): void;
   endToolPointer(sample: PointerSample): void;
   cancelToolPointer(): void;
@@ -260,6 +261,10 @@ export class InputRouter {
     }
   };
 
+  private readonly onPointerLeave = (): void => {
+    this.host.hoverToolPointer(null);
+  };
+
   private readonly onPointerMove = (event: PointerEvent): void => {
     const sample = this.toSample(event);
     if (!sample) {
@@ -333,6 +338,8 @@ export class InputRouter {
       } else {
         this.host.pan(dx, dy);
       }
+    } else if (this.mouse.mode === 'none') {
+      this.host.hoverToolPointer(sample);
     }
   };
 
@@ -592,6 +599,7 @@ export class InputRouter {
     this.host = host;
 
     element.addEventListener('pointerdown', this.onPointerDown);
+    element.addEventListener('pointerleave', this.onPointerLeave);
     element.addEventListener('pointermove', this.onPointerMove);
     element.addEventListener('pointerup', this.onPointerUp);
     element.addEventListener('pointercancel', this.onPointerCancel);
@@ -604,6 +612,7 @@ export class InputRouter {
   /** Remove every listener owned by the router. */
   dispose(): void {
     this.element.removeEventListener('pointerdown', this.onPointerDown);
+    this.element.removeEventListener('pointerleave', this.onPointerLeave);
     this.element.removeEventListener('pointermove', this.onPointerMove);
     this.element.removeEventListener('pointerup', this.onPointerUp);
     this.element.removeEventListener('pointercancel', this.onPointerCancel);
