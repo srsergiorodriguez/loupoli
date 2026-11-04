@@ -1,11 +1,27 @@
 # loupoli — Technical Architecture
 
 **Status:** Phase 2 implementation baseline plus the first Phase 3 slices: multi-element selection, numeric object transforms, and drag-to-orbit orientation gizmo. Later Phase 3 systems remain planned architecture.  
-**Related:** [Plan](./PLAN.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
+**Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 This document fixes the boundaries between Svelte, the editor model, the half-edge kernel, the renderer, input, and the Tauri shell. It is intentionally opinionated: future changes should either fit these boundaries or be recorded as a deliberate architecture change.
 
----
+## Contents
+
+1. [Runtime layers](#1-runtime-layers)
+2. [Coordinates, units, and numeric policy](#2-coordinates-units-and-numeric-policy)
+3. [Document model](#3-document-model)
+4. [Half-edge DCEL](#4-half-edge-dcel)
+5. [Command and undo model](#5-command-and-undo-model)
+6. [Modifiers](#6-modifiers)
+7. [Rendering architecture](#7-rendering-architecture)
+8. [PS1 Unlit shader specification](#8-ps1-unlit-shader-specification)
+9. [Input architecture](#9-input-architecture)
+10. [Screen-space picking](#10-screen-space-picking)
+11. [Platform boundary (Tauri v2)](#11-platform-boundary-tauri-v2)
+12. [iOS memory and lifecycle rules](#12-ios-memory-and-lifecycle-rules)
+13. [Error model and conventions](#13-error-model-and-conventions)
+14. [Deliberate deferrals](#14-deliberate-deferrals)
+
 
 ## 1. Runtime layers
 

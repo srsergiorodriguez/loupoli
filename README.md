@@ -4,11 +4,26 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 **Brand:** always lowercase `loupoli`.
 
+**Documentation:** Start with the [documentation index](docs/README.md) for ownership and reading order.
+
 **Status:** Phase 2 and the Phase 3 foundations are implemented. Current work includes context-sensitive object/group and selection gizmos, a Pencil ActionDock with exact action amounts, desktop G/R/S, front-face-culled Texture + Wire, loop-cut previews, groups and joins, destructive topology actions, and provenance-mapped Mirror/Grid Array/Radial Array stacks. Broader Phase 3 cleanup remains: evaluated-space element pivots and physical iPad validation.
 
 ![Current loupoli desktop viewport with the selection gizmo and ActionDock](docs/media/desktop-overview.png)
 
 ---
+
+## Contents
+
+- [What works now](#what-works-now)
+- [UI consistency](#ui-consistency)
+- [Getting started](#getting-started)
+- [Verification performed](#verification-performed)
+- [Deliberately deferred](#deliberately-deferred)
+- [Workflow layout](#workflow-layout)
+- [iPad layout](#ipad-layout)
+- [Planning and architecture](#planning-and-architecture)
+- [Project layout](#project-layout)
+- [Approved decisions](#approved-decisions)
 
 ## What works now
 
@@ -42,7 +57,7 @@ A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centri
 
 ![Brush-size preview in the UV paint workspace](docs/media/brush-cursor.png)
 
-- **Texture assets and bindings.** A project-level texture library owns independent assets with 64–2048 presets, nearest/linear filtering, and up to eight layers each. Meshes bind to assets by stable ID, so several objects can share one low-poly atlas. Inspector fields, selects, action buttons, and outliner rows share a 32 px desktop control height and a 44 px touch height. The Inspector exposes a compact asset header with a shared inline name field, New/shared overflow actions, stateful assignment, filtering, alpha mode, a typed Add-layer menu, and a selected-layer properties panel. Scene and Texture share the same outliner row, active selection, inline naming, right-side visibility, and danger-hover delete language. Objects, groups, assets, and layers are renamed through the same inline control. Layers can be solid, checker, transparent, or raster. Each asset has one composite `CanvasTexture`, and the renderer caches material variants per asset so shared textures upload once. Paint transactions keep committed pixels untouched until commit and store one localized undo rectangle. Layers carry color/detail/lighting roles for the future bake pipeline and save as binary PNG chunks in `.lpoly` v3; texture edits are captured by v3 autosave checkpoints. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted. Layers carry color/detail/lighting roles for the future bake pipeline. Imported images become fitted raster layers with preserved aspect ratio. Checker is a preview backdrop; transparent texels preserve composite alpha, and assets can render as Opaque, Cutout, or Blend in 3D. Raster layers stay authoritative through opacity/blend/rename undo and save as PNG chunks; a raster brush paints the active asset layer directly in the UV view, and Brush/Eraser projection-paint the active object's bound asset in 3D.
+- **Texture assets and bindings.** A project-level texture library owns independent assets with 64–2048 presets, nearest/linear filtering, and up to eight layers each. Meshes bind to assets by stable ID, so several objects can share one low-poly atlas. The Inspector exposes a compact asset header with a shared inline name field, New/shared overflow actions, stateful assignment, filtering, alpha mode, a typed Add-layer menu, and a selected-layer properties panel. Layers can be solid, checker, transparent, or raster. Each asset has one composite `CanvasTexture`, and the renderer caches material variants per asset so shared textures upload once. Paint transactions keep committed pixels untouched until commit and store one localized undo rectangle. Layers carry color/detail/lighting roles for the future bake pipeline and save as binary PNG chunks in `.lpoly` v3; texture edits are captured by v3 autosave checkpoints. Layer rename and Normal/Multiply/Screen blend modes are implemented and persisted. Layers carry color/detail/lighting roles for the future bake pipeline. Imported images become fitted raster layers with preserved aspect ratio. Checker is a preview backdrop; transparent texels preserve composite alpha, and assets can render as Opaque, Cutout, or Blend in 3D. Raster layers stay authoritative through opacity/blend/rename undo and save as PNG chunks; a raster brush paints the active asset layer directly in the UV view, and Brush/Eraser projection-paint the active object's bound asset in 3D.
 
 ![Texture layer stack in the Inspector](docs/media/texture-layers.png)
 
@@ -126,9 +141,9 @@ The autosave recovery flow is explicit and non-destructive:
 
 ---
 
-## UI consistency contract
+## UI consistency
 
-UI consistency is part of the product contract. Scene and Texture share `OutlinerRow` (left drag slot, right visibility, 2 px inner gutter, shared active/selected states, no selection dot) and `InlineNameField` for every rename. Inputs, selects, action buttons, and outliner rows share the 32 px desktop / 44 px touch control height. Create actions sit above an outliner, contextual actions below it, and destructive actions are last/right with neutral-at-rest/red-hover styling. All custom tooltips render through the body-mounted `TooltipLayer`. See [UI rules](docs/UI_RULES.md) and the [design system](docs/DESIGN_SYSTEM.md) before adding a control.
+UI consistency is part of the product contract. The canonical behavioral rules live in [UI rules §9](./docs/UI_RULES.md#9-shared-ui-contracts); visual tokens and component shapes live in the [Design System](./docs/DESIGN_SYSTEM.md). Do not duplicate them in feature docs.
 
 ## Getting started
 
@@ -375,6 +390,7 @@ Target baseline: **iPadOS 16.4+**. The Tauri app is structured for iOS, but the 
 
 | Document | Contents |
 |---|---|
+| [Documentation index](docs/README.md) | Ownership, reading order, and maintenance rules for all docs |
 | [Working Instructions](AGENTS.md) | Master rules, iOS memory constraints, transform/modifier rules, quality gates |
 | [Master Plan](docs/PLAN.md) | Product constraints, approved decisions, phase exits, risks, toolchain audit |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, DCEL, multi-node rendering, picking, autosave, file I/O |

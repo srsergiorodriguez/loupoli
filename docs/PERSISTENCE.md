@@ -1,7 +1,7 @@
 # loupoli — Persistence and iOS Memory Safety
 
 **Status:** Phase 4 persistence. Autosave, `.lpoly` v3, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, and node texture bindings round-trip. v3 stores a texture asset library with per-layer binary PNG chunks. Legacy v1/v2 compatibility is intentionally deferred until the MVP build. Shape keys remain later work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).
-**Related:** [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
+**Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
 
@@ -10,7 +10,15 @@
 
 Autosave is never presented as a manual save, and a manual save is never implied by autosave.
 
----
+## Contents
+
+1. [Durability model](#1-durability-model)
+2. [Autosave engine](#2-autosave-engine)
+3. [`.lpoly` project format v3](#3-lpoly-project-format-v3)
+4. [Tauri / Rust filesystem boundary](#4-tauri-rust-filesystem-boundary)
+5. [iOS lifecycle and memory](#5-ios-lifecycle-and-memory)
+6. [Testing](#6-testing)
+
 
 ## 1. Durability model
 

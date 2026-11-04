@@ -4,7 +4,16 @@
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
----
+## Contents
+
+1. [Ground truth already in place](#1-ground-truth-already-in-place)
+2. [Data and ownership rules](#2-data-and-ownership-rules)
+3. [Delivery slices](#3-delivery-slices)
+4. [Format and autosave implications](#4-format-and-autosave-implications)
+5. [Memory budget](#5-memory-budget)
+6. [Verification gates](#6-verification-gates)
+7. [Risks and open questions](#7-risks-and-open-questions)
+
 
 ## 1. Ground truth already in place
 

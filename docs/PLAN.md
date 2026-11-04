@@ -3,9 +3,23 @@
 **Status:** Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 has started with UV seam authoring, a resizable UV split with two-way linked corner selection, Move/Rotate/Scale, U/V locks, snap, exact numeric entry, seam-chart LSCM unwrap with pins and overlap rejection, a texture asset library with node bindings, `.lpoly` v3 PNG chunks, blend modes, UV raster painting, and texture-aware autosave; see [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md). Physical-iPad/WKWebView validation remains deferred.
 **Brand rule:** the name is always written `loupoli`, lowercase.
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.
-**Companion docs:** [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
+**Companion docs:** [Docs index](./README.md) ·  [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
----
+## Contents
+
+1. [Product definition](#1-product-definition)
+2. [Non-negotiable guardrails](#2-non-negotiable-guardrails)
+3. [System at a glance](#3-system-at-a-glance)
+4. [Delivery phases](#4-delivery-phases)
+5. [Persistence is cross-cutting, not a final phase](#5-persistence-is-cross-cutting-not-a-final-phase)
+6. [Verification strategy](#6-verification-strategy)
+7. [Toolchain baseline](#7-toolchain-baseline)
+8. [Dependency policy](#8-dependency-policy)
+9. [Risk register](#9-risk-register)
+10. [Approved decisions](#10-approved-decisions)
+11. [Definition of done for every phase](#11-definition-of-done-for-every-phase)
+12. [Planning references](#12-planning-references)
+
 
 ## 1. Product definition
 

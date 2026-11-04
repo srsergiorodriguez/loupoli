@@ -2,6 +2,15 @@
 
 This is the authoritative map of the application shell. New controls must be assigned to one of these regions before implementation.
 
+## Contents
+
+- [Shell regions](#shell-regions)
+- [Subregions](#subregions)
+- [Inspector section sets](#inspector-section-sets)
+- [Ownership rules](#ownership-rules)
+- [Active editor](#active-editor)
+- [Future workspaces](#future-workspaces)
+
 ## Shell regions
 
 | Region | Responsibility | Owns |

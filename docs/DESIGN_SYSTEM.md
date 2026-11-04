@@ -1,7 +1,23 @@
 # loupoli — Design System
 
 **Status:** Phase 2 tokens, shell, scene controls, selection overlays, autosave states, Paint UI, and workspace-filtered Inspector sections implemented; later component inventory remains planned.  
-**Related:** [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Persistence](./PERSISTENCE.md) · [README](../README.md)
+**Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Persistence](./PERSISTENCE.md) · [README](../README.md)
+
+## Contents
+
+1. [Design direction](#1-design-direction)
+2. [Brand](#2-brand)
+3. [Design tokens](#3-design-tokens)
+4. [Foundations](#4-foundations)
+5. [Layout](#5-layout)
+6. [Component system](#6-component-system)
+7. [Interaction design](#7-interaction-design)
+8. [Viewport visual language](#8-viewport-visual-language)
+9. [Responsive and density rules](#9-responsive-and-density-rules)
+10. [Implementation rules](#10-implementation-rules)
+11. [Phase 1–2 design deliverables](#11-phase-12-design-deliverables)
+12. [Visual QA checklist](#12-visual-qa-checklist)
+
 
 ---
 
@@ -300,11 +316,7 @@ Use the 4px scale exclusively. The primary layout rhythm is:
 
 ### 4.6 Action and naming contracts
 
-- Selected-item actions live below their outliner; create actions live above it.
-- Destructive actions are last and right-aligned, labelled with their noun, neutral at rest, and `--accent-danger` on hover/focus.
-- `--accent-warning` is only for warnings and recoverable errors.
-- Scene objects, groups, texture assets, and layers all use `InlineNameField`; no alternate rename box.
-- Scene and Texture both use `OutlinerRow`; no bespoke row markup or selection dot.
+Behavioral rules live in one place: [UI rules §9 — Shared UI contracts](./UI_RULES.md#9-shared-ui-contracts). This document owns their visual tokens and component shapes, not a second copy of the behavior.
 
 ### 4.7 Motion
 

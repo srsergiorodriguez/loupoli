@@ -2,6 +2,25 @@
 
 These are implementation constraints, not style suggestions. A change that violates them is incomplete.
 
+**Related:** [Docs index](./README.md) · [UI map](./UI_MAP.md) · [Design system](./DESIGN_SYSTEM.md) · [Root README](../README.md)
+
+## Contents
+
+1. [One action, one home](#1-one-action-one-home)
+2. [Context is explicit](#2-context-is-explicit)
+3. [Selection combination is one model](#3-selection-combination-is-one-model)
+4. [One disclosure](#4-one-disclosure)
+5. [One numeric control](#5-one-numeric-control)
+6. [One tooltip and shortcut source](#6-one-tooltip-and-shortcut-source)
+7. [Shortcut rules](#7-shortcut-rules)
+8. [Icon and text matrix](#8-icon-and-text-matrix)
+9. [Shared UI contracts](#9-shared-ui-contracts)
+10. [Touch and pointer parity](#10-touch-and-pointer-parity)
+11. [Command and shortcut registry](#11-command-and-shortcut-registry)
+12. [New-control checklist](#12-new-control-checklist)
+13. [Layout, camera, and resize](#13-layout-camera-and-resize)
+14. [UV interaction](#14-uv-interaction)
+
 ## 1. One action, one home
 
 Every command has exactly one visible home. Contextual behavior changes the target, not the location of the control.
@@ -57,7 +76,7 @@ All tooltips come from the command registry. Format: `Label — Shortcut` when a
 - Hover is supplemental. Touch users must be able to identify every control without hover.
 
 
-## 8.1 Shared UI contracts
+## 9. Shared UI contracts
 
 These are mandatory reuse rules. A new surface that duplicates one of these patterns is incomplete.
 
@@ -111,14 +130,14 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 - Tooltips use `--z-toast` and must remain above the Top Bar, Inspector, and panes.
 - Tooltip text and shortcut formatting come from the command registry.
 
-## 9. Touch and pointer parity
+## 10. Touch and pointer parity
 
 - Every interactive target is at least 44 CSS px on touch.
 - No hover-only actions.
 - Hover tooltips are desktop aids; visible labels or a Shortcuts/Help section cover iPad.
 - Test mouse, pen, one-finger touch, and two-finger navigation for any new gesture.
 
-## 10. Command and shortcut registry
+## 11. Command and shortcut registry
 
 Every command entry defines:
 
@@ -133,7 +152,7 @@ Every command entry defines:
 
 The command registry is the source for labels, scopes, tooltips, shortcut help, and presentation mode. The ShortcutBus is the single keyboard dispatch entry point.
 
-## 11. New-control checklist
+## 12. New-control checklist
 
 Before adding a control, answer all of these:
 
@@ -153,7 +172,7 @@ Before adding a control, answer all of these:
 
 If any answer is missing, do not add the control.
 
-## 12. Layout, camera, and resize
+## 13. Layout, camera, and resize
 
 - Pane resize handles straddle the actual pane boundary, with a 44 px hit area centered on the visible divider.
 - Resize math uses the pane boundary, not an unrelated viewport offset.
@@ -169,7 +188,7 @@ If any answer is missing, do not add the control.
 - Workspace panes use the shared PaneHost and PaneFrame; the divider hit area straddles the pane edge, and the canvas/overlay body has one positioning context.
 - New Project is a command-owned document reset and defaults to a Cube.
 
-## 13. UV interaction
+## 14. UV interaction
 
 - Preserve a multi-selection on pointer-down so a drag can begin.
 - Resolve a click without movement to the exact hit entity. Vertex/edge clicks must be able to reduce an All/Island selection.
