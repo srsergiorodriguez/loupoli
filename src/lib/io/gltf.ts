@@ -120,13 +120,20 @@ export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
       if (morphTargets.length > 0) {
         const linear = new Matrix3().setFromMatrix4(matrix);
         const vertexByPosition = new Map<string, number>();
+        const positionKey = (x: number, y: number, z: number): string =>
+          `${x.toFixed(5)}|${y.toFixed(5)}|${z.toFixed(5)}`;
         for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
-          const key = `${mesh.positions[vertex * 3]}|${mesh.positions[vertex * 3 + 1]}|${mesh.positions[vertex * 3 + 2]}`;
+          const key = positionKey(
+            mesh.positions[vertex * 3],
+            mesh.positions[vertex * 3 + 1],
+            mesh.positions[vertex * 3 + 2]
+          );
           vertexByPosition.set(key, vertex);
         }
         const names = Object.entries(object.morphTargetDictionary ?? {});
         morphTargets.forEach((target: BufferAttributeType, shapeIndex: number) => {
           const targetPositions = mesh.positions.slice();
+          const seenVertices = new Set<number>();
           const baseWorld = new Vector3();
           for (let vertex = 0; vertex < position.count; vertex += 1) {
             const localBase = new Vector3(
@@ -136,11 +143,12 @@ export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
             );
             baseWorld.copy(localBase).applyMatrix4(matrix);
             const dcelVertex = vertexByPosition.get(
-              `${baseWorld.x}|${baseWorld.y}|${baseWorld.z}`
+              positionKey(baseWorld.x, baseWorld.y, baseWorld.z)
             );
-            if (dcelVertex === undefined) {
+            if (dcelVertex === undefined || seenVertices.has(dcelVertex)) {
               continue;
             }
+            seenVertices.add(dcelVertex);
             const delta = new Vector3(
               target.getX(vertex),
               target.getY(vertex),
@@ -150,9 +158,11 @@ export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
               delta.sub(localBase);
             }
             delta.applyMatrix3(linear);
-            targetPositions[dcelVertex * 3] += delta.x;
-            targetPositions[dcelVertex * 3 + 1] += delta.y;
-            targetPositions[dcelVertex * 3 + 2] += delta.z;
+            targetPositions[dcelVertex * 3] = mesh.positions[dcelVertex * 3] + delta.x;
+            targetPositions[dcelVertex * 3 + 1] =
+              mesh.positions[dcelVertex * 3 + 1] + delta.y;
+            targetPositions[dcelVertex * 3 + 2] =
+              mesh.positions[dcelVertex * 3 + 2] + delta.z;
           }
           const name =
             names.find(([, index]) => index === shapeIndex)?.[0] ??
@@ -219,6 +229,49 @@ export async function exportGlb(
     const normals = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     node.mesh.writeTriangleData(positions, normals, uvs);
+    const baseVertexByRender = new Uint32Array(vertexCount);
+    {
+      let renderCursor = 0;
+      for (let face = 0; face < node.mesh.faceCount; face += 1) {
+        const loop: number[] = [];
+        const first = node.mesh.faceHalfEdge[face];
+        let halfEdge = first;
+        do {
+          loop.push(node.mesh.heOrigin[halfEdge]);
+          halfEdge = node.mesh.heNext[halfEdge];
+        } while (halfEdge !== first);
+        const renderCount = node.mesh.renderTriangleCountForFace(face);
+        const total = renderCount * 3;
+        if (loop.length === 4 && renderCount > 2) {
+          baseVertexByRender.fill(loop[0], renderCursor, renderCursor + total);
+        } else {
+          let cursor = renderCursor;
+          for (let i = 1; i < loop.length - 1; i += 1) {
+            baseVertexByRender[cursor] = loop[0];
+            baseVertexByRender[cursor + 1] = loop[i];
+            baseVertexByRender[cursor + 2] = loop[i + 1];
+            cursor += 3;
+          }
+          while (cursor < renderCursor + total) {
+            baseVertexByRender[cursor] = loop[0];
+            cursor += 1;
+          }
+        }
+        renderCursor += total;
+      }
+    }
+    const fullMorphTargets = node.shapeKeys.map((key) => {
+      const data = new Float32Array(vertexCount * 3);
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const base = baseVertexByRender[vertex];
+        data[vertex * 3] = key.targetPositions[base * 3] - node.mesh.positions[base * 3];
+        data[vertex * 3 + 1] =
+          key.targetPositions[base * 3 + 1] - node.mesh.positions[base * 3 + 1];
+        data[vertex * 3 + 2] =
+          key.targetPositions[base * 3 + 2] - node.mesh.positions[base * 3 + 2];
+      }
+      return data;
+    });
     const materialFaces = new Map<number, number[]>();
     for (let face = 0; face < node.mesh.faceCount; face += 1) {
       const material = node.mesh.faceMaterial[face];
@@ -259,6 +312,29 @@ export async function exportGlb(
       geometry.setAttribute('position', new BufferAttribute(subsetPositions, 3));
       geometry.setAttribute('normal', new BufferAttribute(subsetNormals, 3));
       geometry.setAttribute('uv', new BufferAttribute(subsetUvs, 2));
+      if (fullMorphTargets.length > 0) {
+        const morphAttributes: BufferAttribute[] = [];
+        let source = 0;
+        for (const morph of fullMorphTargets) {
+          const subset = new Float32Array(triangleCount * 3 * 3);
+          let target = 0;
+          for (let face = 0; face < node.mesh.faceCount; face += 1) {
+            const count = node.mesh.renderTriangleCountForFace(face) * 3;
+            if (faces.includes(face)) {
+              subset.set(
+                morph.subarray(source * 3, (source + count) * 3),
+                target * 3
+              );
+              target += count;
+            }
+            source += count;
+          }
+          source = 0;
+          morphAttributes.push(new BufferAttribute(subset, 3));
+        }
+        geometry.morphAttributes.position = morphAttributes;
+        geometry.morphTargetsRelative = true;
+      }
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
       const mesh = new Mesh(
@@ -266,6 +342,12 @@ export async function exportGlb(
         makeMaterial(palette[materialIndex] ?? palette[0])
       );
       mesh.name = `${node.name}_${objectIndex}`;
+      if (node.shapeKeys.length > 0) {
+        mesh.morphTargetInfluences = node.shapeKeys.map((key) => key.weight);
+        mesh.morphTargetDictionary = Object.fromEntries(
+          node.shapeKeys.map((key, index) => [key.name, index])
+        );
+      }
       objectIndex += 1;
       root.add(mesh);
     }

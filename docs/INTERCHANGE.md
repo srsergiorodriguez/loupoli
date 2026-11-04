@@ -46,7 +46,7 @@ Implemented with Three's GLTF loader/exporter:
 Limitations:
 
 - PBR material complexity is reduced to base color.
-- GLTF textures, animations, and skins are not imported yet; morph targets import into shape keys, but morph export is pending.
+- GLTF textures, animations, and skins are not imported yet. Morph targets import into shape keys and export as relative GLB morph targets with influences.
 - Non-manifold GLB triangle soup is rejected with a clear error.
 - Export uses the base DCEL and simple per-face colors.
 

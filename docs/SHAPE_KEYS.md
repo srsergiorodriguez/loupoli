@@ -1,6 +1,6 @@
 # Shape keys
 
-**Status:** Minimal shape-key support implemented. Keys store absolute morph positions, expose weights, evaluate into the rendered mesh, persist as binary payload, and import glTF morph targets. Shape-key weight animation, sculpt-style key editing, and GLB morph export are not implemented yet.
+**Status:** Minimal shape-key support implemented. Keys store absolute morph positions, expose weights, evaluate into the rendered mesh, persist as binary payload, and import glTF morph targets. Shape-key weight animation and sculpt-style key editing are not implemented yet. GLB morph import and export are implemented.
 
 ## Model
 
@@ -46,11 +46,10 @@ This prevents stale per-vertex morph targets. Direct vertex dragging is still al
 
 ## glTF
 
-GLB import maps `morphAttributes.position` and morph influence weights into shape keys. GLB morph export is still pending.
+GLB import maps `morphAttributes.position` and morph influence weights into shape keys. GLB export writes shape keys as relative morph targets, with weights preserved as morph influences. A browser round-trip verified that a keyed +1 vertex deformation survives export/import at weight 0.5.
 
 ## Remaining
 
 - Shape-key weight tracks in the animation timeline
 - Sculpt/edit-shape mode
-- GLB morph target export
 - Shape-key-aware topology editing or conversion
