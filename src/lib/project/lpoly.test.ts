@@ -38,7 +38,7 @@ function makeDocument(): SceneDocument {
   return document;
 }
 
-describe('.lpoly v3', () => {
+describe('.lpoly v4', () => {
   it('round-trips multiple closed and open meshes byte-for-byte', () => {
     const document = makeDocument();
     const bytes = encodeLpoly(document, SETTINGS);
@@ -147,6 +147,25 @@ describe('.lpoly v3', () => {
     expect(asset?.layers[3].visible).toBe(false);
     expect(asset?.layers[6].blendMode).toBe('multiply');
     expect(asset?.layers[7].role).toBe('lighting');
+  });
+
+  it('round-trips document lights and ambient settings', () => {
+    const document = makeDocument();
+    document.ambientColor = '#20242c';
+    document.ambientIntensity = 0.4;
+    const point = document.createLight('point');
+    point.name = 'Warm lamp';
+    point.color = '#ff8844';
+    point.intensity = 3.2;
+    point.position = [2, -1, 3];
+    document.insertLight(point);
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    expect(decoded.document.ambientColor).toBe('#20242c');
+    expect(decoded.document.ambientIntensity).toBe(0.4);
+    expect(decoded.document.lights).toHaveLength(2);
+    expect(decoded.document.lights[1].name).toBe('Warm lamp');
+    expect(decoded.document.lights[1].position).toEqual([2, -1, 3]);
+    expect(decoded.document.lights[1].kind).toBe('point');
   });
 
   it('round-trips a modifier stack', () => {
@@ -293,5 +312,46 @@ describe('.lpoly v3', () => {
     const bytes = encodeLpoly(empty, SETTINGS);
     const decoded = decodeLpoly(bytes);
     expect(decoded.document.nodes).toHaveLength(0);
+  });
+
+  it('reads a v3 project with a default sun and v4-persisted lights', () => {
+    const document = makeDocument();
+    const v4 = encodeLpoly(document, SETTINGS);
+    const view = new DataView(v4.buffer, v4.byteOffset, v4.byteLength);
+    const manifestLength = view.getUint32(12, true);
+    const payloadLength = view.getUint32(16, true);
+    const manifest = JSON.parse(
+      new TextDecoder().decode(v4.subarray(28, 28 + manifestLength))
+    ) as Record<string, unknown>;
+    delete manifest.lighting;
+    manifest.version = 3;
+    const nextManifest = new TextEncoder().encode(JSON.stringify(manifest));
+    const nextPayloadStart = (28 + nextManifest.byteLength + 3) & ~3;
+    const next = new Uint8Array(nextPayloadStart + payloadLength);
+    next.set(v4.subarray(0, 8));
+    next.set(v4.subarray(28 + manifestLength), nextPayloadStart);
+    next.set(nextManifest, 28);
+    const nextView = new DataView(next.buffer);
+    nextView.setUint16(8, 3, true);
+    nextView.setUint32(12, nextManifest.byteLength, true);
+    nextView.setUint32(16, payloadLength, true);
+    // Recompute the CRC for the v3-shaped file.
+    const crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i += 1) {
+      let value = i;
+      for (let bit = 0; bit < 8; bit += 1) {
+        value = (value & 1) !== 0 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+      }
+      crcTable[i] = value >>> 0;
+    }
+    let crc = 0xffffffff;
+    for (let i = 28; i < next.length; i += 1) {
+      crc = crcTable[(crc ^ next[i]) & 0xff] ^ (crc >>> 8);
+    }
+    nextView.setUint32(20, (crc ^ 0xffffffff) >>> 0, true);
+    const decoded = decodeLpoly(next);
+    expect(decoded.document.lights).toHaveLength(1);
+    expect(decoded.document.lights[0].name).toBe('Sun');
+    expect(decoded.document.ambientIntensity).toBeCloseTo(0.22);
   });
 });

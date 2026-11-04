@@ -662,6 +662,53 @@ export class TextureAsset {
     }
   }
 
+  /** Existing baked-lighting layer, if the asset has one. */
+  lightingLayerId(): string | null {
+    return this.layers.find((layer) => layer.role === 'lighting')?.id ?? null;
+  }
+
+  /** Add a transparent raster lighting layer at the top. */
+  addLightingLayer(name = 'Baked lighting'): string | null {
+    if (this.layers.length >= 8) {
+      return null;
+    }
+    const layer = this.createLayer(name, 'transparent', '#ffffff', 1);
+    layer.kind = 'raster';
+    layer.role = 'lighting';
+    layer.blendMode = 'multiply';
+    layer.visible = true;
+    layer.context.clearRect(0, 0, this.width, this.height);
+    this.layers.push(layer);
+    this.activeId = layer.id;
+    this.compositeLayers();
+    return layer.id;
+  }
+
+  /** Read one layer's pixels for a bake snapshot. */
+  getLayerPixels(id: string): ImageData | null {
+    const layer = this.layers.find((item) => item.id === id);
+    if (!layer) {
+      return null;
+    }
+    return layer.context.getImageData(0, 0, this.width, this.height);
+  }
+
+  /** Replace one layer's pixels for a bake commit or undo. */
+  setLayerPixels(id: string, pixels: ImageData): boolean {
+    const layer = this.layers.find((item) => item.id === id);
+    if (
+      !layer ||
+      pixels.width !== this.width ||
+      pixels.height !== this.height
+    ) {
+      return false;
+    }
+    layer.kind = 'raster';
+    layer.context.putImageData(pixels, 0, 0);
+    this.compositeLayers();
+    return true;
+  }
+
   /** Add a fill layer of the requested type at the top. */
   addLayer(
     name?: string,

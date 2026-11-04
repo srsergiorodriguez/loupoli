@@ -15,6 +15,7 @@
     group?: boolean;
     nodeId?: string;
     textureLayerId?: string;
+    lightId?: string;
     dragLabel?: string;
     dragTitle?: string;
     dragDisabled?: boolean;
@@ -38,6 +39,7 @@
     group = false,
     nodeId = undefined,
     textureLayerId = undefined,
+    lightId = undefined,
     dragLabel = 'Drag to reorder',
     dragTitle = 'Drag to reorder',
     dragDisabled = false,
@@ -63,6 +65,7 @@
   class:drop-after={dropTarget && dropAfter}
   data-node-id={nodeId}
   data-texture-layer-id={textureLayerId}
+  data-light-id={lightId}
   aria-current={active ? 'true' : undefined}
 >
   {#if onDragStart}

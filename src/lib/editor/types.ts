@@ -1,6 +1,7 @@
 import type { AxisProjection } from '../render/CameraRig';
 import type { NodeSummary, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { GroupSummary } from '../scene/SceneGroup';
+import type { LightSummary } from '../scene/SceneLight';
 import type {
   Modifier,
   ModifierAxis
@@ -72,7 +73,7 @@ export type UvSelectionMode = 'vertex' | 'edge' | 'face' | 'island';
 export type UvLayout = 'bottom' | 'side';
 
 /** The top-level modeling workspace. */
-export type Workspace = 'model' | 'uv' | 'paint';
+export type Workspace = 'model' | 'light' | 'uv' | 'paint';
 
 /** The pane that currently owns contextual selection and tool commands. */
 export type EditorPane = '3d' | 'uv' | 'paint';
@@ -218,6 +219,11 @@ export interface EditorSnapshot {
   readonly objectName: string;
   readonly activeNodeId: string | null;
   readonly activeGroupId: string | null;
+  readonly activeLightId: string | null;
+  readonly lights: readonly LightSummary[];
+  readonly ambientColor: string;
+  readonly ambientIntensity: number;
+  readonly bakeBusy: boolean;
   readonly groups: readonly GroupSummary[];
   readonly selectedNodeIds: readonly string[];
   readonly additiveNodeSelection: boolean;

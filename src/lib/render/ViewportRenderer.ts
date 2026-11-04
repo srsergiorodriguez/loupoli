@@ -7,7 +7,9 @@ import {
   Group as ThreeGroup,
   LineBasicMaterial,
   MeshBasicMaterial,
+  Object3D,
   Plane,
+  PointLight,
   PointsMaterial,
   Quaternion,
   Raycaster,
@@ -23,6 +25,7 @@ import {
 import type { Theme } from '../../design/theme';
 import type { MeshNode, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
+import type { LightSummary } from '../scene/SceneLight';
 import type {
   ShadingMode,
   TransformMode,
@@ -90,6 +93,12 @@ export class ViewportRenderer {
   private readonly ambientLight: AmbientLight;
   private readonly keyLight: DirectionalLight;
   private readonly fillLight: DirectionalLight;
+  private readonly sceneAmbient: AmbientLight;
+  private readonly documentLightGroup = new ThreeGroup();
+  private documentLights: Array<{
+    light: DirectionalLight | PointLight;
+    target: Object3D | null;
+  }> = [];
 
   private readonly raycaster = new Raycaster();
   private readonly pointerNdc = new Vector2();
@@ -250,7 +259,15 @@ export class ViewportRenderer {
     this.keyLight.position.set(-4, -6, 8);
     this.fillLight = new DirectionalLight(theme.fillLight.color, 0.4);
     this.fillLight.position.set(5, 4, 3);
-    this.scene.add(this.ambientLight, this.keyLight, this.fillLight);
+    this.sceneAmbient = new AmbientLight(new Color(1, 1, 1), 0.2);
+    this.documentLightGroup.name = 'loupoli-document-lights';
+    this.scene.add(
+      this.ambientLight,
+      this.keyLight,
+      this.fillLight,
+      this.sceneAmbient,
+      this.documentLightGroup
+    );
 
     this.resizeObserver = new ResizeObserver(this.handleWindowResize);
     // Observe the canvas itself, not its parent: the UV split changes the
@@ -531,6 +548,68 @@ export class ViewportRenderer {
     }
   }
 
+  /** Replace document lights used by the Lit shading path. */
+  setLighting(
+    lights: readonly LightSummary[],
+    ambientColor: string,
+    ambientIntensity: number
+  ): void {
+    for (const entry of this.documentLights) {
+      entry.light.removeFromParent();
+      entry.target?.removeFromParent();
+    }
+    this.documentLights = [];
+    this.sceneAmbient.color.set(ambientColor);
+    this.sceneAmbient.intensity = Math.max(0, ambientIntensity);
+    for (const summary of lights) {
+      if (summary.kind === 'directional') {
+        const light = new DirectionalLight(
+          new Color(summary.color),
+          Math.max(0, summary.intensity)
+        );
+        const direction = new Vector3(
+          summary.direction[0],
+          summary.direction[1],
+          summary.direction[2]
+        ).normalize();
+        light.position.set(
+          -direction.x * 10,
+          -direction.y * 10,
+          -direction.z * 10
+        );
+        const target = new Object3D();
+        target.position.set(0, 0, 0);
+        light.target = target;
+        light.visible = summary.enabled && summary.intensity > 0;
+        this.documentLightGroup.add(light, target);
+        this.documentLights.push({ light, target });
+      } else {
+        const light = new PointLight(
+          new Color(summary.color),
+          Math.max(0, summary.intensity),
+          0,
+          2
+        );
+        light.position.set(
+          summary.position[0],
+          summary.position[1],
+          summary.position[2]
+        );
+        light.visible = summary.enabled && summary.intensity > 0;
+        this.documentLightGroup.add(light);
+        this.documentLights.push({ light, target: null });
+      }
+    }
+    this.applyDocumentLightVisibility();
+    this.schedule();
+  }
+
+  private applyDocumentLightVisibility(): void {
+    const lit = this.currentMode === 'lit';
+    this.sceneAmbient.visible = lit;
+    this.documentLightGroup.visible = lit;
+  }
+
   /** Pick a transform gizmo handle on the active object. */
   pickGizmo(clientX: number, clientY: number): GizmoHit | null {
     if (
@@ -777,6 +856,12 @@ export class ViewportRenderer {
       record.materials.ps1.dispose();
     }
     this.textureMaterials.clear();
+    for (const entry of this.documentLights) {
+      entry.light.removeFromParent();
+      entry.target?.removeFromParent();
+    }
+    this.documentLights = [];
+    this.documentLightGroup.removeFromParent();
   }
 
   /** Schedule a frame after a texture composite or layer change. */
@@ -897,13 +982,14 @@ export class ViewportRenderer {
       }
     }
 
-    const isLitPath = mode === 'solid' || mode === 'lit';
-    this.ambientLight.intensity = mode === 'lit' ? 0.4 : 0.9;
-    this.keyLight.intensity = mode === 'lit' ? 2.6 : 1.8;
-    this.fillLight.intensity = mode === 'lit' ? 0.55 : 0.35;
-    this.ambientLight.visible = isLitPath;
-    this.keyLight.visible = isLitPath;
-    this.fillLight.visible = isLitPath;
+    const solid = mode === 'solid';
+    this.ambientLight.intensity = 0.9;
+    this.keyLight.intensity = 1.8;
+    this.fillLight.intensity = 0.35;
+    this.ambientLight.visible = solid;
+    this.keyLight.visible = solid;
+    this.fillLight.visible = solid;
+    this.applyDocumentLightVisibility();
   }
 
   private markCameraChanged(): void {

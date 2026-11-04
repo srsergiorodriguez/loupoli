@@ -16,7 +16,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | Region | Responsibility | Owns |
 | --- | --- | --- |
 | **Application Bar** | Identity, project file state, global document actions | Brand, project name, save state, open, save, undo, redo, sidebar toggle |
-| **Workspace Tabs** | Switch the working context | Model, UV, Paint. Reserved IDs: Light, Animation, Export |
+| **Workspace Tabs** | Switch the working context | Model, UV, Paint, Light. Reserved IDs: Animation, Export |
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale |
 | **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), Loop (3D Edge only), All, Add, Sub |
 | **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock |
@@ -47,6 +47,7 @@ This is the authoritative map of the application shell. New controls must be ass
 - **Model:** Scene → Transform → Selection → Mesh → Modifiers → PS1 Look → Controls.
 - **UV:** Scene → Selection → Controls. Selection remains for edge/seam authoring; 3D editing sections are hidden.
 - **Paint:** Scene → Brush → Texture → Controls. Brush and Texture are adjacent; 3D selection overlays are hidden while the selection set persists.
+- **Light:** Scene → Lighting → Controls. Mesh editing and selection chrome are hidden; Scene remains for choosing the bake target.
 - **Tooltip** — command label plus shortcut, from the command registry.
 
 ## Ownership rules
@@ -67,7 +68,7 @@ The Viewport Stage owns overlays so they adapt to the visible 3D rectangle, not 
 - `activeEditor` is `3d` or `uv`.
 - Clicking a canvas or its View Gizmo activates that editor.
 - Clicking shared chrome or the Inspector does not change the active editor.
-- Switching workspace sets the active editor: Model → 3D; UV/Paint → UV.
+- Switching workspace sets the active editor: Model/Light → 3D; UV/Paint → UV.
 - Island mode, All, Lasso, and context transforms target the active editor.
 - The active editor is shown with a lime dot and title accent, never a full border.
 
@@ -82,4 +83,4 @@ Workspace identifiers are reserved now so adding them does not require renaming 
 - `animation`
 - `export`
 
-Only implemented workspaces are rendered in Workspace Tabs. A future workspace gets its own editor pane inside the same shell and must reuse the active-editor, Inspector Section, command, and shortcut contracts.
+Model, UV, Paint, and Light are implemented. Animation and Export remain future workspaces and must reuse the active-editor, Inspector Section, command, and shortcut contracts.

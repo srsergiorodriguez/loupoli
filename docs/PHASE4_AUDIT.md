@@ -13,7 +13,7 @@ This is a **conditional exit**, not an unconditional device sign-off:
 
 - The multi-angle projected-paint tolerance in Plan gate 3 has implementation evidence but no repeatable automated tolerance test.
 - Plan gate 6’s iOS memory ceiling cannot be measured without the physical iPad/WKWebView pass.
-- Dedicated texture pixel deltas remain a performance deferral; texture edits safely force a full v3 checkpoint.
+- Dedicated texture pixel deltas remain a performance deferral; texture edits safely force a full v4 checkpoint.
 
 These are tracked below. They do not block starting Phase 5A lighting; they do block calling Phase 4 a hardware-verified exit.
 
@@ -33,7 +33,7 @@ These are tracked below. They do not block starting Phase 5A lighting; they do b
 
 | Gate | Result | Evidence / residual |
 |---|---|---|
-| Seams visible, undoable, serialized, autosave-restored | **Pass** | Command/journal tests and v3 seam round-trip. |
+| Seams visible, undoable, serialized, autosave-restored | **Pass** | Command/journal tests and v4 seam round-trip. |
 | UV corners transform without a continuous loop | **Pass** | UV transforms use scheduled frames; idle render gate above covers the viewport. |
 | Each test chart unwraps or reports failure | **Pass with residual fixtures** | Cube/quad/pins/closed-chart coverage exists; broader cylinder/grid fixture breadth is still a test-coverage improvement, not a known failure. |
 | UV and unwrap round-trip through `.lpoly` | **Pass** | `ReplaceUvCommand` and lpoly UV columns/tests. |
@@ -46,7 +46,7 @@ These are tracked below. They do not block starting Phase 5A lighting; they do b
 
 ## Accepted deferrals
 
-1. **Dedicated texture pixel deltas** — current behavior is safe: texture edits mark autosave dirty and force a fresh v3 checkpoint with PNG chunks. Pending delta journaling is an optimization, not a correctness gap.
+1. **Dedicated texture pixel deltas** — current behavior is safe: texture edits mark autosave dirty and force a fresh v4 checkpoint with PNG chunks. Pending delta journaling is an optimization, not a correctness gap.
 2. **Physical iPad/WKWebView memory and lifecycle validation** — blocked on target hardware. This includes the 96 MB texture working budget, 2048² behavior, and real WKWebView process-kill recovery.
 3. **Multi-angle projected-paint tolerance** — implementation exists; add a repeatable visual/regression check with a documented pixel-distance threshold before claiming hardware-level acceptance.
 

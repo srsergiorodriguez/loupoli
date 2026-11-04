@@ -162,6 +162,8 @@
         <span class="selection-badge">
           {#if session.snapshot.workspace === 'paint'}
             Paint
+          {:else if session.snapshot.workspace === 'light'}
+            Light
           {:else}
             {session.snapshot.selectionMode === 'vertex'
               ? 'Vertex'
@@ -176,9 +178,11 @@
 
       <div
         class="selection-mode-wrap"
-        class:no-selection-mode={session.snapshot.activeEditor === 'paint'}
+        class:no-selection-mode={session.snapshot.activeEditor === 'paint' ||
+          session.snapshot.workspace === 'light'}
       >
-        {#if session.snapshot.activeEditor !== 'paint'}
+        {#if session.snapshot.activeEditor !== 'paint' &&
+          session.snapshot.workspace !== 'light'}
           <SelectionModeControl {session} />
         {/if}
         <ShadingControl {session} />
@@ -217,7 +221,7 @@
       {/if}
 
       <TransformHud modal={session.snapshot.modalTransform} />
-      {#if !session.snapshot.uvOpen}
+      {#if !session.snapshot.uvOpen && session.snapshot.workspace !== 'light'}
         <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />
@@ -266,7 +270,8 @@
 
   <TopBar {session} />
   <ProjectBanner {session} />
-  {#if session.snapshot.activeEditor !== 'paint'}
+  {#if session.snapshot.activeEditor !== 'paint' &&
+    session.snapshot.workspace !== 'light'}
     <ToolRail {session} onFocusViewport={focusViewport} />
   {/if}
   <Inspector {session} />

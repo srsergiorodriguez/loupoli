@@ -38,6 +38,13 @@ describe('inspector layout', () => {
     ]);
   });
 
+  it('gives Light its own workspace, ordering, and no mesh editing', () => {
+    expect(workspaceCan('light', 'editLighting')).toBe(true);
+    expect(workspaceCan('light', 'bakeLighting')).toBe(true);
+    expect(workspaceCan('light', 'edit3d')).toBe(false);
+    expect(inspectorSectionsFor('light')).toEqual(['scene', 'light', 'controls']);
+  });
+
   it('exposes the full modeling order only in Model', () => {
     expect(inspectorSectionsFor('model')).toEqual([
       'scene',

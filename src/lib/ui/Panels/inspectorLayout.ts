@@ -8,6 +8,7 @@ import {
 export type InspectorSectionId =
   | 'scene'
   | 'transform'
+  | 'light'
   | 'selection'
   | 'mesh'
   | 'modifiers'
@@ -26,6 +27,7 @@ export interface InspectorSectionDefinition {
 
 export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'scene', order: 10, defaultOpen: true },
+  { id: 'light', requires: 'bakeLighting', order: 15, defaultOpen: true },
   { id: 'transform', requires: 'edit3d', order: 20, defaultOpen: false },
   { id: 'selection', requires: 'select3d', order: 30, defaultOpen: true },
   { id: 'mesh', requires: 'edit3d', order: 40, defaultOpen: false },

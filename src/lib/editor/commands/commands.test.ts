@@ -14,6 +14,12 @@ import { TransformNodeCommand } from './TransformNodeCommand';
 import { SetModifiersCommand } from './SetModifiersCommand';
 import { RenameGroupCommand, RenameNodeCommand } from './RenameCommands';
 import {
+  CreateLightCommand,
+  DeleteLightCommand,
+  SetAmbientLightCommand,
+  UpdateLightCommand
+} from './LightCommands';
+import {
   ReorderNodeCommand,
   SetNodeVisibilityCommand
 } from './SceneOrderCommands';
@@ -504,5 +510,36 @@ describe('scene commands and journal', () => {
     expect(groupReplay.groups[0].name).toBe('Props');
     history.undo();
     expect(document.groups[0].name).toBe(group.name);
+  });
+
+  it('creates, edits, deletes, and replays lights', () => {
+    const document = SceneDocument.createDefault();
+    const history = new History();
+    const light = document.createLight('point');
+    const create = new CreateLightCommand(document, light, document.lights.length);
+    history.execute(create);
+    expect(document.lights.at(-1)?.id).toBe(light.id);
+    const before = light.snapshot();
+    const after = { ...before, name: 'Key lamp', intensity: 4, color: '#ff8844' };
+    const update = new UpdateLightCommand(light, before, after);
+    history.execute(update);
+    expect(light.name).toBe('Key lamp');
+    const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    applyJournalPatch(replay, update.journalPatch('forward'));
+    expect(replay.lights.at(-1)?.name).toBe('Key lamp');
+    const remove = new DeleteLightCommand(document, light, document.lights.length - 1);
+    history.execute(remove);
+    expect(document.lights.some((item) => item.id === light.id)).toBe(false);
+    history.undo();
+    expect(document.lights.some((item) => item.id === light.id)).toBe(true);
+    const ambient = new SetAmbientLightCommand(
+      document,
+      { color: '#ffffff', intensity: 0.22 },
+      { color: '#ffeedd', intensity: 0.4 }
+    );
+    history.execute(ambient);
+    expect(document.ambientColor).toBe('#ffeedd');
+    applyJournalPatch(replay, ambient.journalPatch('forward'));
+    expect(replay.ambientIntensity).toBe(0.4);
   });
 });

@@ -1,6 +1,6 @@
 # loupoli — Phase 4 Texturing Plan
 
-**Status:** Phase 4 feature-complete; **conditional exit** pending the deferred multi-angle and physical-iPad verification recorded in the [Phase 4 exit audit](./PHASE4_AUDIT.md). UV editing, seam/LSCM unwrap, texture layers, raster painting, projected brush/shape/gradient/fill painting, tilt shaping, v3 persistence, and v3 autosave checkpoints are implemented.
+**Status:** Phase 4 feature-complete; **conditional exit** pending the deferred multi-angle and physical-iPad verification recorded in the [Phase 4 exit audit](./PHASE4_AUDIT.md). UV editing, seam/LSCM unwrap, texture layers, raster painting, projected brush/shape/gradient/fill painting, tilt shaping, v4 persistence, and v4 autosave checkpoints are implemented.
 
 **Goal:** a pen-native low-poly texturing workflow without leaving `loupoli`: mark seams, unwrap and edit UVs, build a layered texture, and paint directly on the model.
 
@@ -91,14 +91,14 @@
 - Surface failures explicitly; never write NaN or silently discard a chart. **Closed charts, non-finite results, zero-area triangles, and mixed winding fail before applying.**
 - Two-corner pins and full triangle-overlap rejection are implemented; broader chart fixtures and pin editing remain open.
 
-### Slice 4 — Texture layer stack and format v3 (implemented)
+### Slice 4 — Texture layer stack and format v4 (implemented)
 
 - Layer add/delete/reorder/visibility/opacity/rename. **Implemented.**
 - Normal/Multiply/Screen blend modes. **Implemented and persisted in v2.**
 - Color fills and active-layer selection. **Implemented, including raster layers.**
 - Composite cache: recompute only when a layer or composite changes; one GPU texture. **Implemented. Layer canvases are OffscreenCanvas; the composite is a single HTML canvas wrapped in one CanvasTexture.**
 - `.lpoly` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration. **Implemented for manual save/open; v1 decode retained.**
-- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **Implemented as a fresh v3 checkpoint when texture pixels change; dedicated texture-only pixel deltas are a documented performance deferral.**
+- Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **Implemented as a fresh v4 checkpoint when texture pixels change; dedicated texture-only pixel deltas are a documented performance deferral.**
 - Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery. **Dispose path exists; project load resets the session stack.**
 
 ### Slice 5 — 3D projection painting (Brush/Eraser implemented)

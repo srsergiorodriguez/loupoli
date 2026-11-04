@@ -108,6 +108,9 @@ import {
 } from './commands/SceneOrderCommands';
 import { SetEdgeSeamsCommand } from './commands/SetEdgeSeamsCommand';
 import { AssignTextureCommand } from './commands/AssignTextureCommand';
+import { BakeLightingCommand } from './commands/BakeLightingCommand';
+import { CompositeCommand } from './commands/CompositeCommand';
+import { bakeLighting, uvCoverage } from '../lighting/bake';
 import {
   CreateTextureAssetCommand,
   DeleteTextureAssetCommand,
@@ -147,6 +150,14 @@ import {
   type RecoveryRecord
 } from '../project/AutosaveService';
 import { applyJournalPatch } from '../project/journal';
+import {
+  CreateLightCommand,
+  DeleteLightCommand,
+  SetAmbientLightCommand,
+  UpdateLightCommand,
+  type AmbientLightSnapshot
+} from './commands/LightCommands';
+import type { LightKind, LightSnapshot } from '../scene/SceneLight';
 import {
   decodeLpoly,
   encodeLpoly,
@@ -366,6 +377,7 @@ export class EditorRuntime {
   private ps1Affine = DEFAULT_PS1_AFFINE;
   private activeNodeId: string | null;
   private activeGroupId: string | null = null;
+  private activeLightId: string | null = null;
   private readonly selectedNodeIds = new Set<string>();
   private additiveNodeSelection = false;
   private readonly selection = new ElementSelection('vertex');
@@ -459,6 +471,7 @@ export class EditorRuntime {
   private recoveryUpdatedAt: number | null = null;
   private recovered = false;
   private fileBusy = false;
+  private bakeBusy = false;
   private projectError: string | null = null;
 
   /** Active texture asset used by texture and paint tools. */
@@ -679,9 +692,17 @@ export class EditorRuntime {
       redoLabel: historyState.redoLabel,
       orientation: this.renderer.getOrientation(),
       pointer: this.pointer,
-      objectName: activeGroup?.name ?? active?.name ?? 'Scene',
+      objectName:
+        this.getActiveLight()?.name ??
+        activeGroup?.name ??
+        active?.name ??
+        'Scene',
       activeNodeId: this.activeNodeId,
       activeGroupId: this.activeGroupId,
+      activeLightId: this.activeLightId,
+      lights: this.document.lightSummaries(),
+      ambientColor: this.document.ambientColor,
+      ambientIntensity: this.document.ambientIntensity,
       groups: this.document.groupSummaries(),
       selectedNodeIds: [...this.selectedNodeIds],
       additiveNodeSelection: this.additiveNodeSelection,
@@ -694,6 +715,7 @@ export class EditorRuntime {
       recoveryUpdatedAt: this.recoveryUpdatedAt,
       recovered: this.recovered,
       fileBusy: this.fileBusy,
+      bakeBusy: this.bakeBusy,
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
     };
@@ -1160,8 +1182,12 @@ export class EditorRuntime {
     );
     this.document.replaceNodes(fresh.nodes);
     this.document.replaceGroups([]);
+    this.document.replaceLights(fresh.lights);
+    this.document.ambientColor = fresh.ambientColor;
+    this.document.ambientIntensity = fresh.ambientIntensity;
     this.projectName = 'Untitled';
     this.activeGroupId = null;
+    this.activeLightId = null;
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     this.selectedNodeIds.clear();
     if (this.activeNodeId) {
@@ -1206,15 +1232,15 @@ export class EditorRuntime {
     }
   }
 
-  /** Switch Model, UV, and Paint without duplicating open/close logic. */
-  setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
+  /** Switch Model, Light, UV, and Paint without duplicating open/close logic. */
+  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint'): void {
     if (workspace !== 'paint') {
       this.cancelProjectionPaint();
       this.surfaceCursor = null;
       this.projectionPreview = null;
     }
     this.workspace = workspace;
-    if (workspace === 'model') {
+    if (workspace === 'model' || workspace === 'light') {
       this.activeEditor = '3d';
       if (this.uvOpen) {
         this.closeUvView();
@@ -1222,8 +1248,21 @@ export class EditorRuntime {
         this.uvPaintMode = false;
         this.renderer.setSeamOverlayVisible(false);
         this.syncScene();
-        this.publish();
       }
+      if (workspace === 'light') {
+        if (this.shading !== 'lit') {
+          this.shading = 'lit';
+          this.renderer.setShadingMode('lit');
+        }
+        if (this.activeLightId === null) {
+          this.activeLightId = this.document.lights[0]?.id ?? null;
+        }
+      }
+      // closeUvView() resets the workspace to Model; restore the requested
+      // Light workspace after closing a pane that was open on entry.
+      this.workspace = workspace;
+      this.syncScene();
+      this.publish();
       return;
     }
     if (!this.uvOpen) {
@@ -3497,6 +3536,244 @@ export class EditorRuntime {
     this.history.execute(new TransformNodeCommand(node, before, next));
   }
 
+  /** Select a light for the Light Inspector without losing the bake target. */
+  selectLight(lightId: string): void {
+    if (!this.document.getLight(lightId)) {
+      return;
+    }
+    if (this.drag || this.gizmoDrag) {
+      this.cancelToolPointer();
+    }
+    this.activeLightId = lightId;
+    this.activeGroupId = null;
+    if (this.activeNodeId === null && this.selectedNodeIds.size > 0) {
+      this.activeNodeId = [...this.selectedNodeIds][0] ?? null;
+    }
+    this.publish();
+  }
+
+  /** Add a directional or point light and select it. */
+  addLight(kind: LightKind): void {
+    const light = this.document.createLight(kind);
+    this.history.execute(
+      new CreateLightCommand(this.document, light, this.document.lights.length)
+    );
+    this.activeLightId = light.id;
+    this.activeGroupId = null;
+    this.publish();
+  }
+
+  /** Bake direct lights into the active object's texture lighting layer. */
+  async bakeLighting(): Promise<void> {
+    if (this.bakeBusy) {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node) {
+      this.projectError = 'Select an object before baking lighting.';
+      this.publish();
+      return;
+    }
+    const source = this.textureLibrary.get(node.textureId);
+    if (!source) {
+      this.projectError = 'Assign a texture to the active object before baking lighting.';
+      this.publish();
+      return;
+    }
+    const bakeMesh = node.getEvaluatedMesh().mesh;
+    const coverage = uvCoverage(bakeMesh);
+    if (coverage > 1.01) {
+      this.projectError =
+        'UV islands overlap. Unwrap the object before baking lighting.';
+      this.publish();
+      return;
+    }
+    if (coverage < 1e-6) {
+      this.projectError = 'The object has no UV-covered surface to bake.';
+      this.publish();
+      return;
+    }
+    const shared = this.document.nodes.filter(
+      (item) => item.textureId === source.id
+    ).length > 1;
+    if (source.layerCount >= 8 && source.lightingLayerId() === null) {
+      this.projectError = 'The texture layer limit prevents adding a baked lighting layer.';
+      this.publish();
+      return;
+    }
+    this.bakeBusy = true;
+    this.projectError = null;
+    this.publish();
+    let copy: TextureAsset | null = null;
+    try {
+      // Yield one frame so the busy state can paint before CPU rasterization.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      let target = source;
+      if (shared) {
+        copy = this.textureLibrary.build(
+          source.width,
+          source.height,
+          `${source.name} Baked`,
+          source.textureFilter
+        );
+        await copy.importData(await source.exportData());
+        copy.setFilter(source.textureFilter);
+        copy.setAlphaMode(source.textureAlphaMode);
+        if (copy.layerCount >= 8 && copy.lightingLayerId() === null) {
+          copy.dispose();
+          copy = null;
+          throw new Error('The copied texture has no free layer for baked lighting.');
+        }
+        target = copy;
+      }
+      const existingLayerId = target.lightingLayerId();
+      const before = existingLayerId
+        ? target.getLayerPixels(existingLayerId)
+        : null;
+      const after = bakeLighting({
+        mesh: bakeMesh,
+        node,
+        parent: this.document.getGroup(node.parentId) ?? null,
+        lights: this.document.lightSummaries(),
+        ambientColor: this.document.ambientColor,
+        ambientIntensity: this.document.ambientIntensity,
+        width: target.width,
+        height: target.height
+      });
+      if (!after) {
+        throw new Error('The object has no UV-covered surface to bake.');
+      }
+      const commands: import('./commands/EditorCommand').EditorCommand[] = [];
+      if (copy) {
+        commands.push(new CreateTextureAssetCommand(this.textureLibrary, copy));
+        commands.push(new AssignTextureCommand([node], copy.id));
+      }
+      commands.push(
+        new BakeLightingCommand(target, existingLayerId, before, after)
+      );
+      this.history.execute(
+        commands.length === 1
+          ? commands[0]
+          : new CompositeCommand('Bake lighting', commands)
+      );
+      this.textureLibrary.setActive(target.id);
+      this.autosave.markTextureDirty();
+      this.renderer.refreshTexture();
+      this.shading = 'unlit';
+      this.renderer.setShadingMode('unlit');
+      this.publish();
+    } catch (error) {
+      copy?.dispose();
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.bakeBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Delete the selected light and choose a deterministic fallback. */
+  deleteActiveLight(): void {
+    const light = this.getActiveLight();
+    if (!light) {
+      return;
+    }
+    const index = this.document.lights.indexOf(light);
+    const fallback =
+      this.document.lights[index + 1] ??
+      this.document.lights[index - 1] ??
+      null;
+    this.history.execute(new DeleteLightCommand(this.document, light, index));
+    this.activeLightId = fallback?.id ?? null;
+    this.publish();
+  }
+
+  /** Toggle one light's visibility without changing selection. */
+  setLightEnabled(id: string, enabled: boolean): void {
+    this.updateLight(id, { enabled });
+  }
+
+  /** Edit one light as a single undoable command. */
+  updateLight(
+    id: string,
+    patch: Partial<
+      Pick<
+        LightSnapshot,
+        'name' | 'color' | 'intensity' | 'enabled' | 'position' | 'direction'
+      >
+    >
+  ): void {
+    const light = this.document.getLight(id);
+    if (!light) {
+      return;
+    }
+    const before = light.snapshot();
+    const after: LightSnapshot = {
+      ...before,
+      ...(patch.name !== undefined ? { name: patch.name.trim().slice(0, 64) } : {}),
+      ...(patch.color !== undefined ? { color: patch.color } : {}),
+      ...(patch.intensity !== undefined
+        ? { intensity: Math.max(0, Math.min(20, patch.intensity)) }
+        : {}),
+      ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+      ...(patch.position !== undefined
+        ? { position: [...patch.position] as [number, number, number] }
+        : {}),
+      ...(patch.direction !== undefined
+        ? { direction: [...patch.direction] as [number, number, number] }
+        : {})
+    };
+    if (after.name.length === 0 || JSON.stringify(before) === JSON.stringify(after)) {
+      return;
+    }
+    this.history.execute(new UpdateLightCommand(light, before, after));
+    this.publish();
+  }
+
+  /** Edit the selected light as one undoable command. */
+  updateActiveLight(
+    patch: Partial<
+      Pick<
+        LightSnapshot,
+        'name' | 'color' | 'intensity' | 'enabled' | 'position' | 'direction'
+      >
+    >
+  ): void {
+    if (this.activeLightId) {
+      this.updateLight(this.activeLightId, patch);
+    }
+  }
+
+  /** Set document ambient color. */
+  setAmbientColor(color: string): void {
+    if (!/^#[0-9a-fA-F]{6}$/.test(color) || color === this.document.ambientColor) {
+      return;
+    }
+    this.setAmbientLighting({ color, intensity: this.document.ambientIntensity });
+  }
+
+  /** Set document ambient intensity. */
+  setAmbientIntensity(intensity: number): void {
+    if (!Number.isFinite(intensity) || intensity < 0) {
+      return;
+    }
+    this.setAmbientLighting({
+      color: this.document.ambientColor,
+      intensity: Math.min(10, intensity)
+    });
+  }
+
+  private setAmbientLighting(after: AmbientLightSnapshot): void {
+    const before: AmbientLightSnapshot = {
+      color: this.document.ambientColor,
+      intensity: this.document.ambientIntensity
+    };
+    if (before.color === after.color && before.intensity === after.intensity) {
+      return;
+    }
+    this.history.execute(new SetAmbientLightCommand(this.document, before, after));
+    this.publish();
+  }
+
   /** Select a group as the active transform target. */
   selectGroup(groupId: string): void {
     const group = this.document.getGroup(groupId);
@@ -3508,6 +3785,7 @@ export class EditorRuntime {
     }
     this.activeGroupId = group.id;
     this.activeNodeId = null;
+    this.activeLightId = null;
     this.selectedNodeIds.clear();
     this.selection.clear();
     this.selection.setContext(null, this.selection.mode);
@@ -3676,6 +3954,7 @@ export class EditorRuntime {
       return;
     }
     this.activeGroupId = null;
+    this.activeLightId = null;
 
     if (additive || this.additiveNodeSelection) {
       if (this.selectedNodeIds.has(nodeId)) {
@@ -4566,6 +4845,10 @@ export class EditorRuntime {
 
   private getActiveGroup(): SceneGroup | null {
     return this.document.getGroup(this.activeGroupId) ?? null;
+  }
+
+  private getActiveLight(): import('../scene/SceneLight').SceneLight | null {
+    return this.document.getLight(this.activeLightId) ?? null;
   }
 
   private tapSelect(
@@ -6577,7 +6860,10 @@ export class EditorRuntime {
       event.command instanceof DeleteTextureAssetCommand ||
       event.command instanceof SetTextureFilterCommand ||
       event.command instanceof SetTextureAlphaModeCommand ||
-      event.command instanceof RenameTextureAssetCommand
+      event.command instanceof RenameTextureAssetCommand ||
+      event.command instanceof BakeLightingCommand ||
+      (event.command instanceof CompositeCommand &&
+        event.command.label === 'Bake lighting')
     ) {
       this.autosave.markTextureDirty();
     }
@@ -6604,6 +6890,9 @@ export class EditorRuntime {
           }
         : null;
     this.armedAction = null;
+    if (this.activeLightId !== null && !this.document.getLight(this.activeLightId)) {
+      this.activeLightId = null;
+    }
     if (this.activeGroupId !== null && !this.document.getGroup(this.activeGroupId)) {
       this.activeGroupId = null;
     }
@@ -6737,6 +7026,11 @@ export class EditorRuntime {
 
   private syncScene(): void {
     this.updateSelectionGizmoFrame();
+    this.renderer.setLighting(
+      this.document.lightSummaries(),
+      this.document.ambientColor,
+      this.document.ambientIntensity
+    );
     this.renderer.syncScene(
       this.document.nodes,
       this.document.groups,
@@ -6823,8 +7117,12 @@ export class EditorRuntime {
     this.textureLibrary.reset(512);
     this.document.replaceNodes(decoded.document.nodes);
     this.document.replaceGroups(decoded.document.groups);
+    this.document.replaceLights(decoded.document.lights);
+    this.document.ambientColor = decoded.document.ambientColor;
+    this.document.ambientIntensity = decoded.document.ambientIntensity;
     this.projectName = name;
     this.activeGroupId = null;
+    this.activeLightId = null;
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     this.selectedNodeIds.clear();
     if (this.activeNodeId) {

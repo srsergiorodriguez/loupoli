@@ -13,7 +13,8 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 7. [Persistence](./PERSISTENCE.md) — autosave journal and the `.lpoly` format.
 8. [Phase 4 texturing](./PHASE4_TEXTURING.md) — texture/UV implementation slices and gates.
 9. [Phase 4 exit audit](./PHASE4_AUDIT.md) — gate-by-gate result and deferrals.
-10. [Root README](../README.md) — product overview, setup, and current capabilities.
+10. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
+11. [Root README](../README.md) — product overview, setup, and current capabilities.
 
 ## Document ownership
 
@@ -28,6 +29,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [Persistence](./PERSISTENCE.md) | Autosave, journal patches, `.lpoly` format, filesystem boundary | UI behavior |
 | [Phase 4 texturing](./PHASE4_TEXTURING.md) | Texture/UV slices, data rules, format implications, memory/verification gates | General UI or document architecture |
 | [Phase 4 exit audit](./PHASE4_AUDIT.md) | Gate results, evidence, and accepted deferrals | New feature design |
+| [Phase 5A lighting](./PHASE5_LIGHTING.md) | Light model, Light workspace, direct-light bake, and v4 lighting metadata | Shadows/AO or shape-key design |
 | [Root README](../README.md) | Product overview and quick start | Canonical rules or format specifications |
 
 ## Canonical cross-links
@@ -37,6 +39,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 - Shell regions: [UI map](./UI_MAP.md).
 - Autosave and file format: [Persistence](./PERSISTENCE.md).
 - Phase 4 exit state: [Phase 4 exit audit](./PHASE4_AUDIT.md).
+- Lighting and bake: [Phase 5A lighting](./PHASE5_LIGHTING.md).
 
 ## Maintenance rules
 

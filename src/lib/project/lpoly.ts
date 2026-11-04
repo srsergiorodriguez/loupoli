@@ -15,6 +15,7 @@ import {
 import { MeshNode, type NodeTransform } from '../scene/MeshNode';
 import { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
+import { SceneLight, type LightKind, type LightSnapshot } from '../scene/SceneLight';
 import type {
   TextureBlendMode,
   TextureLayerRecord,
@@ -23,12 +24,13 @@ import type {
 import type { TextureAssetRecord } from '../texture/TextureLibrary';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 3;
+const FORMAT_VERSION = 4;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
 const MAX_NODES = 1024;
 const MAX_GROUPS = 512;
+const MAX_LIGHTS = 64;
 const MAX_VERTICES = 1_000_000;
 const MAX_HALF_EDGES = 4_000_000;
 const MAX_EDGES = 2_000_000;
@@ -120,6 +122,14 @@ interface GroupManifest {
   readonly transform: NodeTransform;
 }
 
+interface LightManifest extends LightSnapshot {}
+
+interface LightingManifest {
+  readonly ambientColor: string;
+  readonly ambientIntensity: number;
+  readonly lights: readonly LightManifest[];
+}
+
 interface TextureLayerManifest {
   readonly id: string;
   readonly name: string;
@@ -155,6 +165,7 @@ interface Manifest {
   readonly nodes: readonly NodeManifest[];
   readonly groups?: readonly GroupManifest[];
   readonly textures?: TextureManifest;
+  readonly lighting?: LightingManifest;
 }
 
 const TYPED_COLUMNS = [
@@ -231,6 +242,89 @@ function validateTransform(value: unknown): NodeTransform {
     position: [...transform.position!] as Vec3,
     rotation: [...transform.rotation!] as Vec3,
     scale: [...transform.scale!] as Vec3
+  };
+}
+
+function validateVec3(value: unknown, label: string): Vec3 {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 3 ||
+    !value.every(
+      (component) => typeof component === 'number' && Number.isFinite(component)
+    )
+  ) {
+    throw new Error(`Invalid ${label}.`);
+  }
+  return [value[0], value[1], value[2]] as Vec3;
+}
+
+function validateLightingManifest(
+  value: unknown,
+  version: number
+): LightingManifest | null {
+  if (value === undefined) {
+    if (version >= 4) {
+      throw new Error('The .lpoly lighting manifest is missing.');
+    }
+    return null;
+  }
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('The .lpoly lighting manifest is invalid.');
+  }
+  const lighting = value as Partial<LightingManifest>;
+  if (
+    typeof lighting.ambientColor !== 'string' ||
+    !/^#[0-9a-fA-F]{6}$/.test(lighting.ambientColor) ||
+    typeof lighting.ambientIntensity !== 'number' ||
+    !Number.isFinite(lighting.ambientIntensity) ||
+    lighting.ambientIntensity < 0 ||
+    !Array.isArray(lighting.lights) ||
+    lighting.lights.length > MAX_LIGHTS
+  ) {
+    throw new Error('The .lpoly ambient lighting settings are invalid.');
+  }
+  const ids = new Set<string>();
+  const lights: LightSnapshot[] = [];
+  for (const raw of lighting.lights) {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoly contains an invalid light.');
+    }
+    const light = raw as Partial<LightManifest>;
+    if (
+      typeof light.id !== 'string' ||
+      light.id.length === 0 ||
+      ids.has(light.id) ||
+      typeof light.name !== 'string' ||
+      light.name.length === 0 ||
+      light.name.length > MAX_NAME_LENGTH ||
+      (light.kind !== 'directional' && light.kind !== 'point') ||
+      typeof light.color !== 'string' ||
+      !/^#[0-9a-fA-F]{6}$/.test(light.color) ||
+      typeof light.intensity !== 'number' ||
+      !Number.isFinite(light.intensity) ||
+      light.intensity < 0 ||
+      typeof light.enabled !== 'boolean'
+    ) {
+      throw new Error('The .lpoly contains invalid light metadata.');
+    }
+    const position = validateVec3(light.position, 'light position');
+    const direction = validateVec3(light.direction, 'light direction');
+    ids.add(light.id);
+    lights.push({
+      id: light.id,
+      name: light.name,
+      kind: light.kind as LightKind,
+      color: light.color,
+      intensity: light.intensity,
+      enabled: light.enabled,
+      position,
+      direction
+    });
+  }
+  return {
+    ambientColor: lighting.ambientColor,
+    ambientIntensity: lighting.ambientIntensity,
+    lights
   };
 }
 
@@ -528,6 +622,11 @@ function encodeInternal(
     settings,
     nodes: manifestNodes,
     groups: manifestGroups,
+    lighting: {
+      ambientColor: document.ambientColor,
+      ambientIntensity: document.ambientIntensity,
+      lights: document.lights.map((light) => light.snapshot())
+    },
     ...(textureManifest ? { textures: textureManifest.manifest } : {})
   };
   const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
@@ -871,6 +970,18 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
 
   for (const group of groups) {
     document.insertGroup(group);
+  }
+
+  const lighting = validateLightingManifest(manifest.lighting, version);
+  if (lighting) {
+    document.ambientColor = lighting.ambientColor;
+    document.ambientIntensity = lighting.ambientIntensity;
+    for (const snapshot of lighting.lights) {
+      document.insertLight(SceneLight.fromSnapshot(snapshot));
+    }
+  } else {
+    // v3 projects predate the light model; keep Lit readable with the default sun.
+    document.insertLight(SceneLight.sun());
   }
 
   let textures: TextureAssetRecord[] | undefined;

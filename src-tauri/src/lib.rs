@@ -45,7 +45,7 @@ fn validate_project_envelope(bytes: &[u8]) -> Result<(), String> {
     return Err("The file is not a loupoli .lpoly project.".into());
   }
   let version = u16::from_le_bytes([bytes[8], bytes[9]]);
-  if version != 1 {
+  if !(1..=4).contains(&version) {
     return Err(format!("Unsupported .lpoly version {version}."));
   }
   let manifest_length = read_u32(bytes, 12) as usize;

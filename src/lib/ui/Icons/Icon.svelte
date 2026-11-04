@@ -67,6 +67,12 @@
     <path
       d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.5 1.5M17.3 17.3l1.5 1.5M18.8 5.2l-1.5 1.5M6.7 17.3l-1.5 1.5"
     />
+  {:else if name === 'sun'}
+    <circle cx="12" cy="12" r="3.2" />
+    <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6" />
+  {:else if name === 'lamp'}
+    <path d="M8 4h8l3 8H5L8 4Z" />
+    <path d="M12 12v7M8 21h8" />
   {:else if name === 'close'}
     <path d="m6 6 12 12M18 6 6 18" />
   {:else if name === 'plus'}

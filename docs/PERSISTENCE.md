@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 4 persistence. Autosave, `.lpoly` v3, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, and node texture bindings round-trip. v3 stores a texture asset library with per-layer binary PNG chunks. Legacy v1/v2 compatibility is intentionally deferred until the MVP build. Shape keys remain later work. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md).
+**Status:** Phase 4 persistence plus Phase 5A lighting. Autosave, `.lpoly` v4, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, and ambient settings round-trip. v4 stores the texture asset library and lighting metadata. v3 files remain readable; legacy v1/v2 compatibility is deferred. Shape keys remain later work. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 **Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
@@ -14,7 +14,7 @@ Autosave is never presented as a manual save, and a manual save is never implied
 
 1. [Durability model](#1-durability-model)
 2. [Autosave engine](#2-autosave-engine)
-3. [`.lpoly` project format v3](#3-lpoly-project-format-v3)
+3. [`.lpoly` project format v4](#3-lpoly-project-format-v4)
 4. [Tauri / Rust filesystem boundary](#4-tauri-rust-filesystem-boundary)
 5. [iOS lifecycle and memory](#5-ios-lifecycle-and-memory)
 6. [Testing](#6-testing)
@@ -56,7 +56,7 @@ Undo and redo append the inverse/forward transitions, so replay reconstructs the
 
 `NodeSnapshot` copies typed arrays before they can mutate; IndexedDB's structured clone stores the arrays directly. No base64 is used.
 
-Texture edits and paint strokes are not represented as autosave pixel deltas; they mark the autosave dirty and force a fresh v3 checkpoint with PNG chunks on the next flush. Paint history stores only the localized before/after dirty rectangle. Other future topology, material, and light commands still need journal patches.
+Texture edits and paint/bake strokes are not represented as autosave pixel deltas; they mark the autosave dirty and force a fresh v4 checkpoint with PNG chunks on the next flush. Paint history stores only the localized before/after dirty rectangle. Topology, material, and light commands use localized journal patches.
 
 ### 2.2 Schedule
 
@@ -99,7 +99,7 @@ Record key: **`current`**
 ```ts
 {
   version: 1,
-  checkpoint: Uint8Array,      // complete .lpoly v3 bytes (texture asset PNG chunks included)
+  checkpoint: Uint8Array,      // complete .lpoly v4 bytes (texture asset and bake PNG chunks included)
   settings: ProjectSettings,   // shading + PS1 flags
   deltas: JournalPatch[],      // transitions since checkpoint
   updatedAt: number
@@ -113,7 +113,7 @@ Only one recovery lineage is current in Phase 2. There is no per-project ID or s
 1. Runtime initialization reads the one autosave record.
 2. If present, it sets `recoveryAvailable` and does not start a new autosave or overwrite the record.
 3. The recovery banner offers **Recover** or **Discard**.
-4. **Recover** decodes the `.lpoly` v3 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
+4. **Recover** decodes the `.lpoly` v4 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
 5. **Discard** deletes the record and starts a new baseline from the current scene.
 6. Save/Open are disabled until recovery is resolved.
 7. Any decode/replay error is reported; the invalid record is not partly applied.
@@ -128,7 +128,7 @@ This is explicit recovery, never a silent replacement of the user's current scen
 
 ---
 
-## 3. `.lpoly` project format v3
+## 3. `.lpoly` project format v4
 
 Implementation: `src/lib/project/lpoly.ts`. Rust validates the envelope and checksum but never parses document semantics.
 
@@ -141,7 +141,7 @@ The header is **28 bytes**:
 | Offset | Size | Type | Field |
 |---:|---:|---|---|
 | 0 | 8 | bytes | Magic `4C 50 4F 4C 59 00 00 00` (`LPOLY\0\0\0`) |
-| 8 | 2 | u16 | Container version (`1` or `2`) |
+| 8 | 2 | u16 | Container version (`3` or `4`) |
 | 10 | 2 | u16 | Flags (reserved, `0`) |
 | 12 | 4 | u32 | Manifest JSON byte length |
 | 16 | 4 | u32 | Payload byte length |
@@ -151,7 +151,7 @@ The header is **28 bytes**:
 | pad | … | bytes | Zero padding to a 4-byte payload start |
 | … | … | bytes | Fixed-order typed-array columns |
 
-`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`. v3 appends aligned texture asset PNG chunks after the mesh columns; the file is aligned to four bytes.
+`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`. v4 appends aligned texture asset PNG chunks after the mesh columns; the file is aligned to four bytes.
 
 Validation occurs before geometry allocation:
 
@@ -170,7 +170,7 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
 ```json
 {
   "format": "lpoly",
-  "version": 3,
+  "version": 4,
   "settings": {
     "shading": "unlit",
     "ps1Snap": false,
@@ -200,6 +200,22 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
             "pngLength": 24692
           }
         ]
+      }
+    ]
+  },
+  "lighting": {
+    "ambientColor": "#ffffff",
+    "ambientIntensity": 0.22,
+    "lights": [
+      {
+        "id": "light-1",
+        "name": "Sun",
+        "kind": "directional",
+        "color": "#fff4e0",
+        "intensity": 2.4,
+        "enabled": true,
+        "position": [4, 4, 8],
+        "direction": [-0.32, 0.23, -0.92]
       }
     ]
   },
@@ -246,17 +262,17 @@ For each node, in order:
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets and node bindings are part of `.lpoly` v3 and the v3 autosave checkpoint.
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, lights, and ambient settings are part of `.lpoly` v4 and the v4 autosave checkpoint.
 
 Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip.
 
-### 3.4 v3 texture asset chunks
+### 3.4 v4 texture asset chunks
 
-After all mesh columns, v3 writes each asset layer's binary PNG in manifest order. Raster layers are authoritative; fill layers retain their deterministic color/pattern metadata. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
+After all mesh columns, v4 writes each asset layer's binary PNG in manifest order. Raster layers are authoritative; fill layers retain their deterministic color/pattern metadata. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
 
-- v1 files open with no texture set.
-- v3 files restore texture assets and node bindings on open; a project without textures resets to one default asset.
-- Texture edits mark autosave dirty and force a fresh v3 checkpoint; recovery restores texture PNGs.
+- v3 files read with default lighting; v4 files restore lights and ambient.
+- v4 files restore texture assets, node bindings, lights, and ambient settings on open; a project without textures resets to one default asset.
+- Texture/bake edits mark autosave dirty and force a fresh v4 checkpoint; recovery restores texture PNGs.
 - Layer PNGs are never base64 or JSON strings.
 
 ### 3.5 Not yet serialized
@@ -266,11 +282,11 @@ After all mesh columns, v3 writes each asset layer's binary PNG in manifest orde
 - Camera position/target
 - Active object and selection
 
-Only v3 is accepted during development. Unknown container versions are rejected with a clear message. Texture asset fields are validated before allocation.
+v3 and v4 are accepted during development. Unknown/newer container versions are rejected with a clear message. Texture and lighting fields are validated before allocation.
 
 ### 3.6 Save protocol
 
-1. TypeScript encodes and validates the current scene, texture assets, and node bindings into a v3 `.lpoly` byte array.
+1. TypeScript encodes and validates the current scene, texture assets, node bindings, lights, and ambient settings into a v4 `.lpoly` byte array.
 2. Tauri save dialog chooses a path; browser mode triggers a download.
 3. For Tauri, Rust re-checks size, magic, header lengths, and CRC.
 4. Rust writes a same-directory temporary file with `create_new`, `write_all`, and `sync_all`.
@@ -283,7 +299,7 @@ Only v3 is accepted during development. Unknown container versions are rejected 
 1. Native dialog selects a path; browser uses a file input.
 2. Rust enforces 128 MB and validates the envelope/CRC before returning bytes.
 3. TypeScript decodes manifest and columns and rebuilds/validates every DCEL.
-4. Only after success does the runtime replace the document, import v3 texture PNGs, and reset history/autosave.
+4. Only after success does the runtime replace the document, import v4 texture PNGs, and reset history/autosave.
 5. Errors are shown as project errors without mutating the current scene.
 
 ---

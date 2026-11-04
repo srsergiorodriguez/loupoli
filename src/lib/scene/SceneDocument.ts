@@ -7,6 +7,12 @@ import {
 import { applyDefaultSeams } from '../geometry/defaultSeams';
 import { MeshNode, type NodeSummary } from './MeshNode';
 import { SceneGroup, type GroupSummary } from './SceneGroup';
+import {
+  createLightId,
+  SceneLight,
+  type LightKind,
+  type LightSummary
+} from './SceneLight';
 
 /**
  * The document's object collection.
@@ -17,6 +23,9 @@ import { SceneGroup, type GroupSummary } from './SceneGroup';
 export class SceneDocument {
   readonly nodes: MeshNode[] = [];
   readonly groups: SceneGroup[] = [];
+  readonly lights: SceneLight[] = [];
+  ambientColor = '#ffffff';
+  ambientIntensity = 0.22;
 
   /** Construct the default first-run scene from the real primitive path. */
   static createDefault(
@@ -29,6 +38,7 @@ export class SceneDocument {
     document.insertNode(
       new MeshNode(mesh, kind, PRIMITIVE_LABELS[kind], undefined, textureId)
     );
+    document.insertLight(SceneLight.sun());
     return document;
   }
 
@@ -46,6 +56,68 @@ export class SceneDocument {
       return undefined;
     }
     return this.groups.find((group) => group.id === id);
+  }
+
+  /** Find a light by stable id. */
+  getLight(id: string | null): SceneLight | undefined {
+    if (id === null) {
+      return undefined;
+    }
+    return this.lights.find((light) => light.id === id);
+  }
+
+  /** Create the next uniquely named light without inserting it. */
+  createLight(kind: LightKind): SceneLight {
+    const base = kind === 'directional' ? 'Sun' : 'Lamp';
+    let index = 1;
+    const names = new Set(this.lights.map((light) => light.name));
+    let name = index === 1 ? base : `${base} ${index}`;
+    while (names.has(name)) {
+      index += 1;
+      name = index === 1 ? base : `${base} ${index}`;
+    }
+    return new SceneLight({
+      id: createLightId(),
+      name,
+      kind,
+      color: kind === 'directional' ? '#fff4e0' : '#ffe0bd',
+      intensity: kind === 'directional' ? 2.2 : 3.5,
+      enabled: true,
+      position: kind === 'point' ? [0, 0, 4] : [4, 4, 8],
+      direction: [0, 0, -1]
+    });
+  }
+
+  /** Insert a light at a specific index, clamped to the collection. */
+  insertLight(light: SceneLight, index = this.lights.length): void {
+    if (this.getLight(light.id)) {
+      throw new Error(`Scene already contains light ${light.id}.`);
+    }
+    const clamped = Math.max(0, Math.min(index, this.lights.length));
+    this.lights.splice(clamped, 0, light);
+  }
+
+  /** Remove a light and return its prior index for localized undo. */
+  removeLight(id: string): { light: SceneLight; index: number } | null {
+    const index = this.lights.findIndex((light) => light.id === id);
+    if (index < 0) {
+      return null;
+    }
+    const [light] = this.lights.splice(index, 1);
+    return { light, index };
+  }
+
+  /** Replace the light collection, used by project load and recovery. */
+  replaceLights(lights: readonly SceneLight[]): void {
+    this.lights.length = 0;
+    for (const light of lights) {
+      this.lights.push(light);
+    }
+  }
+
+  /** Reactive-safe light summaries. */
+  lightSummaries(): LightSummary[] {
+    return this.lights.map((light) => light.snapshot());
   }
 
   /** Whether the document has no editable objects. */

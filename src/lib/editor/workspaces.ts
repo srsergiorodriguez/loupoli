@@ -10,6 +10,8 @@ export type WorkspaceCapability =
   | 'paintTexture'
   | 'paintProjected'
   | 'editRender'
+  | 'editLighting'
+  | 'bakeLighting'
   | 'navigate3d';
 
 const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
@@ -17,6 +19,11 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
     'select3d',
     'edit3d',
     'editRender',
+    'navigate3d'
+  ]),
+  light: new Set([
+    'editLighting',
+    'bakeLighting',
     'navigate3d'
   ]),
   uv: new Set([

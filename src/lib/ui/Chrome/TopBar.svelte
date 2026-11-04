@@ -40,22 +40,22 @@
         return '';
     }
   });
-  const workspace = $derived(
-    !session.snapshot.uvOpen
-      ? 'model'
-      : session.snapshot.uvPaintMode
-        ? 'paint'
-        : 'uv'
-  );
+  const workspace = $derived(session.snapshot.workspace);
 
   const workspaceOptions = [
     { id: 'model', label: 'Model' },
     { id: 'uv', label: 'UV' },
-    { id: 'paint', label: 'Paint' }
+    { id: 'paint', label: 'Paint' },
+    { id: 'light', label: 'Light' }
   ] as const;
 
   function chooseWorkspace(next: string): void {
-    if (next === 'model' || next === 'uv' || next === 'paint') {
+    if (
+      next === 'model' ||
+      next === 'light' ||
+      next === 'uv' ||
+      next === 'paint'
+    ) {
       session.setWorkspace(next);
     }
   }

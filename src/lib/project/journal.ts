@@ -1,7 +1,9 @@
 import type { Vec2, Vec3 } from '../geometry/HalfEdgeMesh';
 import type { NodeTransform } from '../scene/MeshNode';
+import type { LightSnapshot } from '../scene/SceneLight';
 import { validateModifiers, type Modifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
+import { SceneLight } from '../scene/SceneLight';
 import {
   restoreGroup,
   restoreMesh,
@@ -109,6 +111,24 @@ export type JournalPatch =
       readonly type: 'set-group-name';
       readonly groupId: string;
       readonly name: string;
+    }
+  | {
+      readonly type: 'insert-light';
+      readonly index: number;
+      readonly light: LightSnapshot;
+    }
+  | {
+      readonly type: 'remove-light';
+      readonly index: number;
+      readonly light: LightSnapshot;
+    }
+  | {
+      readonly type: 'update-light';
+      readonly light: LightSnapshot;
+    }
+  | {
+      readonly type: 'set-ambient-light';
+      readonly ambient: { readonly color: string; readonly intensity: number };
     };
 
 /** Apply one journal patch to a reconstructed scene document. */
@@ -250,6 +270,28 @@ export function applyJournalPatch(
       group.name = patch.name;
       return;
     }
+    case 'insert-light': {
+      const light = SceneLight.fromSnapshot(patch.light);
+      document.insertLight(light, patch.index);
+      return;
+    }
+    case 'remove-light': {
+      document.removeLight(patch.light.id);
+      return;
+    }
+    case 'update-light': {
+      const light = document.getLight(patch.light.id);
+      if (!light) {
+        throw new Error(`Autosave references missing light ${patch.light.id}.`);
+      }
+      light.apply(patch.light);
+      return;
+    }
+    case 'set-ambient-light': {
+      document.ambientColor = patch.ambient.color;
+      document.ambientIntensity = patch.ambient.intensity;
+      return;
+    }
     case 'set-modifiers': {
       const node = document.getNode(patch.nodeId);
       if (!node) {
@@ -282,6 +324,12 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'set-group-name') {
     return patch.groupId.length * 2 + patch.name.length * 2 + 16;
+  }
+  if (patch.type === 'insert-light' || patch.type === 'remove-light' || patch.type === 'update-light') {
+    return patch.light.id.length * 2 + patch.light.name.length * 2 + 96;
+  }
+  if (patch.type === 'set-ambient-light') {
+    return 48;
   }
   if (patch.type === 'remove-node') {
     return patch.nodeId.length * 2 + 16;

@@ -10,6 +10,8 @@ export type IconName =
   | 'unlit'
   | 'texture-wire'
   | 'lit'
+  | 'sun'
+  | 'lamp'
   | 'close'
   | 'plus'
   | 'minus'

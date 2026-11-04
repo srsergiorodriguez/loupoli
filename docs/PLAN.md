@@ -1,6 +1,6 @@
 # loupoli — Master Delivery Plan
 
-**Status:** Phase 2 and the Phase 3 foundations are implemented for browser and native desktop builds. Phase 4 is feature-complete with a conditional exit: see the [Phase 4 exit audit](./PHASE4_AUDIT.md). Physical-iPad/WKWebView validation and multi-angle paint tolerance verification remain deferred. Phase 5A lighting is next.
+**Status:** Phase 2, Phase 3, and Phase 4 are implemented for browser and native desktop builds; Phase 4 has a [conditional exit audit](./PHASE4_AUDIT.md). Phase 5A lighting and direct-light texture baking are implemented in the dedicated Light workspace; see [Phase 5 lighting](./PHASE5_LIGHTING.md). Physical-iPad/WKWebView validation, shadow/AO bake, shape keys, and interchange remain.
 **Brand rule:** the name is always written `loupoli`, lowercase.
 **Primary targets:** iPadOS (sideloaded build first), macOS desktop, and browser during development.
 **Companion docs:** [Docs index](./README.md) ·  [Architecture](./ARCHITECTURE.md) · [Phase 4 Texturing](./PHASE4_TEXTURING.md) · [Persistence](./PERSISTENCE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
@@ -256,6 +256,8 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 ---
 
 ### Phase 5 — Lighting, baking, shape keys, and interchange
+
+**5A implemented:** editable directional/point/ambient lighting, Lit document-light preview, dedicated Light workspace, and direct-light texture baking. Shadow/AO baking, shape keys, and interchange remain. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 
 **Goal:** finish the asset loop: light it, animate it, move it in and out.
 

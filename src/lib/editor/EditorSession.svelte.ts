@@ -98,6 +98,11 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   objectName: 'Scene',
   activeNodeId: null,
   activeGroupId: null,
+  activeLightId: null,
+  lights: [],
+  ambientColor: '#ffffff',
+  ambientIntensity: 0.22,
+  bakeBusy: false,
   groups: [],
   selectedNodeIds: [],
   additiveNodeSelection: false,
@@ -169,7 +174,13 @@ export class EditorSession {
     runtime.setUvLayout(layout === 'side' ? 'side' : 'bottom');
     const workspace = readPreference(WORKSPACE_STORAGE_KEY, 'model');
     runtime.setWorkspace(
-      workspace === 'paint' ? 'paint' : workspace === 'uv' ? 'uv' : 'model'
+      workspace === 'paint'
+        ? 'paint'
+        : workspace === 'uv'
+          ? 'uv'
+          : workspace === 'light'
+            ? 'light'
+            : 'model'
     );
     this.snapshot = runtime.getSnapshot();
   }
@@ -272,7 +283,7 @@ export class EditorSession {
     writePreference(UV_LAYOUT_STORAGE_KEY, this.snapshot.uvLayout);
   }
 
-  setWorkspace(workspace: 'model' | 'uv' | 'paint'): void {
+  setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint'): void {
     this.runtime?.setWorkspace(workspace);
     writePreference(WORKSPACE_STORAGE_KEY, workspace);
   }
@@ -716,6 +727,47 @@ export class EditorSession {
 
   selectGroup(groupId: string): void {
     this.runtime?.selectGroup(groupId);
+  }
+
+  selectLight(lightId: string): void {
+    this.runtime?.selectLight(lightId);
+  }
+
+  addLight(kind: 'directional' | 'point'): void {
+    this.runtime?.addLight(kind);
+  }
+
+  deleteActiveLight(): void {
+    this.runtime?.deleteActiveLight();
+  }
+
+  bakeLighting(): Promise<void> {
+    return this.runtime?.bakeLighting() ?? Promise.resolve();
+  }
+
+  setLightEnabled(id: string, enabled: boolean): void {
+    this.runtime?.setLightEnabled(id, enabled);
+  }
+
+  updateActiveLight(
+    patch: Partial<{
+      name: string;
+      color: string;
+      intensity: number;
+      enabled: boolean;
+      position: [number, number, number];
+      direction: [number, number, number];
+    }>
+  ): void {
+    this.runtime?.updateActiveLight(patch);
+  }
+
+  setAmbientColor(color: string): void {
+    this.runtime?.setAmbientColor(color);
+  }
+
+  setAmbientIntensity(intensity: number): void {
+    this.runtime?.setAmbientIntensity(intensity);
   }
 
   ungroupActiveGroup(): void {

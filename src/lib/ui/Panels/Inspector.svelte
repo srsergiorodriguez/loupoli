@@ -74,6 +74,10 @@
   const groups = $derived(session.snapshot.groups);
   const activeNode = $derived(nodes.find((node) => node.id === activeNodeId) ?? null);
   const activeGroup = $derived(groups.find((group) => group.id === activeGroupId) ?? null);
+  const lights = $derived(session.snapshot.lights);
+  const activeLight = $derived(
+    lights.find((light) => light.id === session.snapshot.activeLightId) ?? null
+  );
   function objectCount(count: number): string {
     return `${count} ${count === 1 ? 'object' : 'objects'}`;
   }
@@ -633,6 +637,146 @@
           {/if}
         </div>
       {/if}
+    </InspectorSection>
+{/snippet}
+
+    {#snippet lightSection()}
+<InspectorSection
+      title="Lighting"
+      meta={`${lights.length} light${lights.length === 1 ? '' : 's'}`}
+      open={sections.light}
+      onToggle={(open) => setSection('light', open)}
+    >
+      <div class="module-body light-body">
+        <ActionRow align="between">
+          <ActionMenu
+            label="Add light"
+            icon="plus"
+            menuTitle="Add light"
+            options={[
+              {
+                label: 'Directional light',
+                icon: 'sun',
+                onSelect: () => session.addLight('directional')
+              },
+              {
+                label: 'Point light',
+                icon: 'lamp',
+                onSelect: () => session.addLight('point')
+              }
+            ]}
+          />
+          <span class="texture-note">{lights.length} {lights.length === 1 ? 'light' : 'lights'}</span>
+        </ActionRow>
+        <div class="light-list">
+          {#each lights as light (light.id)}
+            <OutlinerRow
+              active={activeLight?.id === light.id}
+              hidden={!light.enabled}
+              lightId={light.id}
+              visible={light.enabled}
+              visibilityLabel={light.enabled ? `Disable ${light.name}` : `Enable ${light.name}`}
+              onToggleVisibility={() => session.setLightEnabled(light.id, !light.enabled)}
+              selectLabel={`Select ${light.name}`}
+              onSelect={() => session.selectLight(light.id)}
+            >
+              <span class="object-glyph">
+                <Icon name={light.kind === 'directional' ? 'sun' : 'lamp'} size={14} />
+              </span>
+              <span class="object-name">{light.name}</span>
+              <span class="object-kind">{light.kind}</span>
+            </OutlinerRow>
+          {/each}
+        </div>
+        {#if lights.length === 0}
+          <p class="hint">Add a directional or point light to illuminate the model.</p>
+        {/if}
+        {#if activeLight}
+          <div class="selected-name-row">
+            <InlineNameField
+              label="Light name"
+              value={activeLight.name}
+              onCommit={(value) => session.updateActiveLight({ name: value })}
+            />
+            <span class="texture-kind">{activeLight.kind}</span>
+          </div>
+          <ColorField
+            label="Color"
+            value={activeLight.color}
+            onChange={(value) => session.updateActiveLight({ color: value })}
+          />
+          <SliderField
+            label="Intensity"
+            value={activeLight.intensity}
+            min={0}
+            max={10}
+            step={0.01}
+            onChange={(value) => session.updateActiveLight({ intensity: value })}
+          />
+          {#if activeLight.kind === 'directional'}
+            <Vector3Field
+              label="Direction"
+              values={activeLight.direction}
+              step={0.01}
+              precision={2}
+              onCommit={(value) => session.updateActiveLight({ direction: value })}
+            />
+          {:else}
+            <Vector3Field
+              label="Position"
+              values={activeLight.position}
+              step={0.1}
+              precision={2}
+              onCommit={(value) => session.updateActiveLight({ position: value })}
+            />
+          {/if}
+          <div class="texture-action-row">
+            <ActionButton
+              label="Delete light"
+              icon="trash"
+              variant="danger"
+              onActivate={() => session.deleteActiveLight()}
+            />
+          </div>
+        {/if}
+        <div class="light-divider"></div>
+        <div class="light-subhead">
+          <span>Ambient</span>
+          <span class="texture-note">{session.snapshot.ambientIntensity.toFixed(2)}</span>
+        </div>
+        <ColorField
+          label="Color"
+          value={session.snapshot.ambientColor}
+          onChange={(value) => session.setAmbientColor(value)}
+        />
+        <SliderField
+          label="Intensity"
+          value={session.snapshot.ambientIntensity}
+          min={0}
+          max={2}
+          step={0.01}
+          precision={2}
+          onChange={(value) => session.setAmbientIntensity(value)}
+        />
+        <div class="light-divider"></div>
+        <div class="light-bake">
+          <span>
+            Bake active object lighting into a texture layer
+            {#if activeNode}
+              <strong>{activeNode.name}</strong>
+            {:else}
+              <strong>select an object first</strong>
+            {/if}
+          </span>
+          <span class="texture-note">Requires non-overlapping UVs.</span>
+          <ActionButton
+            label={session.snapshot.bakeBusy ? 'Baking…' : 'Bake lighting'}
+            icon="lit"
+            disabled={activeNode === null || session.snapshot.bakeBusy}
+            onActivate={() => void session.bakeLighting()}
+          />
+        </div>
+      </div>
     </InspectorSection>
 {/snippet}
 
@@ -1535,6 +1679,7 @@
 
       {#each visibleSections as section (section)}
         {#if section === 'scene'}{@render sceneSection()}
+        {:else if section === 'light'}{@render lightSection()}
         {:else if section === 'transform'}{@render transformSection()}
         {:else if section === 'selection'}{@render selectionSection()}
         {:else if section === 'mesh'}{@render meshSection()}
@@ -2118,6 +2263,41 @@
     display: flex;
     justify-content: flex-end;
     margin-top: var(--space-1);
+  }
+
+  .light-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .light-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .light-divider {
+    height: var(--hairline);
+    margin: var(--space-1) 0;
+    background: var(--border-subtle);
+  }
+
+  .light-subhead {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+  }
+
+  .light-bake {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
+    line-height: var(--leading-ui);
   }
 
   .texture-layer-swatch {
