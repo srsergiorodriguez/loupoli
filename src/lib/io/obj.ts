@@ -25,16 +25,28 @@ export interface ObjImportedObject {
   readonly materialPalette: readonly string[];
 }
 
+/** Which document objects an OBJ export includes. */
+export type ObjExportScope = 'active' | 'scene';
+
+/** One binary texture file to place beside the MTL. */
+export interface ObjTextureFile {
+  readonly name: string;
+  readonly bytes: Uint8Array;
+}
+
 /** Options for an OBJ export. */
 export interface ObjExportOptions {
   readonly upAxis: ObjUpAxis;
   readonly mtlName: string;
+  readonly includeTextures?: boolean;
+  readonly textures?: ReadonlyMap<string, ObjTextureFile>;
 }
 
-/** Generated OBJ and MTL text. */
+/** Generated OBJ/MTL text and any referenced texture files. */
 export interface ObjExportResult {
   readonly obj: string;
   readonly mtl: string;
+  readonly textures: readonly ObjTextureFile[];
 }
 
 /** Parse a Wavefront MTL file into simple diffuse colors. */
@@ -210,6 +222,7 @@ export function exportObj(
   ];
   const mtl: string[] = ['# loupoli MTL export'];
   const usedNames = new Set<string>();
+  const exportedTextures = new Map<string, ObjTextureFile>();
   let vertexBase = 0;
   let uvBase = 0;
   for (const node of nodes) {
@@ -232,6 +245,13 @@ export function exportObj(
       ? node.materialPalette
       : ['#c8c2ad'];
     const materialNames = palette.map((_color, index) => `${objectName}_mat${index}`);
+    const texture =
+      options.includeTextures && node.textureId
+        ? options.textures?.get(node.textureId) ?? null
+        : null;
+    if (texture) {
+      exportedTextures.set(texture.name, texture);
+    }
     obj.push(`o ${objectName}`);
     const positions = node.mesh.positions;
     for (let vertex = 0; vertex < node.mesh.vertexCount; vertex += 1) {
@@ -273,7 +293,14 @@ export function exportObj(
       const g = parseInt(hex.slice(2, 4), 16) / 255;
       const b = parseInt(hex.slice(4, 6), 16) / 255;
       mtl.push(`newmtl ${materialName}`, `Kd ${r} ${g} ${b}`, 'd 1', 'illum 1');
+      if (texture) {
+        mtl.push(`map_Kd ${texture.name}`);
+      }
     });
   }
-  return { obj: obj.join('\n') + '\n', mtl: mtl.join('\n') + '\n' };
+  return {
+    obj: obj.join('\n') + '\n',
+    mtl: mtl.join('\n') + '\n',
+    textures: [...exportedTextures.values()]
+  };
 }

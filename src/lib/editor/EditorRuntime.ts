@@ -100,7 +100,11 @@ import {
 import { ElementSelection } from './ElementSelection';
 import { History, type HistoryEvent } from './History';
 import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
-import { exportObj, importObjNodes } from '../io/obj';
+import {
+  exportObj,
+  importObjNodes,
+  type ObjTextureFile
+} from '../io/obj';
 import { exportGlb, importGlb } from '../io/gltf';
 import { SetAnimationCommand } from './commands/AnimationCommands';
 import { SetShapeKeysCommand } from './commands/ShapeKeyCommands';
@@ -4990,26 +4994,53 @@ export class EditorRuntime {
     }
   }
 
-  /** Export visible objects as OBJ/MTL in a folder or ZIP. */
-  async exportObj(): Promise<void> {
+  /** Export the active object or scene as OBJ/MTL, optionally with textures. */
+  async exportObj(
+    scope: 'active' | 'scene' = 'scene',
+    includeTextures = false
+  ): Promise<void> {
     if (this.fileBusy) {
+      return;
+    }
+    const active = this.getActiveNode();
+    const requested =
+      scope === 'active'
+        ? active
+          ? [active]
+          : []
+        : this.document.nodes;
+    if (requested.length === 0 || requested.every((node) => !node.visible)) {
+      this.projectError =
+        scope === 'active'
+          ? 'Select a visible object before exporting.'
+          : 'There are no visible objects to export.';
+      this.publish();
       return;
     }
     this.fileBusy = true;
     this.projectError = null;
     this.publish();
     try {
-      const base = (this.projectName || 'loupoli')
-        .replace(/[^a-z0-9_-]+/gi, '-')
-        .replace(/^-+|-+$/g, '') || 'loupoli';
-      const result = exportObj(this.document.nodes, this.document.groups, {
+      const base = this.exportBaseName(
+        scope === 'active' ? active?.name : this.projectName
+      );
+      const textures = includeTextures
+        ? await this.exportTextureFiles(requested, base)
+        : new Map<string, ObjTextureFile>();
+      const result = exportObj(requested, this.document.groups, {
         upAxis: 'y',
-        mtlName: `${base}.mtl`
+        mtlName: `${base}.mtl`,
+        includeTextures,
+        textures
       });
       await saveFrameSequence(
         [
           { name: `${base}.obj`, bytes: new TextEncoder().encode(result.obj) },
-          { name: `${base}.mtl`, bytes: new TextEncoder().encode(result.mtl) }
+          { name: `${base}.mtl`, bytes: new TextEncoder().encode(result.mtl) },
+          ...result.textures.map((texture) => ({
+            name: texture.name,
+            bytes: texture.bytes
+          }))
         ],
         `${base}-obj.zip`
       );
@@ -5019,6 +5050,55 @@ export class EditorRuntime {
       this.fileBusy = false;
       this.publish();
     }
+  }
+
+  /** Sanitize a project or object name for export file names. */
+  private exportBaseName(value: string | null | undefined): string {
+    return (
+      (value || 'loupoli')
+        .replace(/[^a-z0-9_-]+/gi, '-')
+        .replace(/^-+|-+$/g, '') || 'loupoli'
+    );
+  }
+
+  /** Encode the assigned composite textures as PNG files for OBJ. */
+  private async exportTextureFiles(
+    nodes: readonly MeshNode[],
+    base: string
+  ): Promise<Map<string, ObjTextureFile>> {
+    const files = new Map<string, ObjTextureFile>();
+    const usedNames = new Set<string>();
+    for (const node of nodes) {
+      if (!node.textureId || files.has(node.textureId)) {
+        continue;
+      }
+      const asset = this.textureLibrary.get(node.textureId);
+      if (!asset) {
+        continue;
+      }
+      const blob = await new Promise<Blob | null>((resolve) => {
+        asset.image.toBlob(resolve, 'image/png');
+      });
+      if (!blob) {
+        throw new Error(`Could not encode texture "${asset.name}" as PNG.`);
+      }
+      const assetBase =
+        asset.name
+          .replace(/[^a-z0-9_-]+/gi, '-')
+          .replace(/^-+|-+$/g, '') || 'texture';
+      let name = `${base}-${assetBase}.png`;
+      let suffix = 2;
+      while (usedNames.has(name)) {
+        name = `${base}-${assetBase}-${suffix}.png`;
+        suffix += 1;
+      }
+      usedNames.add(name);
+      files.set(node.textureId, {
+        name,
+        bytes: new Uint8Array(await blob.arrayBuffer())
+      });
+    }
+    return files;
   }
 
   private cloneShapeKeys(node: MeshNode) {

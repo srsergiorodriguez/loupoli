@@ -853,8 +853,8 @@ export class EditorSession {
     return this.runtime?.importObj() ?? Promise.resolve();
   }
 
-  exportObj(): Promise<void> {
-    return this.runtime?.exportObj() ?? Promise.resolve();
+  exportObj(scope: 'active' | 'scene' = 'scene', includeTextures = false): Promise<void> {
+    return this.runtime?.exportObj(scope, includeTextures) ?? Promise.resolve();
   }
 
   importGlb(): Promise<void> {

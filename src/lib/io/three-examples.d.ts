@@ -12,7 +12,7 @@ declare module 'three/examples/jsm/exporters/GLTFExporter.js' {
   export class GLTFExporter {
     parseAsync(
       input: Object3D,
-      options: { binary: boolean }
+      options: { binary: boolean; trs?: boolean }
     ): Promise<ArrayBuffer>;
   }
 }

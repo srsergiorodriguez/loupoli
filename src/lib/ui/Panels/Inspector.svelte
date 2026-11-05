@@ -11,6 +11,8 @@
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
+  import ExportObjDialog from './ExportObjDialog.svelte';
+  import type { ObjExportScope } from '../../io/obj';
   import ThreeDotMenu from '../Primitives/ThreeDotMenu.svelte';
   import InlineNameField from '../Primitives/InlineNameField.svelte';
   import OutlinerRow from '../Primitives/OutlinerRow.svelte';
@@ -240,6 +242,14 @@
 
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
+  let objExportOpen = $state(false);
+  let objExportScope = $state<ObjExportScope>('scene');
+  let objExportIncludeTexture = $state(true);
+  const exportHasTexture = $derived(
+    objExportScope === 'active'
+      ? activeNode?.textureId != null
+      : nodes.some((node) => node.textureId != null)
+  );
 
   const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v4';
   let sections = $state<Record<SectionKey, boolean>>({ ...SECTION_DEFAULTS });
@@ -708,11 +718,14 @@
               onSelect: () => void session.importGlb()
             },
             {
-              label: 'Export OBJ',
+              label: 'Export OBJ…',
               icon: 'save',
               separatorBefore: true,
               disabled: session.snapshot.fileBusy || nodes.length === 0,
-              onSelect: () => void session.exportObj()
+              onSelect: () => {
+                if (!activeNode) objExportScope = 'scene';
+                objExportOpen = true;
+              }
             },
             {
               label: 'Export GLB',
@@ -2319,6 +2332,23 @@
         {/if}
       {/each}
   </div>
+
+  {#if objExportOpen}
+    <ExportObjDialog
+      scope={objExportScope}
+      includeTexture={objExportIncludeTexture}
+      hasTexture={exportHasTexture}
+      hasActive={activeNode !== null}
+      busy={session.snapshot.fileBusy}
+      onScopeChange={(scope) => (objExportScope = scope)}
+      onIncludeTextureChange={(value) => (objExportIncludeTexture = value)}
+      onCancel={() => (objExportOpen = false)}
+      onExport={() => {
+        objExportOpen = false;
+        void session.exportObj(objExportScope, objExportIncludeTexture);
+      }}
+    />
+  {/if}
 </aside>
 
 <style>

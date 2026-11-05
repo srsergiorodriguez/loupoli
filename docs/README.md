@@ -16,7 +16,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 10. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
 11. [Render workspace and camera](./RENDER.md) — scene cameras, virtual resolution, and clean still rendering.
 12. [Animation workspace](./ANIMATION.md) — transform tracks, timeline, playback, and persistence.
-13. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, simple materials, and coordinate conversion.
+13. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, scoped OBJ bundles with optional PNG textures, simple materials, and coordinate conversion.
 14. [Shape keys](./SHAPE_KEYS.md) — morph targets, weights, persistence, and topology guards.
 15. [Root README](../README.md) — product overview, setup, and current capabilities.
 

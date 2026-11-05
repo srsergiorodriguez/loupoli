@@ -206,11 +206,19 @@ export async function exportGlb(
   groups: readonly SceneGroup[]
 ): Promise<Uint8Array> {
   const scene = new Scene();
+  scene.name = 'loupoli';
   const groupById = new Map(groups.map((group) => [group.id, group]));
   let objectIndex = 0;
   for (const node of nodes) {
-    if (!node.visible) {
+    if (!node.visible || node.mesh.triangleVertexCount === 0) {
       continue;
+    }
+    for (const key of node.shapeKeys) {
+      if (key.targetPositions.length !== node.mesh.positions.length) {
+        throw new Error(
+          `Shape key "${key.name}" does not match the mesh vertex count.`
+        );
+      }
     }
     const parent = node.parentId ? groupById.get(node.parentId) : null;
     const world = transformMatrix(
@@ -220,6 +228,7 @@ export async function exportGlb(
     root.name = node.name;
     root.matrix.copy(world).premultiply(Z_UP_TO_Y_UP);
     root.matrix.decompose(root.position, root.quaternion, root.scale);
+    root.matrixAutoUpdate = true;
     root.updateMatrixWorld(true);
     const palette = node.materialPalette.length
       ? node.materialPalette
@@ -312,6 +321,11 @@ export async function exportGlb(
       geometry.setAttribute('position', new BufferAttribute(subsetPositions, 3));
       geometry.setAttribute('normal', new BufferAttribute(subsetNormals, 3));
       geometry.setAttribute('uv', new BufferAttribute(subsetUvs, 2));
+      const indices = new Uint32Array(triangleCount * 3);
+      for (let index = 0; index < indices.length; index += 1) {
+        indices[index] = index;
+      }
+      geometry.setIndex(new BufferAttribute(indices, 1));
       if (fullMorphTargets.length > 0) {
         const morphAttributes: BufferAttribute[] = [];
         let source = 0;
@@ -337,10 +351,9 @@ export async function exportGlb(
       }
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
-      const mesh = new Mesh(
-        geometry,
-        makeMaterial(palette[materialIndex] ?? palette[0])
-      );
+      const material = makeMaterial(palette[materialIndex] ?? palette[0]);
+      material.name = `${node.name}_mat${materialIndex}`;
+      const mesh = new Mesh(geometry, material);
       mesh.name = `${node.name}_${objectIndex}`;
       if (node.shapeKeys.length > 0) {
         mesh.morphTargetInfluences = node.shapeKeys.map((key) => key.weight);
@@ -357,6 +370,6 @@ export async function exportGlb(
     throw new Error('There are no visible objects to export.');
   }
   const exporter = new GLTFExporter();
-  const buffer = await exporter.parseAsync(scene, { binary: true });
+  const buffer = await exporter.parseAsync(scene, { binary: true, trs: true });
   return new Uint8Array(buffer);
 }

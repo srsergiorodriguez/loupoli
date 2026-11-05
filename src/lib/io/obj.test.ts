@@ -53,6 +53,23 @@ describe('OBJ interchange', () => {
     expect(roundTrip[0].materialPalette).toEqual(['#cc331a', '#1a33cc']);
   });
 
+  it('exports assigned textures as MTL map_Kd files', () => {
+    const nodes = importObjNodes(CUBE_OBJ, CUBE_MTL);
+    nodes[0].textureId = 'texture-1';
+    const texture = {
+      name: 'Cube-Texture.png',
+      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+    };
+    const exported = exportObj(nodes, [], {
+      upAxis: 'y',
+      mtlName: 'Cube.mtl',
+      includeTextures: true,
+      textures: new Map([['texture-1', texture]])
+    });
+    expect(exported.mtl).toContain('map_Kd Cube-Texture.png');
+    expect(exported.textures).toEqual([texture]);
+  });
+
   it('rejects malformed face indices', () => {
     expect(() =>
       parseObj('v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 99')
