@@ -1,6 +1,6 @@
 # loupoli
 
-A low-poly, pen-first 3D modeling studio for iPad and desktop. Z-up, quad-centric, on-demand rendered, and local-first.
+A simple and friendly 3D modeler for iPad and desktop. Z-up, quad-centric, on-demand rendered, and local-first.
 
 **Brand:** always lowercase `loupoli`.
 

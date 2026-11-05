@@ -38,8 +38,8 @@
       "icons/icon.ico"
     ],
     "category": "GraphicsAndDesign",
-    "shortDescription": "A pen-first low-poly 3D modeler",
-    "longDescription": "loupoli is a precise, pen-first low-poly 3D modeling studio for iPad and desktop.",
+    "shortDescription": "A simple and friendly 3D modeler",
+    "longDescription": "loupoli is a simple and friendly 3D modeler for iPad and desktop.",
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

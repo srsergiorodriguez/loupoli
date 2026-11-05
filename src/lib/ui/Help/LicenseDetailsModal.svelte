@@ -64,6 +64,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
+    width: 100%;
     max-width: 980px;
     height: 100%;
     min-height: 0;

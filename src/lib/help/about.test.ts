@@ -13,5 +13,6 @@ describe('application licensing metadata', () => {
     expect(APP_ABOUT.sampleLicenseName).toBe('CC BY 4.0');
     expect(APP_ABOUT.sampleLicenseUrl).toContain('creativecommons.org');
     expect(APP_ABOUT.author).toBe('Sergio Rodríguez Gómez');
+    expect(APP_ABOUT.tagline).toBe('A simple and friendly 3D modeler');
   });
 });

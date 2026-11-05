@@ -52,9 +52,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Illustration',
+        heading: 'Screenshot notes',
         paragraphs: [
-          'The screenshots use a textured character on a separate grid plane. Select the character in Scene, switch to Face mode, and select a surface panel to try Extrude or Inset. The ground remains a separate object, so transforming it does not change the character.'
+          'The screenshot shows the sample character on a separate grid plane. Vertex mode is active, and the white handles mark selectable vertices across the mesh. The Scene outliner lists the ground and the character as separate objects. The ActionDock is visible, with no topology operation armed.'
         ]
       }
     ],
@@ -97,9 +97,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Illustration',
+        heading: 'Screenshot notes',
         paragraphs: [
-          'The sample atlas has separate charts for the head, limbs, and torso. Open UV, select a chart in Island mode, and move it with G. The texture stays attached to each chart, so the model surface updates while you edit.'
+          'The screenshot shows the UV pane filled with separate charts for the head, limbs, and torso. The 3D viewport and the UV pane share the same selection state. The footer reports the selected-corner count and the current U and V delta.'
         ]
       }
     ],
@@ -141,9 +141,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Illustration',
+        heading: 'Screenshot notes',
         paragraphs: [
-          'Select the sample atlas in Texture, add a raster layer, and paint a mark on the face chart. Switch to the 3D viewport and paint on the face to place the same change through the mesh UVs. Use undo to revert the complete stroke.'
+          'The screenshot shows the texture atlas in the Paint pane with Brush selected. The Brush inspector exposes size, opacity, hardness, smoothing, and noise, while the top toolbar holds the tool picker and quick controls. The 3D viewport remains visible beside the texture.'
         ]
       }
     ],
@@ -185,9 +185,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Illustration',
+        heading: 'Screenshot notes',
         paragraphs: [
-          'The sample scene uses a sun and a fill light. The ground receives the character shadow. Drag the sun arrow tip across the model to see the shadow direction change before baking.'
+          'The screenshot shows two directional lights, Sun and Fill, in the Lighting list. The ground receives the character shadow. The Lit viewport reflects the document light state, and the selected Sun exposes its color, intensity, position, and direction fields.'
         ]
       }
     ],
@@ -230,9 +230,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Illustration',
+        heading: 'Screenshot notes',
         paragraphs: [
-          'The screenshots add an empty shape key to the sample model so its weight row is visible. Key a transform at frame 0, move to frame 24, change the object transform, and key it again. Scrub between the two frames to inspect the interpolation.'
+          'The screenshot shows the timeline with the object transform row and a shape-weight row for an empty shape key. The playhead is at the first frame, and the tracked values are visible without a selected key.'
         ]
       }
     ],
@@ -275,9 +275,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Illustration',
+        heading: 'Screenshot notes',
         paragraphs: [
-          'The sample camera frames the character and its ground. Start in free editing to place the marker, use Through to check the composition, then choose Preview to inspect the framed result before writing a PNG.'
+          'The screenshot shows the active camera around the sample character and its ground. The camera frustum and target handles are visible in free editing, and the Camera and Render sections hold the composition and output controls.'
         ]
       }
     ],

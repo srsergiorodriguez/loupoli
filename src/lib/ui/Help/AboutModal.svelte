@@ -1,7 +1,9 @@
 <script lang="ts">
   import BrandMark from '../Brand/BrandMark.svelte';
   import ModalDialog from '../Primitives/ModalDialog.svelte';
-  import ExternalLink from '../Primitives/ExternalLink.svelte';
+  import DependencyDetailsModal from './DependencyDetailsModal.svelte';
+  import Icon from '../Icons/Icon.svelte';
+  import type { AboutLibrary } from '../../help/about';
   import LicenseDetailsModal, { type LicenseKind } from './LicenseDetailsModal.svelte';
   import { APP_ABOUT } from '../../help/about';
 
@@ -12,6 +14,7 @@
 
   let { onClose }: Props = $props();
   let licenseView = $state<LicenseKind | null>(null);
+  let selectedLibrary = $state<AboutLibrary | null>(null);
 
   const groups = [
     { title: 'Runtime libraries', items: APP_ABOUT.runtimeLibraries },
@@ -25,7 +28,7 @@
       <div class="hero-mark"><BrandMark size={44} /></div>
       <div>
         <p class="eyebrow">loupoli</p>
-        <h3>A pen-first low-poly modeler</h3>
+        <h3>{APP_ABOUT.tagline}</h3>
         <p class="version">Version {APP_ABOUT.version}</p>
       </div>
     </header>
@@ -43,7 +46,7 @@
       <section>
         <h4>Built with</h4>
         <p>Svelte, Tauri, Three.js, and TypeScript.</p>
-        <p class="supporting">These libraries remain under their own licenses. Their project pages contain the complete license texts.</p>
+        <p class="supporting">These libraries remain under their own licenses. Select a library below to read its license terms in the dialog.</p>
       </section>
     </div>
 
@@ -85,17 +88,25 @@
             <ul>
               {#each group.items as library (library.name)}
                 <li>
-                  <ExternalLink href={library.url} title={library.url}>
+                  <button
+                    type="button"
+                    class="library-button"
+                    title={library.url}
+                    onclick={() => (selectedLibrary = library)}
+                  >
                     <span>{library.name}</span>
-                    <span class="license">{library.version} · {library.license}</span>
-                  </ExternalLink>
+                    <span class="library-meta">
+                      <span class="license">{library.version} · {library.license}</span>
+                      <Icon name="info" size={14} />
+                    </span>
+                  </button>
                 </li>
               {/each}
             </ul>
           </div>
         {/each}
       </div>
-      <p class="fine-print">License names are listed for attribution. The corresponding license texts are available from each linked project.</p>
+      <p class="fine-print">Select a library to read its license terms. Project URLs are shown in each detail view.</p>
     </section>
 
     <footer class="about-footer">
@@ -107,6 +118,12 @@
 
 {#if licenseView}
   <LicenseDetailsModal kind={licenseView} onClose={() => (licenseView = null)} />
+{/if}
+{#if selectedLibrary}
+  <DependencyDetailsModal
+    library={selectedLibrary}
+    onClose={() => (selectedLibrary = null)}
+  />
 {/if}
 
 <style>
@@ -299,19 +316,40 @@
     border-bottom: var(--hairline) solid var(--border-subtle);
   }
 
-  .library-group :global(a) {
+  .library-button {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
+    width: 100%;
     padding: var(--space-2) 0;
+    border: 0;
+    background: transparent;
     color: var(--text-secondary);
+    font-family: var(--font-ui);
     font-size: var(--text-xs);
-    text-decoration: none;
+    text-align: left;
+    cursor: pointer;
   }
 
-  .library-group :global(a):hover {
+  .library-button:hover {
     color: var(--accent-primary);
+  }
+
+  .library-button:hover .library-meta {
+    color: var(--accent-primary);
+  }
+
+  .library-button:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 2px;
+  }
+
+  .library-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
   }
 
   .license {
