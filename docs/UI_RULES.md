@@ -57,6 +57,7 @@ Inspector field rows share one compact rhythm:
 - Section bodies and module bodies stack direct children with `--inspector-row-gap` (6 px). Section padding is `--inspector-section-pad` (12 px). Do not add per-field `margin-top`/`margin-bottom`.
 - Inline fields share `--inspector-label-width` (96 px), so their controls start at one x-position regardless of label length.
 - Vector cell separators are 1 px borders, not grid gaps. This keeps the three cells stable when sections remount on a workspace change.
+- Vector groups are plain `role="group"` containers. Do not use `<fieldset>`/`<legend>`: WebKit adds fieldset padding and margins that survive some style resets and reappear after DOM reuse.
 - Spatial vectors use three decimal places by default. Degree values use one, and counts or pixel sizes use zero.
 - A vector field is one row. Its label-to-control gap is `--field-label-gap` (4 px), matching a field label above its control.
 - Labels use the shared UI label style; numeric prefixes and values remain monospace.

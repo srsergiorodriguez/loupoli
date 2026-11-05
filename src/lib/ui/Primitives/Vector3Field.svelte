@@ -34,8 +34,8 @@
   }
 </script>
 
-<fieldset class="vector-field">
-  <legend>{label}</legend>
+<div class="vector-field" role="group" aria-label={label}>
+  <div class="vector-label">{label}</div>
   <div class="axis-grid">
     {#each axes as axis, index (axis)}
       <label class="axis-field axis-field--{axis}">
@@ -53,19 +53,15 @@
       </label>
     {/each}
   </div>
-</fieldset>
+</div>
 
 <style>
   .vector-field {
     min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
   }
 
-  legend {
+  .vector-label {
     margin-bottom: var(--field-label-gap);
-    padding: 0;
     color: var(--text-tertiary);
     font-family: var(--font-ui);
     font-size: var(--text-xs);
