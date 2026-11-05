@@ -24,7 +24,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV, Paint, and Render preview |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas with optional read-only UV overlay, brush footer |
-| **Render Preview** | Docked still output inside PaneHost | Output dimensions/upscale header, close action, image body; opens after Preview |
+| **Render Preview** | Always-open live output inside PaneHost | Dimensions/upscale/frame header, play/pause, live canvas; camera and scene edits refresh it |
 | **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace; full-space About/Documentation modals |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
 | **Status Bar** | Persistent status | Context hint, mesh counts, and snap state; no renderer internals |

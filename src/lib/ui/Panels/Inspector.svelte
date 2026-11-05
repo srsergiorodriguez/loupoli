@@ -1088,12 +1088,6 @@
         {/if}
         <ActionRow align="end">
           <ActionButton
-            label="Preview"
-            icon="eye"
-            disabled={activeCamera === null || session.snapshot.renderBusy}
-            onActivate={() => void session.previewRender()}
-          />
-          <ActionButton
             label={session.snapshot.renderBusy
               ? 'Rendering…'
               : session.snapshot.renderKind === 'sequence'

@@ -50,7 +50,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvSelectedCorners: [],
   uvPinnedCorners: [],
   uvPaintMode: false,
-  paintUvOverlay: false,
+  paintUvOverlay: true,
   uvBrushColor: '#f2ffe0',
   uvBrushColorAlpha: 1,
   uvBrushSize: 36,
@@ -122,10 +122,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   renderShading: 'lit',
   renderTransparent: false,
   renderBackground: '#121214',
-  renderPreviewUrl: null,
   renderPreviewSplit: 0.38,
-  renderPreviewWidth: 0,
-  renderPreviewHeight: 0,
+  renderPreviewRevision: 0,
   animationFrame: 0,
   animationStartFrame: 0,
   animationEndFrame: 48,
@@ -209,7 +207,7 @@ export class EditorSession {
     this.runtime = runtime;
     const layout = readPreference(UV_LAYOUT_STORAGE_KEY, 'bottom');
     runtime.setUvLayout(layout === 'side' ? 'side' : 'bottom');
-    runtime.setPaintUvOverlay(readPreference(PAINT_UV_OVERLAY_STORAGE_KEY, 'false') === 'true');
+    runtime.setPaintUvOverlay(readPreference(PAINT_UV_OVERLAY_STORAGE_KEY, 'true') === 'true');
     const previewSplit = Number(readPreference(RENDER_PREVIEW_SPLIT_STORAGE_KEY, '0.38'));
     if (Number.isFinite(previewSplit)) {
       runtime.setRenderPreviewSplit(previewSplit);
@@ -862,12 +860,12 @@ export class EditorSession {
     this.runtime?.updateRenderSettings(patch);
   }
 
-  previewRender(): Promise<void> {
-    return this.runtime?.previewRender() ?? Promise.resolve();
-  }
-
-  clearRenderPreview(): void {
-    this.runtime?.clearRenderPreview();
+  drawRenderPreview(
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number
+  ): void {
+    this.runtime?.drawRenderPreview(canvas, width, height);
   }
 
   setActiveCameraFromView(): void {

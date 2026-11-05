@@ -28,8 +28,8 @@ interface CameraSnapshot {
 - Cameras are saved in `.lpoli`.
 - The Camera Inspector uses the shared outliner list, with editable camera names, position, target, and a field-of-view slider.
 - **Add from view** captures the current navigation camera.
-- Editing the camera does not force the viewport back to the camera view. The Render workspace is a free camera-editing view with orbit, pan, zoom, the orientation gizmo, a camera marker/frustum, a camera list with editable names/FOV, and a docked render preview pane. **Through** is a toggle: it enters the camera view and hides camera handles; orbiting, panning, or zooming leaves it, shows the handles again, and returns to free editing. **Frame camera** frames the camera for free editing. Drag the camera body to move it, drag the target/arrow handle to re-aim it, or use the compact Camera Inspector action row: **Frame**, **From view**, and **Through/Exit**, with **Delete camera** isolated last/right.
-- **Preview** renders the virtual-resolution frame, upscales it to the output size, and opens a resizable docked preview pane beside the camera view. The pane uses the shared PaneHost/PaneFrame and closes from its header; its width is remembered separately from the UV split.
+- Editing the camera does not force the viewport back to the camera view. The Render workspace is a free camera-editing view with orbit, pan, zoom, the orientation gizmo, a camera marker/frustum, a camera list with editable names/FOV, and an always-open live render preview pane. **Through** is a toggle: it enters the camera view and hides camera handles; orbiting, panning, or zooming leaves it, shows the handles again, and returns to free editing. **Frame camera** frames the camera for free editing. Drag the camera body to move it, drag the target/arrow handle to re-aim it, or use the compact Camera Inspector action row: **Frame**, **From view**, and **Through/Exit**, with **Delete camera** isolated last/right.
+- The render preview pane is always present in Render. It uses the shared PaneHost/PaneFrame, displays the live virtual-resolution frame through the active camera, and refreshes whenever the camera, scene, lighting, or animation pose changes. Its header shows virtual → output size and the current frame. The play/pause button runs the existing animation playback; the width is remembered separately from the UV split. There is no separate Preview action or floating portal.
 - Camera animation tracks will be added with the animation timeline.
 
 ## 2. Render workspace
@@ -38,7 +38,7 @@ interface CameraSnapshot {
 
 ![Camera editing in the Render workspace](media/render-workspace.png)
 
-![Upscaled render preview in its docked pane](media/render-preview.png)
+![Live render preview in its docked pane](media/render-preview.png)
 
 Inspector sections:
 

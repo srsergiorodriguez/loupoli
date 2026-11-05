@@ -128,7 +128,7 @@
     class="viewport"
     class:uv-open={session.snapshot.uvOpen}
     class:pane-open={session.snapshot.uvOpen ||
-      (session.snapshot.workspace === 'render' && session.snapshot.renderPreviewUrl !== null)}
+      session.snapshot.workspace === 'render'}
     style={`--pane-width:${
       (session.snapshot.uvOpen
         ? session.snapshot.uvSplit
@@ -258,8 +258,7 @@
     </section>
 
     {#if !startupError &&
-      (session.snapshot.uvOpen ||
-        (session.snapshot.workspace === 'render' && session.snapshot.renderPreviewUrl !== null))}
+      (session.snapshot.uvOpen || session.snapshot.workspace === 'render')}
       <PaneHost
         label={session.snapshot.uvOpen
           ? session.snapshot.uvPaintMode

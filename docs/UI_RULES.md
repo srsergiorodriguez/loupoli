@@ -144,13 +144,13 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Texture layers | Add layer | selection properties | Delete layer, last/right |
 | Animation | — | track + key in timeline | Delete key in timeline header, last/right |
 | Camera | Add from view above list | selected camera name/position/target/FOV; compact Frame/From view/Through toggle on one row | Delete camera isolated last/right |
-| Render | — | output settings below header; Preview then Render in the final action row | — |
+| Render | — | output settings below header; Render action in the final row; live preview lives in the pane | — |
 | Shape keys | Add shape key | selected key: name, weight, Edit target, Capture base; rows support visibility and drag reorder | Delete shape key, last/right |
 
 - Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.
 - Shape-key weight keys are timeline keys; the Shape keys Inspector does not duplicate Key/Unkey. Shape-key rows use the same outliner grouping, visibility, and drag-reorder behavior as scene objects and texture layers.
 - A more-actions (`ThreeDotMenu`) or overflow menu is always the last control in its action row.
-- Camera and Render use `ActionRow` rather than per-section button wrappers; primary/destructive actions sit last and right. The render preview is a docked PaneHost pane beside the camera view, built from the same PaneFrame as UV and Paint.
+- Camera and Render use `ActionRow` rather than per-section button wrappers; primary/destructive actions sit last and right. The render preview is an always-open PaneHost pane beside the camera view, built from the same PaneFrame as UV and Paint, with live output and a play/pause control.
 - Timeline zoom uses minus/Fit/plus in the timeline header. Ruler ticks adapt to the visible range; wheel pans and Ctrl/Cmd+wheel zooms.
 - Labels name the noun: `Delete object`, `Delete layer`, `Delete texture`, `Delete shape key`, `Delete key`, `Delete elements`.
 - Destructive controls are neutral at rest and use `--accent-danger` on hover/focus. Overflow destructive items follow the same neutral/red-hover rule.

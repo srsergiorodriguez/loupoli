@@ -504,7 +504,7 @@ export class EditorRuntime {
     lastFace: number | null;
   } | null = null;
   private uvPaintMode = false;
-  private paintUvOverlay = false;
+  private paintUvOverlay = true;
   private uvBrushColor = '#f2ffe0';
   private uvBrushColorAlpha = 1;
   private uvBrushSize = 36;
@@ -573,10 +573,9 @@ export class EditorRuntime {
   private renderBusy = false;
   private renderCameraView = false;
   private renderKind: 'still' | 'sequence' | 'webm' | 'mp4' = 'still';
-  private renderPreviewUrl: string | null = null;
   private renderPreviewSplit = 0.38;
-  private renderPreviewWidth = 0;
-  private renderPreviewHeight = 0;
+  private renderPreviewRevision = 0;
+  private renderPreviewSource: HTMLCanvasElement | null = null;
   private renderStartFrame = 0;
   private renderEndFrame = 48;
   private renderVirtualWidth = 320;
@@ -877,10 +876,8 @@ export class EditorRuntime {
       renderShading: this.renderShading,
       renderTransparent: this.renderTransparent,
       renderBackground: this.renderBackground,
-      renderPreviewUrl: this.renderPreviewUrl,
       renderPreviewSplit: this.renderPreviewSplit,
-      renderPreviewWidth: this.renderPreviewWidth,
-      renderPreviewHeight: this.renderPreviewHeight,
+      renderPreviewRevision: this.renderPreviewRevision,
       animationFrame: this.animationFrame,
       animationStartFrame: this.document.animation.startFrame,
       animationEndFrame: this.document.animation.endFrame,
@@ -4117,7 +4114,6 @@ export class EditorRuntime {
     if (patch.renderKind !== undefined) {
       this.renderKind = patch.renderKind;
     }
-    this.renderPreviewUrl = null;
     this.renderCameraView = false;
     if (patch.renderStartFrame !== undefined) {
       this.renderStartFrame = Math.max(0, Math.round(patch.renderStartFrame));
@@ -4182,7 +4178,6 @@ export class EditorRuntime {
       this.notify('error', 'Render failed', message);
     } finally {
       this.renderBusy = false;
-    this.renderPreviewUrl = null;
       this.publish();
     }
   }
@@ -4757,23 +4752,41 @@ export class EditorRuntime {
     this.syncScene();
   }
 
-  /** Render an upscaled preview and show it in the Render workspace. */
-  async previewRender(): Promise<void> {
-    if (this.renderBusy) {
+  /**
+   * Draw the current scene through the active render camera into a live pane.
+   *
+   * The virtual-resolution render is upscaled into the supplied 2D canvas. It
+   * runs only after a render-relevant snapshot change, never from an idle loop.
+   */
+  drawRenderPreview(
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number
+  ): void {
+    if (width <= 0 || height <= 0 || this.renderBusy) {
       return;
     }
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const pixelWidth = Math.max(1, Math.round(width * pixelRatio));
+    const pixelHeight = Math.max(1, Math.round(height * pixelRatio));
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return;
+    }
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, width, height);
+
     const camera = this.getActiveCamera();
     if (!camera) {
-      this.projectError = 'Add a camera before previewing.';
-      this.notify('warning', 'Preview unavailable', 'Add a camera before previewing.');
-      this.publish();
       return;
     }
-    this.renderBusy = true;
-    this.projectError = null;
-    this.publish();
+    let image: ImageData;
     try {
-      const image = this.renderer.renderStill({
+      image = this.renderer.renderStill({
         width: this.renderVirtualWidth,
         height: this.renderVirtualHeight,
         shading: this.renderShading,
@@ -4785,36 +4798,32 @@ export class EditorRuntime {
         transparent: this.renderTransparent,
         backgroundColor: this.renderBackground
       });
-      const canvas = upscaleRenderImage(
-        image,
-        this.renderOutputWidth,
-        this.renderOutputHeight,
-        this.renderUpscale
-      );
-      this.renderPreviewUrl = canvas.toDataURL('image/png');
-      this.renderPreviewWidth = this.renderVirtualWidth;
-      this.renderPreviewHeight = this.renderVirtualHeight;
-      this.notify(
-        'success',
-        'Preview rendered',
-        `${this.renderOutputWidth}×${this.renderOutputHeight}`
-      );
-    } catch (error) {
-      const message = this.errorMessage(error);
-      this.projectError = message;
-      this.notify('error', 'Preview failed', message);
-    } finally {
-      this.renderBusy = false;
-      this.publish();
+    } catch {
+      return;
     }
-  }
 
-  /** Clear the floating render preview. */
-  clearRenderPreview(): void {
-    this.renderPreviewUrl = null;
-    this.renderPreviewWidth = 0;
-    this.renderPreviewHeight = 0;
-    this.publish();
+    const source =
+      this.renderPreviewSource ?? (this.renderPreviewSource = document.createElement('canvas'));
+    if (source.width !== image.width || source.height !== image.height) {
+      source.width = image.width;
+      source.height = image.height;
+    }
+    const sourceContext = source.getContext('2d');
+    if (!sourceContext) {
+      return;
+    }
+    sourceContext.putImageData(image, 0, 0);
+    const scale = Math.min(width / image.width, height / image.height);
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+    context.imageSmoothingEnabled = this.renderUpscale !== 'nearest';
+    context.drawImage(
+      source,
+      (width - drawWidth) / 2,
+      (height - drawHeight) / 2,
+      drawWidth,
+      drawHeight
+    );
   }
 
   /** Update the active camera from the current navigation view. */
@@ -6882,6 +6891,7 @@ export class EditorRuntime {
     this.autosave.dispose();
     this.renderer.dispose();
     this.textureLibrary.dispose();
+    this.renderPreviewSource = null;
   }
 
   private getActiveNode(): MeshNode | null {
@@ -9666,6 +9676,9 @@ export class EditorRuntime {
 
   private publish(): void {
     if (!this.disposed) {
+      if (this.workspace === 'render') {
+        this.renderPreviewRevision += 1;
+      }
       this.syncUvSelectionIfChanged();
       this.onSnapshot(this.getSnapshot());
     }
