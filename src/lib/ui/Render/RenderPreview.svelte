@@ -38,13 +38,16 @@
 <style>
   .render-preview {
     position: absolute;
-    bottom: 14px;
-    left: 14px;
+    top: calc(50% - (var(--status-h) + var(--safe-bottom)) / 2);
+    left: 50%;
     z-index: 7;
     display: flex;
     flex-direction: column;
-    width: min(620px, calc(100% - 28px));
+    width: min(620px, calc(100% - 32px));
+    max-height: calc(100% - var(--status-h) - var(--safe-bottom) - 32px);
     padding: 8px;
+    overflow: hidden;
+    transform: translate(-50%, -50%);
     pointer-events: auto;
   }
 
@@ -77,6 +80,8 @@
 
   img {
     display: block;
+    flex: 1 1 auto;
+    min-height: 0;
     width: 100%;
     max-height: 380px;
     object-fit: contain;
