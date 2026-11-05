@@ -964,6 +964,20 @@ export class ViewportRenderer {
     return this.canvas.getBoundingClientRect();
   }
 
+  /** Project a world point into CSS client coordinates, if it is in front. */
+  worldToClient(point: Vector3): { x: number; y: number } | null {
+    this.cameraRig.camera.updateMatrixWorld();
+    const projected = point.clone().project(this.cameraRig.camera);
+    if (projected.z < -1 || projected.z > 1) {
+      return null;
+    }
+    const rect = this.getCanvasRect();
+    return {
+      x: rect.left + ((projected.x + 1) * 0.5) * rect.width,
+      y: rect.top + ((1 - projected.y) * 0.5) * rect.height
+    };
+  }
+
   /** Pick the frontmost surface point and interpolated UV on the active node. */
   pickSurface(clientX: number, clientY: number): SurfaceHit | null {
     const view = this.activeView();

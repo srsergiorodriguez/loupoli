@@ -49,6 +49,7 @@ import type { MeshNode, NodeTransform, SelectionMode, ShapeKey } from '../scene/
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { workspaceCan } from './workspaces';
+import { screenRotationDegrees } from './modalRotation';
 import {
   applyUvView,
   fitUvProjection,
@@ -366,6 +367,7 @@ interface ModalTransform {
   readonly localQuaternion: Quaternion;
   readonly worldQuaternion: Quaternion;
   readonly viewAxis: Vector3;
+  readonly pivotScreen: { x: number; y: number } | null;
   numeric: string;
   value: number;
 }
@@ -7968,6 +7970,7 @@ export class EditorRuntime {
     const startHit =
       this.renderer.intersectPointerPlane(clientX, clientY, plane) ??
       origin.clone();
+    const pivotScreen = this.renderer.worldToClient(origin);
     this.modalTransform = {
       kind,
       target,
@@ -7993,6 +7996,7 @@ export class EditorRuntime {
       // The camera-facing plane normal points into the screen. Rotate around
       // the opposite direction so a positive modal angle reads counterclockwise.
       viewAxis: plane.normal.clone().normalize().negate(),
+      pivotScreen,
       numeric: '',
       value: 0
     };
@@ -8175,6 +8179,27 @@ export class EditorRuntime {
     }
   }
 
+  /** Resolve a modal rotation in degrees, using radial pointer motion on screen. */
+  private modalRotationDegrees(modal: ModalTransform, numeric: number | null): number {
+    if (numeric !== null) {
+      return numeric;
+    }
+    if (modal.axis === null && modal.pivotScreen) {
+      const radial = screenRotationDegrees(
+        modal.pivotScreen.x,
+        modal.pivotScreen.y,
+        modal.startX,
+        modal.startY,
+        modal.lastX,
+        modal.lastY
+      );
+      if (radial !== null) {
+        return radial;
+      }
+    }
+    return (modal.lastX - modal.startX - (modal.lastY - modal.startY)) * 0.5;
+  }
+
   private updateModalTransform(): void {
     const modal = this.modalTransform;
     if (!modal) {
@@ -8252,10 +8277,7 @@ export class EditorRuntime {
         value = localDelta.length();
       }
     } else if (modal.kind === 'rotate') {
-      const angleDegrees =
-        numeric !== null
-          ? numeric
-          : (modal.lastX - modal.startX - (modal.lastY - modal.startY)) * 0.5;
+      const angleDegrees = this.modalRotationDegrees(modal, numeric);
       const radians = (angleDegrees * Math.PI) / 180;
       const rotationAxis = axisWorld ?? modal.viewAxis;
       let rotated: Quaternion;
@@ -8369,10 +8391,7 @@ export class EditorRuntime {
         value = localDelta.length();
       }
     } else if (modal.kind === 'rotate') {
-      const angleDegrees =
-        numeric !== null
-          ? numeric
-          : (modal.lastX - modal.startX - (modal.lastY - modal.startY)) * 0.5;
+      const angleDegrees = this.modalRotationDegrees(modal, numeric);
       const radians = (angleDegrees * Math.PI) / 180;
       if (axisVector && modal.orientation === 'local') {
         const rotation = new Quaternion().setFromAxisAngle(axisVector, radians);
