@@ -23,7 +23,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     summary:
       'Model is the direct-edit workspace. Selection, transforms, one-shot topology tools, modifiers, and shape keys all act on the active editable mesh.',
     image: '/documentation/model.png',
-    alt: 'Model workspace with the front-facing gorilla, grid ground, Scene outliner, and vertex selection handles.',
+    alt: 'Model workspace with a textured sample model, grid ground, Scene outliner, and vertex selection handles.',
     sections: [
       {
         heading: 'Selection',
@@ -52,14 +52,14 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Gorilla example',
+        heading: 'Illustration',
         paragraphs: [
-          'The gorilla is one mesh with per-corner UVs. Select it in Scene, switch to Face mode, and select the shoulder panels to try Extrude or Inset. The ground is a separate grid primitive, so it can be transformed without changing the gorilla.'
+          'The screenshots use a textured character on a separate grid plane. Select the character in Scene, switch to Face mode, and select a surface panel to try Extrude or Inset. The ground remains a separate object, so transforming it does not change the character.'
         ]
       }
     ],
     example:
-      'The example scene keeps the gorilla and ground as separate scene objects. The ground is selected and transformed independently of the character.'
+      'The screenshots use a sample character and ground as separate scene objects. The scene is illustrative; it is not installed with the application.'
   },
   {
     id: 'uv',
@@ -68,7 +68,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     summary:
       'UV holds per-corner texture coordinates. The UV pane edits the same object selection shown in the 3D viewport, so chart work stays linked to the mesh.',
     image: '/documentation/uv.png',
-    alt: 'UV workspace with the gorilla texture atlas, UV charts, and the 3D viewport.',
+    alt: 'UV workspace with a sample texture atlas, UV charts, and the 3D viewport.',
     sections: [
       {
         heading: 'Seams and charts',
@@ -97,14 +97,14 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Gorilla example',
+        heading: 'Illustration',
         paragraphs: [
-          'The gorilla atlas already has separate charts for the head, limbs, and torso. Open UV, select a chart in Island mode, and move it with G. The texture stays attached to each chart, so the gorilla surface updates while you edit.'
+          'The sample atlas has separate charts for the head, limbs, and torso. Open UV, select a chart in Island mode, and move it with G. The texture stays attached to each chart, so the model surface updates while you edit.'
         ]
       }
     ],
     example:
-      'The supplied gorilla texture is a 512 × 512 atlas. Its charts appear directly in the UV pane and use the same texture assigned to the mesh.'
+      'The screenshots use a 512 × 512 sample atlas. Its charts appear directly in the UV pane and use the same texture assigned to the mesh.'
   },
   {
     id: 'paint',
@@ -113,7 +113,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     summary:
       'Paint edits the active texture layer. The texture pane shows the atlas, while the 3D viewport can project brush strokes onto the selected surface.',
     image: '/documentation/paint.png',
-    alt: 'Paint workspace showing the gorilla atlas, Paint toolbar, and Brush inspector.',
+    alt: 'Paint workspace showing a sample atlas, Paint toolbar, and Brush inspector.',
     sections: [
       {
         heading: 'Assets and layers',
@@ -141,14 +141,14 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Gorilla example',
+        heading: 'Illustration',
         paragraphs: [
-          'Select the gorilla’s atlas in Texture, add a raster layer, and paint a mark on the face chart. Switch to the 3D viewport and paint on the face to place the same change through the mesh UVs. Use undo to revert the complete stroke.'
+          'Select the sample atlas in Texture, add a raster layer, and paint a mark on the face chart. Switch to the 3D viewport and paint on the face to place the same change through the mesh UVs. Use undo to revert the complete stroke.'
         ]
       }
     ],
     example:
-      'The gorilla texture is a shared asset in the example scene. Paint edits its layer stack rather than changing the mesh materials.'
+      'The sample atlas is a shared asset in the screenshots. Paint edits its layer stack rather than changing the mesh materials.'
   },
   {
     id: 'light',
@@ -157,7 +157,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     summary:
       'Light owns the document light rig. Directional and point lights drive the Lit viewport and the direct-light texture bake.',
     image: '/documentation/light.png',
-    alt: 'Light workspace with the sun marker, ground shadow, and Lighting inspector.',
+    alt: 'Light workspace with sun and fill markers, a ground shadow, and the Lighting inspector.',
     sections: [
       {
         heading: 'Lights and markers',
@@ -185,14 +185,14 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Gorilla example',
+        heading: 'Illustration',
         paragraphs: [
-          'The example scene keeps one sun above and to the side of the gorilla. The ground receives the character shadow. Drag the sun arrow tip across the model to see the shadow direction change before baking.'
+          'The sample scene uses a sun and a fill light. The ground receives the character shadow. Drag the sun arrow tip across the model to see the shadow direction change before baking.'
         ]
       }
     ],
     example:
-      'The sun is a directional light. Its marker shows the anchor; the arrow points along the light direction toward the scene.'
+      'The sample scene uses a sun and a fill light. The screenshots are illustrative; the scene is not installed with the application.'
   },
   {
     id: 'animate',
@@ -201,7 +201,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     summary:
       'Animate adds transform tracks and shape-weight tracks to the document. A key stores a value at a whole frame; playback evaluates the tracks without changing the rest transforms.',
     image: '/documentation/animate.png',
-    alt: 'Animate workspace with the gorilla, shape-key track, timeline, and Animation inspector.',
+    alt: 'Animate workspace with a sample model, shape-key track, timeline, and Animation inspector.',
     sections: [
       {
         heading: 'Tracks and keys',
@@ -230,9 +230,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Gorilla example',
+        heading: 'Illustration',
         paragraphs: [
-          'The example scene adds an empty shape key to the gorilla so its weight row is visible. Key a transform at frame 0, move to frame 24, change the object transform, and key it again. Scrub between the two frames to inspect the interpolation.'
+          'The screenshots add an empty shape key to the sample model so its weight row is visible. Key a transform at frame 0, move to frame 24, change the object transform, and key it again. Scrub between the two frames to inspect the interpolation.'
         ]
       }
     ],
@@ -246,7 +246,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     summary:
       'Render composes a clean image through a saved scene camera. The viewport is a free camera-editing view; the camera and output settings define the capture.',
     image: '/documentation/render.png',
-    alt: 'Render workspace with the gorilla framed by the camera and Camera and Render inspector sections.',
+    alt: 'Render workspace with a sample model framed by the camera and Camera and Render inspector sections.',
     sections: [
       {
         heading: 'Cameras and view',
@@ -275,9 +275,9 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ]
       },
       {
-        heading: 'Gorilla example',
+        heading: 'Illustration',
         paragraphs: [
-          'The example camera frames the gorilla and its ground. Start in free editing to place the marker, use Through to check the composition, then choose Preview to inspect the framed result before writing a PNG.'
+          'The sample camera frames the character and its ground. Start in free editing to place the marker, use Through to check the composition, then choose Preview to inspect the framed result before writing a PNG.'
         ]
       }
     ],

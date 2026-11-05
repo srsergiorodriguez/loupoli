@@ -71,7 +71,7 @@
       <div class="page-grid">
         <figure>
           <img src={active.image} alt={active.alt} />
-          <figcaption>{active.label} workspace with the gorilla example scene.</figcaption>
+          <figcaption>{active.label} workspace. Screenshots use an illustrative sample scene.</figcaption>
         </figure>
 
         <article class="guide">
