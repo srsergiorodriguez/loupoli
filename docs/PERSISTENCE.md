@@ -1,12 +1,16 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 4 persistence plus Phase 5A lighting. Autosave, `.lpoly` v4, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, ambient settings, and render cameras round-trip. The manifest may contain up to 32 cameras; older files without cameras receive a default camera. v4 stores the texture asset library and lighting metadata. v3 files remain readable; legacy v1/v2 compatibility is deferred. Minimal shape keys, visibility/order metadata, and shape-weight animation tracks round-trip as binary payload. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
+**Status:** Phase 4 persistence plus Phase 5A lighting. New projects use the `.lpoli` extension; existing `.lpoly` files remain readable and migrate to `.lpoli` on the next save. The binary magic and internal format identifier remain `lpoly` for compatibility. Autosave, `.lpoli` v4, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, ambient settings, and render cameras round-trip. The manifest may contain up to 32 cameras; older files without cameras receive a default camera. v4 stores the texture asset library and lighting metadata. v3 files remain readable; legacy v1/v2 compatibility is deferred. Minimal shape keys, visibility/order metadata, and shape-weight animation tracks round-trip as binary payload. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 **Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
+
+## Extension compatibility
+
+New projects are saved as `.lpoli`. The original `.lpoly` extension remains accepted by both the native and browser open flows, so existing files continue to work. Opening a legacy file and saving it writes `.lpoli`; the file contents and format version are unchanged. The binary magic and manifest format identifier remain `lpoly` because they are part of the persisted container, not the filename.
 
 `loupoli` must survive an aggressive WKWebView process kill. Persistence is split into two independent layers:
 
 1. **Autosave cache** — IndexedDB recovery data written as a checkpoint plus localized command deltas.
-2. **`.lpoly` project file** — the authoritative, portable user artifact saved through a native dialog or browser download.
+2. **`.lpoli` project file** — the authoritative, portable user artifact saved through a native dialog or browser download.
 
 Autosave is never presented as a manual save, and a manual save is never implied by autosave.
 
@@ -14,7 +18,7 @@ Autosave is never presented as a manual save, and a manual save is never implied
 
 1. [Durability model](#1-durability-model)
 2. [Autosave engine](#2-autosave-engine)
-3. [`.lpoly` project format v4](#3-lpoly-project-format-v4)
+3. [`.lpoli` project format v4](#3-lpoly-project-format-v4)
 4. [Tauri / Rust filesystem boundary](#4-tauri-rust-filesystem-boundary)
 5. [iOS lifecycle and memory](#5-ios-lifecycle-and-memory)
 6. [Testing](#6-testing)
@@ -26,7 +30,7 @@ Autosave is never presented as a manual save, and a manual save is never implied
 |---|---|---|---|---|
 | Autosave checkpoint | IndexedDB | Session baseline; refreshed on compaction | Scene needed to reconstruct the current document | Best effort; OS may evict |
 | Autosave deltas | IndexedDB | Every 30 s while dirty, plus visibility/pagehide | Localized transitions since checkpoint | Best effort; at most ~30 s lost on crash |
-| Manual `.lpoly` | User-chosen path | User/Cmd+S | Complete Phase 2 project | Durable, user-owned |
+| Manual `.lpoli` | User-chosen path | User/Cmd+S | Complete Phase 2 project | Durable, user-owned |
 | In-memory history | Bounded RAM | Immediate | Recent edits | Not durable |
 
 UI states are distinct: `Unsaved`, `Saving…`, `Autosaved`, `Recovery available`, `Recovered`, `Autosave error`. The top bar labels recovered work until a manual save or explicit discard.
@@ -80,7 +84,7 @@ Texture edits and paint/bake strokes are not represented as autosave pixel delta
 |---|---|
 | Autosave delta count before checkpoint | 512 |
 | Autosave delta bytes before checkpoint | 4 MB |
-| `.lpoly` file size | 128 MB |
+| `.lpoli` file size | 128 MB |
 | Scene nodes per project | 1,024 |
 | Vertices per mesh | 1,000,000 |
 | Half-edges per mesh | 4,000,000 |
@@ -99,7 +103,7 @@ Record key: **`current`**
 ```ts
 {
   version: 1,
-  checkpoint: Uint8Array,      // complete .lpoly v4 bytes (texture asset and bake PNG chunks included)
+  checkpoint: Uint8Array,      // complete .lpoli v4 bytes (texture asset and bake PNG chunks included)
   settings: ProjectSettings,   // shading + PS1 flags
   deltas: JournalPatch[],      // transitions since checkpoint
   updatedAt: number
@@ -113,7 +117,7 @@ Only one recovery lineage is current in Phase 2. There is no per-project ID or s
 1. Runtime initialization reads the one autosave record.
 2. If present, it sets `recoveryAvailable` and does not start a new autosave or overwrite the record.
 3. The recovery banner offers **Recover** or **Discard**.
-4. **Recover** decodes the `.lpoly` v4 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
+4. **Recover** decodes the `.lpoli` v4 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
 5. **Discard** deletes the record and starts a new baseline from the current scene.
 6. Save/Open are disabled until recovery is resolved.
 7. Any decode/replay error is reported; the invalid record is not partly applied.
@@ -128,11 +132,11 @@ This is explicit recovery, never a silent replacement of the user's current scen
 
 ---
 
-## 3. `.lpoly` project format v4
+## 3. `.lpoli` project format v4
 
 Implementation: `src/lib/project/lpoly.ts`. Rust validates the envelope and checksum but never parses document semantics.
 
-`.lpoly` is a single-file, little-endian binary container around a UTF-8 JSON manifest and aligned typed-array payload columns.
+`.lpoli` is a single-file, little-endian binary container around a UTF-8 JSON manifest and aligned typed-array payload columns.
 
 ### 3.1 File header
 
@@ -274,7 +278,7 @@ For each node, in order:
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, simple material palettes, shape-key payloads, lights, ambient settings, render cameras, and animation are part of `.lpoly` v4 and the v4 autosave checkpoint.
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, simple material palettes, shape-key payloads, lights, ambient settings, render cameras, and animation are part of `.lpoli` v4 and the v4 autosave checkpoint.
 
 Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip.
 
@@ -298,7 +302,7 @@ v3 and v4 are accepted during development. Unknown/newer container versions are 
 
 ### 3.6 Save protocol
 
-1. TypeScript encodes and validates the current scene, texture assets, node bindings, lights, and ambient settings into a v4 `.lpoly` byte array.
+1. TypeScript encodes and validates the current scene, texture assets, node bindings, lights, and ambient settings into a v4 `.lpoli` byte array.
 2. Tauri save dialog chooses a path; browser mode triggers a download.
 3. For Tauri, Rust re-checks size, magic, header lengths, and CRC.
 4. Rust writes a same-directory temporary file with `create_new`, `write_all`, and `sync_all`.
@@ -331,15 +335,15 @@ write_project_file(path, Vec<u8>) -> ()
 - Capability permission: `dialog:default`.
 - Paths originate from native dialogs, never remote content.
 - Maximum read/write size: 128 MB.
-- `.lpoly` extension is enforced by the dialog filter and suggested name; arbitrary chosen paths still receive byte validation.
+- `.lpoli` extension is enforced by the dialog filter and suggested name; arbitrary chosen paths still receive byte validation.
 - Rust does not parse document semantics; TypeScript owns schema/topology.
 - Temp filename includes `.filename.tmp-<pid>-<timestamp>` in the same directory.
 - A failed save removes the temp file and leaves the destination in place.
 
 ### 4.2 Browser fallback
 
-- Save: `Blob` + object URL + temporary download link named `<project>.lpoly`.
-- Open: hidden file input accepting `.lpoly`; `cancel` and a window-focus fallback handle cancellation.
+- Save: `Blob` + object URL + temporary download link named `<project>.lpoli`.
+- Open: hidden file input accepting `.lpoli`; `cancel` and a window-focus fallback handle cancellation.
 - The platform adapter dynamically imports Tauri plugins only when `__TAURI_INTERNALS__` exists, so browser mode has no native dependency at runtime.
 
 ---
@@ -362,19 +366,19 @@ The iOS project is still uninitialized. WKWebView background suspension, native 
 
 Implemented automated coverage:
 
-- `.lpoly` round-trips a scene containing QuadSphere, Cylinder (n-gon caps), and Grid (open boundary loops), including seam flags, materials, transforms, IDs, and byte-for-byte re-encoding.
+- `.lpoli` round-trips a scene containing QuadSphere, Cylinder (n-gon caps), and Grid (open boundary loops), including seam flags, materials, transforms, IDs, and byte-for-byte re-encoding.
 - Corrupt checksum and foreign magic are rejected.
 - Empty scenes round-trip.
 - Node snapshots preserve mesh columns and boundary counts.
 - Journal patches replay a checkpoint into the current document (primitive addition, vertex move, deletion).
-- A 100-edit history session restores the exact initial `.lpoly` bytes and stays within the history budget.
+- A 100-edit history session restores the exact initial `.lpoli` bytes and stays within the history budget.
 - Rust tests cover envelope/CRC validation, atomic write/read, and missing-directory rejection.
 
 Manual/browser verification:
 
 - Autosave flush and reload shows the explicit recovery banner.
 - Recover restores a moved vertex and structural node additions.
-- Browser save produces a readable `.lpoly`; browser open restores the saved scene via a file input.
+- Browser save produces a readable `.lpoli`; browser open restores the saved scene via a file input.
 - No app console warnings/errors during the flows.
 
 Still required before production: iOS native dialog/file tests, quota-eviction behavior, large-project profiling, and camera/project-name persistence.

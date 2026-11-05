@@ -18,7 +18,7 @@
 ## 1. Ground truth already in place
 
 - The DCEL stores per-corner UVs (`heUv`) and 8-bit edge flags.
-- `.lpoly` v1 already serializes `heUv` and `edgeFlags`; seam bits round-trip.
+- `.lpoli` v1 already serializes `heUv` and `edgeFlags`; seam bits round-trip.
 - Seam bit `0` (`EDGE_SEAM`) is owned by seam authoring. Other bits stay reserved.
 - Seam toggles are local `SetEdgeSeamsCommand` operations with per-edge autosave patches.
 - The viewport renders marked seams as an amber overlay independently of the shading mode, including on modifier-evaluated copies via provenance.
@@ -69,7 +69,7 @@
 ### Slice 1 — Seam authoring foundation (implemented)
 
 - `EDGE_SEAM` flag API, seam overlay, Inspector toggle, command, journal patches, tests.
-- Seam bits already round-trip through `.lpoly`.
+- Seam bits already round-trip through `.lpoli`.
 
 ### Slice 2 — UV viewport and UV transforms (implemented)
 
@@ -97,7 +97,7 @@
 - Normal/Multiply/Screen blend modes. **Implemented and persisted in v2.**
 - Color fills and active-layer selection. **Implemented, including raster layers.**
 - Composite cache: recompute only when a layer or composite changes; one GPU texture. **Implemented. Layer canvases are OffscreenCanvas; the composite is a single HTML canvas wrapped in one CanvasTexture.**
-- `.lpoly` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration. **Implemented for manual save/open; v1 decode retained.**
+- `.lpoli` format v2 with binary PNG chunks, per-layer metadata, CRC, size/limit validation, and v1 migration. **Implemented for manual save/open; v1 decode retained.**
 - Autosave texture journal separate from geometry, with explicit byte quotas and checkpoint compaction. **Implemented as a fresh v4 checkpoint when texture pixels change; dedicated texture-only pixel deltas are a documented performance deferral.**
 - Dispose layers, composites, textures, and OffscreenCanvas contexts on close/recovery. **Dispose path exists; project load resets the session stack.**
 
@@ -113,7 +113,7 @@
 
 ## 4. Format and autosave implications
 
-`.lpoly` v1 is frozen. Phase 4 introduces v2 rather than silently changing v1 chunk meanings. v1 files remain readable; manual save writes v2 with texture chunks.
+`.lpoli` v1 is frozen. Phase 4 introduces v2 rather than silently changing v1 chunk meanings. v1 files remain readable; manual save writes v2 with texture chunks.
 
 Planned v2 additions:
 

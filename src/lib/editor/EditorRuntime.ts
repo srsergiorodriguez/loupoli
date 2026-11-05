@@ -196,6 +196,7 @@ import {
 import {
   openModelFile,
   openProjectFile,
+  PROJECT_EXTENSION,
   saveBinaryFile,
   saveFrameSequence,
   saveProjectFile
@@ -6672,7 +6673,7 @@ export class EditorRuntime {
       const checkpoint = await this.makeCheckpoint();
       const saved = await saveProjectFile(
         checkpoint.bytes,
-        `${this.projectName}.lpoly`
+        `${this.projectName}.${PROJECT_EXTENSION}`
       );
       if (saved) {
         this.recovered = false;
@@ -6680,7 +6681,7 @@ export class EditorRuntime {
         await this.autosave.clear();
         const checkpoint = await this.makeCheckpoint();
         await this.autosave.start(checkpoint.bytes, checkpoint.settings);
-        this.notify('success', 'Project saved', `${this.projectName}.lpoly`);
+        this.notify('success', 'Project saved', `${this.projectName}.${PROJECT_EXTENSION}`);
       }
     } catch (error) {
       const message = this.errorMessage(error);
@@ -6716,7 +6717,7 @@ export class EditorRuntime {
         return;
       }
       const decoded = decodeLpoly(file.bytes);
-      const name = file.name.replace(/\.lpoly$/i, '') || 'Untitled';
+      const name = file.name.replace(/\.(lpoli|lpoly)$/i, '') || 'Untitled';
       this.applyLoadedDocument(decoded, name);
       await this.applyProjectTextures(decoded);
       this.recovered = false;

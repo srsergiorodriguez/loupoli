@@ -10,7 +10,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 4. [UI map](./UI_MAP.md) — shell regions, subregions, and ownership.
 5. [Design system](./DESIGN_SYSTEM.md) — visual language, tokens, component inventory, visual QA.
 6. [Architecture](./ARCHITECTURE.md) — runtime boundaries, DCEL, rendering, input, and platform.
-7. [Persistence](./PERSISTENCE.md) — autosave journal and the `.lpoly` format.
+7. [Persistence](./PERSISTENCE.md) — autosave journal and the `.lpoli` format.
 8. [Phase 4 texturing](./PHASE4_TEXTURING.md) — texture/UV implementation slices and gates.
 9. [Phase 4 exit audit](./PHASE4_AUDIT.md) — gate-by-gate result and deferrals.
 10. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
@@ -30,7 +30,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [UI map](./UI_MAP.md) | Shell regions, subregions, Inspector section sets, active-editor rules | Interaction behavior |
 | [Design system](./DESIGN_SYSTEM.md) | Tokens, typography, surfaces, layout, component shapes, visual QA | A second copy of UI behavior rules |
 | [Architecture](./ARCHITECTURE.md) | Code boundaries, DCEL, commands, rendering, picking, platform | Product scope or visual styling |
-| [Persistence](./PERSISTENCE.md) | Autosave, journal patches, `.lpoly` format, filesystem boundary | UI behavior |
+| [Persistence](./PERSISTENCE.md) | Autosave, journal patches, `.lpoli` format, filesystem boundary | UI behavior |
 | [Phase 4 texturing](./PHASE4_TEXTURING.md) | Texture/UV slices, data rules, format implications, memory/verification gates | General UI or document architecture |
 | [Phase 4 exit audit](./PHASE4_AUDIT.md) | Gate results, evidence, and accepted deferrals | New feature design |
 | [Phase 5A lighting](./PHASE5_LIGHTING.md) | Light model, Light workspace, direct-light bake, and v4 lighting metadata | Shadows/AO or shape-key design |

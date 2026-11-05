@@ -122,7 +122,7 @@ Shadows are visibility tests against all visible scene meshes, including the act
 
 ## 5. Persistence
 
-`.lpoly` v4 adds:
+`.lpoli` v4 adds:
 
 ```json
 {

@@ -47,7 +47,7 @@ This document fixes the boundaries between Svelte, the editor model, the half-ed
                │ persistence bytes              │ WebGL2
 ┌──────────────▼────────────────┐  ┌────────────▼──────────────┐
 │ Storage                       │  │ GPU + input surfaces      │
-│ IndexedDB journal, .lpoly     │  │ WebGL canvas, CSS/SVG HUD │
+│ IndexedDB journal, .lpoli     │  │ WebGL canvas, CSS/SVG HUD │
 └──────────────┬────────────────┘  └───────────────────────────┘
                │
 ┌──────────────▼────────────────┐
@@ -74,7 +74,7 @@ The editor layer owns decisions. The document layer is plain data plus determini
 | Multi-node viewport | `src/lib/render/ViewportRenderer.ts`, `MeshNodeView.ts` |
 | Picking and overlays | `MeshNodeView` vertex/edge/face paths |
 | Autosave journal | `src/lib/project/AutosaveService.ts`, `journal.ts` |
-| `.lpoly` codec | `src/lib/project/lpoly.ts` |
+| `.lpoli` codec | `src/lib/project/lpoly.ts` |
 | Browser/native files | `src/lib/platform/projectFiles.ts`, `src-tauri/src/lib.rs` |
 | Reactive projection | `src/lib/editor/EditorRuntime.ts`, `EditorSession.svelte.ts` |
 
@@ -783,7 +783,7 @@ WKWebView can be killed without a graceful JS unload. The app must assume it can
 2. **Bound every cache.** History bytes, modifier meshes, picker projections, texture composites, and autosave pending deltas all have limits.
 3. **Dispose explicitly.** Every `RenderMesh`, generated material, texture, and geometry has an owner and a `dispose()` path. Teardown is verified by `renderer.info`.
 4. **Autosave early.** Every 30 seconds after a dirty command; additionally on `visibilitychange`/`pagehide` where the browser grants time. Recovery never assumes the process survived.
-5. **Avoid base64 in memory.** Use Blobs or byte chunks for texture persistence; binary PNG chunks are the approved `.lpoly` representation. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md) for the texturing plan and [PERSISTENCE.md](./PERSISTENCE.md).
+5. **Avoid base64 in memory.** Use Blobs or byte chunks for texture persistence; binary PNG chunks are the approved `.lpoli` representation. See [PHASE4_TEXTURING.md](./PHASE4_TEXTURING.md) for the texturing plan and [PERSISTENCE.md](./PERSISTENCE.md).
 6. **Throttle DPR and texture dimensions.** Full Retina at arbitrary canvas size is not an entitlement.
 7. **No perpetual timers.** Autosave interval is one timer; rendering only has rAF while invalidated. Clear both on teardown.
 8. **Recover visibly.** If autosave data exists, present a recovery action; never silently replace newer user work.

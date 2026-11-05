@@ -38,7 +38,7 @@ function makeDocument(): SceneDocument {
   return document;
 }
 
-describe('.lpoly v4', () => {
+describe('.lpoli v4', () => {
   it('round-trips multiple closed and open meshes byte-for-byte', () => {
     const document = makeDocument();
     const bytes = encodeLpoly(document, SETTINGS);

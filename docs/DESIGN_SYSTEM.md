@@ -43,7 +43,7 @@ What that means in practice:
 - **Wordmark:** lowercase, tight tracking, semibold, with a small faceted mark. The mark is a low-poly folded “l” or faceted diamond; final vector asset comes with app icons.
 - **App icon direction:** a single folded lime facet on near-black, no text at small sizes. Verify against the graphite UI and in monochrome contexts.
 - **Voice:** direct, calm, specific. “Autosaved 12:42” / “Save a copy” / “This loop has a non-quad blocker.” No exclamation marks, no playful failure messages, no “Oops.”
-- **Extension:** `.lpoly` in lowercase.
+- **Extension:** `.lpoli` in lowercase.
 
 ---
 
@@ -474,7 +474,7 @@ Implemented component files and local patterns:
 | `Animation` module | 5 | Dedicated Animate workspace | Transform keyframes, timeline, playback, and explicit animation Inspector |
 | `Camera and Render` module | 6 | Dedicated Render workspace | Scene-camera Inspector, free camera-editing view, camera list/name/FOV, camera frustum/arrow and drag handles, View through toggle, sRGB clean output, camera-driven preview, larger upscaled preview portal |
 | `Lighting` module | 5 | Dedicated Light workspace | Ambient + directional/point lights, viewport position/direction markers with arrow-tip aiming, shared outliner/naming/actions, hard/soft shadows in Lit and bake; AO deferred |
-| `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoly` v4 PNG chunks |
+| `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoli` v4 PNG chunks |
 | `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, Paint toggle, brush color/size/opacity controls, and failure banner |
 | `TransformHud` | 2 | G/R/S readout | Bottom-center pill with target, axis, exact value, key hints |
 | `Inspector` | 1–3 | Scene, transform, modifiers, mesh actions | Floating panel; section-head pattern |

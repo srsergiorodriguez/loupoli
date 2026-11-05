@@ -49,17 +49,17 @@ fn open_external_link(app: tauri::AppHandle, url: String) -> Result<(), String> 
     .map_err(|error| error.to_string())
 }
 
-/// Validate the `.lpoly` envelope and checksum without interpreting the document.
+/// Validate the `.lpoli` envelope and checksum without interpreting the document.
 fn validate_project_envelope(bytes: &[u8]) -> Result<(), String> {
   if bytes.len() < PROJECT_HEADER_BYTES {
     return Err("The project file is too short.".into());
   }
   if &bytes[0..8] != PROJECT_MAGIC {
-    return Err("The file is not a loupoli .lpoly project.".into());
+    return Err("The file is not a loupoli .lpoli project.".into());
   }
   let version = u16::from_le_bytes([bytes[8], bytes[9]]);
   if !(1..=4).contains(&version) {
-    return Err(format!("Unsupported .lpoly version {version}."));
+    return Err(format!("Unsupported .lpoli version {version}."));
   }
   let manifest_length = read_u32(bytes, 12) as usize;
   let payload_length = read_u32(bytes, 16) as usize;
@@ -74,16 +74,16 @@ fn validate_project_envelope(bytes: &[u8]) -> Result<(), String> {
     .checked_add(payload_length)
     .ok_or_else(|| "The project header overflows.".to_string())?;
   if expected_length != bytes.len() {
-    return Err("The .lpoly header lengths do not match the file length.".into());
+    return Err("The .lpoli header lengths do not match the file length.".into());
   }
   let expected_crc = read_u32(bytes, 20);
   if crc32(&bytes[PROJECT_HEADER_BYTES..]) != expected_crc {
-    return Err("The .lpoly checksum failed; the file may be corrupted.".into());
+    return Err("The .lpoli checksum failed; the file may be corrupted.".into());
   }
   Ok(())
 }
 
-/// Read a `.lpoly` project as bytes and enforce the same size bound as the UI.
+/// Read a `.lpoli` project as bytes and enforce the same size bound as the UI.
 #[tauri::command]
 fn read_project_file(path: String) -> Result<Vec<u8>, String> {
   let path = PathBuf::from(path);
@@ -253,7 +253,7 @@ mod tests {
       .duration_since(std::time::UNIX_EPOCH)
       .map(|duration| duration.as_nanos())
       .unwrap_or(0);
-    std::env::temp_dir().join(format!("loupoli-{name}-{}-{stamp}.lpoly", std::process::id()))
+    std::env::temp_dir().join(format!("loupoli-{name}-{}-{stamp}.lpoli", std::process::id()))
   }
 
   fn minimal_project() -> Vec<u8> {
@@ -293,7 +293,7 @@ mod tests {
     let path = std::env::temp_dir()
       .join("loupoli-missing-directory")
       .join("nested")
-      .join("project.lpoly");
+      .join("project.lpoli");
     let result = write_project_file(path.to_string_lossy().into_owned(), minimal_project());
     assert!(result.is_err());
   }

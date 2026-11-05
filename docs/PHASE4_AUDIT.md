@@ -21,12 +21,12 @@ These are tracked below. They do not block starting Phase 5A lighting; they do b
 
 | # | Gate | Result | Evidence / residual |
 |---:|---|---|---|
-| 1 | Seam marking changes the visible UV island boundary and is undoable | **Pass** | `SetEdgeSeamsCommand.test.ts`, UV chart tests, `.lpoly` seam round-trip. |
+| 1 | Seam marking changes the visible UV island boundary and is undoable | **Pass** | `SetEdgeSeamsCommand.test.ts`, UV chart tests, `.lpoli` seam round-trip. |
 | 2 | LSCM produces finite, non-overlapping UVs or reports a specific failure | **Pass** | `lscm.test.ts` covers quad, seam-separated cube, pins, and closed-sphere rejection; `uvValidation.test.ts` covers overlap validation. |
 | 3 | Projected paint produces comparable results at multiple camera angles within a defined tolerance | **Partial** | `beginProjectionPaint`, `PaintEngine.beginProjected`, per-face UV sampling, and prior runtime checks are in place. There is no repeatable two-angle tolerance test with a defined threshold. |
 | 4 | Pen pressure/tilt materially change brush output and survive input diagnostics | **Pass** | Tilt shaping is in `paint/brush.ts`; pressure/tilt reach `PaintEngine`; `PointerReading` exposes both and the Status Bar displays them. |
 | 5 | Layer reorder/blend changes do not reallocate WebGL textures when only pixels change | **Pass** | Runtime audit: changing layer opacity kept the same composite texture, asset texture, and lit material instances; `refreshTexture()` only schedules upload. |
-| 6 | Texture-heavy project restores all layer pixels within the iOS memory ceiling | **Partial** | Added an eight-layer `.lpoly` round-trip test; PNG payloads, metadata, alpha mode, and filter restore. Physical memory/lifecycle is not measurable in browser/desktop audit. |
+| 6 | Texture-heavy project restores all layer pixels within the iOS memory ceiling | **Partial** | Added an eight-layer `.lpoli` round-trip test; PNG payloads, metadata, alpha mode, and filter restore. Physical memory/lifecycle is not measurable in browser/desktop audit. |
 | 7 | UV and paint interactions never require a continuous render loop while idle | **Pass** | Runtime audit: render count stayed at `4` across a 3-second idle window and `hasScheduledFrame()` was false. |
 
 ## Additional Phase 4 plan gates
@@ -36,7 +36,7 @@ These are tracked below. They do not block starting Phase 5A lighting; they do b
 | Seams visible, undoable, serialized, autosave-restored | **Pass** | Command/journal tests and v4 seam round-trip. |
 | UV corners transform without a continuous loop | **Pass** | UV transforms use scheduled frames; idle render gate above covers the viewport. |
 | Each test chart unwraps or reports failure | **Pass with residual fixtures** | Cube/quad/pins/closed-chart coverage exists; broader cylinder/grid fixture breadth is still a test-coverage improvement, not a known failure. |
-| UV and unwrap round-trip through `.lpoly` | **Pass** | `ReplaceUvCommand` and lpoly UV columns/tests. |
+| UV and unwrap round-trip through `.lpoli` | **Pass** | `ReplaceUvCommand` and lpoly UV columns/tests. |
 | Layer reorder/blend reuse texture allocation | **Pass** | Runtime texture/material identity check. |
 | Texture-heavy restore within memory budget | **Partial** | Eight-layer format round-trip passes; memory ceiling requires the deferred iPad pass. |
 | Projected strokes hit the intended face | **Pass (single-angle/runtime)** | Surface picking and UV sampling implementation; multi-angle tolerance remains gate 3. |

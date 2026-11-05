@@ -25,7 +25,7 @@ interface CameraSnapshot {
 }
 ```
 
-- Cameras are saved in `.lpoly`.
+- Cameras are saved in `.lpoli`.
 - The Camera Inspector uses the shared outliner list, with editable camera names, position, target, and a field-of-view slider.
 - **Add from view** captures the current navigation camera.
 - Editing the camera does not force the viewport back to the camera view. The Render workspace is a free camera-editing view with orbit, pan, zoom, the orientation gizmo, a camera marker/frustum, a camera list with editable names/FOV, and a larger render preview. **Through** is a toggle: it enters the camera view and hides camera handles; orbiting, panning, or zooming leaves it, shows the handles again, and returns to free editing. **Frame camera** frames the camera for free editing. Drag the camera body to move it, drag the target/arrow handle to re-aim it, or use the compact Camera Inspector action row: **Frame**, **From view**, and **Through/Exit**, with **Delete camera** isolated last/right.

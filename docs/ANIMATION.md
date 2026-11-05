@@ -24,7 +24,7 @@ interface AnimationTrack {
 - The rest transform remains on the scene node/group.
 - Playback applies a temporary **preview pose** through the renderer; it does not mutate or journal the rest transform.
 - Key edits use one undoable `SetAnimationCommand` snapshot.
-- Animation persists in `.lpoly` and participates in autosave recovery.
+- Animation persists in `.lpoli` and participates in autosave recovery.
 
 ## Workspace
 

@@ -41,7 +41,7 @@ These constraints apply to every phase and every pull request:
 
 | Area | Rule |
 |---|---|
-| Brand | Product name, window title, wordmark, and file branding are lowercase `loupoli`; `.lpoly` is the project extension. |
+| Brand | Product name, window title, wordmark, and file branding are lowercase `loupoli`; `.lpoli` is the project extension. |
 | Coordinates | Right-handed, Z-up world. X is right, Y is forward, Z is up. The grid lies on XY (`z = 0`). `THREE.Object3D.DEFAULT_UP` is set to `(0, 0, 1)` before any scene object is created. Three.js helpers with an XZ assumption must not be used unmodified. |
 | Topology | The editable source of truth is a custom half-edge DCEL. `BufferGeometry` is a derived GPU artifact and is never used as document state. |
 | Undo | Every document mutation is a command with `execute()` and `undo()`. Continuous gestures commit once. Scene-wide snapshots are not used for ordinary history. |
@@ -78,7 +78,7 @@ These constraints apply to every phase and every pull request:
                 │ persistence                    │
 ┌───────────────▼────────────────┐   ┌───────────▼───────────────┐
 │ IndexedDB autosave journal     │   │ WebGL2 canvas             │
-│ `.lpoly` encoder               │   │ + SVG/DOM viewport HUD    │
+│ `.lpoli` encoder               │   │ + SVG/DOM viewport HUD    │
 └───────────────┬────────────────┘   └───────────────────────────┘
                 │ bytes
 ┌───────────────▼────────────────┐
@@ -149,7 +149,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 - Vertex/edge/face selection state and viewport overlays. Selection is session state, not undoable scene state.
 - Default first-run scene built from the real primitive path.
 - IndexedDB autosave journal and restore flow. Autosave begins as soon as there is document data.
-- `.lpoly` v1 encode/decode for scene metadata, base mesh, transforms, and selection-independent camera/settings where appropriate.
+- `.lpoli` v1 encode/decode for scene metadata, base mesh, transforms, and selection-independent camera/settings where appropriate.
 - Tauri Rust file I/O commands with atomic writes and native open/save dialogs.
 
 **Acceptance gates**
@@ -158,7 +158,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 2. Randomized topology mutations in tests never leave an invalid mesh after execute/undo/redo.
 3. A 100-edit session remains within the agreed history byte budget and restores to the exact document state.
 4. Picking selects the intended vertex/edge at multiple zoom levels and near-silhouette geometry, consistently within 16 CSS px.
-5. `.lpoly` round-trips a project with quads, n-gons, UVs, seams, and multiple mesh nodes byte-for-byte at the document level.
+5. `.lpoli` round-trips a project with quads, n-gons, UVs, seams, and multiple mesh nodes byte-for-byte at the document level.
 6. A simulated reload with an unsaved edit recovers the edit from IndexedDB and labels it as recovered work.
 7. Pure vertex moves update existing GPU buffers without allocating new geometry or materials.
 8. The first run contains a real editable QuadSphere (or equivalent) with no render-only fallback path.
@@ -214,7 +214,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 | Request | Phase | Integration intent |
 |---|---|---|
-| Create groups of objects | **3A (one level implemented)** | Groups are scene data with average-position pivots, outliner children, numeric/gizmo transforms, ungroup baking, undo, autosave patches, and `.lpoly` serialization. Nested groups and viewport child selection remain. |
+| Create groups of objects | **3A (one level implemented)** | Groups are scene data with average-position pivots, outliner children, numeric/gizmo transforms, ungroup baking, undo, autosave patches, and `.lpoli` serialization. Nested groups and viewport child selection remain. |
 | Transform objects — position, rotate, scale | **3A (implemented)** | Numeric local transforms, object-space Move/Rotate/Scale gizmos, group transforms, undo/persistence, and group gizmos are implemented. |
 | Rotate the world by moving the gizmo | **3A (implemented)** | Dragging the viewport orientation gizmo orbits the view/world around the camera target; axis-click snap and center-frame remain. |
 | Delete sides, vertices, and faces | **3B (implemented)** | Selected faces are removed, or every face incident to selected edges/vertices. The DCEL is rebuilt with boundary loops, UVs/materials retained, and one undoable command. Seam flags are not yet remapped. |
@@ -239,7 +239,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 - Multi-layer texture stack using `OffscreenCanvas` 2D contexts, blend modes, opacity, visibility, rename, reorder, add/delete.
 - A composite cache that uploads a single GPU texture only when a layer or composite changes; complete disposal path.
 - 3D-to-UV projection painting: pen strokes raycast/project onto the mesh, pressure controls brush falloff/size, tilt shapes the stamp; strokes commit as one undoable command.
-- Texture serialization in `.lpoly` and autosave of texture layer changes. Memory budget and layer limits are explicit in the UI.
+- Texture serialization in `.lpoli` and autosave of texture layer changes. Memory budget and layer limits are explicit in the UI.
 
 **Acceptance gates**
 
@@ -269,14 +269,14 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 - Shape keys (morph targets) with add/rename/delete, weight values, and a timeline scrubber. Topology changes that would invalidate keys are blocked with a clear explanation.
 - Animated preview driven by the scrubber rather than a continuous animation loop; playback explicitly opts into a scheduler-driven loop.
 - Import: `.obj` (v/vt/f, quads and n-gons preserved where possible), `.glb` (triangles converted to DCEL), and images as texture layers.
-- Export: `.obj` with quads preserved, `.glb` through Three's exporter (triangulated), and `.lpoly` for native projects.
+- Export: `.obj` with quads preserved, `.glb` through Three's exporter (triangulated), and `.lpoli` for native projects.
 - Drag-and-drop for imports in the Tauri window and browser development mode. Native save/share dialogs for exports; drag-out behavior is explicitly tested and not promised where WKWebView cannot support it.
 - Final save format expansion: shape keys, lights, bake data, material references, and animation metadata.
 
 **Acceptance gates**
 
 1. All importers validate and repair or reject malformed data without crashing the app or corrupting the document.
-2. OBJ quads survive import and round-trip through `.lpoly`; OBJ export reproduces face/edge/vertex counts as expected.
+2. OBJ quads survive import and round-trip through `.lpoli`; OBJ export reproduces face/edge/vertex counts as expected.
 3. GLB import creates valid DCEL topology and preserves UV seams where vertex attributes differ.
 4. Shape key interpolation is deterministic, undoable, and exported as GLTF morph targets.
 5. A baked hard-shadow result survives save/reload and clears on request.
@@ -308,7 +308,7 @@ Autosave and project I/O ship with the data they protect.
 | Phase | Persistence obligation |
 |---|---|
 | 1 | No document data yet; establish platform boundary, error model, and IndexedDB availability checks. |
-| 2 | Autosave journal, recovery UI, `.lpoly` v1, Tauri atomic file commands, geometry round-trip tests. |
+| 2 | Autosave journal, recovery UI, `.lpoli` v1, Tauri atomic file commands, geometry round-trip tests. |
 | 3 | Object/group hierarchy, transforms, joined topology, destructive-edit deltas, and modifier stack in the format; recovery preserves evaluated results. |
 | 4 | PNG texture chunks, per-layer metadata, texture autosave policy, memory quotas. |
 | 5 | Shape keys, lights, bake data, import/export metadata, format v2+ migration. |
@@ -329,7 +329,7 @@ No phase is “done” if it adds document state that cannot be persisted or und
   - Modifier seam welding and winding correction.
   - Screen-space distance math, including extreme zoom and aspect ratios.
   - Axis projection and snapping precision.
-  - `.lpoly` encode/decode, malformed headers, truncated payloads, checksums, version migration.
+  - `.lpoli` encode/decode, malformed headers, truncated payloads, checksums, version migration.
   - Autosave replay, stale checkpoint detection, and journal pruning.
   - LSCM finite values and chart topology.
 - **Renderer instrumentation (dev):**
@@ -337,7 +337,7 @@ No phase is “done” if it adds document state that cannot be persisted or und
   - Buffer reallocations per edit.
   - Active GPU geometries/materials/textures.
   - Steady-state allocation checks around input and render loops.
-- **Golden files:** a small set of `.lpoly` fixtures representing quads, n-gons, seams, modifiers, and textures.
+- **Golden files:** a small set of `.lpoli` fixtures representing quads, n-gons, seams, modifiers, and textures.
 
 ### Manual / device
 
@@ -460,7 +460,7 @@ Approved on 2026-11-01:
 
 1. **Phase 1 implementation slice.** Phase 1 includes the minimal DCEL cube and one vertex-move command so shading, picking, and gesture undo are exercised against real document state. The general topology kernel remains Phase 2.
 2. **Minimum iPadOS.** iPadOS **16.4+**. This is the first Safari version with `OffscreenCanvas`, which Phase 4 depends on. Older iPads are not supported by the texture stack.
-3. **Texture packing in `.lpoly`.** Texture layers use **binary PNG chunks** in the container rather than base64 strings, to avoid the size and peak-memory penalty on iOS. This supersedes the literal base64 example in the addendum.
+3. **Texture packing in `.lpoli`.** Texture layers use **binary PNG chunks** in the container rather than base64 strings, to avoid the size and peak-memory penalty on iOS. This supersedes the literal base64 example in the addendum.
 4. **Bundle identifier.** `com.loupoli.studio`, chosen instead of the initial `com.loupoli.app` after Tauri warned that a `.app` suffix conflicts with the macOS application bundle extension. Signing credentials stay local and out of version control.
 5. **PS1 is opt-in.** Unlit defaults to correct perspective-correct mapping with no vertex snapping. Vertex snapping and PS1 affine UVs are independent toggles in the Inspector and are off on first load.
 6. **Bent quads are render-only bilinear patches.** Non-planar quads keep a single editable DCEL face but use adaptive render tessellation to avoid a triangle-diagonal texture crease. This is a rendering exception to the usual in-place buffer policy and does not change topological counts.

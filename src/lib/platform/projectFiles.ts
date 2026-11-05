@@ -4,17 +4,25 @@ export interface OpenedProjectFile {
   readonly bytes: Uint8Array;
 }
 
+/** Primary extension for new loupoli project files. */
+export const PROJECT_EXTENSION = 'lpoli';
+
+/** Legacy extension accepted for files created before the rename. */
+export const LEGACY_PROJECT_EXTENSION = 'lpoly';
+
 function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
-function safeName(name: string): string {
+/** Normalize a project name to the primary `.lpoli` extension. */
+export function projectFileName(name: string): string {
   const trimmed = name.trim() || 'Untitled';
-  return trimmed.toLowerCase().endsWith('.lpoly') ? trimmed : `${trimmed}.lpoly`;
+  const withoutExtension = trimmed.replace(/\.(lpoli|lpoly)$/i, '');
+  return `${withoutExtension}.${PROJECT_EXTENSION}`;
 }
 
 /**
- * Open a `.lpoly` project through the Tauri dialog or a browser file picker.
+ * Open a `.lpoli` project through the Tauri dialog or a browser file picker.
  * Returns null when the user cancels.
  */
 export async function openProjectFile(): Promise<OpenedProjectFile | null> {
@@ -26,7 +34,12 @@ export async function openProjectFile(): Promise<OpenedProjectFile | null> {
     const path = await open({
       multiple: false,
       directory: false,
-      filters: [{ name: 'loupoli project', extensions: ['lpoly'] }]
+      filters: [
+        {
+          name: 'loupoli project',
+          extensions: [PROJECT_EXTENSION, LEGACY_PROJECT_EXTENSION]
+        }
+      ]
     });
     if (typeof path !== 'string') {
       return null;
@@ -35,14 +48,14 @@ export async function openProjectFile(): Promise<OpenedProjectFile | null> {
     if (!Array.isArray(bytes)) {
       throw new Error('The native reader returned an invalid project payload.');
     }
-    const name = path.split(/[\\/]/).pop() ?? 'Untitled.lpoly';
+    const name = path.split(/[\\/]/).pop() ?? 'Untitled.lpoli';
     return { name, bytes: Uint8Array.from(bytes) };
   }
 
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.lpoly,application/octet-stream';
+    input.accept = '.lpoli,.lpoly,application/octet-stream';
     input.hidden = true;
     document.body.appendChild(input);
 
@@ -306,14 +319,14 @@ export async function saveBinaryFile(
 }
 
 /**
- * Save `.lpoly` bytes through the Tauri save dialog or a browser download.
+ * Save `.lpoli` bytes through the Tauri save dialog or a browser download.
  * Returns false when the user cancels.
  */
 export async function saveProjectFile(
   bytes: Uint8Array,
-  suggestedName = 'Untitled.lpoly'
+  suggestedName = 'Untitled.lpoli'
 ): Promise<boolean> {
-  const name = safeName(suggestedName);
+  const name = projectFileName(suggestedName);
   if (isTauriRuntime()) {
     const [{ save }, { invoke }] = await Promise.all([
       import('@tauri-apps/plugin-dialog'),
@@ -321,7 +334,7 @@ export async function saveProjectFile(
     ]);
     const path = await save({
       defaultPath: name,
-      filters: [{ name: 'loupoli project', extensions: ['lpoly'] }]
+      filters: [{ name: 'loupoli project', extensions: [PROJECT_EXTENSION] }]
     });
     if (!path) {
       return false;

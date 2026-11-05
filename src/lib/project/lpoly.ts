@@ -296,12 +296,12 @@ function validateLightingManifest(
 ): LightingManifest | null {
   if (value === undefined) {
     if (version >= 4) {
-      throw new Error('The .lpoly lighting manifest is missing.');
+      throw new Error('The .lpoli lighting manifest is missing.');
     }
     return null;
   }
   if (typeof value !== 'object' || value === null) {
-    throw new Error('The .lpoly lighting manifest is invalid.');
+    throw new Error('The .lpoli lighting manifest is invalid.');
   }
   const lighting = value as Partial<LightingManifest>;
   if (
@@ -313,13 +313,13 @@ function validateLightingManifest(
     !Array.isArray(lighting.lights) ||
     lighting.lights.length > MAX_LIGHTS
   ) {
-    throw new Error('The .lpoly ambient lighting settings are invalid.');
+    throw new Error('The .lpoli ambient lighting settings are invalid.');
   }
   const ids = new Set<string>();
   const lights: LightSnapshot[] = [];
   for (const raw of lighting.lights) {
     if (typeof raw !== 'object' || raw === null) {
-      throw new Error('The .lpoly contains an invalid light.');
+      throw new Error('The .lpoli contains an invalid light.');
     }
     const light = raw as Partial<LightManifest>;
     if (
@@ -343,7 +343,7 @@ function validateLightingManifest(
           light.shadowSoftness < 0 ||
           light.shadowSoftness > 1))
     ) {
-      throw new Error('The .lpoly contains invalid light metadata.');
+      throw new Error('The .lpoli contains invalid light metadata.');
     }
     const position = validateVec3(light.position, 'light position');
     const direction = validateVec3(light.direction, 'light direction');
@@ -520,7 +520,7 @@ export function restoreNode(snapshot: NodeSnapshot): MeshNode {
 }
 
 /**
- * Encode a scene document into the versioned `.lpoly` binary container.
+ * Encode a scene document into the versioned `.lpoli` binary container.
  *
  * The payload is a deterministic sequence of aligned typed-array columns per
  * node. The manifest carries metadata and counts; the CRC covers everything
@@ -627,13 +627,13 @@ function validateCamerasManifest(value: unknown): CameraSnapshot[] {
     return [];
   }
   if (!Array.isArray(value) || value.length > MAX_CAMERAS) {
-    throw new Error('The .lpoly camera manifest is invalid.');
+    throw new Error('The .lpoli camera manifest is invalid.');
   }
   const ids = new Set<string>();
   const cameras: CameraSnapshot[] = [];
   for (const raw of value) {
     if (typeof raw !== 'object' || raw === null) {
-      throw new Error('The .lpoly contains an invalid camera.');
+      throw new Error('The .lpoli contains an invalid camera.');
     }
     const camera = raw as Partial<CameraSnapshot>;
     if (
@@ -648,7 +648,7 @@ function validateCamerasManifest(value: unknown): CameraSnapshot[] {
       camera.fov < 5 ||
       camera.fov > 160
     ) {
-      throw new Error('The .lpoly contains invalid camera metadata.');
+      throw new Error('The .lpoli contains invalid camera metadata.');
     }
     ids.add(camera.id);
     cameras.push({
@@ -667,7 +667,7 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
     return null;
   }
   if (typeof value !== 'object' || value === null) {
-    throw new Error('The .lpoly animation manifest is invalid.');
+    throw new Error('The .lpoli animation manifest is invalid.');
   }
   const animation = value as Partial<AnimationSnapshot>;
   const fps = typeof animation.fps === 'number' ? animation.fps : NaN;
@@ -686,14 +686,14 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
     !Array.isArray(animation.tracks) ||
     animation.tracks.length > MAX_ANIMATION_TRACKS
   ) {
-    throw new Error('The .lpoly animation settings are invalid.');
+    throw new Error('The .lpoli animation settings are invalid.');
   }
   const trackIds = new Set<string>();
   const targetIds = new Set<string>();
   let keyTotal = 0;
   const tracks = animation.tracks.map((track) => {
     if (typeof track !== 'object' || track === null) {
-      throw new Error('The .lpoly animation contains an invalid track.');
+      throw new Error('The .lpoli animation contains an invalid track.');
     }
     const raw = track as {
       id?: unknown;
@@ -711,14 +711,14 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       (raw.targetKind !== 'node' && raw.targetKind !== 'group') ||
       !Array.isArray(raw.keyframes)
     ) {
-      throw new Error('The .lpoly animation contains invalid track metadata.');
+      throw new Error('The .lpoli animation contains invalid track metadata.');
     }
     trackIds.add(raw.id);
     targetIds.add(raw.targetId);
     const frames = new Set<number>();
     const keyframes = raw.keyframes.map((key) => {
       if (typeof key !== 'object' || key === null) {
-        throw new Error('The .lpoly animation contains an invalid keyframe.');
+        throw new Error('The .lpoli animation contains an invalid keyframe.');
       }
       const item = key as {
         frame?: unknown;
@@ -730,7 +730,7 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
         frames.has(item.frame as number) ||
         (item.interpolation !== 'step' && item.interpolation !== 'linear')
       ) {
-        throw new Error('The .lpoly animation contains invalid keyframes.');
+        throw new Error('The .lpoli animation contains invalid keyframes.');
       }
       frames.add(item.frame as number);
       keyTotal += 1;
@@ -748,18 +748,18 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
     };
   });
   if (keyTotal > MAX_ANIMATION_KEYS) {
-    throw new Error('The .lpoly animation contains too many keyframes.');
+    throw new Error('The .lpoli animation contains too many keyframes.');
   }
   const rawWeightTracks = (animation as Partial<AnimationSnapshot>).weightTracks;
   if (rawWeightTracks !== undefined && !Array.isArray(rawWeightTracks)) {
-    throw new Error('The .lpoly shape-weight animation is invalid.');
+    throw new Error('The .lpoli shape-weight animation is invalid.');
   }
   const weightIds = new Set<string>();
   const weightPairs = new Set<string>();
   const weightTracks: ShapeWeightTrackSnapshot[] = [];
   for (const value of rawWeightTracks ?? []) {
     if (typeof value !== 'object' || value === null) {
-      throw new Error('The .lpoly animation contains an invalid weight track.');
+      throw new Error('The .lpoli animation contains an invalid weight track.');
     }
     const raw = value as {
       id?: unknown;
@@ -778,14 +778,14 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       weightPairs.has(`${raw.targetId}:${raw.shapeKeyId}`) ||
       !Array.isArray(raw.keyframes)
     ) {
-      throw new Error('The .lpoly shape-weight track metadata is invalid.');
+      throw new Error('The .lpoli shape-weight track metadata is invalid.');
     }
     weightIds.add(raw.id);
     weightPairs.add(`${raw.targetId}:${raw.shapeKeyId}`);
     const frames = new Set<number>();
     const keyframes = raw.keyframes.map((key) => {
       if (typeof key !== 'object' || key === null) {
-        throw new Error('The .lpoly shape-weight keyframe is invalid.');
+        throw new Error('The .lpoli shape-weight keyframe is invalid.');
       }
       const item = key as {
         frame?: unknown;
@@ -801,7 +801,7 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
         item.weight > 1 ||
         (item.interpolation !== 'step' && item.interpolation !== 'linear')
       ) {
-        throw new Error('The .lpoly shape-weight keyframes are invalid.');
+        throw new Error('The .lpoli shape-weight keyframes are invalid.');
       }
       frames.add(item.frame as number);
       keyTotal += 1;
@@ -822,7 +822,7 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
     keyTotal > MAX_ANIMATION_KEYS ||
     tracks.length + weightTracks.length > MAX_ANIMATION_TRACKS
   ) {
-    throw new Error('The .lpoly animation exceeds its track or key limit.');
+    throw new Error('The .lpoli animation exceeds its track or key limit.');
   }
   return { fps, startFrame, endFrame, tracks, weightTracks };
 }
@@ -955,7 +955,7 @@ function encodeInternal(
   const payloadStart = align4(HEADER_BYTES + manifestBytes.length);
   const totalLength = payloadStart + payloadLength;
   if (totalLength > MAX_FILE_BYTES) {
-    throw new Error('Project is too large for the current .lpoly limit.');
+    throw new Error('Project is too large for the current .lpoli limit.');
   }
 
   const file = new Uint8Array(totalLength);
@@ -980,7 +980,7 @@ function encodeInternal(
 
 function validateTextureManifest(value: unknown): TextureManifest {
   if (typeof value !== 'object' || value === null) {
-    throw new Error('The .lpoly texture manifest is invalid.');
+    throw new Error('The .lpoli texture manifest is invalid.');
   }
   const texture = value as Partial<TextureManifest>;
   if (
@@ -988,13 +988,13 @@ function validateTextureManifest(value: unknown): TextureManifest {
     texture.assets.length < 1 ||
     texture.assets.length > MAX_TEXTURE_ASSETS
   ) {
-    throw new Error('The .lpoly texture asset count is invalid.');
+    throw new Error('The .lpoli texture asset count is invalid.');
   }
   const assetIds = new Set<string>();
   const layerIds = new Set<string>();
   const assets: TextureAssetManifest[] = texture.assets.map((rawAsset) => {
     if (typeof rawAsset !== 'object' || rawAsset === null) {
-      throw new Error('The .lpoly contains an invalid texture asset.');
+      throw new Error('The .lpoli contains an invalid texture asset.');
     }
     const asset = rawAsset as Partial<TextureAssetManifest>;
     if (
@@ -1015,12 +1015,12 @@ function validateTextureManifest(value: unknown): TextureManifest {
       asset.layers.length < 1 ||
       asset.layers.length > MAX_TEXTURE_LAYERS
     ) {
-      throw new Error('The .lpoly texture asset metadata is invalid.');
+      throw new Error('The .lpoli texture asset metadata is invalid.');
     }
     assetIds.add(asset.id);
     const layers: TextureLayerManifest[] = asset.layers.map((raw) => {
       if (typeof raw !== 'object' || raw === null) {
-        throw new Error('The .lpoly contains an invalid texture layer.');
+        throw new Error('The .lpoli contains an invalid texture layer.');
       }
       const layer = raw as Partial<TextureLayerManifest>;
       if (
@@ -1053,7 +1053,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
         (layer.pngLength as number) < 1 ||
         (layer.pngLength as number) > MAX_TEXTURE_PNG_BYTES
       ) {
-        throw new Error('The .lpoly texture layer metadata is invalid.');
+        throw new Error('The .lpoli texture layer metadata is invalid.');
       }
       layerIds.add(layer.id);
       return {
@@ -1074,7 +1074,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
       (typeof asset.activeId !== 'string' ||
         !layers.some((layer) => layer.id === asset.activeId))
     ) {
-      throw new Error('The .lpoly active texture layer is invalid.');
+      throw new Error('The .lpoli active texture layer is invalid.');
     }
     return {
       id: asset.id,
@@ -1090,17 +1090,17 @@ function validateTextureManifest(value: unknown): TextureManifest {
   return { assets };
 }
 
-/** Decode and fully validate a versioned `.lpoly` container. */
+/** Decode and fully validate a versioned `.lpoli` container. */
 export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   if (bytes.byteLength < HEADER_BYTES) {
-    throw new Error('This file is too short to be a .lpoly project.');
+    throw new Error('This file is too short to be a .lpoli project.');
   }
   if (bytes.byteLength > MAX_FILE_BYTES) {
-    throw new Error('This .lpoly project exceeds the supported size limit.');
+    throw new Error('This .lpoli project exceeds the supported size limit.');
   }
   for (let i = 0; i < MAGIC.length; i += 1) {
     if (bytes[i] !== MAGIC[i]) {
-      throw new Error('This is not a loupoli .lpoly project.');
+      throw new Error('This is not a loupoli .lpoli project.');
     }
   }
 
@@ -1108,7 +1108,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   const version = view.getUint16(8, true);
   if (version < MIN_SUPPORTED_VERSION || version > FORMAT_VERSION) {
     throw new Error(
-      `Unsupported .lpoly version ${version}; expected ${MIN_SUPPORTED_VERSION}–${FORMAT_VERSION}.`
+      `Unsupported .lpoli version ${version}; expected ${MIN_SUPPORTED_VERSION}–${FORMAT_VERSION}.`
     );
   }
   const manifestLength = view.getUint32(12, true);
@@ -1116,10 +1116,10 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   const expectedCrc = view.getUint32(20, true);
   const payloadStart = align4(HEADER_BYTES + manifestLength);
   if (payloadStart + payloadLength !== bytes.byteLength) {
-    throw new Error('The .lpoly file length does not match its header.');
+    throw new Error('The .lpoli file length does not match its header.');
   }
   if (crc32(bytes.subarray(HEADER_BYTES)) !== expectedCrc) {
-    throw new Error('The .lpoly checksum failed; the file may be corrupted.');
+    throw new Error('The .lpoli checksum failed; the file may be corrupted.');
   }
 
   const manifestText = new TextDecoder().decode(
@@ -1129,10 +1129,10 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   try {
     parsed = JSON.parse(manifestText);
   } catch {
-    throw new Error('The .lpoly manifest is not valid JSON.');
+    throw new Error('The .lpoli manifest is not valid JSON.');
   }
   if (typeof parsed !== 'object' || parsed === null) {
-    throw new Error('The .lpoly manifest is invalid.');
+    throw new Error('The .lpoli manifest is invalid.');
   }
   const manifest = parsed as Partial<Manifest>;
   if (
@@ -1146,7 +1146,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     typeof manifest.settings !== 'object' ||
     manifest.settings === null
   ) {
-    throw new Error('The .lpoly manifest has an unsupported structure.');
+    throw new Error('The .lpoli manifest has an unsupported structure.');
   }
   const textureManifest =
     manifest.textures !== undefined
@@ -1161,7 +1161,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     typeof settings.ps1Snap !== 'boolean' ||
     typeof settings.ps1Affine !== 'boolean'
   ) {
-    throw new Error('The .lpoly viewport settings are invalid.');
+    throw new Error('The .lpoli viewport settings are invalid.');
   }
 
   const document = new SceneDocument();
@@ -1172,7 +1172,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
 
   for (const rawGroup of manifest.groups ?? []) {
     if (typeof rawGroup !== 'object' || rawGroup === null) {
-      throw new Error('The .lpoly contains an invalid group.');
+      throw new Error('The .lpoli contains an invalid group.');
     }
     const group = rawGroup as Partial<GroupManifest>;
     if (
@@ -1184,7 +1184,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
       group.name.length > MAX_NAME_LENGTH ||
       typeof group.visible !== 'boolean'
     ) {
-      throw new Error('The .lpoly contains invalid group metadata.');
+      throw new Error('The .lpoli contains invalid group metadata.');
     }
     groupIds.add(group.id);
     const restoredGroup = new SceneGroup(group.name, group.id);
@@ -1195,7 +1195,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
 
   for (const rawNode of manifest.nodes) {
     if (typeof rawNode !== 'object' || rawNode === null) {
-      throw new Error('The .lpoly contains an invalid node.');
+      throw new Error('The .lpoli contains an invalid node.');
     }
     const node = rawNode as Partial<NodeManifest>;
     const counts = validateMeshCounts(node.mesh);
@@ -1241,7 +1241,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
               key.vertexCount !== counts.vertexCount
           )))
     ) {
-      throw new Error('The .lpoly contains invalid node metadata.');
+      throw new Error('The .lpoli contains invalid node metadata.');
     }
     seen.add(node.id);
     const transform = validateTransform(node.transform);
@@ -1254,7 +1254,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
       const Type = column.Type;
       const byteLength = count * Type.BYTES_PER_ELEMENT;
       if (cursor + byteLength > bytes.byteLength) {
-        throw new Error('The .lpoly payload ended inside a mesh column.');
+        throw new Error('The .lpoli payload ended inside a mesh column.');
       }
       const values = new Type(count);
       new Uint8Array(values.buffer).set(
@@ -1282,7 +1282,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
           cursor + byteLength > bytes.byteLength ||
           cursor + byteLength > payloadStart + payloadLength
         ) {
-          throw new Error('The .lpoly payload ended inside shape-key data.');
+          throw new Error('The .lpoli payload ended inside shape-key data.');
         }
         const targetPositions = new Float32Array(key.vertexCount * 3);
         new Uint8Array(targetPositions.buffer).set(
@@ -1351,7 +1351,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
           cursor + layer.pngLength > bytes.byteLength ||
           cursor + layer.pngLength > payloadStart + payloadLength
         ) {
-          throw new Error('The .lpoly payload ended inside a texture PNG chunk.');
+          throw new Error('The .lpoli payload ended inside a texture PNG chunk.');
         }
         layers.push({
           id: layer.id,
@@ -1383,7 +1383,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
 
   const alignedEnd = align4(cursor);
   if (alignedEnd !== bytes.byteLength) {
-    throw new Error('The .lpoly payload has trailing or missing bytes.');
+    throw new Error('The .lpoli payload has trailing or missing bytes.');
   }
 
   return {
