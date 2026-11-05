@@ -29,6 +29,11 @@
 
   let canvas: HTMLCanvasElement;
   let startupError = $state<string | null>(null);
+  const toolRailVisible = $derived(
+    session.snapshot.activeEditor !== 'paint' &&
+      session.snapshot.workspace !== 'light' &&
+      session.snapshot.workspace !== 'render'
+  );
 
   function focusViewport(): void {
     canvas?.focus({ preventScroll: true });
@@ -157,7 +162,11 @@
     </canvas>
 
     {#if !startupError}
-      <div class="viewport-context" aria-live="polite">
+      <div
+        class="viewport-context"
+        class:no-toolrail={!toolRailVisible}
+        aria-live="polite"
+      >
         <span
           class="context-editor"
           class:active={session.snapshot.activeEditor === '3d'}
@@ -190,13 +199,9 @@
 
       <div
         class="selection-mode-wrap"
-        class:no-selection-mode={session.snapshot.activeEditor === 'paint' ||
-          session.snapshot.workspace === 'light' ||
-          session.snapshot.workspace === 'render'}
+        class:no-selection-mode={!toolRailVisible}
       >
-        {#if session.snapshot.activeEditor !== 'paint' &&
-          session.snapshot.workspace !== 'light' &&
-          session.snapshot.workspace !== 'render'}
+        {#if toolRailVisible}
           <SelectionModeControl {session} />
         {/if}
         <ShadingControl {session} />
@@ -303,9 +308,7 @@
 
   <TopBar {session} />
   <ProjectBanner {session} />
-  {#if session.snapshot.activeEditor !== 'paint' &&
-    session.snapshot.workspace !== 'light' &&
-    session.snapshot.workspace !== 'render'}
+  {#if toolRailVisible}
     <ToolRail {session} onFocusViewport={focusViewport} />
   {/if}
   <Inspector {session} />
@@ -331,6 +334,10 @@
     display: flex;
     overflow: hidden;
     background: var(--bg-canvas);
+  }
+
+  .viewport.pane-open {
+    right: calc(var(--safe-right) + var(--space-3));
   }
 
   .surface-paint-cursor {
@@ -409,6 +416,10 @@
     font-size: var(--text-2xs);
     line-height: 1;
     pointer-events: none;
+  }
+
+  .viewport-context.no-toolrail {
+    left: calc(var(--safe-left) + var(--space-3));
   }
 
   .context-editor {

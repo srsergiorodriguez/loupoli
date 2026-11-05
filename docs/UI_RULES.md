@@ -219,6 +219,8 @@ If any answer is missing, do not add the control.
 - Resize math uses the pane boundary, not an unrelated viewport offset.
 - Breakpoints are shared tokens or a small documented set; do not invent per-component breakpoints.
 - A collapsed sidebar is controlled by the Application Bar toggle only. No duplicate X.
+- The viewport context strip follows Tool Rail visibility: with the rail hidden, it starts at the same left inset as the no-selection control stack.
+- A docked pane keeps its right-edge inset when the desktop Inspector is collapsed; it must not sit against the window edge.
 - The Viewport Stage owns HUD and lasso overlays; HUD anchors to the visible 3D rectangle, not the window.
 - Transparent HUD wrappers are `pointer-events: none`; only visible controls opt back in. No invisible rectangle may block viewport picking.
 - Pane dividers are constrained to the pane frame bounds and must never extend over the Application Bar or Workspace Tabs.
