@@ -161,6 +161,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 - Inputs, selects, action buttons, and outliner rows share `--control-h`: 32 px desktop, 44 px touch.
 - Form rows use a 6 px gap; outliner and track-list rows use 2 px; controls inside one action row use 4 px. Inline field labels share a 96 px column.
 - Inputs and selects must be the same height as adjacent controls; do not put a small input inside a tall row.
+- Paint colors use `PaintColorSwatch` with a body-mounted `PaintColorPicker`. Do not add inline alpha sliders to the Paint toolbar; gradient From/To swatches stay adjacent.
 - Use the shared `SliderField`, `SelectField`, `ColorField`, `InlineNameField`, and `NumberField` shapes.
 
 ### Tooltips

@@ -505,10 +505,12 @@ export class EditorRuntime {
   } | null = null;
   private uvPaintMode = false;
   private uvBrushColor = '#f2ffe0';
+  private uvBrushColorAlpha = 1;
   private uvBrushSize = 36;
   private uvBrushOpacity = 0.9;
   private paintTool: PaintTool = 'brush';
   private paintSecondaryColor = '#1a1a1f';
+  private paintSecondaryColorAlpha = 1;
   private paintHardness = 0.7;
   private paintSmoothing = 0.25;
   private paintNoise = 0;
@@ -774,10 +776,12 @@ export class EditorRuntime {
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvPaintMode: this.uvPaintMode,
       uvBrushColor: this.uvBrushColor,
+  uvBrushColorAlpha: this.uvBrushColorAlpha,
       uvBrushSize: this.uvBrushSize,
       uvBrushOpacity: this.uvBrushOpacity,
       paintTool: this.paintTool,
       paintSecondaryColor: this.paintSecondaryColor,
+  paintSecondaryColorAlpha: this.paintSecondaryColorAlpha,
       paintHardness: this.paintHardness,
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
@@ -2043,6 +2047,11 @@ export class EditorRuntime {
     this.publish();
   }
 
+  setUvBrushColorAlpha(alpha: number): void {
+    this.uvBrushColorAlpha = Math.min(1, Math.max(0, alpha));
+    this.publish();
+  }
+
   setUvBrushSize(size: number): void {
     this.uvBrushSize = Math.min(128, Math.max(2, size));
     this.publish();
@@ -2060,6 +2069,11 @@ export class EditorRuntime {
 
   setPaintSecondaryColor(color: string): void {
     this.paintSecondaryColor = color;
+    this.publish();
+  }
+
+  setPaintSecondaryColorAlpha(alpha: number): void {
+    this.paintSecondaryColorAlpha = Math.min(1, Math.max(0, alpha));
     this.publish();
   }
 
@@ -2443,7 +2457,8 @@ export class EditorRuntime {
       x: number,
       y: number,
       color?: string,
-      pressure = strokePressure
+      pressure = strokePressure,
+      colorAlpha?: number
     ): boolean => {
       const hit = this.renderer.pickSurface(x, y);
       if (!hit || hit.nodeId !== nodeId) {
@@ -2454,7 +2469,8 @@ export class EditorRuntime {
         (1 - hit.uv[1]) * asset.height,
         this.projectionRadius(hit, asset),
         pressure,
-        color
+        color,
+        colorAlpha
       );
       return true;
     };
@@ -2568,7 +2584,13 @@ export class EditorRuntime {
     _engine: PaintEngine,
     _asset: TextureAsset,
     shape: NonNullable<typeof this.projectedShape>,
-    stamp: (x: number, y: number, color?: string, pressure?: number) => boolean
+    stamp: (
+      x: number,
+      y: number,
+      color?: string,
+      pressure?: number,
+      colorAlpha?: number
+    ) => boolean
   ): void {
     const rect = this.renderer.getCanvasRect();
     const step = Math.max(2, this.uvBrushSize * 0.18);
@@ -2587,7 +2609,16 @@ export class EditorRuntime {
           : Math.max(0, Math.min(1, lengthSq === 0
               ? 0
               : ((x - shape.startX) * dx + (y - shape.startY) * dy) / lengthSq));
-        stamp(x, y, this.mixHex(this.uvBrushColor, this.paintSecondaryColor, t));
+        const colorAlpha =
+          this.uvBrushColorAlpha +
+          (this.paintSecondaryColorAlpha - this.uvBrushColorAlpha) * t;
+        stamp(
+          x,
+          y,
+          this.mixHex(this.uvBrushColor, this.paintSecondaryColor, t),
+          undefined,
+          colorAlpha
+        );
       }
     }
   }
@@ -2619,7 +2650,9 @@ export class EditorRuntime {
     return {
       tool: this.paintTool,
       color: this.uvBrushColor,
+      colorAlpha: this.uvBrushColorAlpha,
       secondaryColor: this.paintSecondaryColor,
+      secondaryColorAlpha: this.paintSecondaryColorAlpha,
       radius,
       opacity: this.uvBrushOpacity,
       hardness: this.paintHardness,
@@ -2864,7 +2897,9 @@ export class EditorRuntime {
       filled: this.paintShapeFilled,
       gradient: this.paintGradient,
       color: this.uvBrushColor,
-      secondaryColor: this.paintSecondaryColor
+      colorAlpha: this.uvBrushColorAlpha,
+      secondaryColor: this.paintSecondaryColor,
+      secondaryColorAlpha: this.paintSecondaryColorAlpha
     };
   }
 

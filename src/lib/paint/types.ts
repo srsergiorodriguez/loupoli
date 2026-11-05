@@ -15,7 +15,9 @@ export type PaintGradient = 'linear' | 'radial';
 export interface PaintSettings {
   readonly tool: PaintTool;
   readonly color: string;
+  readonly colorAlpha: number;
   readonly secondaryColor: string;
+  readonly secondaryColorAlpha: number;
   readonly radius: number;
   readonly opacity: number;
   readonly hardness: number;

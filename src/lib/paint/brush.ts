@@ -45,8 +45,10 @@ export function drawStamp(
   const jitterX = (random() - 0.5) * radius * noise * 0.7;
   const jitterY = (random() - 0.5) * radius * noise * 0.7;
   const sizeJitter = 1 + (random() - 0.5) * noise * 0.45;
+  const colorAlpha = erase ? 1 : clamp(settings.colorAlpha ?? 1, 0, 1);
   const alpha =
     clamp(settings.opacity, 0, 1) *
+    colorAlpha *
     (0.35 + clamp(pressure, 0, 1) * 0.65) *
     (1 - random() * noise * 0.35);
   const r = Math.max(0.5, radius * pressureScale * sizeJitter);
@@ -161,4 +163,9 @@ function hexRgb(color: string): string {
     parseInt(hex.slice(2, 4), 16),
     parseInt(hex.slice(4, 6), 16)
   ].join(',');
+}
+
+/** Convert a hex color and alpha value into a Canvas/SVG CSS color. */
+export function rgbaColor(color: string, alpha: number): string {
+  return `rgba(${hexRgb(color)},${clamp(alpha, 0, 1)})`;
 }

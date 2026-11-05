@@ -1,5 +1,5 @@
 import type { TextureAsset } from '../texture/TextureAsset';
-import { drawStamp, drawStampLine, strokeRandom } from './brush';
+import { drawStamp, drawStampLine, rgbaColor, strokeRandom } from './brush';
 import type { PaintSample, PaintSettings } from './types';
 
 interface PaintBounds {
@@ -141,7 +141,7 @@ export class PaintEngine {
     this.context.save();
     this.context.globalAlpha = Math.max(
       0,
-      Math.min(1, this.settings.opacity)
+      Math.min(1, this.settings.opacity * this.settings.colorAlpha)
     );
     this.context.fillStyle = this.settings.color;
     this.context.fill(path, 'nonzero');
@@ -162,7 +162,8 @@ export class PaintEngine {
     y: number,
     radius: number,
     pressure: number,
-    color?: string
+    color?: string,
+    colorAlpha?: number
   ): void {
     if (!this.context) {
       return;
@@ -176,7 +177,11 @@ export class PaintEngine {
       y + margin
     );
     const settings = color
-      ? { ...this.settings, color }
+      ? {
+          ...this.settings,
+          color,
+          colorAlpha: colorAlpha ?? this.settings.colorAlpha
+        }
       : this.settings;
     const bounds = drawStamp(
       this.context,
@@ -351,7 +356,7 @@ export class PaintEngine {
     );
     if (this.settings.shapeFilled) {
       context.save();
-      context.globalAlpha = this.settings.opacity;
+      context.globalAlpha = this.settings.opacity * this.settings.colorAlpha;
       context.fillStyle = this.settings.color;
       context.beginPath();
       if (ellipse) {
@@ -448,8 +453,11 @@ export class PaintEngine {
             Math.max(1, Math.hypot(to.x - from.x, to.y - from.y))
           )
         : context.createLinearGradient(from.x, from.y, to.x, to.y);
-    gradient.addColorStop(0, this.settings.color);
-    gradient.addColorStop(1, this.settings.secondaryColor);
+    gradient.addColorStop(0, rgbaColor(this.settings.color, this.settings.colorAlpha));
+    gradient.addColorStop(
+      1,
+      rgbaColor(this.settings.secondaryColor, this.settings.secondaryColorAlpha)
+    );
     context.save();
     context.globalAlpha = this.settings.opacity;
     context.fillStyle = gradient;
@@ -470,7 +478,10 @@ export class PaintEngine {
     const data = image.data;
     const start = (y * width + x) * 4;
     const target = [data[start], data[start + 1], data[start + 2], data[start + 3]];
-    const fill = this.hexColor(this.settings.color, this.settings.opacity);
+    const fill = this.hexColor(
+      this.settings.color,
+      this.settings.opacity * this.settings.colorAlpha
+    );
     if (
       target[0] === fill[0] &&
       target[1] === fill[1] &&

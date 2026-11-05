@@ -125,10 +125,11 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Painting',
         paragraphs: [
-          'Brush, Eraser, Line, Rectangle, Ellipse, Gradient, and Fill operate on the active layer. Size, opacity, hardness, smoothing, noise, and shape fill live in Brush. The paint engine previews each gesture on a scratch layer and commits one undoable pixel patch when the pointer is released.',
+          'Brush, Eraser, Line, Rectangle, Ellipse, Gradient, and Fill operate on the active layer. Size, opacity, hardness, smoothing, noise, and shape fill live in Brush. The toolbar shows the active color, plus From and To side by side for gradients. Clicking a swatch opens an HSV picker with hue, hex, and alpha; alpha multiplies with brush opacity. The paint engine previews each gesture on a scratch layer and commits one undoable pixel patch when the pointer is released.',
           'Paint in the texture pane, or choose Brush or Eraser and paint on the 3D model. Projected strokes use the surface UV coordinates and stop at face boundaries, so paint does not jump between islands. In the texture pane, use the wheel to zoom and drag with the middle or right mouse button to pan. Over the 3D model, middle mouse or Alt orbits and right mouse or Space pans.'
         ],
         controls: [
+          'From / To: gradient endpoint colors and alpha',
           'B / E: brush or eraser in the toolbar',
           'Left drag: paint or select; middle/right drag: pan the texture pane',
           'Wheel: zoom; MMB/Alt: orbit over the 3D model; Space: pan the 3D view',

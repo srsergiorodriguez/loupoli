@@ -51,10 +51,12 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvPinnedCorners: [],
   uvPaintMode: false,
   uvBrushColor: '#f2ffe0',
+  uvBrushColorAlpha: 1,
   uvBrushSize: 36,
   uvBrushOpacity: 0.9,
   paintTool: 'brush',
   paintSecondaryColor: '#1a1a1f',
+  paintSecondaryColorAlpha: 1,
   paintHardness: 0.7,
   paintSmoothing: 0.25,
   paintNoise: 0,
@@ -507,6 +509,10 @@ export class EditorSession {
     this.runtime?.setUvBrushColor(color);
   }
 
+  setUvBrushColorAlpha(alpha: number): void {
+    this.runtime?.setUvBrushColorAlpha(alpha);
+  }
+
   setUvBrushSize(size: number): void {
     this.runtime?.setUvBrushSize(size);
   }
@@ -521,6 +527,10 @@ export class EditorSession {
 
   setPaintSecondaryColor(color: string): void {
     this.runtime?.setPaintSecondaryColor(color);
+  }
+
+  setPaintSecondaryColorAlpha(alpha: number): void {
+    this.runtime?.setPaintSecondaryColorAlpha(alpha);
   }
 
   setPaintHardness(value: number): void {

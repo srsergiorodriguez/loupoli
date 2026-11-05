@@ -151,7 +151,9 @@ export interface ProjectionPreview {
   readonly filled: boolean;
   readonly gradient: 'linear' | 'radial';
   readonly color: string;
+  readonly colorAlpha: number;
   readonly secondaryColor: string;
+  readonly secondaryColorAlpha: number;
 }
 
 /** The complete small UI-facing projection of the plain editor runtime. */
@@ -223,10 +225,12 @@ export interface EditorSnapshot {
   readonly uvPinnedCorners: readonly number[];
   readonly uvPaintMode: boolean;
   readonly uvBrushColor: string;
+  readonly uvBrushColorAlpha: number;
   readonly uvBrushSize: number;
   readonly uvBrushOpacity: number;
   readonly paintTool: PaintTool;
   readonly paintSecondaryColor: string;
+  readonly paintSecondaryColorAlpha: number;
   readonly paintHardness: number;
   readonly paintSmoothing: number;
   readonly paintNoise: number;

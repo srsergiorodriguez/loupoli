@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { EditorSession } from '../../editor/EditorSession.svelte';
+  import { rgbaColor } from '../../paint/brush';
   import type { PaintTool } from '../../paint/types';
   import type { IconName } from '../Icons/types';
   import IconButton from '../Primitives/IconButton.svelte';
   import BrushPreview from './BrushPreview.svelte';
+  import PaintColorSwatch from './PaintColorSwatch.svelte';
   import { commandTooltipFor, type CommandId } from '../../input/commands';
 
   interface Props {
@@ -29,10 +31,22 @@
     { tool: 'fill', icon: 'fill', command: 'paint.fill', key: 'F' }
   ];
 
+  const gradientPreview = $derived(
+    `linear-gradient(to right, ${rgbaColor(
+      session.snapshot.uvBrushColor,
+      session.snapshot.uvBrushColorAlpha
+    )}, ${rgbaColor(
+      session.snapshot.paintSecondaryColor,
+      session.snapshot.paintSecondaryColorAlpha
+    )})`
+  );
+
   const settings = $derived({
     tool: session.snapshot.paintTool,
     color: session.snapshot.uvBrushColor,
+    colorAlpha: session.snapshot.uvBrushColorAlpha,
     secondaryColor: session.snapshot.paintSecondaryColor,
+    secondaryColorAlpha: session.snapshot.paintSecondaryColorAlpha,
     radius: session.snapshot.uvBrushSize / 2,
     opacity: session.snapshot.uvBrushOpacity,
     hardness: session.snapshot.paintHardness,
@@ -59,15 +73,30 @@
     {/each}
   </div>
   <div class="paint-brush-row">
-  <label class="paint-color" title="Brush color">
-    <input
-      type="color"
-      value={session.snapshot.uvBrushColor}
-      aria-label="Brush color"
-      onchange={(event) => session.setUvBrushColor(event.currentTarget.value)}
+  <div class="paint-color-pair">
+    <PaintColorSwatch
+      label={session.snapshot.paintTool === 'gradient' ? 'From' : 'Color'}
+      color={session.snapshot.uvBrushColor}
+      alpha={session.snapshot.uvBrushColorAlpha}
+      onColor={(color) => session.setUvBrushColor(color)}
+      onAlpha={(alpha) => session.setUvBrushColorAlpha(alpha)}
     />
-  </label>
-  <BrushPreview {settings} />
+    {#if session.snapshot.paintTool === 'gradient'}
+      <span class="paint-gradient-preview" aria-hidden="true">
+        <span style:background={gradientPreview}></span>
+      </span>
+      <PaintColorSwatch
+        label="To"
+        color={session.snapshot.paintSecondaryColor}
+        alpha={session.snapshot.paintSecondaryColorAlpha}
+        onColor={(color) => session.setPaintSecondaryColor(color)}
+        onAlpha={(alpha) => session.setPaintSecondaryColorAlpha(alpha)}
+      />
+    {/if}
+  </div>
+  {#if session.snapshot.paintTool !== 'gradient'}
+    <BrushPreview {settings} />
+  {/if}
   <span class="paint-size">{session.snapshot.uvBrushSize} px</span>
   <IconButton
     label="Zoom out"
@@ -118,14 +147,32 @@
     gap: 1px;
   }
 
-  .paint-color input {
-    width: var(--hit-min);
-    height: var(--control-h);
-    padding: 0;
+  .paint-color-pair {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .paint-gradient-preview {
+    position: relative;
+    display: block;
+    width: 42px;
+    height: 18px;
+    overflow: hidden;
     border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background: transparent;
-    cursor: pointer;
+    border-radius: var(--radius-xs);
+    background:
+      linear-gradient(45deg, var(--bg-raised) 25%, transparent 25%) 0 0 / 8px 8px,
+      linear-gradient(-45deg, var(--bg-raised) 25%, transparent 25%) 0 4px / 8px 8px,
+      linear-gradient(45deg, transparent 75%, var(--bg-raised) 75%) 4px -4px / 8px 8px,
+      linear-gradient(-45deg, transparent 75%, var(--bg-raised) 75%) -4px 0 / 8px 8px,
+      var(--bg-input);
+  }
+
+  .paint-gradient-preview > span {
+    position: absolute;
+    inset: 0;
   }
 
   .paint-size {

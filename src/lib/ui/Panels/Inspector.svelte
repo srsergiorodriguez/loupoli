@@ -1529,11 +1529,6 @@
             onChange={(value) => session.setPaintNoise(value)}
           />
           {#if session.snapshot.paintTool === 'gradient'}
-            <ColorField
-              label="To"
-              value={session.snapshot.paintSecondaryColor}
-              onChange={(value) => session.setPaintSecondaryColor(value)}
-            />
             <SelectField
               label="Type"
               value={session.snapshot.paintGradient}
