@@ -44,6 +44,12 @@ export const APP_ABOUT = {
       url: 'https://github.com/tauri-apps/plugins-workspace'
     },
     {
+      name: 'Tauri opener plugin',
+      version: '2.7.2',
+      license: 'MIT OR Apache-2.0',
+      url: 'https://github.com/tauri-apps/plugins-workspace'
+    },
+    {
       name: 'Tauri',
       version: '2.12.5',
       license: 'MIT OR Apache-2.0',

@@ -110,6 +110,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 
 ### Modal dialogs
 
+- External URLs use the shared `ExternalLink` primitive. It opens a browser tab in web builds and delegates to the native URL opener inside Tauri, so links work in both shells.
 - Use `ModalDialog` for focused options and confirmations. It owns the native `<dialog>`, title/kicker, close control, body, footer, backdrop, and Escape handling. Use `size="full"` for reference content such as About and Documentation; it fills the app viewport and keeps the close control in the header.
 - Do not hand-roll a fixed overlay or per-feature dialog header. Feature code supplies body content and an optional action snippet. Help headings and dialog titles use sentence case; preserve acronyms such as UV, OBJ, GLB, and MTL.
 - Modal confirmation actions sit last/right; the close control is icon-only and always labeled.

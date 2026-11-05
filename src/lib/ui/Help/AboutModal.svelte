@@ -1,6 +1,7 @@
 <script lang="ts">
   import BrandMark from '../Brand/BrandMark.svelte';
   import ModalDialog from '../Primitives/ModalDialog.svelte';
+  import ExternalLink from '../Primitives/ExternalLink.svelte';
   import { APP_ABOUT } from '../../help/about';
 
   /** Full-screen application and dependency information. */
@@ -55,8 +56,8 @@
           <p class="license-name">{APP_ABOUT.licenseName}</p>
           <p>Personal, educational, research, and other noncommercial use is permitted. Commercial use and commercial derivatives require a separate written license.</p>
           <p class="license-links">
-            <a href={APP_ABOUT.licenseUrl} target="_blank" rel="noreferrer">License text</a>
-            <a href={APP_ABOUT.commercialUrl} target="_blank" rel="noreferrer">Commercial licensing</a>
+            <ExternalLink href={APP_ABOUT.licenseUrl}>License text</ExternalLink>
+            <ExternalLink href={APP_ABOUT.commercialUrl}>Commercial licensing</ExternalLink>
           </p>
         </article>
         <article class="license-card">
@@ -64,7 +65,7 @@
           <p class="license-name">{APP_ABOUT.sampleLicenseName}</p>
           <p>The sample model and texture used in the documentation screenshots are by {APP_ABOUT.author}. They are not loaded by the application. Credit the author when reusing them.</p>
           <p class="license-links">
-            <a href={APP_ABOUT.sampleLicenseUrl} target="_blank" rel="noreferrer">Creative Commons license</a>
+            <ExternalLink href={APP_ABOUT.sampleLicenseUrl}>Creative Commons license</ExternalLink>
           </p>
         </article>
       </div>
@@ -82,10 +83,10 @@
             <ul>
               {#each group.items as library (library.name)}
                 <li>
-                  <a href={library.url} target="_blank" rel="noreferrer" title={library.url}>
+                  <ExternalLink href={library.url} title={library.url}>
                     <span>{library.name}</span>
                     <span class="license">{library.version} · {library.license}</span>
-                  </a>
+                  </ExternalLink>
                 </li>
               {/each}
             </ul>
@@ -233,13 +234,13 @@
     margin-top: var(--space-2);
   }
 
-  .license-links a {
+  .license-links :global(a) {
     color: var(--accent-primary);
     font-size: var(--text-xs);
     text-decoration: none;
   }
 
-  .license-links a:hover {
+  .license-links :global(a):hover {
     text-decoration: underline;
   }
 
@@ -282,7 +283,7 @@
     border-bottom: var(--hairline) solid var(--border-subtle);
   }
 
-  .library-group a {
+  .library-group :global(a) {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -293,7 +294,7 @@
     text-decoration: none;
   }
 
-  .library-group a:hover {
+  .library-group :global(a):hover {
     color: var(--accent-primary);
   }
 

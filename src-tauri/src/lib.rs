@@ -219,6 +219,7 @@ fn temporary_path(parent: &Path, file_name: &str) -> PathBuf {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_opener::init())
     .invoke_handler(tauri::generate_handler![
       read_project_file,
       read_import_file,
