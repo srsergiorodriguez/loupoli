@@ -1,6 +1,6 @@
 # Render workspace and camera
 
-**Status:** Camera and render foundation implemented. Scene cameras, camera-driven preview, virtual/output resolution, nearest/smooth upscaling, PNG stills, deterministic PNG frame sequences, and WebM/MP4 recording where the WebView supports the codec are implemented.
+**Status:** Camera and render foundation implemented. Scene cameras, camera-driven preview, virtual/output resolution, nearest/smooth upscaling, color-managed PNG stills, deterministic PNG frame sequences, and WebM/MP4 recording where the WebView supports the codec are implemented.
 
 ## Contents
 
@@ -26,20 +26,17 @@ interface CameraSnapshot {
 ```
 
 - Cameras are saved in `.lpoly`.
-- The Camera Inspector lists cameras and exposes name, position, target, and field of view.
+- The Camera Inspector uses the shared outliner list, with editable camera names, position, target, and a field-of-view slider.
 - **Add from view** captures the current navigation camera.
-- The Render workspace can look through the active camera via **View through**, then return to free editing by orbiting. Editing the camera does not force the viewport back to the camera view.
-- The Render workspace is a free camera-editing view with orbit, pan, zoom, the orientation gizmo, and a camera marker/frustum. **View through** is a toggle: it enters the camera view and hides camera handles; orbiting, panning, or zooming leaves it, shows the handles again, and returns to free editing. **Frame camera** frames the camera for free editing. Drag the camera body to move it, drag the target/arrow handle to re-aim it, or use Camera Inspector actions: **Frame camera**, **Set from view**, and **View through**.
+- Editing the camera does not force the viewport back to the camera view. The Render workspace is a free camera-editing view with orbit, pan, zoom, the orientation gizmo, a camera marker/frustum, a camera list with editable names/FOV, and a larger render preview. **View through** is a toggle: it enters the camera view and hides camera handles; orbiting, panning, or zooming leaves it, shows the handles again, and returns to free editing. **Frame camera** frames the camera for free editing. Drag the camera body to move it, drag the target/arrow handle to re-aim it, or use Camera Inspector actions: **Frame camera**, **Set from view**, **View through/Exit view**, and **Delete camera** (last).
 - **Preview** renders the virtual-resolution frame, upscales it to the output size, and shows it in a floating preview portal before export.
 - Camera animation tracks will be added with the animation timeline.
 
 ## 2. Render workspace
 
-`Render` is a dedicated workspace after Light. It removes modeling chrome and the grid, leaving a camera-composition view.
+`Render` is a dedicated workspace after Light. It removes modeling chrome, keeping the grid only as a navigation aid in free camera editing; captures remain clean.
 
-![Render workspace](media/render-workspace.png)
-
-![Camera editing and render preview](media/render-workspace.png)
+![Camera editing and larger render preview](media/render-workspace.png)
 
 ![Upscaled render preview](media/render-preview.png)
 
@@ -54,7 +51,7 @@ The render path is separate from the interactive viewport state:
 
 - Clean scene: no grid, gizmos, selection overlays, handles, or light markers
 - Explicit `PerspectiveCamera` built from the document camera
-- Offscreen WebGL render target
+- Offscreen sRGB WebGL render target with camera/light/object helpers excluded
 - Still render through the active camera
 - The viewport is restored after rendering
 
@@ -86,7 +83,7 @@ The still path:
 5. Encode PNG.
 6. Save through the native dialog or browser download.
 
-Rendered focus shadows are baked by the renderer's current light state; baked lighting remains a static-texture result.
+Rendered focus shadows are baked by the renderer's current light state; baked lighting remains a static-texture result. The offscreen target is sRGB so PNG, sequence, and video colors match the editor preview path.
 
 ## 5. Video and sequences
 
@@ -94,6 +91,7 @@ Rendered focus shadows are baked by the renderer's current light state; baked li
 - **WebM:** uses `MediaRecorder` on a canvas capture and is enabled only when the WebView reports support.
 - **MP4:** also uses `MediaRecorder` when the WebView supports an MP4 codec; otherwise the UI omits it and points to WebM/frames. Native AVFoundation encoding remains the reliable path for iPad production.
 - Video rendering is real-time driven by the animation FPS; it is not a production-grade offline encoder yet.
+- PNG stills, sequences, WebM, and MP4 all use the same color-managed frame canvas.
 - The Frame range is explicit and separate from the animation range.
 
 ## 6. Next

@@ -82,7 +82,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 
 ### Outliner rows
 
-- Use `OutlinerRow` for scene objects, scene groups, and texture layers.
+- Use `OutlinerRow` for scene objects, scene groups, cameras, lights, and texture layers.
 - Drag slot is always left. Visibility is always right.
 - Keep a 2 px inner gutter inside the row border; the drag handle and eye must not sit flush against it.
 - Active row: accent border plus selected background.
@@ -93,7 +93,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 
 ### Naming
 
-- Use `InlineNameField` for every editable name: scene objects, groups, texture assets, and texture layers.
+- Use `InlineNameField` for every editable name: scene objects, groups, cameras, lights, texture assets, and texture layers.
 - Naming lives in the selected-item header, not in a one-off dialog or a differently styled boxed field.
 - Enter commits, Escape restores, blur commits, and the same 64-character bound applies everywhere.
 - Rename commands are undoable and journaled.
@@ -112,11 +112,14 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Texture assets | New, import/duplicate overflow | Assign/Unassign, filter, alpha | Delete texture in overflow |
 | Texture layers | Add layer | selection properties | Delete layer, last/right |
 | Animation | — | track + key in timeline | Delete key in timeline header, last/right |
+| Camera | Add from view above list | selected camera name/position/target/FOV and view actions below list | Delete camera last/right |
+| Render | — | output settings below header; Preview then Render in the final action row | — |
 | Shape keys | Add shape key | selected key: name, weight, Edit target, Capture base; rows support visibility and drag reorder | Delete shape key, last/right |
 
 - Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.
 - Shape-key weight keys are timeline keys; the Shape keys Inspector does not duplicate Key/Unkey. Shape-key rows use the same outliner grouping, visibility, and drag-reorder behavior as scene objects and texture layers.
 - A more-actions (`ThreeDotMenu`) or overflow menu is always the last control in its action row.
+- Camera and Render use `ActionRow` rather than per-section button wrappers; primary/destructive actions sit last and right.
 - Timeline zoom uses minus/Fit/plus in the timeline header. Ruler ticks adapt to the visible range; wheel pans and Ctrl/Cmd+wheel zooms.
 - Labels name the noun: `Delete object`, `Delete layer`, `Delete texture`, `Delete shape key`, `Delete key`, `Delete elements`.
 - Destructive controls are neutral at rest and use `--accent-danger` on hover/focus. Overflow destructive items follow the same neutral/red-hover rule.

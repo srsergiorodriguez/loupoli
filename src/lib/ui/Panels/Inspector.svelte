@@ -92,10 +92,6 @@
     if (videoMimeFor('mp4')) options.push({ value: 'mp4', label: 'MP4 video' });
     return options;
   });
-  const renderKindLabel = $derived(
-    renderKindOptions.find((option) => option.value === session.snapshot.renderKind)?.label ??
-      'Still PNG'
-  );
   const shapeKeys = $derived(session.snapshot.shapeKeys);
   const shapeEditingId = $derived(session.snapshot.shapeEditingId);
   const editingShapeName = $derived(
@@ -847,13 +843,12 @@
       onToggle={(open) => setSection('camera', open)}
     >
       <div class="module-body">
-        <ActionRow align="between">
+        <ActionRow>
           <ActionButton
             label="Add from view"
             icon="plus"
             onActivate={() => session.addCameraFromCurrentView()}
           />
-          <span class="texture-note">{cameras.length} {cameras.length === 1 ? 'camera' : 'cameras'}</span>
         </ActionRow>
         <div class="object-list">
           {#each cameras as camera (camera.id)}
@@ -872,7 +867,7 @@
                 <Icon name="camera" size={14} />
               </span>
               <span class="object-name">{camera.name}</span>
-              <span class="object-kind">fov {camera.fov.toFixed(0)}</span>
+              <span class="object-kind">{camera.fov.toFixed(0)}°</span>
             </OutlinerRow>
           {/each}
         </div>
@@ -922,6 +917,8 @@
               icon="camera"
               onActivate={() => session.setActiveCameraFromView()}
             />
+          </ActionRow>
+          <ActionRow align="between">
             <ActionButton
               label={session.snapshot.renderCameraView ? 'Exit view' : 'View through'}
               icon="eye"
@@ -948,10 +945,6 @@
       onToggle={(open) => setSection('render', open)}
     >
       <div class="module-body">
-        <div class="light-subhead">
-          <span>{renderKindLabel}</span>
-          <span class="texture-note">{session.snapshot.renderKind === 'still' ? 'PNG' : session.snapshot.renderKind.toUpperCase()}</span>
-        </div>
         <SelectField
           label="Output kind"
           value={session.snapshot.renderKind}
@@ -1082,7 +1075,7 @@
         {:else}
           <p class="texture-note">Add a camera from the Camera section before rendering.</p>
         {/if}
-        <div class="texture-action-row">
+        <ActionRow align="end">
           <ActionButton
             label="Preview"
             icon="eye"
@@ -1113,7 +1106,7 @@
               }
             }}
           />
-        </div>
+        </ActionRow>
       </div>
     </InspectorSection>
     {/snippet}

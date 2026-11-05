@@ -3,13 +3,13 @@
 
   interface Props {
     children: Snippet;
-    align?: 'start' | 'between';
+    align?: 'start' | 'between' | 'end';
   }
 
   let { children, align = 'start' }: Props = $props();
 </script>
 
-<div class="action-row" class:between={align === 'between'}>
+<div class="action-row" class:between={align === 'between'} class:end={align === 'end'}>
   {@render children()}
 </div>
 
@@ -23,5 +23,9 @@
 
   .between {
     justify-content: space-between;
+  }
+
+  .end {
+    justify-content: flex-end;
   }
 </style>
