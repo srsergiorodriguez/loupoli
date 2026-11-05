@@ -892,6 +892,10 @@ export class EditorSession {
     this.runtime?.updateShapeKeyFromMesh(id);
   }
 
+  captureShapeKeyFromMesh(id: string): void {
+    this.runtime?.captureShapeKeyFromMesh(id);
+  }
+
   keyActiveTransform(): void {
     this.runtime?.keyActiveTransform();
   }

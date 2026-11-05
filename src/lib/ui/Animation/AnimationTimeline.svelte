@@ -30,7 +30,14 @@
   }
 
   function frameAt(clientX: number, element: HTMLElement): number {
-    const rect = element.getBoundingClientRect();
+    // The tracks container includes the 120 px name gutter. Scrub against the
+    // first lane (or the playhead overlay when there are no tracks) so the
+    // pointer, ruler labels, diamonds, and playhead share one coordinate space.
+    const lane =
+      element.querySelector<HTMLElement>('.track-lane') ??
+      element.querySelector<HTMLElement>('.timeline-lane-overlay') ??
+      element;
+    const rect = lane.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
     return Math.round(start + ratio * span);
   }
@@ -180,9 +187,9 @@
   .animation-timeline {
     position: absolute;
     right: 12px;
-    bottom: 12px;
+    bottom: calc(38px + env(safe-area-inset-bottom));
     left: 12px;
-    z-index: 6;
+    z-index: 30;
     display: flex;
     flex-direction: column;
     min-width: 0;

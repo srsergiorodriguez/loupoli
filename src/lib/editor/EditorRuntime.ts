@@ -104,6 +104,7 @@ import { exportObj, importObjNodes } from '../io/obj';
 import { exportGlb, importGlb } from '../io/gltf';
 import { SetAnimationCommand } from './commands/AnimationCommands';
 import { SetShapeKeysCommand } from './commands/ShapeKeyCommands';
+import { CaptureShapeKeyCommand } from './commands/CaptureShapeKeyCommand';
 import {
   CreateCameraCommand,
   DeleteCameraCommand,
@@ -230,6 +231,23 @@ interface VertexDrag {
   readonly startClientY: number;
   readonly plane: Plane;
   readonly offset: Vector3;
+}
+
+/** Active drag of a camera body in the Render workspace. */
+interface CameraDrag {
+  readonly pointerId: number;
+  readonly camera: SceneCamera;
+  readonly before: import('../scene/SceneCamera').CameraSnapshot;
+  readonly plane: import('three').Plane;
+  readonly offset: Vector3;
+}
+
+/** Active drag of a camera target/arrow handle. */
+interface CameraTargetDrag {
+  readonly pointerId: number;
+  readonly camera: SceneCamera;
+  readonly before: import('../scene/SceneCamera').CameraSnapshot;
+  readonly plane: import('three').Plane;
 }
 
 /** Active drag of a light marker in the Light workspace. */
@@ -506,6 +524,8 @@ export class EditorRuntime {
   private pointer: EditorSnapshot['pointer'] = null;
   private drag: VertexDrag | null = null;
   private lightDrag: LightDrag | null = null;
+  private cameraDrag: CameraDrag | null = null;
+  private cameraTargetDrag: CameraTargetDrag | null = null;
   private lightDirectionDrag: LightDirectionDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
   private selectionGizmoDrag: SelectionGizmoDrag | null = null;
@@ -588,13 +608,13 @@ export class EditorRuntime {
       activateEditor: (editor) => this.setActiveEditor(editor),
       isUvActive: () => this.activeEditor !== '3d',
       orbit: (dx, dy) => {
-        if (this.workspace !== 'render') this.renderer.orbit(dx, dy);
+        this.renderer.orbit(dx, dy);
       },
       pan: (dx, dy) => {
-        if (this.workspace !== 'render') this.renderer.pan(dx, dy);
+        this.renderer.pan(dx, dy);
       },
       zoom: (factor) => {
-        if (this.workspace !== 'render') this.renderer.zoom(factor);
+        this.renderer.zoom(factor);
       },
       beginToolPointer: (sample) => this.beginToolPointer(sample),
       hoverToolPointer: (sample) => this.hoverToolPointer(sample),
@@ -1357,11 +1377,7 @@ export class EditorRuntime {
       this.surfaceCursor = null;
       this.projectionPreview = null;
     }
-    if (workspace === 'render') {
-      this.renderer.setGridVisible(false);
-    } else {
-      this.renderer.setGridVisible(true);
-    }
+    this.renderer.setGridVisible(true);
     this.workspace = workspace;
     if (workspace !== 'animation') {
       this.pauseAnimation();
@@ -1403,7 +1419,10 @@ export class EditorRuntime {
         this.renderer.frameLightWorkspace();
       }
       if (workspace === 'render') {
-        this.syncRenderCameraView();
+        const camera = this.getActiveCamera();
+        if (camera) {
+          this.renderer.frameCameraView(camera.position, camera.target);
+        }
       }
       if (workspace === 'animation') {
         this.applyAnimationPose();
@@ -3768,7 +3787,6 @@ export class EditorRuntime {
       return;
     }
     this.activeCameraId = id;
-    this.syncRenderCameraView();
     this.publish();
   }
 
@@ -3784,22 +3802,18 @@ export class EditorRuntime {
 
   /** Switch to Render and look through the active camera. */
   viewActiveCamera(): void {
-    if (!this.getActiveCamera()) {
+    const camera = this.getActiveCamera();
+    if (!camera) {
       return;
     }
-    this.setWorkspace('render');
+    if (this.workspace !== 'render') {
+      this.setWorkspace('render');
+    }
+    this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+    this.publish();
   }
 
-  /** Push the active document camera into the Render workspace viewport. */
-  private syncRenderCameraView(): void {
-    if (this.workspace !== 'render') {
-      return;
-    }
-    const camera = this.getActiveCamera();
-    if (camera) {
-      this.renderer.setCameraView(camera.position, camera.target, camera.fov);
-    }
-  }
+
 
   /** Create a camera from the current navigation view. */
   addCameraFromCurrentView(): void {
@@ -3839,7 +3853,6 @@ export class EditorRuntime {
       return;
     }
     this.history.execute(new UpdateCameraCommand(camera, before, after));
-    this.syncRenderCameraView();
     this.publish();
   }
 
@@ -4373,7 +4386,13 @@ export class EditorRuntime {
     }
     try {
       const fps = Math.max(1, this.document.animation.fps);
-      const stream = output.captureStream(fps);
+      // A zero-rate stream plus an explicit requestFrame() after every drawn
+      // frame is more reliable than the timer-driven captureStream(fps) path,
+      // especially in WKWebView and headless Chromium.
+      const stream = output.captureStream(0);
+      const track = stream.getVideoTracks()[0] as
+        | CanvasCaptureMediaStreamTrack
+        | undefined;
       const recorder = new MediaRecorder(stream, {
         mimeType: mime,
         videoBitsPerSecond: 8_000_000
@@ -4390,7 +4409,7 @@ export class EditorRuntime {
           reject(new Error('The video recorder failed.'))
         );
       });
-      recorder.start();
+      recorder.start(250);
       for (let frame = start; frame <= end; frame += 1) {
         this.setAnimationFrame(frame);
         const image = this.renderer.renderStill({
@@ -4412,6 +4431,7 @@ export class EditorRuntime {
           this.renderUpscale
         );
         context.drawImage(frameCanvas, 0, 0);
+        track?.requestFrame();
         await new Promise((resolve) =>
           window.setTimeout(resolve, 1000 / fps)
         );
@@ -4616,6 +4636,28 @@ export class EditorRuntime {
     node.setShapeKeyWeight(id, weight);
     this.history.execute(
       new SetShapeKeysCommand(node, before, node.shapeKeys, 'Shape key weight')
+    );
+    this.publish();
+  }
+
+  /** Capture the edited base mesh into a key and restore the source base. */
+  captureShapeKeyFromMesh(id: string): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const beforeKeys = this.cloneShapeKeys(node);
+    const beforeMesh = node.mesh;
+    node.captureShapeKeyFromMesh(id);
+    const afterMesh = node.mesh;
+    this.history.execute(
+      new CaptureShapeKeyCommand(
+        node,
+        beforeMesh,
+        afterMesh,
+        beforeKeys,
+        node.shapeKeys
+      )
     );
     this.publish();
   }
@@ -6075,6 +6117,139 @@ export class EditorRuntime {
     this.selection.setValues(edges);
   }
 
+  private beginCameraDrag(sample: PointerSample): boolean {
+    const targetId = this.renderer.pickCameraTarget(
+      sample.clientX,
+      sample.clientY
+    );
+    if (targetId) {
+      const camera = this.document.getCamera(targetId);
+      if (!camera) {
+        return false;
+      }
+      this.selectCamera(camera.id);
+      const point = new Vector3(...camera.target);
+      const plane = this.renderer.createCameraFacingPlane(point);
+      if (
+        !this.renderer.intersectPointerPlane(
+          sample.clientX,
+          sample.clientY,
+          plane
+        )
+      ) {
+        return false;
+      }
+      this.cameraTargetDrag = {
+        pointerId: sample.pointerId,
+        camera,
+        before: camera.snapshot(),
+        plane
+      };
+      return true;
+    }
+    const cameraId = this.renderer.pickCamera(
+      sample.clientX,
+      sample.clientY
+    );
+    if (!cameraId) {
+      return false;
+    }
+    const camera = this.document.getCamera(cameraId);
+    if (!camera) {
+      return false;
+    }
+    this.selectCamera(camera.id);
+    const point = new Vector3(...camera.position);
+    const plane = this.renderer.createCameraFacingPlane(point);
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      plane
+    );
+    if (!hit) {
+      return false;
+    }
+    this.cameraDrag = {
+      pointerId: sample.pointerId,
+      camera,
+      before: camera.snapshot(),
+      plane,
+      offset: point.sub(hit)
+    };
+    return true;
+  }
+
+  private moveCameraTargetDrag(sample: PointerSample): void {
+    const drag = this.cameraTargetDrag;
+    if (!drag || drag.pointerId !== sample.pointerId) {
+      return;
+    }
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      drag.plane
+    );
+    if (!hit) {
+      return;
+    }
+    drag.camera.target = [hit.x, hit.y, hit.z];
+    this.syncScene();
+    this.publish();
+  }
+
+  private finishCameraTargetDrag(): void {
+    const drag = this.cameraTargetDrag;
+    if (!drag) {
+      return;
+    }
+    this.cameraTargetDrag = null;
+    const after = drag.camera.snapshot();
+    if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      this.history.execute(
+        new UpdateCameraCommand(drag.camera, drag.before, after)
+      );
+    } else {
+      this.syncScene();
+      this.publish();
+    }
+  }
+
+  private moveCameraDrag(sample: PointerSample): void {
+    const drag = this.cameraDrag;
+    if (!drag || drag.pointerId !== sample.pointerId) {
+      return;
+    }
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      drag.plane
+    );
+    if (!hit) {
+      return;
+    }
+    hit.add(drag.offset);
+    drag.camera.position = [hit.x, hit.y, hit.z];
+    this.syncScene();
+    this.publish();
+  }
+
+  private finishCameraDrag(): void {
+    const drag = this.cameraDrag;
+    if (!drag) {
+      return;
+    }
+    this.cameraDrag = null;
+    const after = drag.camera.snapshot();
+    if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      this.history.execute(
+        new UpdateCameraCommand(drag.camera, drag.before, after)
+      );
+    } else {
+      this.syncScene();
+      this.publish();
+    }
+  }
+
   private beginLightDrag(sample: PointerSample): boolean {
     const directionLightId = this.renderer.pickLightDirection(
       sample.clientX,
@@ -6232,9 +6407,15 @@ export class EditorRuntime {
       this.drag ||
       this.gizmoDrag ||
       this.lightDrag ||
-      this.lightDirectionDrag
+      this.lightDirectionDrag ||
+      this.cameraDrag ||
+      this.cameraTargetDrag
     ) {
       this.cancelToolPointer();
+    }
+
+    if (this.workspace === 'render') {
+      return this.beginCameraDrag(sample);
     }
 
     if (this.workspace === 'light') {
@@ -6424,6 +6605,14 @@ export class EditorRuntime {
   }
 
   private moveToolPointer(sample: PointerSample): void {
+    if (this.cameraTargetDrag && this.cameraTargetDrag.pointerId === sample.pointerId) {
+      this.moveCameraTargetDrag(sample);
+      return;
+    }
+    if (this.cameraDrag && this.cameraDrag.pointerId === sample.pointerId) {
+      this.moveCameraDrag(sample);
+      return;
+    }
     if (
       this.lightDirectionDrag &&
       this.lightDirectionDrag.pointerId === sample.pointerId
@@ -6574,6 +6763,14 @@ export class EditorRuntime {
   }
 
   private endToolPointer(sample: PointerSample): void {
+    if (this.cameraTargetDrag && this.cameraTargetDrag.pointerId === sample.pointerId) {
+      this.finishCameraTargetDrag();
+      return;
+    }
+    if (this.cameraDrag && this.cameraDrag.pointerId === sample.pointerId) {
+      this.finishCameraDrag();
+      return;
+    }
     if (
       this.lightDirectionDrag &&
       this.lightDirectionDrag.pointerId === sample.pointerId
@@ -6635,6 +6832,22 @@ export class EditorRuntime {
   }
 
   private cancelToolPointer(): void {
+    if (this.cameraTargetDrag) {
+      const drag = this.cameraTargetDrag;
+      this.cameraTargetDrag = null;
+      drag.camera.apply(drag.before);
+      this.syncScene();
+      this.publish();
+      return;
+    }
+    if (this.cameraDrag) {
+      const drag = this.cameraDrag;
+      this.cameraDrag = null;
+      drag.camera.apply(drag.before);
+      this.syncScene();
+      this.publish();
+      return;
+    }
     if (this.lightDirectionDrag) {
       const drag = this.lightDirectionDrag;
       this.lightDirectionDrag = null;
@@ -8324,7 +8537,7 @@ export class EditorRuntime {
     this.renderer.setCameraGizmos(
       this.document.cameraSummaries(),
       this.activeCameraId,
-      this.workspace === 'model' || this.workspace === 'animation'
+      this.workspace === 'render'
     );
   }
 

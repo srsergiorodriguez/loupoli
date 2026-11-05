@@ -7,6 +7,7 @@ import { deleteSelectedElements } from '../../geometry/topology';
 import { CreateMeshNodeCommand } from './CreateMeshNodeCommand';
 import { SetAnimationCommand } from './AnimationCommands';
 import { SetShapeKeysCommand } from './ShapeKeyCommands';
+import { CaptureShapeKeyCommand } from './CaptureShapeKeyCommand';
 import {
   CreateCameraCommand,
   DeleteCameraCommand,
@@ -650,5 +651,38 @@ describe('scene commands and journal', () => {
     );
     expect(replay.nodes[0].shapeKeys).toHaveLength(1);
     expect(replay.nodes[0].shapeKeys[0].name).toBe('Wide');
+  });
+
+  it('captures an edited base into a shape key and restores the base', () => {
+    const document = SceneDocument.createDefault();
+    const node = document.nodes[0];
+    node.addShapeKey('Edited');
+    const beforeMesh = node.mesh;
+    const beforeKeys = node.shapeKeys.map((key) => ({
+      ...key,
+      targetPositions: key.targetPositions.slice()
+    }));
+    const vertex = node.mesh.getVertexPosition(0);
+    node.mesh.setVertexPosition(0, [vertex[0] + 1, vertex[1], vertex[2]]);
+    node.captureShapeKeyFromMesh(node.shapeKeys[0].id);
+    const afterMesh = node.mesh;
+    const afterKeys = node.shapeKeys.map((key) => ({
+      ...key,
+      targetPositions: key.targetPositions.slice()
+    }));
+    const history = new History();
+    history.execute(
+      new CaptureShapeKeyCommand(node, beforeMesh, afterMesh, beforeKeys, afterKeys)
+    );
+    expect(node.mesh.positions[0]).toBe(vertex[0]);
+    expect(node.shapeKeys[0].targetPositions[0]).toBeCloseTo(vertex[0] + 1);
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
+    history.undo();
+    expect(node.mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
+    expect(node.shapeKeys[0].targetPositions[0]).toBeCloseTo(vertex[0]);
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
+    history.redo();
+    expect(node.mesh.positions[0]).toBe(vertex[0]);
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
   });
 });

@@ -54,6 +54,7 @@ export class MeshNode {
   materialPalette: string[] = [];
   modifiers: Modifier[] = [];
   shapeKeys: ShapeKey[] = [];
+  shapeBasePositions: Float32Array | null = null;
   private modifierRevision = 0;
   private shapeKeyRevision = 0;
   private evaluationBase: HalfEdgeMesh | null = null;
@@ -127,6 +128,9 @@ export class MeshNode {
     if (this.shapeKeys.length >= 16) {
       throw new Error('A node supports at most 16 shape keys.');
     }
+    if (this.shapeBasePositions === null) {
+      this.shapeBasePositions = this.mesh.positions.slice();
+    }
     const key: ShapeKey = {
       id: createShapeKeyId(),
       name,
@@ -146,6 +150,11 @@ export class MeshNode {
       weight: Math.max(0, Math.min(1, key.weight)),
       targetPositions: key.targetPositions.slice()
     }));
+    if (this.shapeKeys.length === 0) {
+      this.shapeBasePositions = null;
+    } else if (this.shapeBasePositions === null) {
+      this.shapeBasePositions = this.mesh.positions.slice();
+    }
     this.invalidateShapeKeys();
   }
 
@@ -189,6 +198,31 @@ export class MeshNode {
       targetPositions: this.mesh.positions.slice()
     };
     this.invalidateShapeKeys();
+  }
+
+  /** Capture the current base mesh into a key and restore the original base. */
+  captureShapeKeyFromMesh(id: string): void {
+    const index = this.shapeKeys.findIndex((item) => item.id === id);
+    if (index < 0) {
+      return;
+    }
+    if (this.shapeBasePositions === null) {
+      this.shapeBasePositions = this.mesh.positions.slice();
+    }
+    const captured = this.mesh.positions.slice();
+    this.mesh = this.mesh.withPositions(this.shapeBasePositions);
+    this.shapeKeys[index] = {
+      ...this.shapeKeys[index],
+      targetPositions: captured,
+      weight: 1
+    };
+    this.invalidateShapeKeys();
+  }
+
+  /** Restore a base mesh while shape keys remain active (internal capture path). */
+  replaceBaseMesh(mesh: HalfEdgeMesh): void {
+    this.mesh = mesh;
+    this.evaluation = null;
   }
 
   /** Whether any shape key currently contributes to the evaluated mesh. */

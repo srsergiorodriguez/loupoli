@@ -7,6 +7,7 @@
   /** Session projection for the one-shot modeling action dock. */
   interface Props {
     session: EditorSession;
+    lifted?: boolean;
   }
 
   interface ActionChoice {
@@ -15,7 +16,7 @@
     readonly icon: IconName;
   }
 
-  let { session }: Props = $props();
+  let { session, lifted = false }: Props = $props();
 
   const actions: readonly ActionChoice[] = [
     { kind: 'extrude', label: 'Extrude', icon: 'extrude' },
@@ -50,7 +51,7 @@
 </script>
 
 {#if session.snapshot.activeNodeId !== null && session.snapshot.activeGroupId === null}
-  <aside class="action-dock loupoli-panel" aria-label="Mesh actions">
+  <aside class="action-dock loupoli-panel" class:lifted aria-label="Mesh actions">
     <div class="action-grid">
       {#each actions as action (action.kind)}
         <button
@@ -79,6 +80,12 @@
     border-radius: var(--radius-lg);
     -webkit-backdrop-filter: blur(var(--blur-panel));
     backdrop-filter: blur(var(--blur-panel));
+  }
+
+  .action-dock.lifted {
+    bottom: calc(
+      var(--safe-bottom) + var(--status-h) + var(--space-3) + 128px
+    );
   }
 
   .action-grid {

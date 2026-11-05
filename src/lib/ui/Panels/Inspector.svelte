@@ -1648,7 +1648,10 @@
             />
           </div>
           {#if shapeKeys.length === 0}
-            <p class="hint">Add a shape key to store a morph target for this object.</p>
+            <p class="hint">
+              Add a key, edit the object with the vertex tools, then Capture.
+              Capture stores the edited mesh and restores the source base.
+            </p>
           {:else}
             <div class="shape-key-list">
               {#each shapeKeys as key (key.id)}
@@ -1663,9 +1666,9 @@
                     onChange={(value) => session.setShapeKeyWeight(key.id, value)}
                   />
                   <ActionButton
-                    label="Update"
+                    label="Capture"
                     icon="checker"
-                    onActivate={() => session.updateShapeKeyFromMesh(key.id)}
+                    onActivate={() => session.captureShapeKeyFromMesh(key.id)}
                   />
                   <ActionButton
                     label="Delete"
@@ -1676,7 +1679,11 @@
                 </div>
               {/each}
             </div>
-            <p class="hint">Topology-changing edits should be completed before adding shape keys.</p>
+            <p class="hint">
+              Shape keys store mesh targets. Key transform keys object
+              translation/rotation/scale in the timeline; shape weights are not
+              animated yet. Finish topology edits before adding keys.
+            </p>
           {/if}
         {:else}
           <p class="hint">Select an object to edit its shape keys.</p>

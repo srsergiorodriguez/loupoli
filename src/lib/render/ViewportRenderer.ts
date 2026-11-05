@@ -869,6 +869,22 @@ export class ViewportRenderer {
     return { origin, quaternion, size };
   }
 
+  /** Pick one visible camera marker in the Render workspace. */
+  pickCamera(clientX: number, clientY: number): string | null {
+    if (!this.setRayFromPointer(clientX, clientY)) {
+      return null;
+    }
+    return this.cameraGizmos.pick(this.raycaster);
+  }
+
+  /** Pick one visible camera target/arrow handle. */
+  pickCameraTarget(clientX: number, clientY: number): string | null {
+    if (!this.setRayFromPointer(clientX, clientY)) {
+      return null;
+    }
+    return this.cameraGizmos.pickTarget(this.raycaster);
+  }
+
   /** Pick one visible light direction handle in the Light workspace. */
   pickLightDirection(clientX: number, clientY: number): string | null {
     if (!this.setRayFromPointer(clientX, clientY)) {

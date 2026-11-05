@@ -20,11 +20,11 @@ interface ShapeKey {
 
 ## UI
 
-Model and Animate Inspector → **Shape keys**:
+Animate Inspector → **Shape keys**:
 
 - Add shape key
 - Weight slider per key
-- Update key from the current base mesh
+- Capture: stores the edited base mesh as the key target, restores the original base, and sets weight to 1
 - Delete key
 
 ![Shape keys](media/shape-keys.png)
@@ -42,7 +42,7 @@ Changing the node mesh through the topology command path throws:
 
 > Remove shape keys before changing topology.
 
-This prevents stale per-vertex morph targets. Direct vertex dragging is still allowed by the base tool, so finish base-shape edits before adding keys.
+This prevents stale per-vertex morph targets. Direct vertex dragging is allowed while authoring: edit the base mesh in Animate, then press **Capture** to store that edit as the current key and restore the source base. Finish topology edits before adding keys.
 
 ## glTF
 

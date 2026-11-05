@@ -186,22 +186,17 @@
         class="selection-mode-wrap"
         class:no-selection-mode={session.snapshot.activeEditor === 'paint' ||
           session.snapshot.workspace === 'light' ||
-          session.snapshot.workspace === 'render' ||
-          session.snapshot.workspace === 'animation'}
+          session.snapshot.workspace === 'render'}
       >
         {#if session.snapshot.activeEditor !== 'paint' &&
           session.snapshot.workspace !== 'light' &&
-          session.snapshot.workspace !== 'render' &&
-          session.snapshot.workspace !== 'animation'}
+          session.snapshot.workspace !== 'render'}
           <SelectionModeControl {session} />
         {/if}
-        {#if session.snapshot.workspace !== 'render'}
-          <ShadingControl {session} />
-        {/if}
+        <ShadingControl {session} />
       </div>
 
-      {#if session.snapshot.workspace !== 'render' &&
-        session.snapshot.workspace !== 'animation'}
+      {#if session.snapshot.workspace !== 'animation'}
         <div class="viewport-hud">
         <div class="view-actions">
           <IconButton
@@ -238,9 +233,11 @@
       <TransformHud modal={session.snapshot.modalTransform} />
       {#if !session.snapshot.uvOpen &&
         session.snapshot.workspace !== 'light' &&
-        session.snapshot.workspace !== 'render' &&
-        session.snapshot.workspace !== 'animation'}
-        <ActionDock {session} />
+        session.snapshot.workspace !== 'render'}
+        <ActionDock
+          {session}
+          lifted={session.snapshot.workspace === 'animation'}
+        />
       {/if}
       <ActionHud state={session.snapshot.actionState} />
       {#if session.snapshot.workspace === 'animation'}
@@ -296,8 +293,7 @@
   <ProjectBanner {session} />
   {#if session.snapshot.activeEditor !== 'paint' &&
     session.snapshot.workspace !== 'light' &&
-    session.snapshot.workspace !== 'render' &&
-    session.snapshot.workspace !== 'animation'}
+    session.snapshot.workspace !== 'render'}
     <ToolRail {session} onFocusViewport={focusViewport} />
   {/if}
   <Inspector {session} />

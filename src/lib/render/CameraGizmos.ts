@@ -1,9 +1,14 @@
 import {
   BufferGeometry,
   CanvasTexture,
+  ConeGeometry,
   Group,
+  Line,
   LineBasicMaterial,
   LineSegments,
+  Mesh,
+  MeshBasicMaterial,
+  SphereGeometry,
   Sprite,
   SpriteMaterial,
   Vector3
@@ -14,10 +19,22 @@ interface CameraMarker {
   readonly group: Group;
   readonly sprite: Sprite;
   readonly lines: LineSegments;
+  readonly arrow: Line;
+  readonly arrowHead: Mesh;
+  readonly hit: Mesh;
+  readonly targetHandle: Mesh;
   readonly texture: CanvasTexture;
   readonly lineGeometry: BufferGeometry;
+  readonly arrowGeometry: BufferGeometry;
+  readonly arrowHeadGeometry: ConeGeometry;
+  readonly hitGeometry: SphereGeometry;
+  readonly targetGeometry: SphereGeometry;
   readonly lineMaterial: LineBasicMaterial;
   readonly spriteMaterial: SpriteMaterial;
+  readonly arrowMaterial: LineBasicMaterial;
+  readonly arrowHeadMaterial: MeshBasicMaterial;
+  readonly hitMaterial: MeshBasicMaterial;
+  readonly targetMaterial: MeshBasicMaterial;
 }
 
 function makeCameraTexture(active: boolean): CanvasTexture {
@@ -108,11 +125,51 @@ export class CameraGizmos {
       marker.lineGeometry.setFromPoints(points);
       marker.lineMaterial.color.set(active ? '#c8f078' : '#8f938e');
       marker.lineMaterial.opacity = active ? 0.95 : 0.45;
+      marker.arrowGeometry.setFromPoints([position, target]);
+      marker.arrowMaterial.color.set(active ? '#c8f078' : '#8f938e');
+      marker.arrowMaterial.opacity = active ? 0.95 : 0.45;
+      marker.arrowHead.position
+        .copy(position)
+        .lerp(target, 0.62);
+      marker.arrowHead.quaternion.setFromUnitVectors(
+        new Vector3(0, 1, 0),
+        direction.clone().normalize()
+      );
+      marker.arrowHeadMaterial.color.set(active ? '#c8f078' : '#8f938e');
+      marker.arrowHead.scale.setScalar(active ? 1.15 : 0.8);
       marker.group.position.set(0, 0, 0);
       marker.sprite.position.copy(position);
       marker.sprite.scale.setScalar(active ? 0.62 : 0.46);
       marker.spriteMaterial.color.set(active ? '#ffffff' : '#c8c4b8');
+      marker.hit.position.copy(position);
+      marker.hit.userData.cameraId = camera.id;
+      marker.targetHandle.position.copy(target);
+      marker.targetHandle.userData.cameraTargetId = camera.id;
     }
+  }
+
+  /** Pick a camera marker body. */
+  pick(raycaster: import('three').Raycaster): string | null {
+    if (!this.group.visible) {
+      return null;
+    }
+    const hits = raycaster.intersectObjects(
+      [...this.markers.values()].map((marker) => marker.hit),
+      false
+    );
+    return (hits[0]?.object.userData.cameraId as string | undefined) ?? null;
+  }
+
+  /** Pick a camera target/arrow handle. */
+  pickTarget(raycaster: import('three').Raycaster): string | null {
+    if (!this.group.visible) {
+      return null;
+    }
+    const hits = raycaster.intersectObjects(
+      [...this.markers.values()].map((marker) => marker.targetHandle),
+      false
+    );
+    return (hits[0]?.object.userData.cameraTargetId as string | undefined) ?? null;
   }
 
   /** Release all marker resources. */
@@ -150,14 +207,71 @@ export class CameraGizmos {
     const lines = new LineSegments(lineGeometry, lineMaterial);
     lines.renderOrder = 19;
     group.add(lines);
+    const arrowGeometry = new BufferGeometry();
+    const arrowMaterial = new LineBasicMaterial({
+      color: '#8f938e',
+      transparent: true,
+      opacity: 0.45,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    });
+    const arrow = new Line(arrowGeometry, arrowMaterial);
+    arrow.renderOrder = 19;
+    group.add(arrow);
+    const arrowHeadGeometry = new ConeGeometry(0.28, 0.82, 10);
+    const arrowHeadMaterial = new MeshBasicMaterial({
+      color: '#8f938e',
+      transparent: true,
+      opacity: 0.8,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    });
+    const arrowHead = new Mesh(arrowHeadGeometry, arrowHeadMaterial);
+    arrowHead.renderOrder = 20;
+    group.add(arrowHead);
+    const hitGeometry = new SphereGeometry(0.42, 12, 8);
+    const hitMaterial = new MeshBasicMaterial({
+      transparent: true,
+      opacity: 0,
+      depthWrite: false
+    });
+    const hit = new Mesh(hitGeometry, hitMaterial);
+    hit.renderOrder = 21;
+    group.add(hit);
+    const targetGeometry = new SphereGeometry(0.18, 10, 8);
+    const targetMaterial = new MeshBasicMaterial({
+      color: '#e8e4d8',
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    });
+    const targetHandle = new Mesh(targetGeometry, targetMaterial);
+    targetHandle.renderOrder = 21;
+    group.add(targetHandle);
     return {
       group,
       sprite,
       lines,
+      arrow,
+      arrowHead,
+      hit,
+      targetHandle,
       texture,
       lineGeometry,
+      arrowGeometry,
+      arrowHeadGeometry,
+      hitGeometry,
+      targetGeometry,
       lineMaterial,
-      spriteMaterial
+      spriteMaterial,
+      arrowMaterial,
+      arrowHeadMaterial,
+      hitMaterial,
+      targetMaterial
     };
   }
 
@@ -166,7 +280,15 @@ export class CameraGizmos {
     marker.texture.dispose();
     marker.spriteMaterial.dispose();
     marker.lineGeometry.dispose();
+    marker.arrowGeometry.dispose();
+    marker.arrowHeadGeometry.dispose();
+    marker.hitGeometry.dispose();
+    marker.targetGeometry.dispose();
     marker.lineMaterial.dispose();
+    marker.arrowMaterial.dispose();
+    marker.arrowHeadMaterial.dispose();
+    marker.hitMaterial.dispose();
+    marker.targetMaterial.dispose();
     marker.group.clear();
   }
 }

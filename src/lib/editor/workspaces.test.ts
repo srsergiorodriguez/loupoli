@@ -51,7 +51,6 @@ describe('inspector layout', () => {
       'transform',
       'selection',
       'mesh',
-      'shapes',
       'modifiers',
       'ps1',
       'controls'
@@ -71,11 +70,16 @@ describe('inspector layout', () => {
 
   it('gives Animation its own timeline section', () => {
     expect(workspaceCan('animation', 'editAnimation')).toBe(true);
-    expect(workspaceCan('animation', 'edit3d')).toBe(false);
+    expect(workspaceCan('animation', 'edit3d')).toBe(true);
     expect(inspectorSectionsFor('animation')).toEqual([
       'scene',
+      'transform',
       'animation',
+      'selection',
+      'mesh',
       'shapes',
+      'modifiers',
+      'ps1',
       'controls'
     ]);
   });

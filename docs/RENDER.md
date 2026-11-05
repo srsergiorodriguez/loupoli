@@ -28,8 +28,8 @@ interface CameraSnapshot {
 - Cameras are saved in `.lpoly`.
 - The Camera Inspector lists cameras and exposes name, position, target, and field of view.
 - **Add from view** captures the current navigation camera.
-- The Render workspace looks through the active camera; navigation controls are locked there so the composition preview matches the output.
-- The Model and Animate viewports show a camera marker with a frustum rectangle. Camera Inspector actions: **Frame camera**, **Set from view**, and **View through**.
+- The Render workspace can look through the active camera via **View through**, then return to free editing by orbiting. Editing the camera does not force the viewport back to the camera view.
+- The Render workspace is a free camera-editing view with orbit, pan, zoom, the orientation gizmo, and a camera marker/frustum. Drag the camera body to move it, drag the target/arrow handle to re-aim it, or use Camera Inspector actions: **Frame camera**, **Set from view**, and **View through**.
 - **Preview** renders the virtual-resolution frame, upscales it to the output size, and shows it in a floating preview portal before export.
 - Camera animation tracks will be added with the animation timeline.
 
