@@ -128,6 +128,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationPlaying: false,
   animationTracks: [],
   animationInterpolation: 'linear',
+  shapeEditingId: null,
   shapeKeys: [],
   groups: [],
   selectedNodeIds: [],
@@ -894,6 +895,18 @@ export class EditorSession {
 
   captureShapeKeyFromMesh(id: string): void {
     this.runtime?.captureShapeKeyFromMesh(id);
+  }
+
+  beginShapeEdit(id: string): void {
+    this.runtime?.beginShapeEdit(id);
+  }
+
+  finishShapeEdit(): void {
+    this.runtime?.finishShapeEdit();
+  }
+
+  cancelShapeEdit(): void {
+    this.runtime?.cancelShapeEdit();
   }
 
   keyShapeWeight(id: string): void {

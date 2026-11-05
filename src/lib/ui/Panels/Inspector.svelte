@@ -100,6 +100,10 @@
     session.snapshot.activeGroupId ?? session.snapshot.activeNodeId
   );
   const shapeKeys = $derived(session.snapshot.shapeKeys);
+  const shapeEditingId = $derived(session.snapshot.shapeEditingId);
+  const editingShapeName = $derived(
+    shapeKeys.find((key) => key.id === shapeEditingId)?.name ?? 'Shape'
+  );
   const activeAnimationTrack = $derived(
     animationTracks.find((track) => track.targetId === animationTargetId) ?? null
   );
@@ -772,7 +776,7 @@
               onActivate={() => session.keyActiveTransform()}
             />
             <ActionButton
-              label="Delete key"
+              label="Delete transform key"
               icon="trash"
               variant="danger"
               disabled={currentKey === null}
@@ -1644,13 +1648,39 @@
     >
       <div class="module-body">
         {#if activeNode}
-          <div class="texture-action-row">
-            <ActionButton
-              label="Add shape key"
-              icon="plus"
-              onActivate={() => session.addShapeKey()}
-            />
-          </div>
+          {#if shapeEditingId}
+            <div class="shape-edit-banner">
+              <div>
+                <span class="kicker">Editing {editingShapeName}</span>
+                <span class="sub">Live target · one undo step</span>
+              </div>
+              <div class="shape-edit-actions">
+                <ActionButton
+                  label="Finish"
+                  icon="checker"
+                  variant="primary"
+                  onActivate={() => session.finishShapeEdit()}
+                />
+                <ActionButton
+                  label="Cancel"
+                  icon="close"
+                  onActivate={() => session.cancelShapeEdit()}
+                />
+              </div>
+            </div>
+            <p class="hint">
+              Edit the target with the viewport tools. The base mesh is
+              restored when you finish or cancel.
+            </p>
+          {:else}
+            <div class="texture-action-row">
+              <ActionButton
+                label="Add shape key"
+                icon="plus"
+                onActivate={() => session.addShapeKey()}
+              />
+            </div>
+          {/if}
           {#if shapeKeys.length === 0}
             <p class="hint">
               Add a key, edit the object with the vertex tools, then Capture.
@@ -1670,35 +1700,46 @@
                     precision={2}
                     onChange={(value) => session.setShapeKeyWeight(key.id, value)}
                   />
-                  <ActionButton
-                    label="Capture"
-                    icon="checker"
-                    onActivate={() => session.captureShapeKeyFromMesh(key.id)}
-                  />
-                  <ActionButton
-                    label="Key"
-                    icon="plus"
-                    onActivate={() => session.keyShapeWeight(key.id)}
-                  />
-                  <ActionButton
-                    label="Unkey"
-                    icon="minus"
-                    onActivate={() => session.deleteShapeWeightKey(key.id)}
-                  />
-                  <ActionButton
-                    label="Delete"
-                    icon="trash"
-                    variant="danger"
-                    onActivate={() => session.removeShapeKey(key.id)}
-                  />
+                  {#if shapeEditingId === key.id}
+                    <span class="shape-editing-label">Editing target</span>
+                  {:else if shapeEditingId === null}
+                    <div class="shape-key-actions">
+                      <ActionButton
+                        label="Edit"
+                        icon="cursor"
+                        variant="primary"
+                        onActivate={() => session.beginShapeEdit(key.id)}
+                      />
+                      <ActionButton
+                        label="Capture"
+                        icon="checker"
+                        onActivate={() => session.captureShapeKeyFromMesh(key.id)}
+                      />
+                      <ActionButton
+                        label="Key"
+                        icon="plus"
+                        onActivate={() => session.keyShapeWeight(key.id)}
+                      />
+                      <ActionButton
+                        label="Unkey"
+                        icon="minus"
+                        onActivate={() => session.deleteShapeWeightKey(key.id)}
+                      />
+                      <ActionButton
+                        label="Delete"
+                        icon="trash"
+                        variant="danger"
+                        onActivate={() => session.removeShapeKey(key.id)}
+                      />
+                    </div>
+                  {/if}
                 </div>
               {/each}
             </div>
             <p class="hint">
-              Key transform keys object translation/rotation/scale. Key on a
-              shape key adds a weight track with the same linear/step
-              interpolation as transform keys. Finish topology edits before
-              adding keys.
+              Edit updates the stored shape target directly. Capture stores the
+              current base mesh as a new target. Key adds a weight track with
+              the same linear/step interpolation as transform keys.
             </p>
           {/if}
         {:else}
@@ -2979,6 +3020,64 @@
     align-items: center;
     gap: var(--space-2);
     min-width: 0;
+  }
+
+  .shape-key-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+  }
+
+  .shape-key-actions :global(.action-button) {
+    width: 100%;
+  }
+
+  .shape-key-actions :global(.action-button:nth-child(5)) {
+    grid-column: span 2;
+  }
+
+  .shape-editing-label {
+    width: 100%;
+    color: var(--accent-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .shape-edit-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2);
+    border: var(--hairline) solid var(--accent-primary);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  }
+
+  .shape-edit-banner .kicker {
+    display: block;
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .shape-edit-banner .sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--text-tertiary);
+    font-size: 10px;
+  }
+
+  .shape-edit-actions {
+    display: flex;
+    gap: 4px;
+    flex: 0 0 auto;
   }
 
   .shape-key-row :global(.slider-field) {

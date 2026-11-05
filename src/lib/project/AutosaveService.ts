@@ -208,6 +208,22 @@ export class AutosaveService {
     }
   }
 
+  /** Pause autosave while a transactional edit temporarily swaps document state. */
+  pause(): void {
+    this.enabled = false;
+    if (this.timer !== null) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    this.setState('idle', null);
+  }
+
+  /** Restart autosave from a fresh checkpoint after a paused transaction. */
+  async resume(): Promise<void> {
+    const checkpoint = await this.makeCheckpoint();
+    await this.start(checkpoint.bytes, checkpoint.settings);
+  }
+
   /** Record one document transition. Structural snapshots are localized nodes. */
   record(patch: JournalPatch): void {
     if (!this.enabled) {

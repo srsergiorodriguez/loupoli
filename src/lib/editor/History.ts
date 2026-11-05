@@ -35,10 +35,17 @@ export class History {
   private readonly maxCommands = 100;
   private readonly maxBytes = 32 * 1024 * 1024;
   private retainedBytes = 0;
+  private suspended = false;
 
   /** Execute a new command, clearing any redo branch. */
   execute(command: EditorCommand): void {
     command.execute();
+    if (this.suspended) {
+      // Shape-key editing is one transaction. Individual vertex commands must
+      // still update the viewport, but only the final capture enters history.
+      this.emit('execute', command);
+      return;
+    }
     for (const redoCommand of this.redoStack) {
       this.retainedBytes -= redoCommand.estimatedBytes ?? 0;
     }
@@ -57,6 +64,16 @@ export class History {
     }
 
     this.emit('execute', command);
+  }
+
+  /** Hold new commands outside the undo stack until resume(). */
+  suspend(): void {
+    this.suspended = true;
+  }
+
+  /** Resume recording commands after a suspended edit transaction. */
+  resume(): void {
+    this.suspended = false;
   }
 
   /** Undo the most recent command. Returns true if a command was undone. */

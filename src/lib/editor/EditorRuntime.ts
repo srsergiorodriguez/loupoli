@@ -45,7 +45,7 @@ import {
   type GizmoAxis,
   type GizmoHandle
 } from '../render/gizmoMath';
-import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
+import type { MeshNode, NodeTransform, SelectionMode, ShapeKey } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { workspaceCan } from './workspaces';
@@ -248,6 +248,14 @@ interface CameraTargetDrag {
   readonly camera: SceneCamera;
   readonly before: import('../scene/SceneCamera').CameraSnapshot;
   readonly plane: import('three').Plane;
+}
+
+/** Transactional direct editing of one shape key's target. */
+interface ShapeKeyEditSession {
+  readonly node: MeshNode;
+  readonly keyId: string;
+  readonly baseMesh: MeshNode['mesh'];
+  readonly beforeKeys: readonly ShapeKey[];
 }
 
 /** Active drag of a light marker in the Light workspace. */
@@ -533,6 +541,7 @@ export class EditorRuntime {
   private lightDrag: LightDrag | null = null;
   private cameraDrag: CameraDrag | null = null;
   private cameraTargetDrag: CameraTargetDrag | null = null;
+  private shapeEdit: ShapeKeyEditSession | null = null;
   private lightDirectionDrag: LightDirectionDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
   private selectionGizmoDrag: SelectionGizmoDrag | null = null;
@@ -852,6 +861,7 @@ export class EditorRuntime {
       animationPlaying: this.animationPlaying,
       animationTracks: this.animationTrackSummaries(),
       animationInterpolation: this.animationInterpolation,
+      shapeEditingId: this.shapeEdit?.keyId ?? null,
       shapeKeys: (this.getActiveNode()?.shapeKeys ?? []).map((key) => ({
         id: key.id,
         name: key.name,
@@ -1300,6 +1310,9 @@ export class EditorRuntime {
     if (this.fileBusy) {
       return;
     }
+    if (this.shapeEdit) {
+      this.cancelShapeEdit();
+    }
     if (this.modalTransform) {
       this.cancelModalTransform();
     }
@@ -1385,6 +1398,9 @@ export class EditorRuntime {
   setWorkspace(
     workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'
   ): void {
+    if (this.shapeEdit) {
+      this.cancelShapeEdit();
+    }
     if (workspace !== 'paint') {
       this.cancelProjectionPaint();
       this.surfaceCursor = null;
@@ -4819,6 +4835,82 @@ export class EditorRuntime {
     }
   }
 
+  /** Enter a live, transactional edit session for one captured shape key. */
+  beginShapeEdit(id: string): void {
+    if (this.shapeEdit) {
+      return;
+    }
+    const node = this.getActiveNode();
+    const key = node?.shapeKeys.find((item) => item.id === id);
+    if (!node || !key) {
+      return;
+    }
+    const beforeKeys = this.cloneShapeKeys(node);
+    const baseMesh = node.mesh;
+    node.mesh = baseMesh.withPositions(key.targetPositions);
+    node.setShapeWeightOverrides(
+      new Map(node.shapeKeys.map((item) => [item.id, 0]))
+    );
+    this.shapeEdit = { node, keyId: id, baseMesh, beforeKeys };
+    this.history.suspend();
+    this.autosave.pause();
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Commit the live shape edit as one undoable capture. */
+  finishShapeEdit(): void {
+    const session = this.shapeEdit;
+    if (!session) {
+      return;
+    }
+    const edited = session.node.mesh.positions.slice();
+    const afterKeys = session.beforeKeys.map((key) =>
+      key.id === session.keyId
+        ? { ...key, targetPositions: edited }
+        : { ...key, targetPositions: key.targetPositions.slice() }
+    );
+    session.node.mesh = session.baseMesh;
+    session.node.setShapeKeys(session.beforeKeys);
+    session.node.setShapeWeightOverrides(null);
+    this.shapeEdit = null;
+    this.history.resume();
+    this.history.execute(
+      new CaptureShapeKeyCommand(
+        session.node,
+        session.baseMesh,
+        session.baseMesh,
+        session.beforeKeys,
+        afterKeys
+      )
+    );
+    void this.autosave.resume();
+    if (this.workspace === 'animation') {
+      this.applyAnimationPose();
+    } else {
+      this.syncScene();
+    }
+  }
+
+  /** Abort a live shape edit and restore the original target/base. */
+  cancelShapeEdit(): void {
+    const session = this.shapeEdit;
+    if (!session) {
+      return;
+    }
+    session.node.mesh = session.baseMesh;
+    session.node.setShapeKeys(session.beforeKeys);
+    session.node.setShapeWeightOverrides(null);
+    this.shapeEdit = null;
+    this.history.resume();
+    void this.autosave.resume();
+    if (this.workspace === 'animation') {
+      this.applyAnimationPose();
+    } else {
+      this.syncScene();
+    }
+  }
+
   /** Capture the edited base mesh into a key and restore the source base. */
   captureShapeKeyFromMesh(id: string): void {
     const node = this.getActiveNode();
@@ -5972,6 +6064,9 @@ export class EditorRuntime {
   }
 
   undo(): void {
+    if (this.shapeEdit) {
+      return;
+    }
     if (this.drag || this.gizmoDrag) {
       this.cancelToolPointer();
       return;
@@ -5980,6 +6075,9 @@ export class EditorRuntime {
   }
 
   redo(): void {
+    if (this.shapeEdit) {
+      return;
+    }
     if (this.drag || this.gizmoDrag) {
       this.cancelToolPointer();
       return;
@@ -6045,6 +6143,11 @@ export class EditorRuntime {
     if (this.fileBusy) {
       return;
     }
+    if (this.shapeEdit) {
+      this.projectError = 'Finish or cancel shape editing before saving.';
+      this.publish();
+      return;
+    }
     if (this.recoveryAvailable) {
       this.projectError = 'Recover or discard the available autosave before saving.';
       this.publish();
@@ -6077,6 +6180,11 @@ export class EditorRuntime {
   /** Open a project through the platform adapter, replacing the scene on success. */
   async openProject(): Promise<void> {
     if (this.fileBusy) {
+      return;
+    }
+    if (this.shapeEdit) {
+      this.projectError = 'Finish or cancel shape editing before opening another project.';
+      this.publish();
       return;
     }
     if (this.recoveryAvailable) {
@@ -8669,7 +8777,7 @@ export class EditorRuntime {
       this.selection.setContext(null, this.selection.mode);
     }
 
-    if (event.command.journalPatch) {
+    if (event.command.journalPatch && this.shapeEdit === null) {
       try {
         const direction = event.action === 'undo' ? 'backward' : 'forward';
         const patch = event.command.journalPatch(direction);

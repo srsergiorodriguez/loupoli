@@ -73,11 +73,11 @@ describe('inspector layout', () => {
     expect(workspaceCan('animation', 'edit3d')).toBe(true);
     expect(inspectorSectionsFor('animation')).toEqual([
       'scene',
-      'transform',
       'animation',
+      'shapes',
+      'transform',
       'selection',
       'mesh',
-      'shapes',
       'modifiers',
       'ps1',
       'controls'

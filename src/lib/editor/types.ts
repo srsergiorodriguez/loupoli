@@ -282,6 +282,7 @@ export interface EditorSnapshot {
   readonly animationPlaying: boolean;
   readonly animationTracks: readonly AnimationTrackSummary[];
   readonly animationInterpolation: AnimationInterpolation;
+  readonly shapeEditingId: string | null;
   readonly shapeKeys: readonly ShapeKeySummary[];
   readonly groups: readonly GroupSummary[];
   readonly selectedNodeIds: readonly string[];

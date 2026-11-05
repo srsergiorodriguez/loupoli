@@ -1,6 +1,6 @@
 # Shape keys
 
-**Status:** Minimal shape-key support implemented. Keys store absolute morph positions, expose weights, evaluate into the rendered mesh, persist as binary payload, and import glTF morph targets. Shape-key weights are animatable with linear/step tracks. Direct sculpt-style editing of the active shape key is not implemented; author the base mesh and Capture.
+**Status:** Minimal shape-key support implemented. Keys store absolute morph positions, expose weights, evaluate into the rendered mesh, persist as binary payload, and import glTF morph targets. Shape-key weights are animatable with linear/step tracks. Captured shape keys can be edited live with the normal mesh tools through the **Edit / Finish / Cancel** flow.
 
 ## Model
 
@@ -23,9 +23,10 @@ interface ShapeKey {
 Animate Inspector → **Shape keys**:
 
 - Add shape key
+- **Edit**: enter the stored target, edit it live with the normal mesh tools, then **Finish** to record one undoable capture or **Cancel** to discard
 - Weight slider per key
 - Key/Unkey: add or remove a shape-weight timeline key
-- Capture: stores the edited base mesh as the key target, restores the original base, and leaves weight at 0
+- Capture: stores the current edited base mesh as the key target, restores the source base, and leaves weight at 0
 - Delete key
 
 ![Shape keys](media/shape-keys.png)
@@ -43,7 +44,7 @@ Changing the node mesh through the topology command path throws:
 
 > Remove shape keys before changing topology.
 
-This prevents stale per-vertex morph targets. Direct vertex dragging is allowed while authoring: edit the base mesh in Animate, then press **Capture** to store that edit as the current key and restore the source base. The captured key stays at weight 0 so the base remains editable; raise its weight or add a weight key to preview it. Finish topology edits before adding keys.
+This prevents stale per-vertex morph targets. Use **Edit** for the direct live-target workflow. **Capture** remains available for the base-first workflow: edit the base mesh, then capture it into a key and restore the source base. The captured key stays at weight 0 so the base remains editable; raise its weight or add a weight key to preview it. Finish topology edits before adding keys.
 
 ## glTF
 

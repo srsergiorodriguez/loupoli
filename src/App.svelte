@@ -234,10 +234,7 @@
       {#if !session.snapshot.uvOpen &&
         session.snapshot.workspace !== 'light' &&
         session.snapshot.workspace !== 'render'}
-        <ActionDock
-          {session}
-          lifted={session.snapshot.workspace === 'animation'}
-        />
+        <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />
       {#if session.snapshot.workspace === 'animation'}
