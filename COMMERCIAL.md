@@ -10,6 +10,6 @@ For commercial licensing inquiries, contact Sergio Rodríguez Gómez through [Gi
 
 The iPad App Store edition is distributed under Apple's Standard End User License Agreement. Buying that edition grants a license to use the app; it does not grant a commercial license to the source code.
 
-## What is not included
+## Other terms
 
 The loupoli name, logo, and sample documentation assets have their own terms. See [ASSETS.md](ASSETS.md).

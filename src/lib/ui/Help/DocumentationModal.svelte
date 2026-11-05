@@ -71,7 +71,7 @@
       <div class="page-grid">
         <figure>
           <img src={active.image} alt={active.alt} />
-          <figcaption>{active.label} workspace. Screenshots use an illustrative sample scene.</figcaption>
+          <figcaption>{active.label} workspace.</figcaption>
         </figure>
 
         <article class="guide">
@@ -91,7 +91,6 @@
               {/if}
             </section>
           {/each}
-          <p class="example">{active.example}</p>
         </article>
       </div>
     </div>
@@ -273,15 +272,6 @@
     color: var(--accent-primary);
   }
 
-  .example {
-    margin-top: var(--space-4);
-    padding: var(--space-2) var(--space-3);
-    border-left: 2px solid var(--accent-primary);
-    background: var(--accent-primary-muted);
-    color: var(--text-secondary);
-    font-size: var(--text-lg);
-    line-height: var(--leading-body);
-  }
 
   @media (max-width: 900px) {
     .page-head {

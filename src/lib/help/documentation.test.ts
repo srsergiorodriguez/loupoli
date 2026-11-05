@@ -23,7 +23,6 @@ describe('workspace documentation', () => {
     for (const page of DOCUMENTATION) {
       expect(page.summary.length).toBeGreaterThan(80);
       expect(page.sections.length).toBeGreaterThan(1);
-      expect(page.example.length).toBeGreaterThan(60);
       for (const section of page.sections) {
         expect(section.heading.length).toBeGreaterThan(2);
         expect(section.paragraphs.length).toBeGreaterThan(0);

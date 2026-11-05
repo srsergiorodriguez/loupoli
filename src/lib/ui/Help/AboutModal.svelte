@@ -68,7 +68,7 @@
         <article class="license-card">
           <h4>Sample gorilla</h4>
           <p class="license-name">{APP_ABOUT.sampleLicenseName}</p>
-          <p>The sample model and texture used in the documentation screenshots are by {APP_ABOUT.author}. They are not loaded by the application. Credit the author when reusing them.</p>
+          <p>The sample model and texture used in the documentation screenshots are by {APP_ABOUT.author}. Credit the author when reusing them.</p>
           <p class="license-links">
             <button type="button" class="license-link" onclick={() => (licenseView = 'sample')}>Creative Commons license</button>
           </p>
@@ -111,7 +111,6 @@
 
     <footer class="about-footer">
       <p>Made by {APP_ABOUT.author}.</p>
-      <p>Documentation screenshots use a sample scene for illustration.</p>
     </footer>
   </div>
 </ModalDialog>

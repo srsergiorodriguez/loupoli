@@ -11,7 +11,6 @@ export interface DocumentationPage {
     readonly paragraphs: readonly string[];
     readonly controls?: readonly string[];
   }[];
-  readonly example: string;
 }
 
 /** Workspace documentation used by the application-bar reference dialog. */
@@ -57,9 +56,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The screenshot shows the sample character on a separate grid plane. Vertex mode is active, and the white handles mark selectable vertices across the mesh. The Scene outliner lists the ground and the character as separate objects. The ActionDock is visible, with no topology operation armed.'
         ]
       }
-    ],
-    example:
-      'The screenshots use a sample character and ground as separate scene objects. The scene is illustrative; it is not installed with the application.'
+    ]
   },
   {
     id: 'uv',
@@ -102,9 +99,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The screenshot shows the UV pane filled with separate charts for the head, limbs, and torso. The 3D viewport and the UV pane share the same selection state. The footer reports the selected-corner count and the current U and V delta.'
         ]
       }
-    ],
-    example:
-      'The screenshots use a 512 × 512 sample atlas. Its charts appear directly in the UV pane and use the same texture assigned to the mesh.'
+    ]
   },
   {
     id: 'paint',
@@ -146,9 +141,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The screenshot shows the texture atlas in the Paint pane with Brush selected. The Brush inspector exposes size, opacity, hardness, smoothing, and noise, while the top toolbar holds the tool picker and quick controls. The 3D viewport remains visible beside the texture.'
         ]
       }
-    ],
-    example:
-      'The sample atlas is a shared asset in the screenshots. Paint edits its layer stack rather than changing the mesh materials.'
+    ]
   },
   {
     id: 'light',
@@ -190,9 +183,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The screenshot shows two directional lights, Sun and Fill, in the Lighting list. The ground receives the character shadow. The Lit viewport reflects the document light state, and the selected Sun exposes its color, intensity, position, and direction fields.'
         ]
       }
-    ],
-    example:
-      'The sample scene uses a sun and a fill light. The screenshots are illustrative; the scene is not installed with the application.'
+    ]
   },
   {
     id: 'animate',
@@ -207,7 +198,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Tracks and keys',
         paragraphs: [
           'The timeline shows one transform row for the active object or group and one weight row for each shape key. Move the playhead to a whole frame, change the transform or weight, then use + Key on the row. A key stores the visible pose at that frame.',
-          'Diamonds can be dragged between whole frames and selected for interpolation editing. Linear blends between values; Step holds the previous value until the next key. Delete removes the selected key. The Animation section controls FPS, start and end frames, looping, and the default interpolation for new keys.'
+          'Diamonds can be dragged between whole frames and selected for interpolation editing. Linear blends between values; Step holds the previous value until the next key. Delete removes the selected key. The Animation section controls FPS, start and end frames, looping, and the default interpolation for new keys. Camera and light animation are not part of the animation system yet.'
         ],
         controls: [
           'Play / pause: transport buttons',
@@ -235,9 +226,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The screenshot shows the timeline with the object transform row and a shape-weight row for an empty shape key. The playhead is at the first frame, and the tracked values are visible without a selected key.'
         ]
       }
-    ],
-    example:
-      'Camera and light animation are not part of the animation system yet. Transform and shape-weight tracks are document data; the playhead and playback state are session state.'
+    ]
   },
   {
     id: 'render',
@@ -265,7 +254,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Output',
         paragraphs: [
           'Virtual resolution is the internal render size; output resolution is the saved image size. Upscale chooses nearest or smooth sampling between them. Shading selects Lit, Texture, or Solid; the background can be transparent or a solid color.',
-          'Preview renders the virtual frame, upscales it, and opens the floating portal. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM and Render MP4 appear when the WebView supports that codec. PNG stills, sequences, and video frames use the same color-managed frame path.'
+          'Preview renders the virtual frame, upscales it, and opens the floating portal. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM and Render MP4 appear when the WebView supports that codec. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
         ],
         controls: [
           'Output kind: still, frame sequence, WebM, or MP4',
@@ -280,8 +269,6 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The screenshot shows the active camera around the sample character and its ground. The camera frustum and target handles are visible in free editing, and the Camera and Render sections hold the composition and output controls.'
         ]
       }
-    ],
-    example:
-      'Rendered output uses the evaluated modifier geometry and the assigned texture. The render target is color-managed and excludes editor helpers.'
+    ]
   }
 ] as const;

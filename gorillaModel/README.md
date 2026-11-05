@@ -1,6 +1,6 @@
 # Sample gorilla
 
-This model and texture are used only to produce the documentation screenshots. loupoli does not load them at runtime.
+This model and texture are used for documentation and illustration.
 
 Copyright 2026 Sergio Rodríguez Gómez.
 

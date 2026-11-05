@@ -2,7 +2,7 @@
 
 ## Sample gorilla
 
-The sample gorilla model and texture are used only in the documentation screenshots. They are not loaded by the application.
+The sample gorilla model and texture accompany the documentation and screenshots.
 
 - `gorillaModel/gorilla.obj`
 - `gorillaModel/gorilla.png` (recolored from the supplied texture)

@@ -396,8 +396,7 @@ Target baseline: **iPadOS 16.4+**. The Tauri app is structured for iOS, but the 
 
 loupoli's source is **source-available** under [PolyForm Noncommercial 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). It is not OSI open source, because the license does not permit commercial use. Personal, educational, research, and other noncommercial use is allowed. Commercial use and commercial derivatives require a separate written license; see [COMMERCIAL.md](COMMERCIAL.md). The full license text and the commercial and sample-asset notices are available inside the About dialog, so they remain readable without a working external browser.
 
-The sample gorilla model and texture used for documentation screenshots are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), not under PolyForm. See [ASSETS.md](ASSETS.md) for attribution and the list of covered files. The sample is not loaded by the application.
-
+The sample gorilla model and texture used for documentation screenshots are licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), not under PolyForm. See [ASSETS.md](ASSETS.md) for attribution and the list of covered files. 
 ## Planning and architecture
 
 | Document | Contents |
