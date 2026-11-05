@@ -667,56 +667,165 @@ export interface EdgeLoop {
 }
 
 /**
- * Collect the edge loop seeded by one edge across opposite quad edges.
+ * Collect the connected edge loop seeded by one edge.
  *
- * Walks both directions and stops at open boundaries or non-quad faces, so the
- * result is a usable partial loop instead of a topology error.
+ * An edge loop continues through the opposite edge at a valence-four vertex.
+ * At an open boundary it follows the other boundary edge; at a low-valence
+ * corner it follows the straightest continuation so cube face rings still form
+ * a complete loop. Poles and non-manifold vertices stop the walk instead of
+ * guessing a branch. The loop is returned in deterministic index order.
  */
 export function collectEdgeLoop(mesh: HalfEdgeMesh, edge: number): EdgeLoop {
   if (!Number.isInteger(edge) || edge < 0 || edge >= mesh.edgeCount) {
     throw new RangeError(`Edge ${edge} is outside the mesh.`);
   }
-  const halfEdge = mesh.edgeHalfEdge[edge];
-  const firstFace = mesh.heFace[halfEdge];
-  const secondFace = mesh.heFace[mesh.heTwin[halfEdge]];
-  const loopEdges = new Set<number>([edge]);
-  const visitedFaces = new Set<number>();
-  let closed = false;
-  const maxFaces = mesh.faceCount * 2 + 4;
+  const incident: number[][] = Array.from(
+    { length: mesh.vertexCount },
+    () => []
+  );
+  for (let halfEdge = 0; halfEdge < mesh.halfEdgeCount; halfEdge += 1) {
+    const vertex = mesh.heOrigin[halfEdge];
+    const current = mesh.heEdge[halfEdge];
+    if (!incident[vertex].includes(current)) {
+      incident[vertex].push(current);
+    }
+  }
 
-  const walk = (startFace: number, startEdge: number): void => {
-    let face = startFace;
-    let currentEdge = startEdge;
-    while (face >= 0 && !visitedFaces.has(face)) {
-      if (visitedFaces.size > maxFaces) {
-        return;
+  const verticesOf = (value: number): [number, number] => {
+    const halfEdge = mesh.edgeHalfEdge[value];
+    return [
+      mesh.heOrigin[halfEdge],
+      mesh.heOrigin[mesh.heNext[halfEdge]]
+    ];
+  };
+  const otherVertex = (value: number, vertex: number): number => {
+    const [a, b] = verticesOf(value);
+    return a === vertex ? b : a;
+  };
+  const facesOf = (value: number): number[] => {
+    const halfEdge = mesh.edgeHalfEdge[value];
+    return [
+      mesh.heFace[halfEdge],
+      mesh.heFace[mesh.heTwin[halfEdge]]
+    ].filter((face) => face >= 0);
+  };
+  const boundary = (value: number): boolean => facesOf(value).length < 2;
+  const sharesFace = (a: number, b: number): boolean => {
+    const faces = facesOf(a);
+    return facesOf(b).some((face) => faces.includes(face));
+  };
+  const straightest = (
+    vertex: number,
+    current: number,
+    candidates: readonly number[]
+  ): number | null => {
+    if (candidates.length === 0) {
+      return null;
+    }
+    const [currentA, currentB] = verticesOf(current);
+    const vertexX = mesh.positions[vertex * 3];
+    const vertexY = mesh.positions[vertex * 3 + 1];
+    const vertexZ = mesh.positions[vertex * 3 + 2];
+    const currentOther = currentA === vertex ? currentB : currentA;
+    const currentX = mesh.positions[currentOther * 3] - vertexX;
+    const currentY = mesh.positions[currentOther * 3 + 1] - vertexY;
+    const currentZ = mesh.positions[currentOther * 3 + 2] - vertexZ;
+    const currentLength = Math.hypot(currentX, currentY, currentZ);
+    if (currentLength < 1e-9) {
+      return null;
+    }
+    const normalizedX = currentX / currentLength;
+    const normalizedY = currentY / currentLength;
+    const normalizedZ = currentZ / currentLength;
+    let best = -1;
+    let bestDot = Infinity;
+    for (const candidate of candidates) {
+      const other = otherVertex(candidate, vertex);
+      const candidateX = mesh.positions[other * 3] - vertexX;
+      const candidateY = mesh.positions[other * 3 + 1] - vertexY;
+      const candidateZ = mesh.positions[other * 3 + 2] - vertexZ;
+      const candidateLength = Math.hypot(candidateX, candidateY, candidateZ);
+      if (candidateLength < 1e-9) {
+        continue;
       }
-      const corners = faceLoopCorners(mesh, face);
-      if (corners.length !== 4) {
-        return;
+      const dot =
+        normalizedX * (candidateX / candidateLength) +
+        normalizedY * (candidateY / candidateLength) +
+        normalizedZ * (candidateZ / candidateLength);
+      if (dot < bestDot - 1e-9 || (Math.abs(dot - bestDot) <= 1e-9 && candidate < best)) {
+        best = candidate;
+        bestDot = dot;
       }
-      visitedFaces.add(face);
-      const index = corners.findIndex((corner) => corner.edge === currentEdge);
-      if (index < 0) {
-        return;
+    }
+    return best >= 0 ? best : null;
+  };
+  const nextAt = (
+    vertex: number,
+    current: number,
+    sideFace: number
+  ): number | null => {
+    const candidates = incident[vertex].filter((item) => item !== current);
+    if (candidates.length === 0) {
+      return null;
+    }
+    const boundaryCandidates = candidates.filter(boundary);
+    if (boundary(current)) {
+      return boundaryCandidates.length === 1 ? boundaryCandidates[0] : null;
+    }
+    if (boundaryCandidates.length > 0) {
+      return null;
+    }
+    const valence = candidates.length + 1;
+    if (valence === 4) {
+      const opposite = candidates.filter(
+        (candidate) => !sharesFace(current, candidate)
+      );
+      if (opposite.length === 1) {
+        return opposite[0];
       }
-      const opposite = corners[(index + 2) % 4].edge;
-      if (loopEdges.has(opposite)) {
-        closed = true;
-        return;
+    }
+    if (valence === 3) {
+      // A cube-like corner has no unique topological opposite. Follow the
+      // boundary of the face selected for the whole loop instead of jumping
+      // between faces based on an arbitrary index tie.
+      const onSide = candidates.filter((candidate) =>
+        facesOf(candidate).includes(sideFace)
+      );
+      if (onSide.length === 1) {
+        return onSide[0];
       }
-      loopEdges.add(opposite);
-      const next = otherFace(mesh, opposite, face);
+    }
+    if (valence <= 4) {
+      return straightest(vertex, current, candidates);
+    }
+    return null;
+  };
+
+  const loopEdges = new Set<number>([edge]);
+  let closed = false;
+  const sideFace = facesOf(edge).sort((a, b) => a - b)[0] ?? -1;
+  const walk = (startVertex: number): void => {
+    let current = edge;
+    let vertex = startVertex;
+    let steps = 0;
+    while (steps <= mesh.edgeCount) {
+      steps += 1;
+      const next = nextAt(vertex, current, sideFace);
       if (next === null) {
         return;
       }
-      currentEdge = opposite;
-      face = next;
+      if (next === edge || loopEdges.has(next)) {
+        closed = true;
+        return;
+      }
+      loopEdges.add(next);
+      vertex = otherVertex(next, vertex);
+      current = next;
     }
   };
-
-  walk(firstFace, edge);
-  walk(secondFace, edge);
+  const [startA, startB] = verticesOf(edge);
+  walk(startA);
+  walk(startB);
   return {
     edges: [...loopEdges].sort((a, b) => a - b),
     closed

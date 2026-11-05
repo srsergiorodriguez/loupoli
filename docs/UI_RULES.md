@@ -29,7 +29,7 @@ Every command has exactly one visible home. Contextual behavior changes the targ
 - Pointer tools: Tool Rail. ActionDock is Model-only and is hidden while the UV split is open or in Animate.
 - Paint uses a fixed two-row toolbar: icon tool strip, then brush preview/quick controls. Detailed brush options live in the Brush Inspector section; tool changes must not resize the canvas.
 - Inspector sections are filtered and ordered by the shared workspace capability policy. Never hardcode workspace checks inside a section; require a capability and let the Inspector shell order the visible sections. Hidden sections keep their open state.
-- Edge-loop selection is a sticky toggle shown only in 3D Edge mode; it expands an edge pick across the quad loop.
+- Edge-loop selection is a sticky toggle shown only in 3D Edge mode; it expands an edge pick through the connected quad loop, following an open boundary and stopping at poles or non-quad junctions.
 - UV-only operations: UV Toolbar.
 - Document actions: Application Bar.
 - Topology one-shots: Action Dock (Model only; not Animate).
