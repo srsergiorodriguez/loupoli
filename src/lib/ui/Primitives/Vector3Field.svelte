@@ -75,11 +75,10 @@
   .axis-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
     overflow: hidden;
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
-    background: var(--border-subtle);
+    background: var(--bg-input);
   }
 
   .axis-field {
@@ -91,6 +90,10 @@
     padding: 0 7px;
     background: var(--bg-input);
     cursor: ew-resize;
+  }
+
+  .axis-field + .axis-field {
+    border-left: var(--hairline) solid var(--border-subtle);
   }
 
 </style>

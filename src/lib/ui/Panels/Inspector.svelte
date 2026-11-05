@@ -2283,22 +2283,24 @@
     </InspectorSection>
 {/snippet}
 
-      {#each visibleSections as section (section)}
-        {#if section === 'scene'}{@render sceneSection()}
-        {:else if section === 'animation'}{@render animationSection()}
-        {:else if section === 'camera'}{@render cameraSection()}
-        {:else if section === 'render'}{@render renderSection()}
-        {:else if section === 'light'}{@render lightSection()}
-        {:else if section === 'transform'}{@render transformSection()}
-        {:else if section === 'selection'}{@render selectionSection()}
-        {:else if section === 'mesh'}{@render meshSection()}
-        {:else if section === 'shapes'}{@render shapesSection()}
-        {:else if section === 'modifiers'}{@render modifiersSection()}
-        {:else if section === 'ps1'}{@render ps1Section()}
-        {:else if section === 'brush'}{@render brushSection()}
-        {:else if section === 'texture'}{@render textureSection()}
-        {/if}
-      {/each}
+      {#key session.snapshot.workspace}
+        {#each visibleSections as section (section)}
+          {#if section === 'scene'}{@render sceneSection()}
+          {:else if section === 'animation'}{@render animationSection()}
+          {:else if section === 'camera'}{@render cameraSection()}
+          {:else if section === 'render'}{@render renderSection()}
+          {:else if section === 'light'}{@render lightSection()}
+          {:else if section === 'transform'}{@render transformSection()}
+          {:else if section === 'selection'}{@render selectionSection()}
+          {:else if section === 'mesh'}{@render meshSection()}
+          {:else if section === 'shapes'}{@render shapesSection()}
+          {:else if section === 'modifiers'}{@render modifiersSection()}
+          {:else if section === 'ps1'}{@render ps1Section()}
+          {:else if section === 'brush'}{@render brushSection()}
+          {:else if section === 'texture'}{@render textureSection()}
+          {/if}
+        {/each}
+      {/key}
   </div>
 
   {#if objExportOpen}
