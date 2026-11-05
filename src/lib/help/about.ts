@@ -12,7 +12,12 @@ export interface AboutLibrary {
 export const APP_ABOUT = {
   version: packageJson.version,
   author: 'Sergio Rodríguez Gómez',
-  licenseStatus: 'Not chosen yet',
+  licenseStatus: 'Source available',
+  licenseName: 'PolyForm Noncommercial 1.0.0',
+  licenseUrl: 'https://polyformproject.org/licenses/noncommercial/1.0.0',
+  commercialUrl: 'https://github.com/srsergiorodriguez',
+  sampleLicenseName: 'CC BY 4.0',
+  sampleLicenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
   runtimeLibraries: [
     {
       name: 'three.js',

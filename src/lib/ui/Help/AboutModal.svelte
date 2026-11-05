@@ -34,8 +34,8 @@
       </section>
       <section>
         <h4>License</h4>
-        <p class="license-state">{APP_ABOUT.licenseStatus}</p>
-        <p class="supporting">No license has been selected for loupoli yet. The project remains private until a license is chosen.</p>
+        <p class="license-state">{APP_ABOUT.licenseName}</p>
+        <p class="supporting">{APP_ABOUT.licenseStatus} for noncommercial use. Commercial use requires a separate license.</p>
       </section>
       <section>
         <h4>Built with</h4>
@@ -43,6 +43,32 @@
         <p class="supporting">These libraries remain under their own licenses. Their project pages contain the complete license texts.</p>
       </section>
     </div>
+
+    <section class="licensing" aria-labelledby="licensing-heading">
+      <div class="section-heading">
+        <h3 id="licensing-heading">Licenses</h3>
+        <p>Source and sample-asset terms.</p>
+      </div>
+      <div class="license-grid">
+        <article class="license-card">
+          <h4>Source code</h4>
+          <p class="license-name">{APP_ABOUT.licenseName}</p>
+          <p>Personal, educational, research, and other noncommercial use is permitted. Commercial use and commercial derivatives require a separate written license.</p>
+          <p class="license-links">
+            <a href={APP_ABOUT.licenseUrl} target="_blank" rel="noreferrer">License text</a>
+            <a href={APP_ABOUT.commercialUrl} target="_blank" rel="noreferrer">Commercial licensing</a>
+          </p>
+        </article>
+        <article class="license-card">
+          <h4>Sample gorilla</h4>
+          <p class="license-name">{APP_ABOUT.sampleLicenseName}</p>
+          <p>The sample model and texture used in the documentation screenshots are by {APP_ABOUT.author}. They are not loaded by the application. Credit the author when reusing them.</p>
+          <p class="license-links">
+            <a href={APP_ABOUT.sampleLicenseUrl} target="_blank" rel="noreferrer">Creative Commons license</a>
+          </p>
+        </article>
+      </div>
+    </section>
 
     <section class="software" aria-labelledby="open-source-heading">
       <div class="section-heading">
@@ -156,14 +182,65 @@
     line-height: var(--leading-body);
   }
 
-  .license-state {
-    color: var(--accent-warning) !important;
-    font-family: var(--font-mono);
-  }
-
   .supporting {
     color: var(--text-tertiary) !important;
     font-size: var(--text-2xs) !important;
+  }
+
+  .license-state {
+    color: var(--accent-primary) !important;
+    font-family: var(--font-mono);
+  }
+
+  .license-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .license-card {
+    padding: var(--space-3);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+  }
+
+  .license-card h4 {
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-regular);
+  }
+
+  .license-card .license-name {
+    margin-top: var(--space-1);
+    color: var(--accent-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+  }
+
+  .license-card p:not(.license-name):not(.license-links) {
+    margin-top: var(--space-1);
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+    line-height: var(--leading-body);
+  }
+
+  .license-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .license-links a {
+    color: var(--accent-primary);
+    font-size: var(--text-xs);
+    text-decoration: none;
+  }
+
+  .license-links a:hover {
+    text-decoration: underline;
   }
 
   .section-heading {
@@ -205,7 +282,7 @@
     border-bottom: var(--hairline) solid var(--border-subtle);
   }
 
-  a {
+  .library-group a {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -216,7 +293,7 @@
     text-decoration: none;
   }
 
-  a:hover {
+  .library-group a:hover {
     color: var(--accent-primary);
   }
 
@@ -249,6 +326,7 @@
 
   @media (max-width: 760px) {
     .facts,
+    .license-grid,
     .groups {
       grid-template-columns: 1fr;
     }
