@@ -262,6 +262,7 @@ export interface EditorSnapshot {
   readonly ambientIntensity: number;
   readonly bakeBusy: boolean;
   readonly renderBusy: boolean;
+  readonly renderCameraView: boolean;
   readonly renderKind: 'still' | 'sequence' | 'webm' | 'mp4';
   readonly renderStartFrame: number;
   readonly renderEndFrame: number;

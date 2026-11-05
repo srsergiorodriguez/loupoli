@@ -558,6 +558,7 @@ export class EditorRuntime {
   private fileBusy = false;
   private bakeBusy = false;
   private renderBusy = false;
+  private renderCameraView = false;
   private renderKind: 'still' | 'sequence' | 'webm' | 'mp4' = 'still';
   private renderPreviewUrl: string | null = null;
   private renderPreviewWidth = 0;
@@ -626,12 +627,15 @@ export class EditorRuntime {
       isUvActive: () => this.activeEditor !== '3d',
       orbit: (dx, dy) => {
         this.renderer.orbit(dx, dy);
+        this.leaveCameraView();
       },
       pan: (dx, dy) => {
         this.renderer.pan(dx, dy);
+        this.leaveCameraView();
       },
       zoom: (factor) => {
         this.renderer.zoom(factor);
+        this.leaveCameraView();
       },
       beginToolPointer: (sample) => this.beginToolPointer(sample),
       hoverToolPointer: (sample) => this.hoverToolPointer(sample),
@@ -814,10 +818,11 @@ export class EditorRuntime {
       orientation: this.renderer.getOrientation(),
       pointer: this.pointer,
       objectName:
-        this.getActiveLight()?.name ??
-        activeGroup?.name ??
-        active?.name ??
-        'Scene',
+        this.workspace === 'light'
+          ? (this.getActiveLight()?.name ?? 'Lighting')
+          : this.workspace === 'render'
+            ? (this.getActiveCamera()?.name ?? 'Render')
+            : (activeGroup?.name ?? active?.name ?? 'Scene'),
       activeNodeId: this.activeNodeId,
       activeGroupId: this.activeGroupId,
       activeLightId: this.activeLightId,
@@ -840,6 +845,7 @@ export class EditorRuntime {
       fileBusy: this.fileBusy,
       bakeBusy: this.bakeBusy,
       renderBusy: this.renderBusy,
+      renderCameraView: this.renderCameraView,
       renderKind: this.renderKind,
       renderStartFrame: this.renderStartFrame,
       renderEndFrame: this.renderEndFrame,
@@ -1456,6 +1462,7 @@ export class EditorRuntime {
         this.renderer.frameLightWorkspace();
       }
       if (workspace === 'render') {
+        this.renderCameraView = false;
         const camera = this.getActiveCamera();
         if (camera) {
           this.renderer.frameCameraView(camera.position, camera.target);
@@ -3832,21 +3839,28 @@ export class EditorRuntime {
       return;
     }
     this.activeCameraId = id;
+    if (this.workspace === 'render' && this.renderCameraView) {
+      const camera = this.getActiveCamera();
+      if (camera) {
+        this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+      }
+    }
     this.publish();
   }
 
   /** Frame the active camera's position and target in the viewport. */
-  frameActiveCamera(): void {
-    const camera = this.getActiveCamera();
-    if (!camera) {
+  /** Leave the through-camera view and show camera handles again. */
+  private leaveCameraView(): void {
+    if (this.workspace !== 'render' || !this.renderCameraView) {
       return;
     }
-    this.renderer.frameCameraView(camera.position, camera.target);
+    this.renderCameraView = false;
+    this.syncScene();
     this.publish();
   }
 
-  /** Switch to Render and look through the active camera. */
-  viewActiveCamera(): void {
+  /** Toggle between free camera editing and looking through the render camera. */
+  toggleCameraView(): void {
     const camera = this.getActiveCamera();
     if (!camera) {
       return;
@@ -3854,8 +3868,31 @@ export class EditorRuntime {
     if (this.workspace !== 'render') {
       this.setWorkspace('render');
     }
+    if (this.renderCameraView) {
+      this.renderCameraView = false;
+      this.frameActiveCamera();
+      return;
+    }
+    this.renderCameraView = true;
     this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+    this.syncScene();
     this.publish();
+  }
+
+  frameActiveCamera(): void {
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      return;
+    }
+    this.renderCameraView = false;
+    this.renderer.frameCameraView(camera.position, camera.target);
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Toggle Render between free editing and camera view. */
+  viewActiveCamera(): void {
+    this.toggleCameraView();
   }
 
 
@@ -3898,6 +3935,13 @@ export class EditorRuntime {
       return;
     }
     this.history.execute(new UpdateCameraCommand(camera, before, after));
+    if (
+      this.workspace === 'render' &&
+      this.renderCameraView &&
+      this.activeCameraId === id
+    ) {
+      this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+    }
     this.publish();
   }
 
@@ -3971,6 +4015,7 @@ export class EditorRuntime {
       this.renderKind = patch.renderKind;
     }
     this.renderPreviewUrl = null;
+    this.renderCameraView = false;
     if (patch.renderStartFrame !== undefined) {
       this.renderStartFrame = Math.max(0, Math.round(patch.renderStartFrame));
     }
@@ -4658,6 +4703,7 @@ export class EditorRuntime {
       return;
     }
     const view = this.renderer.captureCameraView();
+    this.renderCameraView = false;
     this.updateCamera(camera.id, {
       position: view.position,
       target: view.target,
@@ -9170,7 +9216,7 @@ export class EditorRuntime {
     this.renderer.setCameraGizmos(
       this.document.cameraSummaries(),
       this.activeCameraId,
-      this.workspace === 'render'
+      this.workspace === 'render' && !this.renderCameraView
     );
   }
 

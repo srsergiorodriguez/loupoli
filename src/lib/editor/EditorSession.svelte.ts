@@ -106,6 +106,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   ambientIntensity: 0.22,
   bakeBusy: false,
   renderBusy: false,
+  renderCameraView: false,
   renderKind: 'still',
   renderStartFrame: 0,
   renderEndFrame: 48,
@@ -798,6 +799,10 @@ export class EditorSession {
 
   viewActiveCamera(): void {
     this.runtime?.viewActiveCamera();
+  }
+
+  toggleCameraView(): void {
+    this.runtime?.toggleCameraView();
   }
 
   frameActiveCamera(): void {

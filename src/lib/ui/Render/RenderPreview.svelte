@@ -43,7 +43,7 @@
     z-index: 7;
     display: flex;
     flex-direction: column;
-    width: min(460px, calc(100% - 28px));
+    width: min(620px, calc(100% - 28px));
     padding: 8px;
     pointer-events: auto;
   }
@@ -78,7 +78,7 @@
   img {
     display: block;
     width: 100%;
-    max-height: 300px;
+    max-height: 380px;
     object-fit: contain;
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-sm);

@@ -581,6 +581,7 @@ export class ViewportRenderer {
     const previousGrid = this.grid.group.visible;
     const previousGizmo = this.objectGizmo.group.visible;
     const previousLights = this.lightGizmos.group.visible;
+    const previousCameras = this.cameraGizmos.group.visible;
     const previousClear = this.renderer.getClearColor(new Color());
     const previousClearAlpha = this.renderer.getClearAlpha();
     const views = [...this.nodeViews.values()];
@@ -590,11 +591,13 @@ export class ViewportRenderer {
     this.grid.group.visible = false;
     this.objectGizmo.group.visible = false;
     this.lightGizmos.group.visible = false;
+    this.cameraGizmos.group.visible = false;
 
     const target = new WebGLRenderTarget(width, height, {
       depthBuffer: true,
       stencilBuffer: false
     });
+    target.texture.colorSpace = SRGBColorSpace;
     try {
       this.setShadingMode(
         options.shading === 'texture' ? 'unlit' : options.shading
@@ -639,6 +642,7 @@ export class ViewportRenderer {
       this.grid.group.visible = previousGrid;
       this.objectGizmo.group.visible = previousGizmo;
       this.lightGizmos.group.visible = previousLights;
+      this.cameraGizmos.group.visible = previousCameras;
       for (const view of views) {
         view.setCleanRender(false);
       }

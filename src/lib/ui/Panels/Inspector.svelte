@@ -669,7 +669,7 @@
         <div class="selected-name-row">
           <InlineNameField
             label={activeGroup ? 'Group name' : 'Object name'}
-            value={session.snapshot.objectName}
+            value={activeGroup?.name ?? activeNode?.name ?? ''}
             onCommit={(value) => session.renameActiveObject(value)}
           />
           <span class="texture-kind">{activeItemKind}</span>
@@ -855,7 +855,7 @@
           />
           <span class="texture-note">{cameras.length} {cameras.length === 1 ? 'camera' : 'cameras'}</span>
         </ActionRow>
-        <div class="light-list">
+        <div class="object-list">
           {#each cameras as camera (camera.id)}
             <OutlinerRow
               active={activeCamera?.id === camera.id}
@@ -902,19 +902,16 @@
             precision={2}
             onCommit={(value) => session.updateActiveCamera({ target: value })}
           />
-          <div class="render-field">
-            <span>Field of view</span>
-            <NumberField
-              label="Field of view"
-              value={activeCamera.fov}
-              step={1}
-              precision={1}
-              min={5}
-              max={160}
-              onCommit={(value) => session.updateActiveCamera({ fov: value })}
-            />
-          </div>
-          <div class="texture-action-row">
+          <SliderField
+            label="Field of view"
+            value={activeCamera.fov}
+            min={5}
+            max={160}
+            step={1}
+            precision={1}
+            onChange={(value) => session.updateActiveCamera({ fov: value })}
+          />
+          <ActionRow>
             <ActionButton
               label="Frame camera"
               icon="frame"
@@ -926,9 +923,10 @@
               onActivate={() => session.setActiveCameraFromView()}
             />
             <ActionButton
-              label="View through"
+              label={session.snapshot.renderCameraView ? 'Exit view' : 'View through'}
               icon="eye"
-              onActivate={() => session.viewActiveCamera()}
+              active={session.snapshot.renderCameraView}
+              onActivate={() => session.toggleCameraView()}
             />
             <ActionButton
               label="Delete camera"
@@ -936,7 +934,7 @@
               variant="danger"
               onActivate={() => session.deleteActiveCamera()}
             />
-          </div>
+          </ActionRow>
         {/if}
       </div>
     </InspectorSection>
