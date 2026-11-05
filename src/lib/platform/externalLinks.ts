@@ -12,10 +12,18 @@ function isTauriRuntime(): boolean {
 export async function openExternalUrl(url: string): Promise<void> {
   if (isTauriRuntime()) {
     try {
-      const { openUrl } = await import('@tauri-apps/plugin-opener');
-      await openUrl(url);
-    } catch (error) {
-      console.error('Could not open the external link.', error);
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('open_external_link', { url });
+      return;
+    } catch (commandError) {
+      console.error('Could not open the external link through the app command.', commandError);
+      try {
+        const { openUrl } = await import('@tauri-apps/plugin-opener');
+        await openUrl(url);
+        return;
+      } catch (pluginError) {
+        console.error('Could not open the external link through the opener plugin.', pluginError);
+      }
     }
     return;
   }

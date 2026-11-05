@@ -2,6 +2,7 @@
   import BrandMark from '../Brand/BrandMark.svelte';
   import ModalDialog from '../Primitives/ModalDialog.svelte';
   import ExternalLink from '../Primitives/ExternalLink.svelte';
+  import LicenseDetailsModal, { type LicenseKind } from './LicenseDetailsModal.svelte';
   import { APP_ABOUT } from '../../help/about';
 
   /** Full-screen application and dependency information. */
@@ -10,6 +11,7 @@
   }
 
   let { onClose }: Props = $props();
+  let licenseView = $state<LicenseKind | null>(null);
 
   const groups = [
     { title: 'Runtime libraries', items: APP_ABOUT.runtimeLibraries },
@@ -56,8 +58,8 @@
           <p class="license-name">{APP_ABOUT.licenseName}</p>
           <p>Personal, educational, research, and other noncommercial use is permitted. Commercial use and commercial derivatives require a separate written license.</p>
           <p class="license-links">
-            <ExternalLink href={APP_ABOUT.licenseUrl}>License text</ExternalLink>
-            <ExternalLink href={APP_ABOUT.commercialUrl}>Commercial licensing</ExternalLink>
+            <button type="button" class="license-link" onclick={() => (licenseView = 'source')}>License text</button>
+            <button type="button" class="license-link" onclick={() => (licenseView = 'commercial')}>Commercial licensing</button>
           </p>
         </article>
         <article class="license-card">
@@ -65,7 +67,7 @@
           <p class="license-name">{APP_ABOUT.sampleLicenseName}</p>
           <p>The sample model and texture used in the documentation screenshots are by {APP_ABOUT.author}. They are not loaded by the application. Credit the author when reusing them.</p>
           <p class="license-links">
-            <ExternalLink href={APP_ABOUT.sampleLicenseUrl}>Creative Commons license</ExternalLink>
+            <button type="button" class="license-link" onclick={() => (licenseView = 'sample')}>Creative Commons license</button>
           </p>
         </article>
       </div>
@@ -102,6 +104,10 @@
     </footer>
   </div>
 </ModalDialog>
+
+{#if licenseView}
+  <LicenseDetailsModal kind={licenseView} onClose={() => (licenseView = null)} />
+{/if}
 
 <style>
   .about {
@@ -234,14 +240,24 @@
     margin-top: var(--space-2);
   }
 
-  .license-links :global(a) {
+  .license-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
     color: var(--accent-primary);
+    font-family: var(--font-ui);
     font-size: var(--text-xs);
     text-decoration: none;
+    cursor: pointer;
   }
 
-  .license-links :global(a):hover {
+  .license-link:hover {
     text-decoration: underline;
+  }
+
+  .license-link:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 2px;
   }
 
   .section-heading {

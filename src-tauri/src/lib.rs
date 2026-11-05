@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use tauri_plugin_opener::OpenerExt;
 
 const MAX_PROJECT_BYTES: u64 = 128 * 1024 * 1024;
 
@@ -34,6 +35,18 @@ fn read_u32(bytes: &[u8], offset: usize) -> u32 {
     bytes[offset + 2],
     bytes[offset + 3],
   ])
+}
+
+/// Open an HTTP(S) link with the operating system's default browser.
+#[tauri::command]
+fn open_external_link(app: tauri::AppHandle, url: String) -> Result<(), String> {
+  if !(url.starts_with("https://") || url.starts_with("http://")) {
+    return Err("Only http and https links can be opened.".into());
+  }
+  app
+    .opener()
+    .open_url(url, None::<&str>)
+    .map_err(|error| error.to_string())
 }
 
 /// Validate the `.lpoly` envelope and checksum without interpreting the document.
@@ -224,7 +237,8 @@ pub fn run() {
       read_project_file,
       read_import_file,
       write_project_file,
-      write_export_file
+      write_export_file,
+      open_external_link
     ])
     .run(tauri::generate_context!())
     .expect("error while building loupoli");
