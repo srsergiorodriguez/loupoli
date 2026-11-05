@@ -25,16 +25,14 @@ describe('inspector layout', () => {
     expect(inspectorSectionsFor('paint')).toEqual([
       'scene',
       'brush',
-      'texture',
-      'controls'
+      'texture'
     ]);
   });
 
   it('keeps selection for UV seams and hides 3D editing sections', () => {
     expect(inspectorSectionsFor('uv')).toEqual([
       'scene',
-      'selection',
-      'controls'
+      'selection'
     ]);
   });
 
@@ -43,7 +41,7 @@ describe('inspector layout', () => {
     expect(workspaceCan('light', 'bakeLighting')).toBe(true);
     expect(workspaceCan('light', 'edit3d')).toBe(false);
     expect(workspaceCan('light', 'editTopology')).toBe(false);
-    expect(inspectorSectionsFor('light')).toEqual(['scene', 'light', 'controls']);
+    expect(inspectorSectionsFor('light')).toEqual(['scene', 'light']);
   });
 
   it('exposes the full modeling order only in Model', () => {
@@ -55,8 +53,7 @@ describe('inspector layout', () => {
       'selection',
       'mesh',
       'modifiers',
-      'ps1',
-      'controls'
+      'ps1'
     ]);
   });
 
@@ -66,8 +63,7 @@ describe('inspector layout', () => {
     expect(inspectorSectionsFor('render')).toEqual([
       'scene',
       'camera',
-      'render',
-      'controls'
+      'render'
     ]);
   });
 
@@ -81,8 +77,7 @@ describe('inspector layout', () => {
       'animation',
       'shapes',
       'transform',
-      'selection',
-      'controls'
+      'selection'
     ]);
   });
 

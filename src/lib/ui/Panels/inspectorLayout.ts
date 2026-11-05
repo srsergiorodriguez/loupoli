@@ -18,8 +18,7 @@ export type InspectorSectionId =
   | 'modifiers'
   | 'ps1'
   | 'brush'
-  | 'texture'
-  | 'controls';
+  | 'texture';
 
 /** One policy-driven Inspector section. */
 export interface InspectorSectionDefinition {
@@ -42,8 +41,7 @@ export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'modifiers', requires: 'editTopology', order: 40, defaultOpen: false },
   { id: 'ps1', requires: 'editLook', order: 50, defaultOpen: false },
   { id: 'brush', requires: 'paintTexture', order: 70, defaultOpen: true },
-  { id: 'texture', requires: 'paintTexture', order: 80, defaultOpen: true },
-  { id: 'controls', order: 90, defaultOpen: false }
+  { id: 'texture', requires: 'paintTexture', order: 80, defaultOpen: true }
 ];
 
 /** Ordered, filtered section IDs for the active workspace. */

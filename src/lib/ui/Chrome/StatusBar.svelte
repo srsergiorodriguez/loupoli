@@ -55,8 +55,17 @@
         ? `UV · ${count} corner${count === 1 ? '' : 's'} · drag to ${mode}${mode === 'rotate' ? '' : ' · U/V lock'}`
         : 'UV · select 3D faces or click UV corners';
     }
+    if (session.snapshot.workspace === 'render') {
+      return 'Orbit/pan free camera · Through hides handles · F frame';
+    }
+    if (session.snapshot.workspace === 'light') {
+      return 'Drag light markers · arrow tips aim · Add light in the Inspector';
+    }
     if (session.snapshot.modifiersActive) {
       return 'Modifiers active · base edits re-evaluate · gizmo uses base median';
+    }
+    if (session.snapshot.workspace === 'animation' && selectionCount === 0) {
+      return 'Timeline scrub/play · + Key per track · drag diamonds';
     }
     if (selectionCount === 1) {
       if (session.snapshot.selectionMode === 'vertex') {
@@ -79,7 +88,7 @@
     {#if dynamicHint}
       <span>{dynamicHint}</span>
     {:else}
-      <span class="hint-desktop">Drag orbit · Move/Rotate/Scale gizmo · E/I actions · Add/Shift select · F frame</span>
+      <span class="hint-desktop">Drag orbit · Move/Rotate/Scale gizmo · E/I/L actions · Add/Shift-click select · F frame</span>
       <span class="hint-touch">Tap select · Pencil gizmo/actions · 1-finger orbit · 2-finger pan/zoom · 2/3-finger undo/redo</span>
     {/if}
   </div>
@@ -94,15 +103,12 @@
     <span>{counts.triangles} T</span>
   </div>
 
-  <div class="status-cell status-state text-mono">
-    {#if session.snapshot.snapEnabled}
-      <span class="snap-status">Snap {session.snapshot.snapStep}</span>
-      <span class="state-separator" aria-hidden="true"></span>
-    {/if}
-    <span class="state-dot" aria-hidden="true"></span>
-    <span>On-demand</span>
-    <span class="state-separator" aria-hidden="true"></span>
-    <span class="renderer-label">WebGL2</span>
+  <div class="status-cell status-state text-mono" aria-label="Snapping">
+    <span class="snap-status">
+      {session.snapshot.snapEnabled
+        ? `Snap ${session.snapshot.snapStep}`
+        : 'Snap off'}
+    </span>
   </div>
 </footer>
 
@@ -161,24 +167,6 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 7px;
-  }
-
-  .state-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent-primary);
-  }
-
-  .state-separator {
-    display: block;
-    width: 1px;
-    height: 10px;
-    background: var(--border-subtle);
-  }
-
-  .renderer-label {
     color: var(--text-tertiary);
   }
 
@@ -199,17 +187,6 @@
 
     .status-bar {
       grid-template-columns: minmax(0, 1fr) auto;
-    }
-  }
-
-  @media (max-width: 620px) {
-    .status-state {
-      gap: 6px;
-    }
-
-    .renderer-label,
-    .state-separator {
-      display: none;
     }
   }
 </style>

@@ -26,7 +26,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas, brush footer |
 | **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
-| **Status Bar** | Persistent status | Selection counts, frame budget, render state |
+| **Status Bar** | Persistent status | Context hint, mesh counts, and snap state; no renderer internals |
 | **Notifications** | Transient operation feedback | Bottom-center toast stack above the status bar; import, export, render, and recoverable operation results |
 
 ## Subregions
@@ -45,12 +45,12 @@ This is the authoritative map of the application shell. New controls must be ass
 
 ### Inspector section sets
 
-- **Model:** Scene → Transform → Selection → Mesh → Modifiers → PS1 Look → Controls.
-- **UV:** Scene → Selection → Controls. Selection remains for edge/seam authoring; 3D editing sections are hidden.
-- **Paint:** Scene → Brush → Texture → Controls. Brush and Texture are adjacent; 3D selection overlays are hidden while the selection set persists.
-- **Light:** Scene → Lighting → Controls. Mesh editing and selection chrome are hidden; Scene remains for choosing the bake target.
-- **Render:** Scene → Camera → Render → Controls. Mesh editing and selection chrome are hidden; the active camera and output settings drive the clean render. Scene lists only mesh objects/groups; cameras and lights live in their own lists. **View through** hides camera handles; orbit/pan/zoom returns to free editing.
-- **Animate:** Scene → Animation → Shape keys → Transform → Selection → Controls. Animate has no Mesh, Modifiers, PS1 look, or ActionDock.
+- **Model:** Scene → Transform → Selection → Mesh → Modifiers → PS1 Look.
+- **UV:** Scene → Selection. Selection remains for edge/seam authoring; 3D editing sections are hidden.
+- **Paint:** Scene → Brush → Texture. Brush and Texture are adjacent; 3D selection overlays are hidden while the selection set persists.
+- **Light:** Scene → Lighting. Mesh editing and selection chrome are hidden; Scene remains for choosing the bake target.
+- **Render:** Scene → Camera → Render. Mesh editing and selection chrome are hidden; the active camera and output settings drive the clean render. Scene lists only mesh objects/groups; cameras and lights live in their own lists. **View through** hides camera handles; orbit/pan/zoom returns to free editing.
+- **Animate:** Scene → Animation → Shape keys → Transform → Selection. Animate has no Mesh, Modifiers, PS1 look, or ActionDock.
 - **Timeline:** per-track **+ Key**, selected-key **Delete key/interpolation**, integer-frame diamond dragging, adaptive ruler ticks, minus/Fit/plus zoom, wheel pan, and Ctrl/Cmd+wheel zoom. Transform and shape-weight tracks share the same interaction. The timeline dock owns transport, track keying, key deletion, interpolation, and diamond movement.
 - **Scene import/export:** one labeled **Import / Export** menu; import options precede a separator and export options. The primitive selector remains below the object list because new objects append there.
 - **Tooltip** — command label plus shortcut, from the command registry.

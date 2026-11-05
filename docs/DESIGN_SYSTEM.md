@@ -452,7 +452,7 @@ Implemented component files and local patterns:
 | App shell layout | 1 | Canvas + chrome layout, safe areas, density | `App.svelte` owns layout only, no editor state |
 | `TopBar` | 1–2 | Brand, project title, open/save, autosave state, history actions | File actions collapse on narrow widths |
 | `ToolRail` | 1–3 | Desktop left rail; bottom-docked touch toolrail | Select, Move, Rotate, Scale, Frame; active state is not color-only |
-| `StatusBar` | 1 | Hints, topology counts, renderer state | Hints are context-sensitive; autosave lives in the top bar |
+| `StatusBar` | 1 | Context hints, topology counts, snap state | Hints are context-sensitive; autosave lives in the top bar; renderer internals are not exposed |
 | `OrientationGizmo` | 1–3 | Interactive camera orientation | Drag-to-orbit; tap axis to snap, center to frame |
 | `ShadingControl` | 1 | Five viewport modes | Labels on wide desktop, 44px icon-only buttons on touch |
 | `SelectionModeControl` | 2 | Vertex/Edge/Face mode switch | 44px targets, active state not color-only |

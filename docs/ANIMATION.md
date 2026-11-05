@@ -33,7 +33,7 @@ The `Animate` workspace is a 3D workspace with a bottom timeline.
 ![Animation workspace](media/animation-workspace.png)
 
 - Scene outliner remains available for target selection.
-- Inspector sections are ordered **Scene**, **Animation**, **Shape keys**, **Transform**, **Selection**, and **Controls**. Animate does not expose Mesh, Modifiers, or PS1 look, and it does not show the ActionDock. Shape keys are authored in Animate only.
+- Inspector sections are ordered **Scene**, **Animation**, **Shape keys**, **Transform**, and **Selection**. Animate does not expose Mesh, Modifiers, or PS1 look, and it does not show the ActionDock. Shape keys are authored in Animate only.
 - Timeline:
   - Play/pause
   - Scrubbable ruler

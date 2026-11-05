@@ -2287,33 +2287,6 @@
     </InspectorSection>
 {/snippet}
 
-    {#snippet controlsSection()}
-<InspectorSection
-      title="Controls"
-      open={sections.controls}
-      onToggle={(open) => setSection('controls', open)}
-    >
-      <dl class="controls">
-        <div>
-          <dt>Pen</dt>
-          <dd>
-            {session.snapshot.selectionMode === 'vertex'
-              ? 'Select and drag a vertex'
-              : `Select an ${modeLabel.toLowerCase()}`}
-          </dd>
-        </div>
-        <div>
-          <dt>Touch</dt>
-          <dd>1-finger tap select; drag orbit · 2-finger pinch/pan · 2/3-finger tap undo/redo</dd>
-        </div>
-        <div>
-          <dt>Mouse</dt>
-          <dd>Drag background/face, Alt, or MMB to orbit · Click to select · Shift+MMB pan · wheel zoom</dd>
-        </div>
-      </dl>
-    </InspectorSection>
-{/snippet}
-
       {#each visibleSections as section (section)}
         {#if section === 'scene'}{@render sceneSection()}
         {:else if section === 'animation'}{@render animationSection()}
@@ -2328,7 +2301,6 @@
         {:else if section === 'ps1'}{@render ps1Section()}
         {:else if section === 'brush'}{@render brushSection()}
         {:else if section === 'texture'}{@render textureSection()}
-        {:else if section === 'controls'}{@render controlsSection()}
         {/if}
       {/each}
   </div>
@@ -3101,33 +3073,6 @@
 
   .module-body {
     padding-bottom: var(--space-4);
-  }
-
-  .controls {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin: 0;
-  }
-
-  .controls div {
-    display: grid;
-    grid-template-columns: 52px minmax(0, 1fr);
-    gap: var(--space-2);
-  }
-
-  .controls dt {
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    line-height: var(--leading-body);
-  }
-
-  .controls dd {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: var(--text-2xs);
-    line-height: var(--leading-body);
   }
 
   @media (max-width: 899px) {
