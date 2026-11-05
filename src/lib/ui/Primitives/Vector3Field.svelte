@@ -64,12 +64,12 @@
   }
 
   legend {
-    margin-bottom: 5px;
+    margin-bottom: var(--field-label-gap);
     padding: 0;
     color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    line-height: 1;
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    line-height: var(--leading-ui);
   }
 
   .axis-grid {

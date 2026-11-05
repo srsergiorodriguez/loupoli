@@ -1131,7 +1131,7 @@
       open={sections.light}
       onToggle={(open) => setSection('light', open)}
     >
-      <div class="module-body light-body">
+      <div class="module-body">
         <ActionRow align="between">
           <ActionMenu
             label="Add light"
@@ -1231,14 +1231,14 @@
                 session.updateActiveLight({ shadowSoftness: value })}
             />
           {/if}
-          <div class="texture-action-row">
+          <ActionRow align="end">
             <ActionButton
               label="Delete light"
               icon="trash"
               variant="danger"
               onActivate={() => session.deleteActiveLight()}
             />
-          </div>
+          </ActionRow>
         {/if}
         <div class="light-divider"></div>
         <div class="light-subhead">
@@ -1501,7 +1501,7 @@
         open={sections.brush}
         onToggle={(open) => setSection('brush', open)}
       >
-        <div class="module-body brush-body">
+        <div class="module-body">
           <SliderField
             label="Size"
             value={session.snapshot.uvBrushSize}
@@ -1999,7 +1999,7 @@
       open={sections.texture}
       onToggle={(open) => setSection('texture', open)}
     >
-      <div class="module-body texture-body">
+      <div class="module-body">
         <input
           bind:this={textureImportInput}
           class="visually-hidden"
@@ -2167,7 +2167,7 @@
               </OutlinerRow>
             {/each}
           </div>
-          <div class="texture-action-row">
+          <ActionRow align="end">
             <ActionButton
               label="Delete layer"
               icon="trash"
@@ -2175,7 +2175,7 @@
               disabled={textureLayers.length <= 1}
               onActivate={() => session.removeTextureLayer(activeTextureLayer?.id ?? '')}
             />
-          </div>
+          </ActionRow>
         </div>
 
         {#if activeTextureLayer}
@@ -2379,7 +2379,6 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: var(--space-1);
-    margin-top: var(--space-2);
   }
 
   .primitive-select {
@@ -2400,16 +2399,8 @@
   .scene-action-row {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-1);
-    margin-top: var(--space-2);
-  }
-
-  .scene-action-row {
-    display: flex;
-    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-1);
-    margin-top: var(--space-2);
   }
 
   .scene-action-spacer {
@@ -2450,7 +2441,7 @@
   .transform-stack {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--field-gap);
   }
 
   .stats {
@@ -2469,7 +2460,7 @@
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-2);
-    padding: 8px 10px;
+    padding: var(--space-2) var(--space-3);
     background: var(--bg-input);
   }
 
@@ -2485,7 +2476,7 @@
   }
 
   .selection-title {
-    margin: 0 0 var(--space-2);
+    margin: 0;
     color: var(--text-secondary);
     font-size: var(--text-xs);
   }
@@ -2528,14 +2519,12 @@
   .transform-orientation {
     display: flex;
     justify-content: flex-end;
-    margin-bottom: var(--space-2);
   }
 
   .snap-line {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 82px;
     gap: var(--space-1);
-    margin-top: var(--space-2);
   }
 
   .snap-toggle,
@@ -2584,7 +2573,6 @@
     display: flex;
     align-items: center;
     gap: var(--space-1);
-    margin-top: var(--space-2);
   }
 
   .axis-lock-label {
@@ -2646,7 +2634,7 @@
   }
 
   .modifier-error {
-    margin: var(--space-2) 0 0;
+    margin: 0;
     padding: var(--space-2);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -2659,7 +2647,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
-    margin-top: var(--space-2);
   }
 
   .modifier-card {
@@ -2758,7 +2745,7 @@
   .modifier-field {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: var(--field-label-gap);
     color: var(--text-tertiary);
     font-size: var(--text-2xs);
   }
@@ -2772,7 +2759,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);
-    margin-top: var(--space-2);
   }
 
   .topology-action,
@@ -2823,26 +2809,11 @@
     border-radius: var(--radius-md);
   }
 
-  .hint {
-    margin-top: var(--space-2);
-  }
-
-  .texture-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-
-  .brush-body {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
 
   .texture-block {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--field-gap);
     padding: var(--space-1) 0;
     border-bottom: var(--hairline) solid var(--border-subtle);
   }
@@ -2868,7 +2839,7 @@
   .texture-property-pair {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--field-gap);
   }
 
   .texture-usage {
@@ -2884,20 +2855,6 @@
   }
 
   .texture-layer-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .texture-action-row {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--space-2);
-    margin-top: var(--space-1);
-  }
-
-  .light-body {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -3067,11 +3024,14 @@
 
   .shape-edit-actions {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
     flex: 0 0 auto;
   }
 
   .module-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--field-gap);
     padding-bottom: var(--space-4);
   }
 
