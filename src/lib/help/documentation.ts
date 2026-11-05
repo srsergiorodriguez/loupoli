@@ -125,10 +125,11 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Painting',
         paragraphs: [
-          'Brush, Eraser, Line, Rectangle, Ellipse, Gradient, and Fill operate on the active layer. Size, opacity, hardness, smoothing, noise, and shape fill live in Brush. The toolbar shows the active color, plus From and To side by side for gradients. Clicking a swatch opens an HSV picker with hue, hex, and alpha; alpha multiplies with brush opacity. The paint engine previews each gesture on a scratch layer and commits one undoable pixel patch when the pointer is released.',
+          'Brush, Eraser, Line, Rectangle, Ellipse, Gradient, and Fill operate on the active layer. Size, opacity, hardness, smoothing, noise, and shape fill live in Brush. The toolbar shows the active color, plus From and To side by side for gradients. Clicking a swatch opens an HSV picker with hue, hex, and alpha; alpha multiplies with brush opacity. The eye button draws a read-only UV wireframe over the texture; seams stay amber and the overlay never intercepts paint input. The paint engine previews each gesture on a scratch layer and commits one undoable pixel patch when the pointer is released.',
           'Paint in the texture pane, or choose Brush or Eraser and paint on the 3D model. Projected strokes use the surface UV coordinates and stop at face boundaries, so paint does not jump between islands. In the texture pane, use the wheel to zoom and drag with the middle or right mouse button to pan. Over the 3D model, middle mouse or Alt orbits and right mouse or Space pans.'
         ],
         controls: [
+          'Eye: show or hide the read-only UV overlay over the texture',
           'From / To: gradient endpoint colors and alpha',
           'B / E: brush or eraser in the toolbar',
           'Left drag: paint or select; middle/right drag: pan the texture pane',
@@ -255,7 +256,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Output',
         paragraphs: [
           'Virtual resolution is the internal render size; output resolution is the saved image size. Upscale chooses nearest or smooth sampling between them. Shading selects Lit, Texture, or Solid; the background can be transparent or a solid color.',
-          'Preview renders the virtual frame, upscales it, and opens the floating portal. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM and Render MP4 appear when the WebView supports that codec. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
+          'Preview renders the virtual frame, upscales it, and opens the docked preview pane beside the camera view. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM and Render MP4 appear when the WebView supports that codec. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
         ],
         controls: [
           'Output kind: still, frame sequence, WebM, or MP4',
@@ -267,7 +268,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Screenshot notes',
         paragraphs: [
-          'The screenshot shows the active camera around the sample character and its ground. The camera frustum and target handles are visible in free editing, and the Camera and Render sections hold the composition and output controls.'
+          'The screenshot shows the active camera around the sample character and its ground. The camera frustum and target handles are visible in free editing, the docked preview pane holds the upscaled still, and the Camera and Render sections hold the composition and output controls.'
         ]
       }
     ]

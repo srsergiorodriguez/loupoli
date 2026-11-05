@@ -50,6 +50,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvSelectedCorners: [],
   uvPinnedCorners: [],
   uvPaintMode: false,
+  paintUvOverlay: false,
   uvBrushColor: '#f2ffe0',
   uvBrushColorAlpha: 1,
   uvBrushSize: 36,
@@ -122,6 +123,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   renderTransparent: false,
   renderBackground: '#121214',
   renderPreviewUrl: null,
+  renderPreviewSplit: 0.38,
   renderPreviewWidth: 0,
   renderPreviewHeight: 0,
   animationFrame: 0,
@@ -155,6 +157,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
 const SIDEBAR_STORAGE_KEY = 'loupoli:sidebar:open';
 const WORKSPACE_STORAGE_KEY = 'loupoli:workspace';
 const UV_LAYOUT_STORAGE_KEY = 'loupoli:uv-layout';
+const PAINT_UV_OVERLAY_STORAGE_KEY = 'loupoli:paint-uv-overlay';
+const RENDER_PREVIEW_SPLIT_STORAGE_KEY = 'loupoli:render-preview-split';
 
 function readPreference(key: string, fallback: string): string {
   if (typeof localStorage === 'undefined') {
@@ -205,6 +209,11 @@ export class EditorSession {
     this.runtime = runtime;
     const layout = readPreference(UV_LAYOUT_STORAGE_KEY, 'bottom');
     runtime.setUvLayout(layout === 'side' ? 'side' : 'bottom');
+    runtime.setPaintUvOverlay(readPreference(PAINT_UV_OVERLAY_STORAGE_KEY, 'false') === 'true');
+    const previewSplit = Number(readPreference(RENDER_PREVIEW_SPLIT_STORAGE_KEY, '0.38'));
+    if (Number.isFinite(previewSplit)) {
+      runtime.setRenderPreviewSplit(previewSplit);
+    }
     const workspace = readPreference(WORKSPACE_STORAGE_KEY, 'model');
     runtime.setWorkspace(
       workspace === 'paint'
@@ -284,8 +293,24 @@ export class EditorSession {
     this.runtime?.toggleUvView();
   }
 
+  setPaintUvOverlay(enabled: boolean): void {
+    this.runtime?.setPaintUvOverlay(enabled);
+    writePreference(PAINT_UV_OVERLAY_STORAGE_KEY, String(enabled));
+  }
+
+  togglePaintUvOverlay(): void {
+    const enabled = !this.snapshot.paintUvOverlay;
+    this.runtime?.setPaintUvOverlay(enabled);
+    writePreference(PAINT_UV_OVERLAY_STORAGE_KEY, String(enabled));
+  }
+
   setUvSplit(fraction: number): void {
     this.runtime?.setUvSplit(fraction);
+  }
+
+  setRenderPreviewSplit(fraction: number): void {
+    this.runtime?.setRenderPreviewSplit(fraction);
+    writePreference(RENDER_PREVIEW_SPLIT_STORAGE_KEY, String(fraction));
   }
 
   zoomUv(

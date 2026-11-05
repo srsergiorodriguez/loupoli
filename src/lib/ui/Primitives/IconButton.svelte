@@ -9,6 +9,7 @@
     onActivate?: () => void;
     disabled?: boolean;
     active?: boolean;
+    pressed?: boolean;
     tooltip?: string;
     shortcut?: string;
     tooltipPlacement?: 'bottom' | 'right';
@@ -20,6 +21,7 @@
     onActivate,
     disabled = false,
     active = false,
+    pressed = undefined,
     tooltip,
     shortcut = '',
     tooltipPlacement = 'bottom'
@@ -31,6 +33,7 @@
   class="icon-button"
   class:active
   aria-label={label}
+  aria-pressed={pressed}
   aria-keyshortcuts={shortcut || undefined}
   {disabled}
   data-tooltip={tooltip ? `${tooltip}${shortcut ? ` — ${shortcut}` : ''}` : undefined}

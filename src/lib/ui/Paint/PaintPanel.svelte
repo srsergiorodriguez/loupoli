@@ -66,6 +66,8 @@
     session.snapshot.textureAssetId;
     session.snapshot.textureActiveId;
     session.snapshot.textureLayers.length;
+    session.snapshot.paintUvOverlay;
+    session.snapshot.activeNodeId;
     if (canvas && width > 0 && height > 0) {
       session.drawPaintView(canvas, width, height);
     }

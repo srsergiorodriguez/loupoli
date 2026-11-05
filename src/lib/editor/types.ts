@@ -224,6 +224,7 @@ export interface EditorSnapshot {
   readonly uvSelectedCorners: readonly number[];
   readonly uvPinnedCorners: readonly number[];
   readonly uvPaintMode: boolean;
+  readonly paintUvOverlay: boolean;
   readonly uvBrushColor: string;
   readonly uvBrushColorAlpha: number;
   readonly uvBrushSize: number;
@@ -291,6 +292,7 @@ export interface EditorSnapshot {
   readonly renderTransparent: boolean;
   readonly renderBackground: string;
   readonly renderPreviewUrl: string | null;
+  readonly renderPreviewSplit: number;
   readonly renderPreviewWidth: number;
   readonly renderPreviewHeight: number;
   readonly animationFrame: number;

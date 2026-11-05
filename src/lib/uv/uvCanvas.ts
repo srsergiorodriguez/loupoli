@@ -31,6 +31,91 @@ function faceCorners(mesh: HalfEdgeMesh, face: number): number[] {
   return corners;
 }
 
+
+/** Visual options for a read-only UV wireframe. */
+export interface UvWireframeOptions {
+  color?: string;
+  seamColor?: string;
+  lineWidth?: number;
+  seamWidth?: number;
+  alpha?: number;
+  seamAlpha?: number;
+  drawSeams?: boolean;
+}
+
+/**
+ * Stroke UV face boundaries and seams through a caller-provided projection.
+ *
+ * Both the UV editor and the Paint overlay use this so the wire geometry cannot
+ * drift between views. It never draws handles, pins, or selection affordances.
+ */
+export function drawUvWireframe(
+  context: CanvasRenderingContext2D,
+  mesh: HalfEdgeMesh,
+  toPoint: (u: number, v: number) => readonly [number, number],
+  options: UvWireframeOptions = {}
+): void {
+  const color = options.color ?? cssToken('--wireframe-edge', 'rgba(242,239,230,.26)');
+  const seamColor = options.seamColor ?? cssToken('--accent-warning', '#ffb45e');
+  const lineWidth = options.lineWidth ?? 1;
+  const seamWidth = options.seamWidth ?? 2;
+  const alpha = options.alpha ?? 1;
+  const seamAlpha = options.seamAlpha ?? alpha;
+
+  context.save();
+  context.globalAlpha = Math.min(1, Math.max(0, alpha));
+  context.strokeStyle = color;
+  context.lineWidth = lineWidth;
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const corners = faceCorners(mesh, face);
+    if (corners.length < 3) {
+      continue;
+    }
+    context.beginPath();
+    for (let index = 0; index < corners.length; index += 1) {
+      const corner = corners[index];
+      const [x, y] = toPoint(
+        mesh.heUv[corner * 2],
+        mesh.heUv[corner * 2 + 1]
+      );
+      if (index === 0) {
+        context.moveTo(x, y);
+      } else {
+        context.lineTo(x, y);
+      }
+    }
+    context.closePath();
+    context.stroke();
+  }
+
+  if (options.drawSeams !== false) {
+    context.globalAlpha = Math.min(1, Math.max(0, seamAlpha));
+    context.strokeStyle = seamColor;
+    context.lineWidth = seamWidth;
+    context.lineCap = 'round';
+    context.beginPath();
+    for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+      if (!mesh.isEdgeSeam(edge)) {
+        continue;
+      }
+      const halfEdge = mesh.edgeHalfEdge[edge];
+      const [fromX, fromY] = toPoint(
+        mesh.heUv[halfEdge * 2],
+        mesh.heUv[halfEdge * 2 + 1]
+      );
+      const destination = mesh.heNext[halfEdge];
+      const [toX, toY] = toPoint(
+        mesh.heUv[destination * 2],
+        mesh.heUv[destination * 2 + 1]
+      );
+      context.moveTo(fromX, fromY);
+      context.lineTo(toX, toY);
+    }
+    context.stroke();
+  }
+  context.restore();
+}
+
 /**
  * Draw the editable UV layout into a 2D canvas.
  *
@@ -117,34 +202,14 @@ export function drawUvCanvas(
       context.fillStyle = 'rgba(201, 244, 92, 0.16)';
       context.fill();
     }
-    context.strokeStyle = wire;
-    context.lineWidth = 1;
-    context.stroke();
   }
 
-  // Marked seams stay visible above the chart wire.
-  context.strokeStyle = seam;
-  context.lineWidth = 2;
-  context.lineCap = 'round';
-  context.beginPath();
-  for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
-    if (!mesh.isEdgeSeam(edge)) {
-      continue;
-    }
-    const halfEdge = mesh.edgeHalfEdge[edge];
-    const from = toPoint(
-      mesh.heUv[halfEdge * 2],
-      mesh.heUv[halfEdge * 2 + 1]
-    );
-    const destination = mesh.heNext[halfEdge];
-    const to = toPoint(
-      mesh.heUv[destination * 2],
-      mesh.heUv[destination * 2 + 1]
-    );
-    context.moveTo(from[0], from[1]);
-    context.lineTo(to[0], to[1]);
-  }
-  context.stroke();
+  drawUvWireframe(context, mesh, toPoint, {
+    color: wire,
+    seamColor: seam,
+    lineWidth: 1,
+    seamWidth: 2
+  });
 
   // Draw each unique UV location once as a small corner dot.
   const seen = new Set<string>();

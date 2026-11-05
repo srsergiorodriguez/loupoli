@@ -98,6 +98,18 @@
     <BrushPreview {settings} />
   {/if}
   <span class="paint-size">{session.snapshot.uvBrushSize} px</span>
+  <span class="paint-divider" aria-hidden="true"></span>
+  <IconButton
+    label={session.snapshot.paintUvOverlay ? 'Hide UV overlay' : 'Show UV overlay'}
+    icon={session.snapshot.paintUvOverlay ? 'eye' : 'eye-off'}
+    active={session.snapshot.paintUvOverlay}
+    pressed={session.snapshot.paintUvOverlay}
+    tooltip={session.snapshot.paintUvOverlay ? 'Hide UV overlay' : 'Show UV overlay'}
+    tooltipPlacement="bottom"
+    disabled={!session.snapshot.activeNodeId}
+    onActivate={() => session.togglePaintUvOverlay()}
+  />
+  <span class="paint-divider" aria-hidden="true"></span>
   <IconButton
     label="Zoom out"
     icon="minus"
@@ -173,6 +185,13 @@
   .paint-gradient-preview > span {
     position: absolute;
     inset: 0;
+  }
+
+  .paint-divider {
+    flex: 0 0 auto;
+    width: 1px;
+    height: 24px;
+    background: var(--border-subtle);
   }
 
   .paint-size {

@@ -20,10 +20,11 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale |
 | **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), Loop (3D Edge only), All, Add, Sub |
 | **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock; Light workspace adds selectable/draggable light markers and arrow-tip direction handles |
-| **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, UV and Paint now; Animation later |
-| **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV and Paint |
+| **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width; used by UV, Paint, and Render preview |
+| **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV, Paint, and Render preview |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
-| **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas, brush footer |
+| **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas with optional read-only UV overlay, brush footer |
+| **Render Preview** | Docked still output inside PaneHost | Output dimensions/upscale header, close action, image body; opens after Preview |
 | **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace; full-space About/Documentation modals |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
 | **Status Bar** | Persistent status | Context hint, mesh counts, and snap state; no renderer internals |
@@ -65,7 +66,7 @@ The Viewport Stage owns overlays so they adapt to the visible 3D rectangle, not 
 5. The Tool Rail owns pointer tools, not selection combination.
 6. The Action Dock owns one-shot topology commands.
 7. The Application Bar owns document-level actions only, including New Project.
-8. A workspace owns its PaneHost placement; the UV pane is side-by-side and resizable.
+8. A workspace owns its PaneHost placement; UV, Paint, and Render preview share the side-by-side pane host and resizable divider.
 
 ## Active editor
 

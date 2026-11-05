@@ -18,7 +18,7 @@
   import IconButton from './lib/ui/Primitives/IconButton.svelte';
   import TooltipLayer from './lib/ui/Primitives/TooltipLayer.svelte';
   import AnimationTimeline from './lib/ui/Animation/AnimationTimeline.svelte';
-  import RenderPreview from './lib/ui/Render/RenderPreview.svelte';
+  import RenderPreviewPanel from './lib/ui/Render/RenderPreviewPanel.svelte';
   import ToastStack from './lib/ui/Chrome/ToastStack.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
@@ -127,8 +127,13 @@
   <main
     class="viewport"
     class:uv-open={session.snapshot.uvOpen}
-    class:pane-open={session.snapshot.uvOpen}
-    style={`--pane-width:${session.snapshot.uvSplit * 100}%`}
+    class:pane-open={session.snapshot.uvOpen ||
+      (session.snapshot.workspace === 'render' && session.snapshot.renderPreviewUrl !== null)}
+    style={`--pane-width:${
+      (session.snapshot.uvOpen
+        ? session.snapshot.uvSplit
+        : session.snapshot.renderPreviewSplit) * 100
+    }%`}
     aria-label="3D viewport"
   >
     <section class="viewport-stage" aria-label="3D viewport stage">
@@ -239,9 +244,6 @@
       {#if session.snapshot.workspace === 'animation'}
         <AnimationTimeline {session} />
       {/if}
-      {#if session.snapshot.workspace === 'render'}
-        <RenderPreview {session} />
-      {/if}
     {:else}
       <section class="startup-error loupoli-panel" role="alert">
         <p class="error-kicker">Graphics unavailable</p>
@@ -255,16 +257,31 @@
     {/if}
     </section>
 
-    {#if !startupError && session.snapshot.uvOpen}
+    {#if !startupError &&
+      (session.snapshot.uvOpen ||
+        (session.snapshot.workspace === 'render' && session.snapshot.renderPreviewUrl !== null))}
       <PaneHost
-        label={session.snapshot.uvPaintMode ? 'Paint editor' : 'UV editor'}
-        width={session.snapshot.uvSplit}
-        onResize={(fraction) => session.setUvSplit(fraction)}
+        label={session.snapshot.uvOpen
+          ? session.snapshot.uvPaintMode
+            ? 'Paint editor'
+            : 'UV editor'
+          : 'Render preview'}
+        width={session.snapshot.uvOpen
+          ? session.snapshot.uvSplit
+          : session.snapshot.renderPreviewSplit}
+        onResize={(fraction) =>
+          session.snapshot.uvOpen
+            ? session.setUvSplit(fraction)
+            : session.setRenderPreviewSplit(fraction)}
       >
-        {#if session.snapshot.uvPaintMode}
-          <PaintPanel {session} />
+        {#if session.snapshot.uvOpen}
+          {#if session.snapshot.uvPaintMode}
+            <PaintPanel {session} />
+          {:else}
+            <UvPanel {session} />
+          {/if}
         {:else}
-          <UvPanel {session} />
+          <RenderPreviewPanel {session} />
         {/if}
       </PaneHost>
     {/if}

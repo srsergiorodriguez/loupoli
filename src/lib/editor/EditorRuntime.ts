@@ -60,7 +60,7 @@ import {
   type UvProjection,
   type UvProjectionBase
 } from '../uv/uvView';
-import { drawUvCanvas } from '../uv/uvCanvas';
+import { drawUvCanvas, drawUvWireframe } from '../uv/uvCanvas';
 import { extractUvCharts } from '../geometry/uvCharts';
 import { LscmError, unwrapUvCharts } from '../geometry/lscm';
 import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
@@ -504,6 +504,7 @@ export class EditorRuntime {
     lastFace: number | null;
   } | null = null;
   private uvPaintMode = false;
+  private paintUvOverlay = false;
   private uvBrushColor = '#f2ffe0';
   private uvBrushColorAlpha = 1;
   private uvBrushSize = 36;
@@ -573,6 +574,7 @@ export class EditorRuntime {
   private renderCameraView = false;
   private renderKind: 'still' | 'sequence' | 'webm' | 'mp4' = 'still';
   private renderPreviewUrl: string | null = null;
+  private renderPreviewSplit = 0.38;
   private renderPreviewWidth = 0;
   private renderPreviewHeight = 0;
   private renderStartFrame = 0;
@@ -775,13 +777,14 @@ export class EditorRuntime {
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvPaintMode: this.uvPaintMode,
+      paintUvOverlay: this.paintUvOverlay,
       uvBrushColor: this.uvBrushColor,
-  uvBrushColorAlpha: this.uvBrushColorAlpha,
+      uvBrushColorAlpha: this.uvBrushColorAlpha,
       uvBrushSize: this.uvBrushSize,
       uvBrushOpacity: this.uvBrushOpacity,
       paintTool: this.paintTool,
       paintSecondaryColor: this.paintSecondaryColor,
-  paintSecondaryColorAlpha: this.paintSecondaryColorAlpha,
+      paintSecondaryColorAlpha: this.paintSecondaryColorAlpha,
       paintHardness: this.paintHardness,
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
@@ -875,6 +878,7 @@ export class EditorRuntime {
       renderTransparent: this.renderTransparent,
       renderBackground: this.renderBackground,
       renderPreviewUrl: this.renderPreviewUrl,
+      renderPreviewSplit: this.renderPreviewSplit,
       renderPreviewWidth: this.renderPreviewWidth,
       renderPreviewHeight: this.renderPreviewHeight,
       animationFrame: this.animationFrame,
@@ -2042,6 +2046,25 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Show or hide the read-only UV wireframe over the Paint texture. */
+  setPaintUvOverlay(enabled: boolean): void {
+    if (this.paintUvOverlay === enabled) {
+      return;
+    }
+    this.paintUvOverlay = enabled;
+    this.publish();
+  }
+
+  /** Set the fraction of the viewport occupied by the render preview pane. */
+  setRenderPreviewSplit(fraction: number): void {
+    const clamped = Math.min(0.65, Math.max(0.25, fraction));
+    if (Math.abs(clamped - this.renderPreviewSplit) < 1e-4) {
+      return;
+    }
+    this.renderPreviewSplit = clamped;
+    this.publish();
+  }
+
   setUvBrushColor(color: string): void {
     this.uvBrushColor = color;
     this.publish();
@@ -2370,6 +2393,37 @@ export class EditorRuntime {
     };
     drawTextureChecker(context, textureRect);
     drawTextureSurface(context, this.textureStack, textureRect);
+    const node = this.getActiveNode();
+    if (this.paintUvOverlay && node) {
+      context.save();
+      context.beginPath();
+      context.rect(bounds.x, bounds.y, bounds.size, bounds.size);
+      context.clip();
+      const rootStyle = getComputedStyle(document.documentElement);
+      const wire =
+        rootStyle.getPropertyValue('--text-primary').trim() || '#f2efe6';
+      const seam =
+        rootStyle.getPropertyValue('--accent-warning').trim() || '#ffb45e';
+      context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+      context.shadowBlur = 2;
+      drawUvWireframe(
+        context,
+        node.mesh,
+        (u, v) => [
+          bounds.x + u * bounds.size,
+          bounds.y + (1 - v) * bounds.size
+        ],
+        {
+          color: wire,
+          seamColor: seam,
+          lineWidth: 1,
+          seamWidth: 1.5,
+          alpha: 0.75,
+          seamAlpha: 0.95
+        }
+      );
+      context.restore();
+    }
     context.strokeStyle =
       getComputedStyle(document.documentElement)
         .getPropertyValue('--border-subtle')
