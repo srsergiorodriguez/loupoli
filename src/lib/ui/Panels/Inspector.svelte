@@ -908,23 +908,23 @@
           />
           <ActionRow>
             <ActionButton
-              label="Frame camera"
+              label="Frame"
               icon="frame"
               onActivate={() => session.frameActiveCamera()}
             />
             <ActionButton
-              label="Set from view"
+              label="From view"
               icon="camera"
               onActivate={() => session.setActiveCameraFromView()}
             />
-          </ActionRow>
-          <ActionRow align="between">
             <ActionButton
-              label={session.snapshot.renderCameraView ? 'Exit view' : 'View through'}
+              label={session.snapshot.renderCameraView ? 'Exit' : 'Through'}
               icon="eye"
               active={session.snapshot.renderCameraView}
               onActivate={() => session.toggleCameraView()}
             />
+          </ActionRow>
+          <ActionRow align="end">
             <ActionButton
               label="Delete camera"
               icon="trash"

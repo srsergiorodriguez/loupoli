@@ -112,7 +112,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Texture assets | New, import/duplicate overflow | Assign/Unassign, filter, alpha | Delete texture in overflow |
 | Texture layers | Add layer | selection properties | Delete layer, last/right |
 | Animation | — | track + key in timeline | Delete key in timeline header, last/right |
-| Camera | Add from view above list | selected camera name/position/target/FOV and view actions below list | Delete camera last/right |
+| Camera | Add from view above list | selected camera name/position/target/FOV; compact Frame/From view/Through toggle on one row | Delete camera isolated last/right |
 | Render | — | output settings below header; Preview then Render in the final action row | — |
 | Shape keys | Add shape key | selected key: name, weight, Edit target, Capture base; rows support visibility and drag reorder | Delete shape key, last/right |
 
