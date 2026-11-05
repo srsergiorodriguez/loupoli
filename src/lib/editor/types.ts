@@ -165,9 +165,11 @@ export interface ShapeKeySummary {
 /** Reactive-safe animation track projection. */
 export interface AnimationTrackSummary {
   readonly id: string;
+  readonly kind: 'transform' | 'shape';
   readonly targetId: string;
   readonly targetKind: AnimationTargetKind;
   readonly targetName: string;
+  readonly shapeKeyId?: string;
   readonly keyframes: readonly {
     readonly frame: number;
     readonly interpolation: AnimationInterpolation;

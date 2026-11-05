@@ -1,6 +1,6 @@
 # Animation workspace
 
-**Status:** Foundation implemented. The Animation workspace has transform tracks for objects and groups, keyframe insertion/deletion, linear/step interpolation, scrubbable timeline, and explicit scheduler-driven playback. Camera animation, light animation, and shape keys are not implemented yet.
+**Status:** Foundation implemented. The Animation workspace has transform tracks for objects and groups, keyframe insertion/deletion, linear/step interpolation, scrubbable timeline, and explicit scheduler-driven playback. Transform tracks and shape-weight tracks are implemented. Camera and light animation are not implemented yet.
 
 ## Model
 
@@ -39,7 +39,7 @@ The `Animate` workspace is a 3D workspace with a bottom timeline.
   - Scrubbable ruler
   - Tracks and key diamonds
   - Current frame and FPS
-- Key insertion rounds the playhead to the exact integer key frame, and the ruler/track lanes share the same horizontal inset so diamonds and playhead align. The timeline sits above the status bar. Animate keeps the modeling tool rail and selection controls, but hides the view gizmo so the timeline remains unobstructed.
+- Key insertion rounds the playhead to the exact integer key frame, and the ruler/track lanes share the same horizontal inset so diamonds and playhead align. The timeline sits above the status bar and is inset beside the ActionDock. Animate keeps the modeling tool rail and selection controls, but hides the view gizmo so the timeline remains unobstructed. Transform edits show from the current animated pose; an existing key at the current frame updates automatically, while an unkeyed frame requires Key transform.
 - Animation Inspector:
   - FPS, start/end frame
   - Loop toggle

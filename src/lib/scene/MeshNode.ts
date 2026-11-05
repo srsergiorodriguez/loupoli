@@ -55,6 +55,7 @@ export class MeshNode {
   modifiers: Modifier[] = [];
   shapeKeys: ShapeKey[] = [];
   shapeBasePositions: Float32Array | null = null;
+  private shapeWeightOverrides: ReadonlyMap<string, number> | null = null;
   private modifierRevision = 0;
   private shapeKeyRevision = 0;
   private evaluationBase: HalfEdgeMesh | null = null;
@@ -214,7 +215,7 @@ export class MeshNode {
     this.shapeKeys[index] = {
       ...this.shapeKeys[index],
       targetPositions: captured,
-      weight: 1
+      weight: 0
     };
     this.invalidateShapeKeys();
   }
@@ -225,9 +226,20 @@ export class MeshNode {
     this.evaluation = null;
   }
 
+  /** Apply session-only animated weight overrides without changing key values. */
+  setShapeWeightOverrides(overrides: ReadonlyMap<string, number> | null): void {
+    this.shapeWeightOverrides = overrides;
+    this.invalidateShapeKeys();
+  }
+
+  /** Effective weight for one shape key (animated override wins). */
+  shapeKeyWeight(key: ShapeKey): number {
+    return this.shapeWeightOverrides?.get(key.id) ?? key.weight;
+  }
+
   /** Whether any shape key currently contributes to the evaluated mesh. */
   get shapeKeysActive(): boolean {
-    return this.shapeKeys.some((key) => key.weight > 0);
+    return this.shapeKeys.some((key) => this.shapeKeyWeight(key) > 0);
   }
 
   private invalidateShapeKeys(): void {
@@ -241,14 +253,15 @@ export class MeshNode {
     }
     const positions = this.mesh.positions.slice();
     for (const key of this.shapeKeys) {
-      if (key.weight <= 0) {
+      const weight = this.shapeKeyWeight(key);
+      if (weight <= 0) {
         continue;
       }
       if (key.targetPositions.length !== positions.length) {
         continue;
       }
       for (let i = 0; i < positions.length; i += 1) {
-        positions[i] += (key.targetPositions[i] - this.mesh.positions[i]) * key.weight;
+        positions[i] += (key.targetPositions[i] - this.mesh.positions[i]) * weight;
       }
     }
     return this.mesh.withPositions(positions);

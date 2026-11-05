@@ -274,7 +274,11 @@ interface GizmoDrag {
   readonly axis: GizmoAxis;
   readonly orientation: TransformOrientation;
   readonly target: MeshNode | SceneGroup;
+  /** Visible pose at drag start; usually equals the rest transform. */
   readonly before: NodeTransform;
+  /** Rest transform before an animation-pose edit, restored on cancel. */
+  readonly restBefore: NodeTransform;
+  readonly animationTargetKind: 'node' | 'group' | null;
   readonly origin: Vector3;
   readonly axisWorld: Vector3;
   readonly size: number;
@@ -282,6 +286,7 @@ interface GizmoDrag {
   readonly plane: Plane | null;
   readonly basis: { u: Vector3; v: Vector3 } | null;
   readonly startAngle: number;
+  dragged: boolean;
 }
 
 /** Active selection-median transform gizmo drag. */
@@ -332,6 +337,8 @@ interface ModalTransform {
   readonly element: ElementTransform | null;
   readonly targetLabel: string;
   readonly before: NodeTransform;
+  readonly restBefore: NodeTransform;
+  readonly animationTargetKind: 'node' | 'group' | null;
   readonly orientation: TransformOrientation;
   axis: GizmoAxis | null;
   readonly startX: number;
@@ -675,10 +682,20 @@ export class EditorRuntime {
     const parentTransform = active
       ? (this.document.getGroup(active.parentId)?.transform ?? null)
       : null;
-    const globalTransform = activeGroup
-      ? this.cloneTransform(activeGroup.transform)
+    const targetId = activeGroup?.id ?? active?.id ?? null;
+    const pose =
+      this.workspace === 'animation' && targetId !== null
+        ? this.animationPose.get(targetId)
+        : undefined;
+    const activeTransformValue = activeGroup
+      ? this.cloneTransform(pose ?? activeGroup.transform)
       : active
-        ? worldTransformForNode(active.transform, parentTransform)
+        ? this.cloneTransform(pose ?? active.transform)
+        : null;
+    const globalTransform = activeGroup
+      ? this.cloneTransform(pose ?? activeGroup.transform)
+      : active
+        ? worldTransformForNode(pose ?? active.transform, parentTransform)
         : null;
     const selectedElements = this.selection.values();
     let seamCount = 0;
@@ -762,11 +779,7 @@ export class EditorRuntime {
             triangles: evaluated.mesh.topologyTriangleCount
           }
         : EMPTY_COUNTS,
-      activeTransform: activeGroup
-        ? this.cloneTransform(activeGroup.transform)
-        : active
-          ? this.cloneTransform(active.transform)
-          : null,
+      activeTransform: activeTransformValue,
       globalTransform,
       transformOrientation: this.transformOrientation,
       modalTransform: this.modalSnapshot(),
@@ -842,7 +855,7 @@ export class EditorRuntime {
       shapeKeys: (this.getActiveNode()?.shapeKeys ?? []).map((key) => ({
         id: key.id,
         name: key.name,
-        weight: key.weight
+        weight: this.getActiveNode()?.shapeKeyWeight(key) ?? key.weight
       })),
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
@@ -3618,6 +3631,12 @@ export class EditorRuntime {
     orientation: TransformOrientation = 'local'
   ): void {
     const group = this.getActiveGroup();
+    if (this.workspace === 'animation') {
+      const id = group?.id ?? this.getActiveNode()?.id;
+      if (id !== undefined) {
+        this.animationPose.delete(id);
+      }
+    }
     if (group) {
       const values = [
         ...transform.position,
@@ -3649,6 +3668,7 @@ export class EditorRuntime {
         );
       if (!unchanged) {
         this.history.execute(new TransformGroupCommand(group, before, next));
+        this.syncAnimationTransformEdit(group);
       }
       return;
     }
@@ -3701,6 +3721,7 @@ export class EditorRuntime {
       return;
     }
     this.history.execute(new TransformNodeCommand(node, before, next));
+    this.syncAnimationTransformEdit(node);
   }
 
   /** Select a light for the Light Inspector without losing the bake target. */
@@ -3986,8 +4007,9 @@ export class EditorRuntime {
 
   /** Reactive-safe animation track summaries with resolved target names. */
   private animationTrackSummaries() {
-    return this.document.animation.tracks.map((track) => ({
+    const transforms = this.document.animation.tracks.map((track) => ({
       id: track.id,
+      kind: 'transform' as const,
       targetId: track.targetId,
       targetKind: track.targetKind,
       targetName:
@@ -3999,6 +4021,23 @@ export class EditorRuntime {
         interpolation: key.interpolation
       }))
     }));
+    const weights = this.document.animation.weightTracks.map((track) => {
+      const node = this.document.getNode(track.targetId);
+      const key = node?.shapeKeys.find((item) => item.id === track.shapeKeyId);
+      return {
+        id: track.id,
+        kind: 'shape' as const,
+        targetId: track.targetId,
+        targetKind: 'node' as const,
+        targetName: `${node?.name ?? 'Missing object'} · ${key?.name ?? 'Missing shape'}`,
+        shapeKeyId: track.shapeKeyId,
+        keyframes: track.keyframes.map((item) => ({
+          frame: item.frame,
+          interpolation: item.interpolation
+        }))
+      };
+    });
+    return [...transforms, ...weights];
   }
 
   /** Return the animation track for the active node/group, if any. */
@@ -4024,6 +4063,26 @@ export class EditorRuntime {
       }
     }
     this.animationPose = pose;
+    const weightOverrides = new Map<string, Map<string, number>>();
+    for (const track of this.document.animation.weightTracks) {
+      const node = this.document.getNode(track.targetId);
+      if (!node || !node.shapeKeys.some((key) => key.id === track.shapeKeyId)) {
+        continue;
+      }
+      const weight = track.evaluate(this.animationFrame);
+      if (weight === null) {
+        continue;
+      }
+      let values = weightOverrides.get(track.targetId);
+      if (!values) {
+        values = new Map();
+        weightOverrides.set(track.targetId, values);
+      }
+      values.set(track.shapeKeyId, weight);
+    }
+    for (const node of this.document.nodes) {
+      node.setShapeWeightOverrides(weightOverrides.get(node.id) ?? null);
+    }
     this.syncScene();
     this.publish();
   }
@@ -4091,6 +4150,33 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Update an existing transform key when the current frame is keyed. */
+  private syncAnimationTransformEdit(target: MeshNode | SceneGroup): void {
+    if (this.workspace !== 'animation') {
+      return;
+    }
+    const track = this.document.animation.getTrack(target.id);
+    if (!track) {
+      return;
+    }
+    const frame = Math.round(this.animationFrame);
+    if (!track.keyframes.some((key) => key.frame === frame)) {
+      return;
+    }
+    const before = this.document.animation.snapshot();
+    track.setKey(frame, target.transform, this.animationInterpolation);
+    const after = this.document.animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        after,
+        'Update transform key'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
   /** Key the active object or group transform at the current frame. */
   keyActiveTransform(): void {
     const group = this.getActiveGroup();
@@ -4123,6 +4209,61 @@ export class EditorRuntime {
     this.applyAnimationPose();
   }
 
+  /** Key the active object's shape weight at the current frame. */
+  keyShapeWeight(shapeKeyId: string): void {
+    const node = this.getActiveNode();
+    const key = node?.shapeKeys.find((item) => item.id === shapeKeyId);
+    if (!node || !key) {
+      return;
+    }
+    const keyFrame = Math.round(this.animationFrame);
+    this.animationFrame = keyFrame;
+    const before = this.document.animation.snapshot();
+    const track = this.document.animation.ensureWeightTrack(node.id, key.id);
+    track.setKey(
+      keyFrame,
+      node.shapeKeyWeight(key),
+      this.animationInterpolation
+    );
+    const after = this.document.animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        after,
+        'Key shape weight'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Delete the active object's shape-weight key at the current frame. */
+  deleteShapeWeightKey(shapeKeyId: string): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const track = this.document.animation.getWeightTrack(node.id, shapeKeyId);
+    if (!track) {
+      return;
+    }
+    const before = this.document.animation.snapshot();
+    track.removeKey(Math.round(this.animationFrame));
+    if (track.keyframes.length === 0) {
+      this.document.animation.removeWeightTrack(node.id, shapeKeyId);
+    }
+    const after = this.document.animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        after,
+        'Delete shape-weight key'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
   /** Delete the key at the current frame for the active target. */
   deleteActiveAnimationKey(): void {
     const track = this.getActiveAnimationTrack();
@@ -4148,7 +4289,11 @@ export class EditorRuntime {
 
   /** Start scheduler-driven animation playback. */
   playAnimation(): void {
-    if (this.animationPlaying || this.document.animation.tracks.length === 0) {
+    if (
+      this.animationPlaying ||
+      (this.document.animation.tracks.length === 0 &&
+        this.document.animation.weightTracks.length === 0)
+    ) {
       return;
     }
     const settings = this.document.animation;
@@ -4208,10 +4353,10 @@ export class EditorRuntime {
 
   /** Clear the preview pose when leaving animation-oriented views. */
   private clearAnimationPose(): void {
-    if (this.animationPose.size === 0) {
-      return;
-    }
     this.animationPose.clear();
+    for (const node of this.document.nodes) {
+      node.setShapeWeightOverrides(null);
+    }
     this.syncScene();
   }
 
@@ -4623,7 +4768,20 @@ export class EditorRuntime {
     this.history.execute(
       new SetShapeKeysCommand(node, before, node.shapeKeys, 'Remove shape key')
     );
-    this.publish();
+    const track = this.document.animation.getWeightTrack(node.id, id);
+    if (track) {
+      const animationBefore = this.document.animation.snapshot();
+      this.document.animation.removeWeightTrack(node.id, id);
+      this.history.execute(
+        new SetAnimationCommand(
+          this.document.animation,
+          animationBefore,
+          this.document.animation.snapshot(),
+          'Remove shape-weight track'
+        )
+      );
+    }
+    this.applyAnimationPose();
   }
 
   /** Change one shape-key weight. */
@@ -4637,7 +4795,28 @@ export class EditorRuntime {
     this.history.execute(
       new SetShapeKeysCommand(node, before, node.shapeKeys, 'Shape key weight')
     );
-    this.publish();
+    if (this.workspace === 'animation') {
+      const track = this.document.animation.getWeightTrack(node.id, id);
+      if (track) {
+        const animationBefore = this.document.animation.snapshot();
+        track.setKey(
+          Math.round(this.animationFrame),
+          weight,
+          this.animationInterpolation
+        );
+        this.history.execute(
+          new SetAnimationCommand(
+            this.document.animation,
+            animationBefore,
+            this.document.animation.snapshot(),
+            'Shape key weight'
+          )
+        );
+      }
+      this.applyAnimationPose();
+    } else {
+      this.publish();
+    }
   }
 
   /** Capture the edited base mesh into a key and restore the source base. */
@@ -6892,9 +7071,13 @@ export class EditorRuntime {
     if (this.gizmoDrag) {
       const drag = this.gizmoDrag;
       this.gizmoDrag = null;
-      drag.target.setTransform(drag.before);
-      this.syncScene();
-      this.publish();
+      drag.target.setTransform(drag.restBefore);
+      if (drag.animationTargetKind !== null) {
+        this.applyAnimationPose();
+      } else {
+        this.syncScene();
+        this.publish();
+      }
       return;
     }
 
@@ -7039,6 +7222,16 @@ export class EditorRuntime {
     if (!target || this.gizmoDrag || this.drag) {
       return false;
     }
+    const restBefore = this.cloneTransform(target.transform);
+    const posed =
+      !useElements && this.workspace === 'animation'
+        ? this.animationPose.get(target.id)
+        : undefined;
+    if (posed) {
+      target.setTransform(posed);
+      this.animationPose.delete(target.id);
+      this.syncScene();
+    }
     const parent =
       'primitive' in target && target.parentId !== null
         ? this.document.getGroup(target.parentId)
@@ -7126,6 +7319,10 @@ export class EditorRuntime {
       element,
       targetLabel,
       before: this.cloneTransform(target.transform),
+      restBefore,
+      animationTargetKind: posed
+        ? ('primitive' in target ? 'node' : 'group')
+        : null,
       orientation: this.transformOrientation,
       axis: null,
       startX: clientX,
@@ -7690,9 +7887,13 @@ export class EditorRuntime {
     if (changed) {
       this.history.execute(
         'primitive' in modal.target
-          ? new TransformNodeCommand(modal.target, modal.before, after)
-          : new TransformGroupCommand(modal.target, modal.before, after)
+          ? new TransformNodeCommand(modal.target, modal.restBefore, after)
+          : new TransformGroupCommand(modal.target, modal.restBefore, after)
       );
+      this.syncAnimationTransformEdit(modal.target);
+    } else if (modal.animationTargetKind !== null) {
+      modal.target.setTransform(modal.restBefore);
+      this.applyAnimationPose();
     } else {
       this.publish();
     }
@@ -7719,9 +7920,13 @@ export class EditorRuntime {
       this.publish();
       return;
     }
-    modal.target.setTransform(modal.before);
-    this.syncScene();
-    this.publish();
+    modal.target.setTransform(modal.restBefore);
+    if (modal.animationTargetKind !== null) {
+      this.applyAnimationPose();
+    } else {
+      this.syncScene();
+      this.publish();
+    }
   }
 
   private selectionGizmoLabel(
@@ -8135,20 +8340,41 @@ export class EditorRuntime {
       startParameter = parameter;
     }
 
+    const restBefore = this.cloneTransform(target.transform);
+    const posed =
+      this.workspace === 'animation'
+        ? this.animationPose.get(target.id)
+        : undefined;
+    const before = posed
+      ? this.cloneTransform(posed)
+      : this.cloneTransform(target.transform);
+    if (posed) {
+      // Edit from the visible animated pose. The edit becomes the rest
+      // transform immediately and the stale preview pose is removed; press
+      // Key to write it back into the animation track.
+      target.setTransform(before);
+      this.animationPose.delete(target.id);
+      this.syncScene();
+    }
     this.gizmoDrag = {
       pointerId: sample.pointerId,
       mode: hit.mode,
       axis: hit.axis,
       orientation: this.transformOrientation,
       target,
-      before: this.cloneTransform(target.transform),
+      before,
+      restBefore,
+      animationTargetKind: posed
+        ? ('primitive' in target ? 'node' : 'group')
+        : null,
       origin: frame.origin,
       axisWorld,
       size: frame.size,
       startParameter,
       plane,
       basis,
-      startAngle
+      startAngle,
+      dragged: false
     };
     this.publish();
     return true;
@@ -8275,7 +8501,16 @@ export class EditorRuntime {
       next.rotation = [euler.x, euler.y, euler.z];
     }
 
+    const current = drag.target.transform;
+    const changed =
+      next.position.some((value, i) => Math.abs(value - current.position[i]) > 1e-7) ||
+      next.rotation.some((value, i) => Math.abs(value - current.rotation[i]) > 1e-7) ||
+      next.scale.some((value, i) => Math.abs(value - current.scale[i]) > 1e-7);
+    if (!changed) {
+      return;
+    }
     drag.target.setTransform(next);
+    drag.dragged = true;
     this.syncScene();
     this.publish();
   }
@@ -8288,6 +8523,7 @@ export class EditorRuntime {
     this.gizmoDrag = null;
     const after = this.cloneTransform(drag.target.transform);
     const changed =
+      drag.dragged ||
       after.position.some(
         (value, i) => Math.abs(value - drag.before.position[i]) > 1e-7
       ) ||
@@ -8300,9 +8536,13 @@ export class EditorRuntime {
     if (changed) {
       this.history.execute(
         'primitive' in drag.target
-          ? new TransformNodeCommand(drag.target, drag.before, after)
-          : new TransformGroupCommand(drag.target, drag.before, after)
+          ? new TransformNodeCommand(drag.target, drag.restBefore, after)
+          : new TransformGroupCommand(drag.target, drag.restBefore, after)
       );
+      this.syncAnimationTransformEdit(drag.target);
+    } else if (drag.animationTargetKind !== null) {
+      drag.target.setTransform(drag.restBefore);
+      this.applyAnimationPose();
     } else {
       this.publish();
     }

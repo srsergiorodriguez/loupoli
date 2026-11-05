@@ -896,6 +896,14 @@ export class EditorSession {
     this.runtime?.captureShapeKeyFromMesh(id);
   }
 
+  keyShapeWeight(id: string): void {
+    this.runtime?.keyShapeWeight(id);
+  }
+
+  deleteShapeWeightKey(id: string): void {
+    this.runtime?.deleteShapeWeightKey(id);
+  }
+
   keyActiveTransform(): void {
     this.runtime?.keyActiveTransform();
   }

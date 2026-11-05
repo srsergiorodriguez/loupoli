@@ -761,6 +761,10 @@
             session.setAnimationInterpolation(value as 'linear' | 'step')}
         />
         {#if animationTargetId}
+          <p class="hint">
+            When a track is posed, transform edits show immediately. Press Key
+            transform to write the current rest transform into the timeline.
+          </p>
           <div class="texture-action-row">
             <ActionButton
               label="Key transform"
@@ -1650,7 +1654,8 @@
           {#if shapeKeys.length === 0}
             <p class="hint">
               Add a key, edit the object with the vertex tools, then Capture.
-              Capture stores the edited mesh and restores the source base.
+              Capture stores the edited mesh, restores the source base, and
+              leaves weight at 0 so the base stays editable.
             </p>
           {:else}
             <div class="shape-key-list">
@@ -1671,6 +1676,16 @@
                     onActivate={() => session.captureShapeKeyFromMesh(key.id)}
                   />
                   <ActionButton
+                    label="Key"
+                    icon="plus"
+                    onActivate={() => session.keyShapeWeight(key.id)}
+                  />
+                  <ActionButton
+                    label="Unkey"
+                    icon="minus"
+                    onActivate={() => session.deleteShapeWeightKey(key.id)}
+                  />
+                  <ActionButton
                     label="Delete"
                     icon="trash"
                     variant="danger"
@@ -1680,9 +1695,10 @@
               {/each}
             </div>
             <p class="hint">
-              Shape keys store mesh targets. Key transform keys object
-              translation/rotation/scale in the timeline; shape weights are not
-              animated yet. Finish topology edits before adding keys.
+              Key transform keys object translation/rotation/scale. Key on a
+              shape key adds a weight track with the same linear/step
+              interpolation as transform keys. Finish topology edits before
+              adding keys.
             </p>
           {/if}
         {:else}
@@ -2959,13 +2975,14 @@
 
   .shape-key-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
     min-width: 0;
   }
 
   .shape-key-row :global(.slider-field) {
-    flex: 1 1 auto;
+    flex: 1 0 100%;
     min-width: 0;
   }
 

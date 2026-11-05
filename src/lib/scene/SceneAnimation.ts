@@ -21,20 +21,44 @@ export interface AnimationTrackSnapshot {
   readonly keyframes: readonly AnimationKeyframe[];
 }
 
+/** One keyed shape-key weight at an integer frame. */
+export interface ShapeWeightKeyframe {
+  readonly frame: number;
+  readonly weight: number;
+  readonly interpolation: AnimationInterpolation;
+}
+
+/** One shape-key weight track. */
+export interface ShapeWeightTrackSnapshot {
+  readonly id: string;
+  readonly targetId: string;
+  readonly shapeKeyId: string;
+  readonly keyframes: readonly ShapeWeightKeyframe[];
+}
+
 /** Complete serializable animation state. */
 export interface AnimationSnapshot {
   readonly fps: number;
   readonly startFrame: number;
   readonly endFrame: number;
   readonly tracks: readonly AnimationTrackSnapshot[];
+  readonly weightTracks?: readonly ShapeWeightTrackSnapshot[];
 }
 
 let nextTrackNumber = 1;
+let nextWeightTrackNumber = 1;
 
 /** Create a stable animation track id. */
 export function createAnimationTrackId(): string {
   const id = `track-${nextTrackNumber}`;
   nextTrackNumber += 1;
+  return id;
+}
+
+/** Create a stable shape-weight track id. */
+export function createShapeWeightTrackId(): string {
+  const id = `weight-track-${nextWeightTrackNumber}`;
+  nextWeightTrackNumber += 1;
   return id;
 }
 
@@ -184,12 +208,114 @@ export class AnimationTrack {
   }
 }
 
-/** Document-level animation settings and transform tracks. */
+/** One shape key's animated weight track. */
+export class ShapeWeightTrack {
+  readonly id: string;
+  readonly targetId: string;
+  readonly shapeKeyId: string;
+  private frames: ShapeWeightKeyframe[] = [];
+
+  constructor(
+    targetId: string,
+    shapeKeyId: string,
+    id = createShapeWeightTrackId()
+  ) {
+    this.targetId = targetId;
+    this.shapeKeyId = shapeKeyId;
+    this.id = id;
+  }
+
+  /** Restore one track from serialized data. */
+  static fromSnapshot(snapshot: ShapeWeightTrackSnapshot): ShapeWeightTrack {
+    const track = new ShapeWeightTrack(
+      snapshot.targetId,
+      snapshot.shapeKeyId,
+      snapshot.id
+    );
+    track.frames = snapshot.keyframes
+      .map((key) => ({
+        frame: key.frame,
+        weight: Math.max(0, Math.min(1, key.weight)),
+        interpolation: key.interpolation
+      }))
+      .sort((a, b) => a.frame - b.frame);
+    return track;
+  }
+
+  /** Ordered read-only keys. */
+  get keyframes(): readonly ShapeWeightKeyframe[] {
+    return this.frames;
+  }
+
+  /** Add or replace the key at one frame. */
+  setKey(
+    frame: number,
+    weight: number,
+    interpolation: AnimationInterpolation = 'linear'
+  ): void {
+    const key: ShapeWeightKeyframe = {
+      frame,
+      weight: Math.max(0, Math.min(1, weight)),
+      interpolation
+    };
+    const existing = this.frames.findIndex((item) => item.frame === frame);
+    if (existing >= 0) {
+      this.frames[existing] = key;
+    } else {
+      this.frames.push(key);
+      this.frames.sort((a, b) => a.frame - b.frame);
+    }
+  }
+
+  /** Remove one frame key. */
+  removeKey(frame: number): void {
+    this.frames = this.frames.filter((key) => key.frame !== frame);
+  }
+
+  /** Evaluate the weight at a frame with clamping at either end. */
+  evaluate(frame: number): number | null {
+    if (this.frames.length === 0) {
+      return null;
+    }
+    if (frame <= this.frames[0].frame) {
+      return this.frames[0].weight;
+    }
+    const last = this.frames[this.frames.length - 1];
+    if (frame >= last.frame) {
+      return last.weight;
+    }
+    for (let i = 0; i < this.frames.length - 1; i += 1) {
+      const a = this.frames[i];
+      const b = this.frames[i + 1];
+      if (frame >= a.frame && frame <= b.frame) {
+        if (a.interpolation === 'step' || b.frame === a.frame) {
+          return a.weight;
+        }
+        const t = (frame - a.frame) / (b.frame - a.frame);
+        return a.weight + (b.weight - a.weight) * t;
+      }
+    }
+    return last.weight;
+  }
+
+  /** Detached snapshot for commands, journal patches, and saves. */
+  snapshot(): ShapeWeightTrackSnapshot {
+    return {
+      id: this.id,
+      targetId: this.targetId,
+      shapeKeyId: this.shapeKeyId,
+      keyframes: this.frames.map((key) => ({ ...key }))
+    };
+  }
+}
+
+/** Document-level animation settings, transform tracks, and shape weight tracks. */
 export class SceneAnimation {
   fps = 24;
   startFrame = 0;
   endFrame = 48;
   readonly tracks: AnimationTrack[] = [];
+  readonly weightTracks: ShapeWeightTrack[] = [];
 
   /** Restore the complete animation from serialized data. */
   static fromSnapshot(snapshot: AnimationSnapshot): SceneAnimation {
@@ -198,6 +324,9 @@ export class SceneAnimation {
     animation.startFrame = snapshot.startFrame;
     animation.endFrame = snapshot.endFrame;
     animation.replaceTracks(snapshot.tracks.map(AnimationTrack.fromSnapshot));
+    animation.replaceWeightTracks(
+      (snapshot.weightTracks ?? []).map(ShapeWeightTrack.fromSnapshot)
+    );
     return animation;
   }
 
@@ -223,6 +352,38 @@ export class SceneAnimation {
     return track;
   }
 
+  /** Find the weight track for one node/shape-key pair. */
+  getWeightTrack(targetId: string, shapeKeyId: string): ShapeWeightTrack | null {
+    return (
+      this.weightTracks.find(
+        (track) =>
+          track.targetId === targetId && track.shapeKeyId === shapeKeyId
+      ) ?? null
+    );
+  }
+
+  /** Find or create one shape-weight track. */
+  ensureWeightTrack(targetId: string, shapeKeyId: string): ShapeWeightTrack {
+    const existing = this.getWeightTrack(targetId, shapeKeyId);
+    if (existing) {
+      return existing;
+    }
+    const track = new ShapeWeightTrack(targetId, shapeKeyId);
+    this.weightTracks.push(track);
+    return track;
+  }
+
+  /** Remove one shape-weight track. */
+  removeWeightTrack(targetId: string, shapeKeyId: string): void {
+    const index = this.weightTracks.findIndex(
+      (track) =>
+        track.targetId === targetId && track.shapeKeyId === shapeKeyId
+    );
+    if (index >= 0) {
+      this.weightTracks.splice(index, 1);
+    }
+  }
+
   /** Remove a track by target id. */
   removeTrack(targetId: string): void {
     const index = this.tracks.findIndex((track) => track.targetId === targetId);
@@ -237,13 +398,20 @@ export class SceneAnimation {
     this.tracks.push(...tracks);
   }
 
+  /** Replace the full shape-weight track collection. */
+  replaceWeightTracks(tracks: readonly ShapeWeightTrack[]): void {
+    this.weightTracks.length = 0;
+    this.weightTracks.push(...tracks);
+  }
+
   /** Detached snapshot for commands and persistence. */
   snapshot(): AnimationSnapshot {
     return {
       fps: this.fps,
       startFrame: this.startFrame,
       endFrame: this.endFrame,
-      tracks: this.tracks.map((track) => track.snapshot())
+      tracks: this.tracks.map((track) => track.snapshot()),
+      weightTracks: this.weightTracks.map((track) => track.snapshot())
     };
   }
 
@@ -253,5 +421,8 @@ export class SceneAnimation {
     this.startFrame = snapshot.startFrame;
     this.endFrame = snapshot.endFrame;
     this.replaceTracks(snapshot.tracks.map(AnimationTrack.fromSnapshot));
+    this.replaceWeightTracks(
+      (snapshot.weightTracks ?? []).map(ShapeWeightTrack.fromSnapshot)
+    );
   }
 }

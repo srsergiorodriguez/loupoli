@@ -20,6 +20,7 @@ import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import {
   type AnimationInterpolation,
   type AnimationSnapshot,
+  type ShapeWeightTrackSnapshot,
   type AnimationTargetKind
 } from '../scene/SceneAnimation';
 import type {
@@ -741,7 +742,81 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
   if (keyTotal > MAX_ANIMATION_KEYS) {
     throw new Error('The .lpoly animation contains too many keyframes.');
   }
-  return { fps, startFrame, endFrame, tracks };
+  const rawWeightTracks = (animation as Partial<AnimationSnapshot>).weightTracks;
+  if (rawWeightTracks !== undefined && !Array.isArray(rawWeightTracks)) {
+    throw new Error('The .lpoly shape-weight animation is invalid.');
+  }
+  const weightIds = new Set<string>();
+  const weightPairs = new Set<string>();
+  const weightTracks: ShapeWeightTrackSnapshot[] = [];
+  for (const value of rawWeightTracks ?? []) {
+    if (typeof value !== 'object' || value === null) {
+      throw new Error('The .lpoly animation contains an invalid weight track.');
+    }
+    const raw = value as {
+      id?: unknown;
+      targetId?: unknown;
+      shapeKeyId?: unknown;
+      keyframes?: unknown;
+    };
+    if (
+      typeof raw.id !== 'string' ||
+      raw.id.length === 0 ||
+      weightIds.has(raw.id) ||
+      typeof raw.targetId !== 'string' ||
+      raw.targetId.length === 0 ||
+      typeof raw.shapeKeyId !== 'string' ||
+      raw.shapeKeyId.length === 0 ||
+      weightPairs.has(`${raw.targetId}:${raw.shapeKeyId}`) ||
+      !Array.isArray(raw.keyframes)
+    ) {
+      throw new Error('The .lpoly shape-weight track metadata is invalid.');
+    }
+    weightIds.add(raw.id);
+    weightPairs.add(`${raw.targetId}:${raw.shapeKeyId}`);
+    const frames = new Set<number>();
+    const keyframes = raw.keyframes.map((key) => {
+      if (typeof key !== 'object' || key === null) {
+        throw new Error('The .lpoly shape-weight keyframe is invalid.');
+      }
+      const item = key as {
+        frame?: unknown;
+        weight?: unknown;
+        interpolation?: unknown;
+      };
+      if (
+        !Number.isInteger(item.frame) ||
+        frames.has(item.frame as number) ||
+        typeof item.weight !== 'number' ||
+        !Number.isFinite(item.weight) ||
+        item.weight < 0 ||
+        item.weight > 1 ||
+        (item.interpolation !== 'step' && item.interpolation !== 'linear')
+      ) {
+        throw new Error('The .lpoly shape-weight keyframes are invalid.');
+      }
+      frames.add(item.frame as number);
+      keyTotal += 1;
+      return {
+        frame: item.frame as number,
+        weight: item.weight,
+        interpolation: item.interpolation as AnimationInterpolation
+      };
+    }).sort((a, b) => a.frame - b.frame);
+    weightTracks.push({
+      id: raw.id,
+      targetId: raw.targetId,
+      shapeKeyId: raw.shapeKeyId,
+      keyframes
+    });
+  }
+  if (
+    keyTotal > MAX_ANIMATION_KEYS ||
+    tracks.length + weightTracks.length > MAX_ANIMATION_TRACKS
+  ) {
+    throw new Error('The .lpoly animation exceeds its track or key limit.');
+  }
+  return { fps, startFrame, endFrame, tracks, weightTracks };
 }
 
 /** Encode a project with a texture asset library. */

@@ -675,14 +675,18 @@ describe('scene commands and journal', () => {
       new CaptureShapeKeyCommand(node, beforeMesh, afterMesh, beforeKeys, afterKeys)
     );
     expect(node.mesh.positions[0]).toBe(vertex[0]);
+    expect(node.shapeKeys[0].weight).toBe(0);
     expect(node.shapeKeys[0].targetPositions[0]).toBeCloseTo(vertex[0] + 1);
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0]);
+    node.setShapeKeyWeight(node.shapeKeys[0].id, 1);
     expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
+    node.setShapeKeyWeight(node.shapeKeys[0].id, 0);
     history.undo();
     expect(node.mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
     expect(node.shapeKeys[0].targetPositions[0]).toBeCloseTo(vertex[0]);
     expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
     history.redo();
     expect(node.mesh.positions[0]).toBe(vertex[0]);
-    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0] + 1);
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(vertex[0]);
   });
 });

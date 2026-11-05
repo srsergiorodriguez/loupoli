@@ -151,6 +151,7 @@
         <div
           class="timeline-track"
           class:active={activeTrack?.id === track.id}
+          class:shape-track={track.kind === 'shape'}
           role="button"
           tabindex="0"
           onclick={() => selectTrack(track)}
@@ -188,13 +189,19 @@
     position: absolute;
     right: 12px;
     bottom: calc(38px + env(safe-area-inset-bottom));
-    left: 12px;
+    left: 178px;
     z-index: 30;
     display: flex;
     flex-direction: column;
     min-width: 0;
     padding: 8px 10px 10px;
     pointer-events: auto;
+  }
+
+  @media (max-width: 899px) {
+    .animation-timeline {
+      left: 12px;
+    }
   }
 
   .timeline-head {
@@ -275,6 +282,10 @@
     overflow-y: auto;
     cursor: ew-resize;
     touch-action: none;
+  }
+
+  .timeline-track.shape-track .track-name {
+    color: var(--accent-primary);
   }
 
   .timeline-lane-overlay {

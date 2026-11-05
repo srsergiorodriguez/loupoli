@@ -181,6 +181,21 @@ describe('.lpoly v4', () => {
     expect(restored?.keyframes[1].transform.position).toEqual([3, 0, 1]);
   });
 
+  it('round-trips shape-weight animation tracks', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    const key = node.addShapeKey('Smile');
+    const track = document.animation.ensureWeightTrack(node.id, key.id);
+    track.setKey(0, 0, 'step');
+    track.setKey(24, 1, 'step');
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    const restored = decoded.document.animation.getWeightTrack(node.id, key.id);
+    expect(restored?.keyframes).toHaveLength(2);
+    expect(restored?.evaluate(12)).toBe(0);
+    expect(restored?.evaluate(24)).toBe(1);
+    expect(restored?.keyframes[1].interpolation).toBe('step');
+  });
+
   it('round-trips shape keys and evaluates weights', () => {
     const document = makeDocument();
     const node = document.nodes[0];

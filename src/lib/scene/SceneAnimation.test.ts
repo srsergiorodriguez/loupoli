@@ -36,4 +36,19 @@ describe('SceneAnimation', () => {
       expect(track.keyframes[0].transform.position[0]).toBe(2);
     }
   });
+
+  it('evaluates and snapshots shape-weight tracks with linear and step keys', () => {
+    const animation = new SceneAnimation();
+    const track = animation.ensureWeightTrack('node-1', 'shape-1');
+    track.setKey(0, 0, 'linear');
+    track.setKey(10, 1, 'linear');
+    expect(track.evaluate(5)).toBeCloseTo(0.5);
+    expect(track.evaluate(10)).toBe(1);
+    track.setKey(4, 0.25, 'step');
+    expect(track.evaluate(8)).toBe(0.25);
+    const snapshot = animation.snapshot();
+    const restored = SceneAnimation.fromSnapshot(snapshot);
+    expect(restored.getWeightTrack('node-1', 'shape-1')?.keyframes).toHaveLength(3);
+    expect(restored.weightTracks).toHaveLength(1);
+  });
 });
