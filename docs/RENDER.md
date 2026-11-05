@@ -29,6 +29,8 @@ interface CameraSnapshot {
 - The Camera Inspector lists cameras and exposes name, position, target, and field of view.
 - **Add from view** captures the current navigation camera.
 - The Render workspace looks through the active camera; navigation controls are locked there so the composition preview matches the output.
+- The Model and Animate viewports show a camera marker with a frustum rectangle. Camera Inspector actions: **Frame camera**, **Set from view**, and **View through**.
+- **Preview** renders the virtual-resolution frame, upscales it to the output size, and shows it in a floating preview portal before export.
 - Camera animation tracks will be added with the animation timeline.
 
 ## 2. Render workspace
@@ -36,6 +38,10 @@ interface CameraSnapshot {
 `Render` is a dedicated workspace after Light. It removes modeling chrome and the grid, leaving a camera-composition view.
 
 ![Render workspace](media/render-workspace.png)
+
+![Camera frustum](media/camera-frustum.png)
+
+![Upscaled render preview](media/render-preview.png)
 
 Inspector sections:
 

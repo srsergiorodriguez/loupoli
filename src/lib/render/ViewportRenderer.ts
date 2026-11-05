@@ -41,6 +41,7 @@ import { CameraRig, type AxisProjection, type AxisName } from './CameraRig';
 import { ViewportGrid } from './Grid';
 import { MeshNodeView } from './MeshNodeView';
 import { LightGizmos } from './LightGizmos';
+import { CameraGizmos } from './CameraGizmos';
 import {
   createViewportMaterials,
   disposeViewportMaterials,
@@ -85,6 +86,7 @@ export class ViewportRenderer {
   private readonly groupViews = new Map<string, ThreeGroup>();
   private readonly objectGizmo: ObjectGizmo;
   private readonly lightGizmos = new LightGizmos();
+  private readonly cameraGizmos = new CameraGizmos();
 
   private readonly vertexMaterial: PointsMaterial;
   private readonly selectedVertexMaterial: PointsMaterial;
@@ -275,6 +277,7 @@ export class ViewportRenderer {
       this.documentLightGroup
     );
     this.scene.add(this.lightGizmos.group);
+    this.scene.add(this.cameraGizmos.group);
 
     this.resizeObserver = new ResizeObserver(this.handleWindowResize);
     // Observe the canvas itself, not its parent: the UV split changes the
@@ -409,6 +412,16 @@ export class ViewportRenderer {
     }
 
     this.applyActionPreviewLine();
+    this.schedule();
+  }
+
+  /** Show document camera markers in modeling/animation views. */
+  setCameraGizmos(
+    cameras: readonly import('../scene/SceneCamera').CameraSummary[],
+    activeCameraId: string | null,
+    visible: boolean
+  ): void {
+    this.cameraGizmos.sync(cameras, activeCameraId, visible);
     this.schedule();
   }
 
@@ -632,6 +645,23 @@ export class ViewportRenderer {
       target.dispose();
       this.schedule();
     }
+  }
+
+  /** Frame a camera position and its target for inspection. */
+  frameCameraView(
+    position: readonly [number, number, number],
+    target: readonly [number, number, number]
+  ): void {
+    const bounds = new Box3();
+    const a = new Vector3(...position);
+    const b = new Vector3(...target);
+    bounds.expandByPoint(a);
+    bounds.expandByPoint(b);
+    const center = bounds.getCenter(new Vector3());
+    const radius = Math.max(1, bounds.getSize(new Vector3()).length() * 0.5);
+    bounds.expandByPoint(center.clone().add(new Vector3(radius, radius, radius)));
+    this.cameraRig.frame(bounds);
+    this.markCameraChanged();
   }
 
   /** Show an explicit document camera in the navigation viewport. */
@@ -1100,6 +1130,7 @@ export class ViewportRenderer {
     this.scene.remove(this.objectGizmo.group);
     this.objectGizmo.dispose();
     this.lightGizmos.dispose();
+    this.cameraGizmos.dispose();
 
     this.vertexMaterial.dispose();
     this.selectedVertexMaterial.dispose();

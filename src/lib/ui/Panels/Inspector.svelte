@@ -897,6 +897,21 @@
           </div>
           <div class="texture-action-row">
             <ActionButton
+              label="Frame camera"
+              icon="frame"
+              onActivate={() => session.frameActiveCamera()}
+            />
+            <ActionButton
+              label="Set from view"
+              icon="camera"
+              onActivate={() => session.setActiveCameraFromView()}
+            />
+            <ActionButton
+              label="View through"
+              icon="eye"
+              onActivate={() => session.viewActiveCamera()}
+            />
+            <ActionButton
               label="Delete camera"
               icon="trash"
               variant="danger"
@@ -1051,6 +1066,12 @@
           <p class="texture-note">Add a camera from the Camera section before rendering.</p>
         {/if}
         <div class="texture-action-row">
+          <ActionButton
+            label="Preview"
+            icon="eye"
+            disabled={activeCamera === null || session.snapshot.renderBusy}
+            onActivate={() => void session.previewRender()}
+          />
           <ActionButton
             label={session.snapshot.renderBusy
               ? 'Rendering…'
@@ -2776,7 +2797,9 @@
 
   .texture-action-row {
     display: flex;
+    flex-wrap: wrap;
     justify-content: flex-end;
+    gap: var(--space-2);
     margin-top: var(--space-1);
   }
 

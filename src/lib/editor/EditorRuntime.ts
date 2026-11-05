@@ -522,6 +522,9 @@ export class EditorRuntime {
   private bakeBusy = false;
   private renderBusy = false;
   private renderKind: 'still' | 'sequence' | 'webm' | 'mp4' = 'still';
+  private renderPreviewUrl: string | null = null;
+  private renderPreviewWidth = 0;
+  private renderPreviewHeight = 0;
   private renderStartFrame = 0;
   private renderEndFrame = 48;
   private renderVirtualWidth = 320;
@@ -805,6 +808,9 @@ export class EditorRuntime {
       renderShading: this.renderShading,
       renderTransparent: this.renderTransparent,
       renderBackground: this.renderBackground,
+      renderPreviewUrl: this.renderPreviewUrl,
+      renderPreviewWidth: this.renderPreviewWidth,
+      renderPreviewHeight: this.renderPreviewHeight,
       animationFrame: this.animationFrame,
       animationStartFrame: this.document.animation.startFrame,
       animationEndFrame: this.document.animation.endFrame,
@@ -3766,6 +3772,24 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Frame the active camera's position and target in the viewport. */
+  frameActiveCamera(): void {
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      return;
+    }
+    this.renderer.frameCameraView(camera.position, camera.target);
+    this.publish();
+  }
+
+  /** Switch to Render and look through the active camera. */
+  viewActiveCamera(): void {
+    if (!this.getActiveCamera()) {
+      return;
+    }
+    this.setWorkspace('render');
+  }
+
   /** Push the active document camera into the Render workspace viewport. */
   private syncRenderCameraView(): void {
     if (this.workspace !== 'render') {
@@ -3888,6 +3912,7 @@ export class EditorRuntime {
     if (patch.renderKind !== undefined) {
       this.renderKind = patch.renderKind;
     }
+    this.renderPreviewUrl = null;
     if (patch.renderStartFrame !== undefined) {
       this.renderStartFrame = Math.max(0, Math.round(patch.renderStartFrame));
     }
@@ -3941,6 +3966,7 @@ export class EditorRuntime {
       this.projectError = this.errorMessage(error);
     } finally {
       this.renderBusy = false;
+    this.renderPreviewUrl = null;
       this.publish();
     }
   }
@@ -4060,13 +4086,15 @@ export class EditorRuntime {
     if (!target) {
       return;
     }
+    const keyFrame = Math.round(this.animationFrame);
+    this.animationFrame = keyFrame;
     const before = this.document.animation.snapshot();
     const track = this.document.animation.ensureTrack(
       target.id,
       group ? 'group' : 'node'
     );
     track.setKey(
-      Math.round(this.animationFrame),
+      keyFrame,
       target.transform,
       this.animationInterpolation
     );
@@ -4172,6 +4200,72 @@ export class EditorRuntime {
     }
     this.animationPose.clear();
     this.syncScene();
+  }
+
+  /** Render an upscaled preview and show it in the Render workspace. */
+  async previewRender(): Promise<void> {
+    if (this.renderBusy) {
+      return;
+    }
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      this.projectError = 'Add a camera before previewing.';
+      this.publish();
+      return;
+    }
+    this.renderBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const image = this.renderer.renderStill({
+        width: this.renderVirtualWidth,
+        height: this.renderVirtualHeight,
+        shading: this.renderShading,
+        camera: {
+          position: camera.position,
+          target: camera.target,
+          fov: camera.fov
+        },
+        transparent: this.renderTransparent,
+        backgroundColor: this.renderBackground
+      });
+      const canvas = upscaleRenderImage(
+        image,
+        this.renderOutputWidth,
+        this.renderOutputHeight,
+        this.renderUpscale
+      );
+      this.renderPreviewUrl = canvas.toDataURL('image/png');
+      this.renderPreviewWidth = this.renderVirtualWidth;
+      this.renderPreviewHeight = this.renderVirtualHeight;
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+    } finally {
+      this.renderBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Clear the floating render preview. */
+  clearRenderPreview(): void {
+    this.renderPreviewUrl = null;
+    this.renderPreviewWidth = 0;
+    this.renderPreviewHeight = 0;
+    this.publish();
+  }
+
+  /** Update the active camera from the current navigation view. */
+  setActiveCameraFromView(): void {
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      return;
+    }
+    const view = this.renderer.captureCameraView();
+    this.updateCamera(camera.id, {
+      position: view.position,
+      target: view.target,
+      fov: view.fov
+    });
   }
 
   /** Render a deterministic PNG frame sequence over the render range. */
@@ -8226,6 +8320,11 @@ export class EditorRuntime {
       this.transformOrientation,
       workspaceCan(this.workspace, 'select3d'),
       this.animationPose
+    );
+    this.renderer.setCameraGizmos(
+      this.document.cameraSummaries(),
+      this.activeCameraId,
+      this.workspace === 'model' || this.workspace === 'animation'
     );
   }
 

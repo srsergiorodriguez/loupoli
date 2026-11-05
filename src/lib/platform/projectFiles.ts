@@ -200,7 +200,7 @@ export async function openModelFile(
     if (typeof path !== 'string') {
       return null;
     }
-    const bytes = await invoke<number[]>('read_project_file', { path });
+    const bytes = await invoke<number[]>('read_import_file', { path });
     const name = path.split(/[\\/]/).pop() ?? `Imported.${extensions[0]}`;
     return { name, bytes: Uint8Array.from(bytes) };
   }
@@ -255,7 +255,7 @@ export async function saveFrameSequence(
       return false;
     }
     for (const frame of frames) {
-      await invoke('write_project_file', {
+      await invoke('write_export_file', {
         path: `${directory}/${frame.name}`,
         data: Array.from(frame.bytes)
       });
@@ -289,7 +289,7 @@ export async function saveBinaryFile(
     if (!path) {
       return false;
     }
-    await invoke('write_project_file', { path, data: Array.from(bytes) });
+    await invoke('write_export_file', { path, data: Array.from(bytes) });
     return true;
   }
   const blob = new Blob([bytes.slice().buffer], { type: 'application/octet-stream' });

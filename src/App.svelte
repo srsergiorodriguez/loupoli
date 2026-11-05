@@ -18,6 +18,7 @@
   import IconButton from './lib/ui/Primitives/IconButton.svelte';
   import TooltipLayer from './lib/ui/Primitives/TooltipLayer.svelte';
   import AnimationTimeline from './lib/ui/Animation/AnimationTimeline.svelte';
+  import RenderPreview from './lib/ui/Render/RenderPreview.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
@@ -199,7 +200,8 @@
         {/if}
       </div>
 
-      {#if session.snapshot.workspace !== 'render'}
+      {#if session.snapshot.workspace !== 'render' &&
+        session.snapshot.workspace !== 'animation'}
         <div class="viewport-hud">
         <div class="view-actions">
           <IconButton
@@ -243,6 +245,9 @@
       <ActionHud state={session.snapshot.actionState} />
       {#if session.snapshot.workspace === 'animation'}
         <AnimationTimeline {session} />
+      {/if}
+      {#if session.snapshot.workspace === 'render'}
+        <RenderPreview {session} />
       {/if}
     {:else}
       <section class="startup-error loupoli-panel" role="alert">

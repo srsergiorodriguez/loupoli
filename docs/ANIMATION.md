@@ -33,12 +33,13 @@ The `Animate` workspace is a 3D workspace with a bottom timeline.
 ![Animation workspace](media/animation-workspace.png)
 
 - Scene outliner remains available for target selection.
-- Inspector sections: **Scene**, **Animation**, **Controls**.
+- Inspector sections: **Scene**, **Animation**, **Shape keys**, **Controls**. Shape keys can be created and weighted in Animate as well as Model.
 - Timeline:
   - Play/pause
   - Scrubbable ruler
   - Tracks and key diamonds
   - Current frame and FPS
+- Key insertion rounds the playhead to the exact integer key frame, and the ruler/track lanes share the same horizontal inset so diamonds and playhead align. View gizmos are hidden in Animate so the timeline is unobstructed.
 - Animation Inspector:
   - FPS, start/end frame
   - Loop toggle

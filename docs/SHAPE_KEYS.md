@@ -20,7 +20,7 @@ interface ShapeKey {
 
 ## UI
 
-Model Inspector → **Shape keys**:
+Model and Animate Inspector → **Shape keys**:
 
 - Add shape key
 - Weight slider per key

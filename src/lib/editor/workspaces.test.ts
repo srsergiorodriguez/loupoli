@@ -75,6 +75,7 @@ describe('inspector layout', () => {
     expect(inspectorSectionsFor('animation')).toEqual([
       'scene',
       'animation',
+      'shapes',
       'controls'
     ]);
   });

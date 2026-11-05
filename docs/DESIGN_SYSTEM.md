@@ -468,7 +468,7 @@ Implemented component files and local patterns:
 | `Shape keys` module | 5 | Model Inspector | Morph targets, weights, persistence, topology guard |
 | `Interchange` module | 5 | Scene Inspector | OBJ/GLB import and export, simple material colors, Y-up conversion |
 | `Animation` module | 5 | Dedicated Animate workspace | Transform keyframes, timeline, playback, and explicit animation Inspector |
-| `Camera and Render` module | 6 | Dedicated Render workspace | Scene-camera Inspector, virtual/output resolution, clean still render, camera-driven preview |
+| `Camera and Render` module | 6 | Dedicated Render workspace | Scene-camera Inspector, camera frustum, virtual/output resolution, clean still render, camera-driven preview, upscaled preview portal |
 | `Lighting` module | 5 | Dedicated Light workspace | Ambient + directional/point lights, viewport position/direction markers with arrow-tip aiming, shared outliner/naming/actions, hard/soft shadows in Lit and bake; AO deferred |
 | `Texture` module | 4 | Project-level texture asset library | Asset selector/create/duplicate/assign/delete, 64–2048 presets, nearest/linear filter, 8-layer cap, shared control-height actions (44px touch), one composite texture per asset, `.lpoly` v4 PNG chunks |
 | `UvPanel` | 4 | Resizable UV editing split | Bottom pane, 44px mode/lock/action targets, 16 px corner pick, seam overlay, two-way linked selection, exact numeric fields, Unwrap/Pin actions, pin markers, Paint toggle, brush color/size/opacity controls, and failure banner |

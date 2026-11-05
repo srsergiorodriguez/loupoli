@@ -12,6 +12,7 @@ export type WorkspaceCapability =
   | 'editRender'
   | 'editCamera'
   | 'editAnimation'
+  | 'editShapes'
   | 'editLighting'
   | 'bakeLighting'
   | 'navigate3d';
@@ -21,6 +22,7 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
     'select3d',
     'edit3d',
     'editRender',
+    'editShapes',
     'navigate3d'
   ]),
   light: new Set([
@@ -36,7 +38,7 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
     'navigate3d'
   ]),
   paint: new Set(['paintTexture', 'paintProjected', 'navigate3d']),
-  animation: new Set(['editAnimation', 'navigate3d']),
+  animation: new Set(['editAnimation', 'editShapes', 'navigate3d']),
   render: new Set(['editCamera', 'navigate3d'])
 };
 

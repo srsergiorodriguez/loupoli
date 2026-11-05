@@ -86,10 +86,70 @@ fn read_project_file(path: String) -> Result<Vec<u8>, String> {
   Ok(bytes)
 }
 
-/// Write a `.lpoly` project through a same-directory temporary file and rename.
-///
-/// Unix replaces the destination atomically. Windows may require removing the
-/// old file first; the temporary file is always cleaned up on failure.
+/// Read an arbitrary import file without interpreting project semantics.
+#[tauri::command]
+fn read_import_file(path: String) -> Result<Vec<u8>, String> {
+  let destination = PathBuf::from(path);
+  let metadata = fs::metadata(&destination)
+    .map_err(|error| format!("Cannot inspect import file: {error}"))?;
+  if metadata.len() > MAX_PROJECT_BYTES {
+    return Err("The selected import exceeds the 128 MB limit.".into());
+  }
+  fs::read(&destination).map_err(|error| format!("Cannot read import file: {error}"))
+}
+
+/// Write an arbitrary export through a same-directory temporary file and rename.
+#[tauri::command]
+fn write_export_file(path: String, data: Vec<u8>) -> Result<(), String> {
+  if data.len() as u64 > MAX_PROJECT_BYTES {
+    return Err("The export exceeds the 128 MB limit.".into());
+  }
+  let destination = PathBuf::from(path);
+  let parent = destination
+    .parent()
+    .filter(|parent| !parent.as_os_str().is_empty())
+    .ok_or_else(|| "The export path has no parent directory.".to_string())?;
+  if !parent.is_dir() {
+    return Err("The export directory does not exist.".into());
+  }
+  let file_name = destination
+    .file_name()
+    .ok_or_else(|| "The export path has no file name.".to_string())?
+    .to_string_lossy();
+  let temp_path = temporary_path(parent, &file_name);
+  let result = (|| -> Result<(), String> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    let mut file = options
+      .open(&temp_path)
+      .map_err(|error| format!("Cannot create temporary export file: {error}"))?;
+    file
+      .write_all(&data)
+      .map_err(|error| format!("Cannot write temporary export file: {error}"))?;
+    file
+      .sync_all()
+      .map_err(|error| format!("Cannot flush temporary export file: {error}"))?;
+    drop(file);
+    match fs::rename(&temp_path, &destination) {
+      Ok(()) => Ok(()),
+      Err(rename_error) => {
+        if destination.exists() {
+          fs::remove_file(&destination)
+            .map_err(|error| format!("Cannot replace existing export: {error}"))?;
+          fs::rename(&temp_path, &destination)
+            .map_err(|error| format!("Cannot commit export file: {error}"))
+        } else {
+          Err(format!("Cannot commit export file: {rename_error}"))
+        }
+      }
+    }
+  })();
+  if result.is_err() && temp_path.exists() {
+    let _ = fs::remove_file(&temp_path);
+  }
+  result
+}
+
 #[tauri::command]
 fn write_project_file(path: String, data: Vec<u8>) -> Result<(), String> {
   if data.len() as u64 > MAX_PROJECT_BYTES {
@@ -161,7 +221,9 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
       read_project_file,
-      write_project_file
+      read_import_file,
+      write_project_file,
+      write_export_file
     ])
     .run(tauri::generate_context!())
     .expect("error while building loupoli");
@@ -219,5 +281,15 @@ mod tests {
       .join("project.lpoly");
     let result = write_project_file(path.to_string_lossy().into_owned(), minimal_project());
     assert!(result.is_err());
+  }
+
+  #[test]
+  fn exports_and_imports_arbitrary_bytes() {
+    let path = test_path("png-export");
+    let bytes = vec![0x89, b'P', b'N', b'G', 0, 1, 2, 3];
+    write_export_file(path.to_string_lossy().into_owned(), bytes.clone()).unwrap();
+    let read = read_import_file(path.to_string_lossy().into_owned()).unwrap();
+    assert_eq!(read, bytes);
+    let _ = fs::remove_file(path);
   }
 }

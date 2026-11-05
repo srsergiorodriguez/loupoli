@@ -112,9 +112,11 @@
   </div>
 
   <div class="timeline-ruler" aria-hidden="true">
-    {#each [0, 0.25, 0.5, 0.75, 1] as ratio (ratio)}
-      <span style:left={`${ratio * 100}%`}>{Math.round(start + ratio * span)}</span>
-    {/each}
+    <div class="timeline-ruler-lane">
+      {#each [0, 0.25, 0.5, 0.75, 1] as ratio (ratio)}
+        <span style:left={`${ratio * 100}%`}>{Math.round(start + ratio * span)}</span>
+      {/each}
+    </div>
   </div>
 
   <div
@@ -127,11 +129,12 @@
     onpointerup={endScrub}
     onpointercancel={() => (scrubbing = false)}
   >
-    <span
-      class="timeline-playhead"
-      style:left={`${percent(snapshot.animationFrame)}%`}
-      aria-hidden="true"
-    ></span>
+    <span class="timeline-lane-overlay" aria-hidden="true">
+      <span
+        class="timeline-playhead"
+        style:left={`${percent(snapshot.animationFrame)}%`}
+      ></span>
+    </span>
     {#if snapshot.animationTracks.length === 0}
       <p class="timeline-empty">
         Select an object or group, set a frame, and press Key.
@@ -227,25 +230,30 @@
   .timeline-ruler {
     position: relative;
     height: 14px;
-    margin: 2px 0 3px;
+    margin: 2px 4px 3px 132px;
     border-bottom: var(--hairline) solid var(--border-subtle);
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: 9px;
   }
 
-  .timeline-ruler span {
+  .timeline-ruler-lane {
+    position: relative;
+    height: 100%;
+  }
+
+  .timeline-ruler-lane span {
     position: absolute;
     bottom: 2px;
     transform: translateX(-50%);
     white-space: nowrap;
   }
 
-  .timeline-ruler span:first-child {
+  .timeline-ruler-lane span:first-child {
     transform: none;
   }
 
-  .timeline-ruler span:last-child {
+  .timeline-ruler-lane span:last-child {
     transform: translateX(-100%);
   }
 
@@ -260,6 +268,15 @@
     overflow-y: auto;
     cursor: ew-resize;
     touch-action: none;
+  }
+
+  .timeline-lane-overlay {
+    position: absolute;
+    top: 0;
+    right: 4px;
+    bottom: 0;
+    left: 132px;
+    pointer-events: none;
   }
 
   .timeline-playhead {

@@ -269,6 +269,9 @@ export interface EditorSnapshot {
   readonly renderShading: RenderShading;
   readonly renderTransparent: boolean;
   readonly renderBackground: string;
+  readonly renderPreviewUrl: string | null;
+  readonly renderPreviewWidth: number;
+  readonly renderPreviewHeight: number;
   readonly animationFrame: number;
   readonly animationStartFrame: number;
   readonly animationEndFrame: number;

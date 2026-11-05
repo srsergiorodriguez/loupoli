@@ -117,6 +117,9 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   renderShading: 'lit',
   renderTransparent: false,
   renderBackground: '#121214',
+  renderPreviewUrl: null,
+  renderPreviewWidth: 0,
+  renderPreviewHeight: 0,
   animationFrame: 0,
   animationStartFrame: 0,
   animationEndFrame: 48,
@@ -791,6 +794,14 @@ export class EditorSession {
     this.runtime?.deleteActiveCamera();
   }
 
+  viewActiveCamera(): void {
+    this.runtime?.viewActiveCamera();
+  }
+
+  frameActiveCamera(): void {
+    this.runtime?.frameActiveCamera();
+  }
+
   updateRenderSettings(patch: Partial<{
     renderVirtualWidth: number;
     renderVirtualHeight: number;
@@ -805,6 +816,18 @@ export class EditorSession {
     renderEndFrame: number;
   }>): void {
     this.runtime?.updateRenderSettings(patch);
+  }
+
+  previewRender(): Promise<void> {
+    return this.runtime?.previewRender() ?? Promise.resolve();
+  }
+
+  clearRenderPreview(): void {
+    this.runtime?.clearRenderPreview();
+  }
+
+  setActiveCameraFromView(): void {
+    this.runtime?.setActiveCameraFromView();
   }
 
   renderStill(): Promise<void> {
