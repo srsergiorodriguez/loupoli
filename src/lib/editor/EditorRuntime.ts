@@ -7990,7 +7990,9 @@ export class EditorRuntime {
       parentQuaternion,
       localQuaternion,
       worldQuaternion,
-      viewAxis: plane.normal.clone().normalize(),
+      // The camera-facing plane normal points into the screen. Rotate around
+      // the opposite direction so a positive modal angle reads counterclockwise.
+      viewAxis: plane.normal.clone().normalize().negate(),
       numeric: '',
       value: 0
     };
