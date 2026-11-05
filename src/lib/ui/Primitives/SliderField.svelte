@@ -47,10 +47,10 @@
 <style>
   .slider-field {
     display: grid;
-    grid-template-columns: minmax(64px, auto) minmax(0, 1fr) 44px;
+    grid-template-columns: var(--inspector-label-width) minmax(0, 1fr) 44px;
     align-items: center;
     min-height: var(--control-h);
-    gap: var(--space-2);
+    gap: var(--inspector-row-gap);
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);

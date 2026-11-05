@@ -49,7 +49,7 @@ What that means in practice:
 
 ## 3. Design tokens
 
-Tokens live in `src/design/tokens.css`. Components consume semantic tokens; no component should hard-code palette hex values, spacing numbers, or z-indexes. Inspector field rhythm uses `--inspector-row-gap` (6 px) between direct rows, `--inspector-section-pad` (12 px) for section padding, and `--field-label-gap` (4 px) between a vector label and its control.
+Tokens live in `src/design/tokens.css`. Components consume semantic tokens; no component should hard-code palette hex values, spacing numbers, or z-indexes. Inspector field rhythm uses `--inspector-row-gap` (6 px) between direct rows, `--inspector-section-pad` (12 px) for section padding, `--field-label-gap` (4 px) between a vector label and its control, and `--inspector-label-width` (96 px) for the shared inline-label column.
 
 ### 3.1 Core CSS
 
@@ -459,7 +459,7 @@ Implemented component files and local patterns:
 | `ActionDock` | 3 | One-shot mesh actions | Bottom-left 2×2 grid, 64×44 minimum targets, contextual disabled states |
 | `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
 | `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, shared control-height action (44px touch) |
-| `Vector3Field` / field rhythm | 2 | Shared field rows | One vector group per row, 4 px label gap, 6 px row/section rhythm via `--inspector-row-gap` / `--field-label-gap`, 12 px section padding |
+| `Vector3Field` / field rhythm | 2 | Shared field rows | One vector group per row, 4 px label gap, 6 px row/section rhythm, 12 px section padding, 96 px inline-label column, 3-decimal spatial values |
 | `ThreeDotMenu` / `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Standard icon-only overflow wrapper; body-mounted fixed menu so inspector overflow cannot clip it |
 | `ModalDialog` | 5 | Shared native dialog shell | Top-layer `<dialog>`, shared header/close/body/footer, backdrop and Escape handling; `size="full"` fills the app for reference content |
 | `AboutModal` / `DocumentationModal` | 5 | Application bar help | Full-space content, version/attribution/licenses, and tabbed illustrated workspace guides |

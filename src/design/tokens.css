@@ -92,6 +92,7 @@
   --field-label-gap: var(--space-1);
   --inspector-row-gap: 6px;
   --inspector-section-pad: var(--space-3);
+  --inspector-label-width: 96px;
 
   /* Shape */
   --radius-xs: 4px;

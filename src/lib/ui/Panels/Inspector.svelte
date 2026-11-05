@@ -831,7 +831,7 @@
           onChange={(value) => session.setAnimationLoop(value)}
         />
         <SelectField
-          label="Default key interpolation"
+          label="Interpolation"
           value={session.snapshot.animationInterpolation}
           options={[
             { value: 'linear', label: 'Linear' },
@@ -900,14 +900,12 @@
             label="Position"
             values={activeCamera.position}
             step={0.1}
-            precision={2}
             onCommit={(value) => session.updateActiveCamera({ position: value })}
           />
           <Vector3Field
             label="Target"
             values={activeCamera.target}
             step={0.1}
-            precision={2}
             onCommit={(value) => session.updateActiveCamera({ target: value })}
           />
           <SliderField
@@ -1201,7 +1199,6 @@
             label="Position"
             values={activeLight.position}
             step={0.1}
-            precision={2}
             onCommit={(value) => session.updateActiveLight({ position: value })}
           />
           {#if activeLight.kind === 'directional'}
@@ -1209,7 +1206,6 @@
               label="Direction"
               values={activeLight.direction}
               step={0.01}
-              precision={2}
               onCommit={(value) => session.updateActiveLight({ direction: value })}
             />
           {/if}
@@ -2935,21 +2931,22 @@
   }
 
   .render-field {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--inspector-label-width) minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
+    gap: var(--inspector-row-gap);
     min-height: var(--control-h);
     color: var(--text-secondary);
     font-size: var(--text-xs);
   }
 
   .render-field > span {
-    flex: 0 0 auto;
+    min-width: 0;
   }
 
   .render-field :global(.number-field) {
     max-width: 96px;
+    justify-self: end;
   }
 
   .animation-track-list {

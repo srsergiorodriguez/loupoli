@@ -55,6 +55,8 @@ All editable numbers use `NumberField`; all editable vectors use `Vector3Field`.
 Inspector field rows share one compact rhythm:
 
 - Section bodies and module bodies stack direct children with `--inspector-row-gap` (6 px). Section padding is `--inspector-section-pad` (12 px). Do not add per-field `margin-top`/`margin-bottom`.
+- Inline fields share `--inspector-label-width` (96 px), so their controls start at one x-position regardless of label length.
+- Spatial vectors use three decimal places by default. Degree values use one, and counts or pixel sizes use zero.
 - A vector field is one row. Its label-to-control gap is `--field-label-gap` (4 px), matching a field label above its control.
 - Labels use the shared UI label style; numeric prefixes and values remain monospace.
 - Nested outliner/track lists keep their own 2 px row gap. Grouped cards may keep internal gaps but must not add outer margins.
@@ -155,7 +157,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 ### Controls and rhythm
 
 - Inputs, selects, action buttons, and outliner rows share `--control-h`: 32 px desktop, 44 px touch.
-- Form rows use a 6 px gap; outliner and track-list rows use 2 px; controls inside one action row use 4 px.
+- Form rows use a 6 px gap; outliner and track-list rows use 2 px; controls inside one action row use 4 px. Inline field labels share a 96 px column.
 - Inputs and selects must be the same height as adjacent controls; do not put a small input inside a tall row.
 - Use the shared `SliderField`, `SelectField`, `ColorField`, `InlineNameField`, and `NumberField` shapes.
 

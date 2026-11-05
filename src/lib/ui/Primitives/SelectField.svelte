@@ -33,10 +33,10 @@
 <style>
   .select-field {
     display: grid;
-    grid-template-columns: minmax(64px, auto) minmax(0, 1fr);
+    grid-template-columns: var(--inspector-label-width) minmax(0, 1fr);
     align-items: center;
     min-height: var(--control-h);
-    gap: var(--space-2);
+    gap: var(--inspector-row-gap);
     color: var(--text-tertiary);
     font-family: var(--font-ui);
     font-size: var(--text-xs);
