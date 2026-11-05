@@ -179,7 +179,7 @@ import type {
   AnimationInterpolation,
   AnimationTrack
 } from '../scene/SceneAnimation';
-import { upscaleRenderImage, canvasToPng } from '../render/renderImage';
+import { fitRect, upscaleRenderImage, canvasToPng } from '../render/renderImage';
 import {
   videoExtension,
   videoLabel,
@@ -4121,6 +4121,12 @@ export class EditorRuntime {
     if (patch.renderEndFrame !== undefined) {
       this.renderEndFrame = Math.max(1, Math.round(patch.renderEndFrame));
     }
+    this.renderer.setCameraGizmos(
+      this.document.cameraSummaries(),
+      this.activeCameraId,
+      this.workspace === 'render' && !this.renderCameraView,
+      this.renderVirtualWidth / Math.max(1, this.renderVirtualHeight)
+    );
     this.publish();
   }
 
@@ -4156,7 +4162,11 @@ export class EditorRuntime {
         image,
         this.renderOutputWidth,
         this.renderOutputHeight,
-        this.renderUpscale
+        this.renderUpscale,
+        {
+          transparent: this.renderTransparent,
+          background: this.renderBackground
+        }
       );
       const bytes = await canvasToPng(canvas);
       const saved = await saveBinaryFile(
@@ -4813,16 +4823,34 @@ export class EditorRuntime {
       return;
     }
     sourceContext.putImageData(image, 0, 0);
-    const scale = Math.min(width / image.width, height / image.height);
-    const drawWidth = image.width * scale;
-    const drawHeight = image.height * scale;
+    const outputFrame = fitRect(
+      this.renderOutputWidth,
+      this.renderOutputHeight,
+      width,
+      height
+    );
+    if (!this.renderTransparent) {
+      context.fillStyle = this.renderBackground;
+      context.fillRect(
+        outputFrame.x,
+        outputFrame.y,
+        outputFrame.width,
+        outputFrame.height
+      );
+    }
+    const fitted = fitRect(
+      image.width,
+      image.height,
+      outputFrame.width,
+      outputFrame.height
+    );
     context.imageSmoothingEnabled = this.renderUpscale !== 'nearest';
     context.drawImage(
       source,
-      (width - drawWidth) / 2,
-      (height - drawHeight) / 2,
-      drawWidth,
-      drawHeight
+      outputFrame.x + fitted.x,
+      outputFrame.y + fitted.y,
+      fitted.width,
+      fitted.height
     );
   }
 
@@ -4889,7 +4917,11 @@ export class EditorRuntime {
           image,
           this.renderOutputWidth,
           this.renderOutputHeight,
-          this.renderUpscale
+          this.renderUpscale,
+          {
+            transparent: this.renderTransparent,
+            background: this.renderBackground
+          }
         );
         frames.push({
           name: `${base}_${String(frame - start).padStart(4, '0')}.png`,
@@ -5006,7 +5038,11 @@ export class EditorRuntime {
           image,
           this.renderOutputWidth,
           this.renderOutputHeight,
-          this.renderUpscale
+          this.renderUpscale,
+          {
+            transparent: this.renderTransparent,
+            background: this.renderBackground
+          }
         );
         context.drawImage(frameCanvas, 0, 0);
         track?.requestFrame();
@@ -9560,7 +9596,8 @@ export class EditorRuntime {
     this.renderer.setCameraGizmos(
       this.document.cameraSummaries(),
       this.activeCameraId,
-      this.workspace === 'render' && !this.renderCameraView
+      this.workspace === 'render' && !this.renderCameraView,
+      this.renderVirtualWidth / Math.max(1, this.renderVirtualHeight)
     );
   }
 

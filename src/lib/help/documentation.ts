@@ -255,7 +255,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Output',
         paragraphs: [
-          'Virtual resolution is the internal render size; output resolution is the saved image size. Upscale chooses nearest or smooth sampling between them. Shading selects Lit, Texture, or Solid; the background can be transparent or a solid color.',
+          'Virtual resolution is the internal render size and defines the camera frame; the camera frustum marker follows its aspect. Output resolution is the saved image size. Upscale chooses nearest or smooth sampling between them. If the two aspect ratios differ, the virtual frame is letterboxed or pillarboxed into the output, with background or transparent bars, never stretched. Shading selects Lit, Texture, or Solid; the background can be transparent or a solid color.',
           'The docked preview pane is always visible and updates live through the active camera whenever the camera, scene, lighting, or animation pose changes. Play and Pause run the existing animation playback without leaving Render. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM and Render MP4 appear when the WebView supports that codec. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
         ],
         controls: [
@@ -263,6 +263,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'Virtual width / height: internal render size',
           'Output width / height: saved image size',
           'Play/Pause: run the animation in the live preview',
+          'Virtual size: camera frame aspect; Output size: delivery canvas with letterboxing when aspects differ',
           'Upscale: nearest or smooth; Shading: Lit, Texture, or Solid'
         ]
       },

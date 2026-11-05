@@ -419,9 +419,10 @@ export class ViewportRenderer {
   setCameraGizmos(
     cameras: readonly import('../scene/SceneCamera').CameraSummary[],
     activeCameraId: string | null,
-    visible: boolean
+    visible: boolean,
+    aspect = 16 / 9
   ): void {
-    this.cameraGizmos.sync(cameras, activeCameraId, visible);
+    this.cameraGizmos.sync(cameras, activeCameraId, visible, aspect);
     this.schedule();
   }
 

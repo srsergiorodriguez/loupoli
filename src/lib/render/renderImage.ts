@@ -1,11 +1,60 @@
 import type { RenderUpscale } from './renderSettings';
 
-/** Convert a virtual-resolution ImageData into an output-resolution canvas. */
+/** A centered fit rectangle inside a target frame. */
+export interface FitRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Fit a source rectangle into a target without changing its aspect ratio. */
+export function fitRect(
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number
+): FitRect {
+  const safeSourceWidth = Math.max(1, sourceWidth);
+  const safeSourceHeight = Math.max(1, sourceHeight);
+  const safeTargetWidth = Math.max(1, targetWidth);
+  const safeTargetHeight = Math.max(1, targetHeight);
+  const scale = Math.min(
+    safeTargetWidth / safeSourceWidth,
+    safeTargetHeight / safeSourceHeight
+  );
+  const width = safeSourceWidth * scale;
+  const height = safeSourceHeight * scale;
+  return {
+    x: (safeTargetWidth - width) / 2,
+    y: (safeTargetHeight - height) / 2,
+    width,
+    height
+  };
+}
+
+/** Background options for an output-resolution render. */
+export interface RenderOutputOptions {
+  readonly transparent: boolean;
+  readonly background: string;
+}
+
+/**
+ * Convert a virtual-resolution ImageData into an output-resolution canvas.
+ *
+ * The virtual aspect is preserved. If the output dimensions use a different
+ * aspect, the remaining area is letterboxed with the render background or left
+ * transparent, never stretched.
+ */
 export function upscaleRenderImage(
   image: ImageData,
   width: number,
   height: number,
-  upscale: RenderUpscale
+  upscale: RenderUpscale,
+  options: RenderOutputOptions = {
+    transparent: false,
+    background: '#121214'
+  }
 ): HTMLCanvasElement {
   const source = document.createElement('canvas');
   source.width = image.width;
@@ -19,7 +68,23 @@ export function upscaleRenderImage(
   if (context) {
     context.imageSmoothingEnabled = upscale === 'smooth';
     context.clearRect(0, 0, output.width, output.height);
-    context.drawImage(source, 0, 0, output.width, output.height);
+    if (!options.transparent) {
+      context.fillStyle = options.background;
+      context.fillRect(0, 0, output.width, output.height);
+    }
+    const fitted = fitRect(
+      image.width,
+      image.height,
+      output.width,
+      output.height
+    );
+    context.drawImage(
+      source,
+      fitted.x,
+      fitted.y,
+      fitted.width,
+      fitted.height
+    );
   }
   return output;
 }
