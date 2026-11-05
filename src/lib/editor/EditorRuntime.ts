@@ -50,6 +50,7 @@ import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { workspaceCan } from './workspaces';
 import { screenRotationDegrees } from './modalRotation';
+import { screenScaleFactor } from './modalScale';
 import {
   applyUvView,
   fitUvProjection,
@@ -8179,6 +8180,32 @@ export class EditorRuntime {
     }
   }
 
+  /** Resolve a modal scale factor from the pointer distance to the pivot. */
+  private modalScaleFactor(modal: ModalTransform, numeric: number | null): number {
+    if (numeric !== null) {
+      return Math.max(0.001, numeric);
+    }
+    if (modal.axis === null && modal.pivotScreen) {
+      const radial = screenScaleFactor(
+        modal.pivotScreen.x,
+        modal.pivotScreen.y,
+        modal.startX,
+        modal.startY,
+        modal.lastX,
+        modal.lastY
+      );
+      if (radial !== null) {
+        return radial;
+      }
+    }
+    return Math.max(
+      0.001,
+      1 +
+        (modal.lastX - modal.startX - (modal.lastY - modal.startY)) /
+          200
+    );
+  }
+
   /** Resolve a modal rotation in degrees, using radial pointer motion on screen. */
   private modalRotationDegrees(modal: ModalTransform, numeric: number | null): number {
     if (numeric !== null) {
@@ -8299,17 +8326,7 @@ export class EditorRuntime {
       next.rotation = [euler.x, euler.y, euler.z];
       value = angleDegrees;
     } else {
-      const factor =
-        numeric !== null
-          ? Math.max(0.001, numeric)
-          : Math.max(
-              0.001,
-              1 +
-                (modal.lastX -
-                  modal.startX -
-                  (modal.lastY - modal.startY)) /
-                  200
-            );
+      const factor = this.modalScaleFactor(modal, numeric);
       next.scale = [...modal.before.scale];
       if (modal.axis) {
         const index =
@@ -8432,17 +8449,7 @@ export class EditorRuntime {
       }
       value = angleDegrees;
     } else {
-      const factor =
-        numeric !== null
-          ? Math.max(0.001, numeric)
-          : Math.max(
-              0.001,
-              1 +
-                (modal.lastX -
-                  modal.startX -
-                  (modal.lastY - modal.startY)) /
-                  200
-            );
+      const factor = this.modalScaleFactor(modal, numeric);
       const axisIndex = modal.axis
         ? modal.axis === 'x'
           ? 0

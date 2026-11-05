@@ -204,7 +204,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Cmd/Ctrl+O | Open a project. |
 | G | Start a modal move of the active object or group. Move the mouse to set the offset. |
 | R | Start a modal rotate. Without an axis constraint, rotation follows the pointer angle around the object pivot; moving counterclockwise on screen rotates counterclockwise. |
-| S | Start a modal scale. Without an axis constraint, scaling is uniform. |
+| S | Start a modal scale. Without an axis constraint, scaling is uniform and follows the pointer distance from the object pivot. |
 | X / Y / Z during G/R/S | Constrain to an axis. Pressing the same axis again clears the constraint. |
 | Type a number during G/R/S | Exact amount: units for move, degrees for rotate, factor for scale. Move requires an axis constraint. |
 | Enter / left click | Commit the modal transform. |
