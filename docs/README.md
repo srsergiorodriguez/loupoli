@@ -36,6 +36,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [Phase 5A lighting](./PHASE5_LIGHTING.md) | Light model, Light workspace, direct-light bake, and v4 lighting metadata | Shadows/AO or shape-key design |
 | [Render workspace](./RENDER.md) | Scene camera model, Render workspace, virtual resolution, and still export | Frame/video export or camera animation |
 | [Animation workspace](./ANIMATION.md) | Transform tracks, timeline, playback, and persistence | Camera/shape-key animation design |
+| [UI rules](./UI_RULES.md) | Application bar, modals, toasts, and complete field-row rhythm | Internal help content |
 | [Interchange](./INTERCHANGE.md) | OBJ/GLB import/export, evaluated geometry, simple materials, embedded GLB textures, Y-up conversion | Texture import, skins, animations |
 | [Shape keys](./SHAPE_KEYS.md) | Morph targets, weights, persistence, topology guard | Weight animation and GLB morph export |
 | [Root README](../README.md) | Product overview and quick start | Canonical rules or format specifications |

@@ -8,6 +8,7 @@
     title: string;
     kicker?: string;
     width?: string;
+    size?: 'compact' | 'full';
     children: Snippet;
     actions?: Snippet;
     onClose: () => void;
@@ -17,6 +18,7 @@
     title,
     kicker = '',
     width = '440px',
+    size = 'compact',
     children,
     actions,
     onClose
@@ -38,6 +40,7 @@
 <dialog
   bind:this={dialog}
   class="modal-dialog loupoli-panel"
+  class:full={size === 'full'}
   style={`--modal-width:${width}`}
   aria-labelledby={titleId}
   oncancel={close}
@@ -83,6 +86,31 @@
     box-shadow: var(--shadow-panel);
   }
 
+  .modal-dialog.full {
+    width: calc(100vw - var(--space-6));
+    max-width: none;
+    height: calc(100dvh - var(--space-6));
+    max-height: calc(100dvh - var(--space-6));
+    margin: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-dialog.full header {
+    flex: 0 0 auto;
+  }
+
+  .modal-dialog.full .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .modal-dialog.full footer {
+    flex: 0 0 auto;
+  }
+
   .modal-dialog::backdrop {
     background: var(--bg-scrim);
     -webkit-backdrop-filter: blur(2px);
@@ -105,7 +133,6 @@
     font-size: var(--text-2xs);
     font-weight: var(--weight-semibold);
     letter-spacing: 0.12em;
-    text-transform: uppercase;
   }
 
   h2 {

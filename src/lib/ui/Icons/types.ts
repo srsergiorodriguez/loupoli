@@ -56,4 +56,6 @@ export type IconName =
   | 'sync'
   | 'lock'
   | 'play'
-  | 'pause';
+  | 'pause'
+  | 'info'
+  | 'book';

@@ -77,6 +77,11 @@
   {:else if name === 'lamp'}
     <path d="M8 4h8l3 8H5L8 4Z" />
     <path d="M12 12v7M8 21h8" />
+  {:else if name === 'info'}
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 10.5v6M12 7.5h.01" />
+  {:else if name === 'book'}
+    <path d="M4 5.5c2.8-1 6.8-1 8 1v13c-1.2-2-5.2-2-8-1v-13ZM20 5.5c-2.8-1-6.8-1-8 1v13c1.2-2 5.2-2 8-1v-13Z" />
   {:else if name === 'close'}
     <path d="m6 6 12 12M18 6 6 18" />
   {:else if name === 'plus'}
