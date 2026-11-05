@@ -15,7 +15,7 @@ This is the authoritative map of the application shell. New controls must be ass
 
 | Region | Responsibility | Owns |
 | --- | --- | --- |
-| **Application Bar** | Identity, project file state, global document actions | Brand, project name, save state, open, save, undo, redo, about, tutorial, sidebar toggle |
+| **Application Bar** | Identity, project file state, global document actions | Brand, project name, save state, open, save, undo, redo, about, documentation, sidebar toggle |
 | **Workspace Tabs** | Switch the working context | Model, UV, Paint, Light, Animate, Render. Reserved: Export interchange workspace |
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale |
 | **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), Loop (3D Edge only), All, Add, Sub |
@@ -24,7 +24,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV and Paint |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas, brush footer |
-| **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace; full-space About/Tutorial modals |
+| **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace; full-space About/Documentation modals |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
 | **Status Bar** | Persistent status | Context hint, mesh counts, and snap state; no renderer internals |
 | **Notifications** | Transient operation feedback | Bottom-center toast stack above the status bar; import, export, render, and recoverable operation results |

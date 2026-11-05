@@ -71,7 +71,7 @@
 
     <footer class="about-footer">
       <p>Made by {APP_ABOUT.author}.</p>
-      <p>The gorilla model and texture are used for the tutorial scenes.</p>
+      <p>The gorilla model and texture are used for the documentation scenes.</p>
     </footer>
   </div>
 </ModalDialog>

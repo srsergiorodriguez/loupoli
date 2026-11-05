@@ -1,7 +1,7 @@
 <script lang="ts">
   import BrandMark from '../Brand/BrandMark.svelte';
   import AboutModal from '../Help/AboutModal.svelte';
-  import TutorialModal from '../Help/TutorialModal.svelte';
+  import DocumentationModal from '../Help/DocumentationModal.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
   import SegmentedControl from '../Primitives/SegmentedControl.svelte';
   import { shortcut } from '../../input/shortcuts';
@@ -14,7 +14,7 @@
 
   let { session }: Props = $props();
   let aboutOpen = $state(false);
-  let tutorialOpen = $state(false);
+  let documentationOpen = $state(false);
 
   const undoLabel = $derived(
     session.snapshot.undoLabel ? `Undo ${session.snapshot.undoLabel}` : 'Undo'
@@ -165,10 +165,10 @@
       tooltip="About loupoli"
     />
     <IconButton
-      label="Tutorial"
+      label="Documentation"
       icon="book"
-      onActivate={() => (tutorialOpen = true)}
-      tooltip="Tutorial"
+      onActivate={() => (documentationOpen = true)}
+      tooltip="Documentation"
     />
     <span class="divider divider--actions" aria-hidden="true"></span>
     <span class="inspector-toggle">
@@ -185,8 +185,8 @@
 {#if aboutOpen}
   <AboutModal onClose={() => (aboutOpen = false)} />
 {/if}
-{#if tutorialOpen}
-  <TutorialModal onClose={() => (tutorialOpen = false)} />
+{#if documentationOpen}
+  <DocumentationModal onClose={() => (documentationOpen = false)} />
 {/if}
 
 <style>

@@ -1,21 +1,17 @@
 <script lang="ts">
   import ModalDialog from '../Primitives/ModalDialog.svelte';
-  import { TUTORIALS } from '../../help/tutorials';
+  import { DOCUMENTATION } from '../../help/documentation';
 
-  /** Full-screen tabbed tutorial with actual workspace screenshots. */
+  /** Full-screen tabbed reference for each workspace. */
   interface Props {
     onClose: () => void;
   }
 
   let { onClose }: Props = $props();
-  let activeId = $state(TUTORIALS[0].id);
+  let activeId = $state(DOCUMENTATION[0].id);
   const active = $derived(
-    TUTORIALS.find((page) => page.id === activeId) ?? TUTORIALS[0]
+    DOCUMENTATION.find((page) => page.id === activeId) ?? DOCUMENTATION[0]
   );
-
-  function selectTab(id: string): void {
-    activeId = id;
-  }
 
   function moveTab(event: KeyboardEvent): void {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
@@ -23,33 +19,35 @@
     }
     event.preventDefault();
     const direction = event.key === 'ArrowLeft' ? -1 : 1;
-    const index = TUTORIALS.findIndex((page) => page.id === activeId);
-    const next = (index + direction + TUTORIALS.length) % TUTORIALS.length;
-    activeId = TUTORIALS[next].id;
+    const index = DOCUMENTATION.findIndex((page) => page.id === activeId);
+    const next = (index + direction + DOCUMENTATION.length) % DOCUMENTATION.length;
+    activeId = DOCUMENTATION[next].id;
     document
-      .querySelector<HTMLButtonElement>(`[data-tutorial-tab="${TUTORIALS[next].id}"]`)
+      .querySelector<HTMLButtonElement>(`[data-documentation-tab="${DOCUMENTATION[next].id}"]`)
       ?.focus();
-  }
-
-  function plainStep(step: string): string {
-    return step.replaceAll('**', '');
   }
 </script>
 
-<ModalDialog title="Tutorial" kicker="Learn loupoli" size="full" onClose={onClose}>
-  <div class="tutorial">
-    <div class="tabs" role="tablist" tabindex="0" aria-label="Tutorial workspace" onkeydown={moveTab}>
-      {#each TUTORIALS as page (page.id)}
+<ModalDialog title="Documentation" kicker="Reference" size="full" onClose={onClose}>
+  <div class="documentation">
+    <div
+      class="tabs"
+      role="tablist"
+      tabindex="0"
+      aria-label="Workspace documentation"
+      onkeydown={moveTab}
+    >
+      {#each DOCUMENTATION as page (page.id)}
         <button
           type="button"
           role="tab"
-          id={`tutorial-tab-${page.id}`}
+          id={`documentation-tab-${page.id}`}
           aria-selected={page.id === activeId}
-          aria-controls={`tutorial-panel-${page.id}`}
+          aria-controls={`documentation-panel-${page.id}`}
           tabindex={page.id === activeId ? 0 : -1}
-          data-tutorial-tab={page.id}
+          data-documentation-tab={page.id}
           class:active={page.id === activeId}
-          onclick={() => selectTab(page.id)}
+          onclick={() => (activeId = page.id)}
         >
           {page.label}
         </button>
@@ -58,38 +56,50 @@
 
     <div
       class="page"
-      id={`tutorial-panel-${active.id}`}
+      id={`documentation-panel-${active.id}`}
       role="tabpanel"
-      aria-labelledby={`tutorial-tab-${active.id}`}
+      aria-labelledby={`documentation-tab-${active.id}`}
     >
       <header class="page-head">
         <div>
           <p class="eyebrow">{active.label} workspace</p>
           <h3>{active.title}</h3>
         </div>
-        <p class="intro">{active.intro}</p>
+        <p class="summary">{active.summary}</p>
       </header>
 
       <div class="page-grid">
         <figure>
           <img src={active.image} alt={active.alt} />
-          <figcaption>{active.label} workspace with the tutorial gorilla, ground grid, and document sun.</figcaption>
+          <figcaption>{active.label} workspace with the gorilla example scene.</figcaption>
         </figure>
-        <div class="guide">
-          <ol>
-            {#each active.steps as step, index (index)}
-              <li>{plainStep(step)}</li>
-            {/each}
-          </ol>
-          <p class="note">{active.note}</p>
-        </div>
+
+        <article class="guide">
+          {#each active.sections as section (section.heading)}
+            <section class="doc-section">
+              <h4>{section.heading}</h4>
+              {#each section.paragraphs as paragraph (paragraph)}
+                <p>{paragraph}</p>
+              {/each}
+              {#if section.controls}
+                <h5>Controls</h5>
+                <ul>
+                  {#each section.controls as control (control)}
+                    <li>{control}</li>
+                  {/each}
+                </ul>
+              {/if}
+            </section>
+          {/each}
+          <p class="example">{active.example}</p>
+        </article>
       </div>
     </div>
   </div>
 </ModalDialog>
 
 <style>
-  .tutorial {
+  .documentation {
     display: flex;
     flex-direction: column;
     gap: var(--space-3);
@@ -114,7 +124,7 @@
     background: transparent;
     color: var(--text-tertiary);
     font-family: var(--font-ui);
-    font-size: var(--text-xs);
+    font-size: var(--text-md);
     cursor: pointer;
     white-space: nowrap;
   }
@@ -136,7 +146,7 @@
   .page {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: var(--space-4);
     min-height: 0;
   }
 
@@ -151,31 +161,30 @@
     margin: 0 0 var(--space-1);
     color: var(--text-tertiary);
     font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    letter-spacing: 0.08em;
+    font-size: var(--text-xs);
   }
 
   h3 {
     margin: 0;
     color: var(--text-primary);
     font-family: var(--font-ui);
-    font-size: var(--text-lg);
+    font-size: var(--text-2xl);
     font-weight: var(--weight-medium);
     line-height: var(--leading-tight);
   }
 
-  .intro {
-    max-width: 56ch;
+  .summary {
+    max-width: 64ch;
     margin: 0;
     color: var(--text-secondary);
-    font-size: var(--text-xs);
+    font-size: var(--text-xl);
     line-height: var(--leading-body);
   }
 
   .page-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
-    gap: var(--space-4);
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: var(--space-5);
     min-height: 0;
   }
 
@@ -193,7 +202,7 @@
   img {
     display: block;
     width: 100%;
-    max-height: min(58vh, 560px);
+    max-height: min(56vh, 540px);
     object-fit: contain;
     background: var(--bg-canvas);
   }
@@ -202,7 +211,7 @@
     padding: var(--space-2) var(--space-3);
     border-top: var(--hairline) solid var(--border-subtle);
     color: var(--text-tertiary);
-    font-size: var(--text-2xs);
+    font-size: var(--text-sm);
     line-height: var(--leading-ui);
   }
 
@@ -211,41 +220,66 @@
     overflow: auto;
   }
 
-  ol {
+  .doc-section + .doc-section {
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: var(--hairline) solid var(--border-subtle);
+  }
+
+  h4 {
+    margin: 0 0 var(--space-1);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-xl);
+    font-weight: var(--weight-medium);
+  }
+
+  h5 {
+    margin: var(--space-3) 0 var(--space-1);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-regular);
+  }
+
+  p {
+    margin: var(--space-1) 0 0;
+    color: var(--text-secondary);
+    font-size: var(--text-xl);
+    line-height: var(--leading-body);
+  }
+
+  ul {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-1);
     margin: 0;
     padding: 0;
     list-style: none;
-    counter-reset: tutorial-step;
-    color: var(--text-secondary);
-    font-size: var(--text-xs);
-    line-height: var(--leading-body);
   }
 
   li {
-    display: grid;
-    grid-template-columns: 1.4rem minmax(0, 1fr);
-    gap: var(--space-2);
-    counter-increment: tutorial-step;
+    position: relative;
+    padding-left: var(--space-3);
+    color: var(--text-secondary);
+    font-size: var(--text-lg);
+    line-height: var(--leading-body);
   }
 
   li::before {
-    content: counter(tutorial-step);
+    content: '·';
+    position: absolute;
+    left: 0;
     color: var(--accent-primary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    line-height: var(--leading-body);
-    text-align: right;
   }
 
-  .note {
-    margin: var(--space-3) 0 0;
-    padding-top: var(--space-2);
-    border-top: var(--hairline) solid var(--border-subtle);
-    color: var(--text-tertiary);
-    font-size: var(--text-2xs);
+  .example {
+    margin-top: var(--space-4);
+    padding: var(--space-2) var(--space-3);
+    border-left: 2px solid var(--accent-primary);
+    background: var(--accent-primary-muted);
+    color: var(--text-secondary);
+    font-size: var(--text-lg);
     line-height: var(--leading-body);
   }
 
@@ -261,7 +295,7 @@
     }
 
     img {
-      max-height: 42vh;
+      max-height: 40vh;
     }
   }
 </style>

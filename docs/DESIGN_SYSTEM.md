@@ -462,7 +462,7 @@ Implemented component files and local patterns:
 | `Vector3Field` / field rhythm | 2 | Shared field rows | One vector group per row, 4 px label gap, 8 px module-body gap via `--field-gap` / `--field-label-gap` |
 | `ThreeDotMenu` / `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Standard icon-only overflow wrapper; body-mounted fixed menu so inspector overflow cannot clip it |
 | `ModalDialog` | 5 | Shared native dialog shell | Top-layer `<dialog>`, shared header/close/body/footer, backdrop and Escape handling; `size="full"` fills the app for reference content |
-| `AboutModal` / `TutorialModal` | 5 | Application bar help | Full-space content, version/attribution/licenses, and tabbed illustrated workspace guides |
+| `AboutModal` / `DocumentationModal` | 5 | Application bar help | Full-space content, version/attribution/licenses, and tabbed illustrated workspace guides |
 | `ToastStack` | 5 | Transient notifications | Bottom-center above the status bar, max 4, auto-dismiss, success/warning/error kinds, accessible close; persistent project errors remain in `ProjectBanner` |
 | `TooltipLayer` | 1 | Application-wide tooltips | Body-mounted fixed tooltip above panels and popovers; no pseudo-element tooltips |
 | `OutlinerRow` / `OutlinerDragHandle` / `OutlinerVisibility` | 1 | Scene and texture outliners | 2 px inner gutter, shared active/selected states, left drag slot, right visibility, no selection dot |
