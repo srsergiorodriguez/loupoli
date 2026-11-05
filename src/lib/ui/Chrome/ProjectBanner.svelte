@@ -46,7 +46,7 @@
   </section>
 {/if}
 
-{#if session.snapshot.projectError}
+{#if session.snapshot.projectError && !session.snapshot.toasts.some((toast) => toast.kind === 'error')}
   <div class="project-error loupoli-panel" role="alert">
     <p>{session.snapshot.projectError}</p>
     <IconButton

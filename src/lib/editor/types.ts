@@ -178,6 +178,18 @@ export interface AnimationTrackSummary {
   }[];
 }
 
+
+/** Transient notification severity. */
+export type ToastKind = 'info' | 'success' | 'warning' | 'error';
+
+/** One transient notification shown above the status bar. */
+export interface ToastMessage {
+  readonly id: string;
+  readonly kind: ToastKind;
+  readonly message: string;
+  readonly detail?: string;
+}
+
 export interface EditorSnapshot {
   readonly shading: ShadingMode;
   readonly transformMode: TransformMode;
@@ -301,5 +313,6 @@ export interface EditorSnapshot {
   readonly recovered: boolean;
   readonly fileBusy: boolean;
   readonly projectError: string | null;
+  readonly toasts: readonly ToastMessage[];
   readonly renderCount: number;
 }

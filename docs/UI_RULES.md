@@ -98,6 +98,22 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 - Enter commits, Escape restores, blur commits, and the same 64-character bound applies everywhere.
 - Rename commands are undoable and journaled.
 
+### Modal dialogs
+
+- Use `ModalDialog` for focused options and confirmations. It owns the native `<dialog>`, title/kicker, close control, body, footer, backdrop, and Escape handling.
+- Do not hand-roll a fixed overlay or per-feature dialog header. Feature code supplies body content and an optional action snippet.
+- Modal confirmation actions sit last/right; the close control is icon-only and always labeled.
+
+### Notifications
+
+- Use `ToastStack` for transient operation results: import, export, render, recovery, and warnings when an action cannot proceed.
+- Success/warning/error toasts auto-dismiss; errors remain longer and expose the same detail as the persistent project-error banner. The banner returns when the transient error toast clears.
+- Notifications sit bottom-center above the status bar and never block the inspector or viewport. They are supplemental, never the only place a persistent error is recorded.
+- Do not use toasts for field validation or destructive confirmation; those belong inline or in `ModalDialog`.
+
+![Toast notification](media/toasts.png)
+- Project save/open/recovery and import/export/render operations report completion or failure through the same toast path.
+
 ### Actions
 
 - Use `ActionButton` for icon+text actions, `IconButton` for icon-only actions, and `ThreeDotMenu`/`ActionMenu` for overflow.

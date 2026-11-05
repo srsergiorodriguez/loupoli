@@ -229,6 +229,14 @@ export function exportObj(
     if (!node.visible) {
       continue;
     }
+    const evaluated = node.getEvaluatedMesh();
+    if (evaluated.error) {
+      throw new Error(`${node.name}: ${evaluated.error}`);
+    }
+    const mesh = evaluated.mesh;
+    if (mesh.faceCount === 0) {
+      continue;
+    }
     const parent = node.parentId ? groupById.get(node.parentId) : null;
     const matrix = transformMatrix(
       worldTransformForNode(node.transform, parent?.transform ?? null)
@@ -253,8 +261,8 @@ export function exportObj(
       exportedTextures.set(texture.name, texture);
     }
     obj.push(`o ${objectName}`);
-    const positions = node.mesh.positions;
-    for (let vertex = 0; vertex < node.mesh.vertexCount; vertex += 1) {
+    const positions = mesh.positions;
+    for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
       const point = new Vector3(
         positions[vertex * 3],
         positions[vertex * 3 + 1],
@@ -265,27 +273,27 @@ export function exportObj(
     }
     let uvIndex = uvBase;
     let activeMaterial = -1;
-    for (let face = 0; face < node.mesh.faceCount; face += 1) {
-      const material = node.mesh.faceMaterial[face];
+    for (let face = 0; face < mesh.faceCount; face += 1) {
+      const material = mesh.faceMaterial[face];
       if (material !== activeMaterial) {
         activeMaterial = material;
         obj.push(`usemtl ${materialNames[material] ?? materialNames[0]}`);
       }
-      const first = node.mesh.faceHalfEdge[face];
+      const first = mesh.faceHalfEdge[face];
       const tokens: string[] = [];
       let halfEdge = first;
       do {
-        const vertex = node.mesh.heOrigin[halfEdge];
+        const vertex = mesh.heOrigin[halfEdge];
         uvIndex += 1;
         obj.push(
-          `vt ${node.mesh.heUv[halfEdge * 2]} ${node.mesh.heUv[halfEdge * 2 + 1]}`
+          `vt ${mesh.heUv[halfEdge * 2]} ${mesh.heUv[halfEdge * 2 + 1]}`
         );
         tokens.push(`${vertexBase + vertex + 1}/${uvIndex}`);
-        halfEdge = node.mesh.heNext[halfEdge];
+        halfEdge = mesh.heNext[halfEdge];
       } while (halfEdge !== first);
       obj.push(`f ${tokens.join(' ')}`);
     }
-    vertexBase += node.mesh.vertexCount;
+    vertexBase += mesh.vertexCount;
     uvBase = uvIndex;
     materialNames.forEach((materialName, index) => {
       const hex = materialColor(palette, index).slice(1);

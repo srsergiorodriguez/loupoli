@@ -27,6 +27,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace |
 | **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
 | **Status Bar** | Persistent status | Selection counts, frame budget, render state |
+| **Notifications** | Transient operation feedback | Bottom-center toast stack above the status bar; import, export, render, and recoverable operation results |
 
 ## Subregions
 

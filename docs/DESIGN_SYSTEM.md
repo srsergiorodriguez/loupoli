@@ -460,13 +460,15 @@ Implemented component files and local patterns:
 | `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
 | `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, shared control-height action (44px touch) |
 | `ThreeDotMenu` / `ActionMenu` / `ActionMenuPanel` | 1 | Shared overflow menus | Standard icon-only overflow wrapper; body-mounted fixed menu so inspector overflow cannot clip it |
+| `ModalDialog` | 5 | Shared native dialog shell | Top-layer `<dialog>`, shared header/close/body/footer, backdrop and Escape handling; use for focused options and confirmations |
+| `ToastStack` | 5 | Transient notifications | Bottom-center above the status bar, max 4, auto-dismiss, success/warning/error kinds, accessible close; persistent project errors remain in `ProjectBanner` |
 | `TooltipLayer` | 1 | Application-wide tooltips | Body-mounted fixed tooltip above panels and popovers; no pseudo-element tooltips |
 | `OutlinerRow` / `OutlinerDragHandle` / `OutlinerVisibility` | 1 | Scene and texture outliners | 2 px inner gutter, shared active/selected states, left drag slot, right visibility, no selection dot |
 | `InlineNameField` | 4 | Scene, texture asset, and layer names | Shared borderless rename field with Enter/Escape handling |
 | `RenameNodeCommand` / `RenameGroupCommand` | 4 | Scene object and group rename | Undoable and journaled through `set-node-name` / `set-group-name` |
 | `BrushPreview` | 1 | Paint toolbar | Brush-character canvas using the paint stamp renderer |
 | `Shape keys` module | 5 | Animate Inspector | Selected-key list/context controls, visibility, rename, drag reorder, live Edit/Finish/Cancel, capture, timeline weight tracks, persistence, topology guard |
-| `Interchange` module | 5 | Scene Inspector | OBJ/GLB import and export, active/scene OBJ scope, optional PNG texture bundle, simple material colors, Y-up conversion |
+| `Interchange` module | 5 | Scene Inspector | OBJ/GLB import and export with evaluated geometry, active/scene OBJ scope, optional PNG texture bundle, embedded GLB textures, simple material colors, Y-up conversion |
 | `Animation` module | 5 | Dedicated Animate workspace | Transform keyframes, timeline, playback, and explicit animation Inspector |
 | `Camera and Render` module | 6 | Dedicated Render workspace | Scene-camera Inspector, free camera-editing view, camera list/name/FOV, camera frustum/arrow and drag handles, View through toggle, sRGB clean output, camera-driven preview, larger upscaled preview portal |
 | `Lighting` module | 5 | Dedicated Light workspace | Ambient + directional/point lights, viewport position/direction markers with arrow-tip aiming, shared outliner/naming/actions, hard/soft shadows in Lit and bake; AO deferred |

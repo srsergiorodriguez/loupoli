@@ -19,6 +19,7 @@
   import TooltipLayer from './lib/ui/Primitives/TooltipLayer.svelte';
   import AnimationTimeline from './lib/ui/Animation/AnimationTimeline.svelte';
   import RenderPreview from './lib/ui/Render/RenderPreview.svelte';
+  import ToastStack from './lib/ui/Chrome/ToastStack.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
   import { EditorSession } from './lib/editor/EditorSession.svelte';
@@ -293,6 +294,7 @@
   {/if}
   <Inspector {session} />
   <StatusBar {session} />
+  <ToastStack {session} />
   <TooltipLayer />
 </div>
 

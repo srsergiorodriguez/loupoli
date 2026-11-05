@@ -218,7 +218,9 @@ import {
   type UvAxisLock,
   type UvTransformMode,
   type AxisLock,
-  type ModifierPatch
+  type ModifierPatch,
+  type ToastKind,
+  type ToastMessage
 } from './types';
 
 /** State captured at pointer-down so a preview can be committed or cancelled. */
@@ -586,6 +588,9 @@ export class EditorRuntime {
   private animationClockStart = 0;
   private animationClockFrame = 0;
   private projectError: string | null = null;
+  private toasts: ToastMessage[] = [];
+  private toastSequence = 0;
+  private readonly toastTimers = new Map<string, number>();
 
   /** Active texture asset used by texture and paint tools. */
   private get textureStack(): TextureAsset {
@@ -886,6 +891,7 @@ export class EditorRuntime {
         visible: key.visible
       })),
       projectError: this.projectError,
+      toasts: this.toasts,
       renderCount: this.renderer.getRenderCount()
     };
   }
@@ -4037,6 +4043,7 @@ export class EditorRuntime {
     const camera = this.getActiveCamera();
     if (!camera) {
       this.projectError = 'Add a camera before rendering.';
+      this.notify('warning', 'Render unavailable', 'Add a camera before rendering.');
       this.publish();
       return;
     }
@@ -4063,14 +4070,23 @@ export class EditorRuntime {
         this.renderUpscale
       );
       const bytes = await canvasToPng(canvas);
-      await saveBinaryFile(
+      const saved = await saveBinaryFile(
         bytes,
         `${this.projectName}-render.png`,
         'png',
         'PNG image'
       );
+      if (saved) {
+        this.notify(
+          'success',
+          'Render exported',
+          `${this.renderOutputWidth}×${this.renderOutputHeight} PNG`
+        );
+      }
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Render failed', message);
     } finally {
       this.renderBusy = false;
     this.renderPreviewUrl = null;
@@ -4656,6 +4672,7 @@ export class EditorRuntime {
     const camera = this.getActiveCamera();
     if (!camera) {
       this.projectError = 'Add a camera before previewing.';
+      this.notify('warning', 'Preview unavailable', 'Add a camera before previewing.');
       this.publish();
       return;
     }
@@ -4684,8 +4701,15 @@ export class EditorRuntime {
       this.renderPreviewUrl = canvas.toDataURL('image/png');
       this.renderPreviewWidth = this.renderVirtualWidth;
       this.renderPreviewHeight = this.renderVirtualHeight;
+      this.notify(
+        'success',
+        'Preview rendered',
+        `${this.renderOutputWidth}×${this.renderOutputHeight}`
+      );
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Preview failed', message);
     } finally {
       this.renderBusy = false;
       this.publish();
@@ -4723,6 +4747,7 @@ export class EditorRuntime {
     const camera = this.getActiveCamera();
     if (!camera) {
       this.projectError = 'Add a camera before rendering.';
+      this.notify('warning', 'Render unavailable', 'Add a camera before rendering.');
       this.publish();
       return;
     }
@@ -4730,6 +4755,7 @@ export class EditorRuntime {
     const end = Math.max(this.renderStartFrame, this.renderEndFrame);
     if (end - start + 1 > 1200) {
       this.projectError = 'The frame sequence is limited to 1200 frames.';
+      this.notify('warning', 'Frame sequence limited', 'The maximum is 1200 frames.');
       this.publish();
       return;
     }
@@ -4768,9 +4794,18 @@ export class EditorRuntime {
           bytes: await canvasToPng(canvas)
         });
       }
-      await saveFrameSequence(frames, `${base}-frames.zip`);
+      const saved = await saveFrameSequence(frames, `${base}-frames.zip`);
+      if (saved) {
+        this.notify(
+          'success',
+          'Frame sequence exported',
+          `${frames.length} PNG frame${frames.length === 1 ? '' : 's'}`
+        );
+      }
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Frame export failed', message);
     } finally {
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
@@ -4786,6 +4821,7 @@ export class EditorRuntime {
     const camera = this.getActiveCamera();
     if (!camera) {
       this.projectError = 'Add a camera before rendering.';
+      this.notify('warning', 'Render unavailable', 'Add a camera before rendering.');
       this.publish();
       return;
     }
@@ -4793,6 +4829,11 @@ export class EditorRuntime {
     const mime = videoMimeFor(format);
     if (!mime) {
       this.projectError = `${videoLabel(format)} recording is not supported by this WebView. Use a PNG frame sequence instead.`;
+      this.notify(
+        'warning',
+        `${videoLabel(format)} unavailable`,
+        'Use a PNG frame sequence in this WebView.'
+      );
       this.publish();
       return;
     }
@@ -4800,6 +4841,7 @@ export class EditorRuntime {
     const end = Math.max(this.renderStartFrame, this.renderEndFrame);
     if (end - start + 1 > 1200) {
       this.projectError = 'The video is limited to 1200 frames.';
+      this.notify('warning', 'Video limited', 'The maximum is 1200 frames.');
       this.publish();
       return;
     }
@@ -4876,14 +4918,23 @@ export class EditorRuntime {
       const base = (this.projectName || 'render')
         .replace(/[^a-z0-9_-]+/gi, '-')
         .replace(/^-+|-+$/g, '') || 'render';
-      await saveBinaryFile(
+      const saved = await saveBinaryFile(
         bytes,
         `${base}.${videoExtension(format)}`,
         videoExtension(format),
         `${videoLabel(format)} video`
       );
+      if (saved) {
+        this.notify(
+          'success',
+          `${videoLabel(format)} exported`,
+          `${end - start + 1} frames`
+        );
+      }
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Video export failed', message);
     } finally {
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
@@ -4922,9 +4973,16 @@ export class EditorRuntime {
       }
       this.selection.setContext(this.activeNodeId, 'vertex');
       this.renderer.frameActiveNode();
+      this.notify(
+        'success',
+        'OBJ imported',
+        `${nodes.length} object${nodes.length === 1 ? '' : 's'}`
+      );
       this.publish();
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'OBJ import failed', message);
     } finally {
       this.fileBusy = false;
       this.publish();
@@ -4963,9 +5021,16 @@ export class EditorRuntime {
       }
       this.selection.setContext(this.activeNodeId, 'vertex');
       this.renderer.frameActiveNode();
+      this.notify(
+        'success',
+        'GLB imported',
+        `${nodes.length} object${nodes.length === 1 ? '' : 's'}`
+      );
       this.publish();
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'GLB import failed', message);
     } finally {
       this.fileBusy = false;
       this.publish();
@@ -4981,13 +5046,33 @@ export class EditorRuntime {
     this.projectError = null;
     this.publish();
     try {
-      const bytes = await exportGlb(this.document.nodes, this.document.groups);
-      const base = (this.projectName || 'loupoli')
-        .replace(/[^a-z0-9_-]+/gi, '-')
-        .replace(/^-+|-+$/g, '') || 'loupoli';
-      await saveBinaryFile(bytes, `${base}.glb`, 'glb', 'Binary glTF');
+      const base = this.exportBaseName(this.projectName);
+      const textures = await this.exportTextureFiles(
+        this.document.nodes,
+        base
+      );
+      const bytes = await exportGlb(
+        this.document.nodes,
+        this.document.groups,
+        textures
+      );
+      const saved = await saveBinaryFile(
+        bytes,
+        `${base}.glb`,
+        'glb',
+        'Binary glTF'
+      );
+      if (saved) {
+        this.notify(
+          'success',
+          'GLB exported',
+          `${base}.glb${textures.size > 0 ? ` · ${textures.size} embedded texture${textures.size === 1 ? '' : 's'}` : ''}`
+        );
+      }
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'GLB export failed', message);
     } finally {
       this.fileBusy = false;
       this.publish();
@@ -5014,6 +5099,7 @@ export class EditorRuntime {
         scope === 'active'
           ? 'Select a visible object before exporting.'
           : 'There are no visible objects to export.';
+      this.notify('warning', 'Nothing to export', this.projectError);
       this.publish();
       return;
     }
@@ -5033,7 +5119,7 @@ export class EditorRuntime {
         includeTextures,
         textures
       });
-      await saveFrameSequence(
+      const saved = await saveFrameSequence(
         [
           { name: `${base}.obj`, bytes: new TextEncoder().encode(result.obj) },
           { name: `${base}.mtl`, bytes: new TextEncoder().encode(result.mtl) },
@@ -5044,8 +5130,17 @@ export class EditorRuntime {
         ],
         `${base}-obj.zip`
       );
+      if (saved) {
+        this.notify(
+          'success',
+          'OBJ exported',
+          `${requested.length} object${requested.length === 1 ? '' : 's'}${result.textures.length > 0 ? ` · ${result.textures.length} PNG` : ''}`
+        );
+      }
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'OBJ export failed', message);
     } finally {
       this.fileBusy = false;
       this.publish();
@@ -6517,8 +6612,11 @@ export class EditorRuntime {
       this.pendingRecovery = null;
       const checkpoint = await this.makeCheckpoint();
       await this.autosave.start(checkpoint.bytes, checkpoint.settings, true);
+      this.notify('success', 'Project recovered', this.projectName);
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Recovery failed', message);
     } finally {
       this.fileBusy = false;
       this.publish();
@@ -6579,9 +6677,12 @@ export class EditorRuntime {
         await this.autosave.clear();
         const checkpoint = await this.makeCheckpoint();
         await this.autosave.start(checkpoint.bytes, checkpoint.settings);
+        this.notify('success', 'Project saved', `${this.projectName}.lpoly`);
       }
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Save failed', message);
     } finally {
       this.fileBusy = false;
       this.publish();
@@ -6622,8 +6723,11 @@ export class EditorRuntime {
       await this.autosave.clear();
       const checkpoint = await this.makeCheckpoint();
       await this.autosave.start(checkpoint.bytes, checkpoint.settings);
+      this.notify('success', 'Project opened', name);
     } catch (error) {
-      this.projectError = this.errorMessage(error);
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Open failed', message);
     } finally {
       this.fileBusy = false;
       this.publish();
@@ -6633,6 +6737,34 @@ export class EditorRuntime {
   /** Dismiss the last project-level error shown in the UI. */
   dismissProjectError(): void {
     this.projectError = null;
+    this.publish();
+  }
+
+  /** Add a transient notification; the newest few remain visible. */
+  notify(
+    kind: ToastKind,
+    message: string,
+    detail?: string,
+    timeoutMs = kind === 'error' ? 7000 : 4200
+  ): void {
+    const id = `toast-${++this.toastSequence}`;
+    this.toasts = [...this.toasts, { id, kind, message, detail }].slice(-4);
+    const timer = window.setTimeout(() => this.dismissToast(id), timeoutMs);
+    this.toastTimers.set(id, timer);
+    this.publish();
+  }
+
+  /** Dismiss one transient notification. */
+  dismissToast(id: string): void {
+    const timer = this.toastTimers.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      this.toastTimers.delete(id);
+    }
+    if (!this.toasts.some((toast) => toast.id === id)) {
+      return;
+    }
+    this.toasts = this.toasts.filter((toast) => toast.id !== id);
     this.publish();
   }
 
@@ -6648,6 +6780,10 @@ export class EditorRuntime {
     }
     this.disposed = true;
     this.unsubscribeHistory();
+    for (const timer of this.toastTimers.values()) {
+      window.clearTimeout(timer);
+    }
+    this.toastTimers.clear();
     this.input.dispose();
     this.history.dispose();
     this.autosave.dispose();

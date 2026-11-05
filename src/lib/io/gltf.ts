@@ -8,6 +8,8 @@ import {
   MeshStandardMaterial,
   Object3D,
   Scene,
+  SRGBColorSpace,
+  Texture,
   Vector3
 } from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
@@ -192,6 +194,12 @@ export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
   return nodes;
 }
 
+/** One embedded PNG texture for a GLB export. */
+export interface GlbTextureFile {
+  readonly name: string;
+  readonly bytes: Uint8Array;
+}
+
 function makeMaterial(color: string): MeshStandardMaterial {
   return new MeshStandardMaterial({
     color,
@@ -200,21 +208,47 @@ function makeMaterial(color: string): MeshStandardMaterial {
   });
 }
 
-/** Export visible nodes as a binary GLB with simple material colors. */
+/** Export visible evaluated nodes as a binary GLB with embedded textures. */
 export async function exportGlb(
   nodes: readonly MeshNode[],
-  groups: readonly SceneGroup[]
+  groups: readonly SceneGroup[],
+  textures: ReadonlyMap<string, GlbTextureFile> = new Map()
 ): Promise<Uint8Array> {
+  const textureCache = new Map<string, Texture>();
+  const textureImages: ImageBitmap[] = [];
+  for (const [id, file] of textures) {
+    const image = await createImageBitmap(
+      new Blob([file.bytes.slice().buffer as ArrayBuffer], {
+        type: 'image/png'
+      })
+    );
+    const texture = new Texture(image);
+    texture.name = file.name;
+    texture.colorSpace = SRGBColorSpace;
+    texture.flipY = false;
+    texture.needsUpdate = true;
+    textureCache.set(id, texture);
+    textureImages.push(image);
+  }
   const scene = new Scene();
   scene.name = 'loupoli';
   const groupById = new Map(groups.map((group) => [group.id, group]));
   let objectIndex = 0;
   for (const node of nodes) {
-    if (!node.visible || node.mesh.triangleVertexCount === 0) {
+    if (!node.visible) {
       continue;
     }
-    for (const key of node.shapeKeys) {
-      if (key.targetPositions.length !== node.mesh.positions.length) {
+    const evaluated = node.getEvaluatedMesh();
+    if (evaluated.error) {
+      throw new Error(`${node.name}: ${evaluated.error}`);
+    }
+    const mesh = evaluated.mesh;
+    const morphKeys = mesh === node.mesh ? node.shapeKeys : [];
+    if (mesh.triangleVertexCount === 0) {
+      continue;
+    }
+    for (const key of morphKeys) {
+      if (key.targetPositions.length !== mesh.positions.length) {
         throw new Error(
           `Shape key "${key.name}" does not match the mesh vertex count.`
         );
@@ -233,23 +267,23 @@ export async function exportGlb(
     const palette = node.materialPalette.length
       ? node.materialPalette
       : ['#c8c2ad'];
-    const vertexCount = node.mesh.triangleVertexCount;
+    const vertexCount = mesh.triangleVertexCount;
     const positions = new Float32Array(vertexCount * 3);
     const normals = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
-    node.mesh.writeTriangleData(positions, normals, uvs);
+    mesh.writeTriangleData(positions, normals, uvs);
     const baseVertexByRender = new Uint32Array(vertexCount);
     {
       let renderCursor = 0;
-      for (let face = 0; face < node.mesh.faceCount; face += 1) {
+      for (let face = 0; face < mesh.faceCount; face += 1) {
         const loop: number[] = [];
-        const first = node.mesh.faceHalfEdge[face];
+        const first = mesh.faceHalfEdge[face];
         let halfEdge = first;
         do {
-          loop.push(node.mesh.heOrigin[halfEdge]);
-          halfEdge = node.mesh.heNext[halfEdge];
+          loop.push(mesh.heOrigin[halfEdge]);
+          halfEdge = mesh.heNext[halfEdge];
         } while (halfEdge !== first);
-        const renderCount = node.mesh.renderTriangleCountForFace(face);
+        const renderCount = mesh.renderTriangleCountForFace(face);
         const total = renderCount * 3;
         if (loop.length === 4 && renderCount > 2) {
           baseVertexByRender.fill(loop[0], renderCursor, renderCursor + total);
@@ -269,28 +303,28 @@ export async function exportGlb(
         renderCursor += total;
       }
     }
-    const fullMorphTargets = node.shapeKeys.map((key) => {
+    const fullMorphTargets = morphKeys.map((key) => {
       const data = new Float32Array(vertexCount * 3);
       for (let vertex = 0; vertex < vertexCount; vertex += 1) {
         const base = baseVertexByRender[vertex];
-        data[vertex * 3] = key.targetPositions[base * 3] - node.mesh.positions[base * 3];
+        data[vertex * 3] = key.targetPositions[base * 3] - mesh.positions[base * 3];
         data[vertex * 3 + 1] =
-          key.targetPositions[base * 3 + 1] - node.mesh.positions[base * 3 + 1];
+          key.targetPositions[base * 3 + 1] - mesh.positions[base * 3 + 1];
         data[vertex * 3 + 2] =
-          key.targetPositions[base * 3 + 2] - node.mesh.positions[base * 3 + 2];
+          key.targetPositions[base * 3 + 2] - mesh.positions[base * 3 + 2];
       }
       return data;
     });
     const materialFaces = new Map<number, number[]>();
-    for (let face = 0; face < node.mesh.faceCount; face += 1) {
-      const material = node.mesh.faceMaterial[face];
+    for (let face = 0; face < mesh.faceCount; face += 1) {
+      const material = mesh.faceMaterial[face];
       const list = materialFaces.get(material) ?? [];
       list.push(face);
       materialFaces.set(material, list);
     }
     for (const [materialIndex, faces] of materialFaces) {
       const triangleCount = faces.reduce(
-        (sum, face) => sum + node.mesh.renderTriangleCountForFace(face),
+        (sum, face) => sum + mesh.renderTriangleCountForFace(face),
         0
       );
       const subsetPositions = new Float32Array(triangleCount * 3 * 3);
@@ -298,8 +332,8 @@ export async function exportGlb(
       const subsetUvs = new Float32Array(triangleCount * 3 * 2);
       let sourceVertex = 0;
       let targetVertex = 0;
-      for (let face = 0; face < node.mesh.faceCount; face += 1) {
-        const count = node.mesh.renderTriangleCountForFace(face) * 3;
+      for (let face = 0; face < mesh.faceCount; face += 1) {
+        const count = mesh.renderTriangleCountForFace(face) * 3;
         if (faces.includes(face)) {
           subsetPositions.set(
             positions.subarray(sourceVertex * 3, (sourceVertex + count) * 3),
@@ -332,8 +366,8 @@ export async function exportGlb(
         for (const morph of fullMorphTargets) {
           const subset = new Float32Array(triangleCount * 3 * 3);
           let target = 0;
-          for (let face = 0; face < node.mesh.faceCount; face += 1) {
-            const count = node.mesh.renderTriangleCountForFace(face) * 3;
+          for (let face = 0; face < mesh.faceCount; face += 1) {
+            const count = mesh.renderTriangleCountForFace(face) * 3;
             if (faces.includes(face)) {
               subset.set(
                 morph.subarray(source * 3, (source + count) * 3),
@@ -353,23 +387,35 @@ export async function exportGlb(
       geometry.computeBoundingSphere();
       const material = makeMaterial(palette[materialIndex] ?? palette[0]);
       material.name = `${node.name}_mat${materialIndex}`;
-      const mesh = new Mesh(geometry, material);
-      mesh.name = `${node.name}_${objectIndex}`;
-      if (node.shapeKeys.length > 0) {
-        mesh.morphTargetInfluences = node.shapeKeys.map((key) => key.weight);
-        mesh.morphTargetDictionary = Object.fromEntries(
-          node.shapeKeys.map((key, index) => [key.name, index])
+      material.map = node.textureId
+        ? textureCache.get(node.textureId) ?? null
+        : null;
+      const meshObject = new Mesh(geometry, material);
+      meshObject.name = `${node.name}_${objectIndex}`;
+      if (morphKeys.length > 0) {
+        meshObject.morphTargetInfluences = morphKeys.map((key) => key.weight);
+        meshObject.morphTargetDictionary = Object.fromEntries(
+          morphKeys.map((key, index) => [key.name, index])
         );
       }
       objectIndex += 1;
-      root.add(mesh);
+      root.add(meshObject);
     }
     scene.add(root);
   }
   if (scene.children.length === 0) {
     throw new Error('There are no visible objects to export.');
   }
-  const exporter = new GLTFExporter();
-  const buffer = await exporter.parseAsync(scene, { binary: true, trs: true });
-  return new Uint8Array(buffer);
+  try {
+    const exporter = new GLTFExporter();
+    const buffer = await exporter.parseAsync(scene, { binary: true, trs: true });
+    return new Uint8Array(buffer);
+  } finally {
+    for (const texture of textureCache.values()) {
+      texture.dispose();
+    }
+    for (const image of textureImages) {
+      image.close();
+    }
+  }
 }

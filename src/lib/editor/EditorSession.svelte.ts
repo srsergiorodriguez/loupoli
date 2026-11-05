@@ -14,7 +14,8 @@ import {
   type AxisLock,
   type ModifierPatch,
   type TransformOrientation,
-  type MeshActionKind
+  type MeshActionKind,
+  type ToastKind
 } from './types';
 
 const INITIAL_SNAPSHOT: EditorSnapshot = {
@@ -145,6 +146,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   recovered: false,
   fileBusy: false,
   projectError: null,
+  toasts: [],
   renderCount: 0
 };
 
@@ -1141,6 +1143,14 @@ export class EditorSession {
 
   dismissProjectError(): void {
     this.runtime?.dismissProjectError();
+  }
+
+  dismissToast(id: string): void {
+    this.runtime?.dismissToast(id);
+  }
+
+  notify(kind: ToastKind, message: string, detail?: string): void {
+    this.runtime?.notify(kind, message, detail);
   }
 
   undo(): void {

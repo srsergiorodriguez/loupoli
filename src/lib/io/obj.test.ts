@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { exportObj, importObjNodes, parseMtl, parseObj } from './obj';
+import { createModifier } from '../geometry/modifiers';
 
 const CUBE_OBJ = `
 mtllib cube.mtl
@@ -68,6 +69,19 @@ describe('OBJ interchange', () => {
     });
     expect(exported.mtl).toContain('map_Kd Cube-Texture.png');
     expect(exported.textures).toEqual([texture]);
+  });
+
+  it('exports the evaluated modifier result', () => {
+    const nodes = importObjNodes(CUBE_OBJ, CUBE_MTL);
+    nodes[0].modifiers = [createModifier('grid-array')];
+    expect(nodes[0].getEvaluatedMesh().mesh.faceCount).toBeGreaterThan(
+      nodes[0].mesh.faceCount
+    );
+    const exported = exportObj(nodes, []);
+    const roundTrip = importObjNodes(exported.obj, exported.mtl);
+    expect(roundTrip[0].mesh.faceCount).toBe(
+      nodes[0].getEvaluatedMesh().mesh.faceCount
+    );
   });
 
   it('rejects malformed face indices', () => {
