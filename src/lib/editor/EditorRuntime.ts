@@ -542,6 +542,7 @@ export class EditorRuntime {
   private cameraDrag: CameraDrag | null = null;
   private cameraTargetDrag: CameraTargetDrag | null = null;
   private shapeEdit: ShapeKeyEditSession | null = null;
+  private activeShapeKeyId: string | null = null;
   private lightDirectionDrag: LightDirectionDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
   private selectionGizmoDrag: SelectionGizmoDrag | null = null;
@@ -862,6 +863,12 @@ export class EditorRuntime {
       animationTracks: this.animationTrackSummaries(),
       animationInterpolation: this.animationInterpolation,
       shapeEditingId: this.shapeEdit?.keyId ?? null,
+      activeShapeKeyId:
+        this.getActiveNode()?.shapeKeys.some(
+          (key) => key.id === this.activeShapeKeyId
+        )
+          ? this.activeShapeKeyId
+          : (this.getActiveNode()?.shapeKeys[0]?.id ?? null),
       shapeKeys: (this.getActiveNode()?.shapeKeys ?? []).map((key) => ({
         id: key.id,
         name: key.name,
@@ -4032,11 +4039,28 @@ export class EditorRuntime {
         track.targetKind === 'node'
           ? (this.document.getNode(track.targetId)?.name ?? 'Missing object')
           : (this.document.getGroup(track.targetId)?.name ?? 'Missing group'),
+      hasTrack: true,
       keyframes: track.keyframes.map((key) => ({
         frame: key.frame,
         interpolation: key.interpolation
       }))
     }));
+    const activeGroup = this.getActiveGroup();
+    const activeNode = activeGroup ? null : this.getActiveNode();
+    if (
+      (activeGroup || activeNode) &&
+      !this.document.animation.getTrack(activeGroup?.id ?? activeNode?.id ?? '')
+    ) {
+      transforms.push({
+        id: `pending-transform:${activeGroup?.id ?? activeNode?.id}`,
+        kind: 'transform' as const,
+        targetId: activeGroup?.id ?? activeNode?.id ?? '',
+        targetKind: activeGroup ? 'group' as const : 'node' as const,
+        targetName: activeGroup?.name ?? activeNode?.name ?? 'Missing object',
+        hasTrack: false,
+        keyframes: []
+      });
+    }
     const weights = this.document.animation.weightTracks.map((track) => {
       const node = this.document.getNode(track.targetId);
       const key = node?.shapeKeys.find((item) => item.id === track.shapeKeyId);
@@ -4047,12 +4071,30 @@ export class EditorRuntime {
         targetKind: 'node' as const,
         targetName: `${node?.name ?? 'Missing object'} · ${key?.name ?? 'Missing shape'}`,
         shapeKeyId: track.shapeKeyId,
+        hasTrack: true,
         keyframes: track.keyframes.map((item) => ({
           frame: item.frame,
           interpolation: item.interpolation
         }))
       };
     });
+    if (activeNode) {
+      for (const key of activeNode.shapeKeys) {
+        if (this.document.animation.getWeightTrack(activeNode.id, key.id)) {
+          continue;
+        }
+        weights.push({
+          id: `pending-shape:${activeNode.id}:${key.id}`,
+          kind: 'shape' as const,
+          targetId: activeNode.id,
+          targetKind: 'node' as const,
+          targetName: `${activeNode.name} · ${key.name}`,
+          shapeKeyId: key.id,
+          hasTrack: false,
+          keyframes: []
+        });
+      }
+    }
     return [...transforms, ...weights];
   }
 
@@ -4164,6 +4206,151 @@ export class EditorRuntime {
   setAnimationInterpolation(interpolation: AnimationInterpolation): void {
     this.animationInterpolation = interpolation;
     this.publish();
+  }
+
+  /** Add or update the key for one timeline track at the playhead. */
+  keyAnimationTrack(
+    targetId: string,
+    targetKind: import('../scene/SceneAnimation').AnimationTargetKind,
+    kind: 'transform' | 'shape',
+    shapeKeyId?: string
+  ): void {
+    const keyFrame = Math.round(this.animationFrame);
+    this.animationFrame = keyFrame;
+    const before = this.document.animation.snapshot();
+    if (kind === 'shape' && shapeKeyId) {
+      const node = this.document.getNode(targetId);
+      const key = node?.shapeKeys.find((item) => item.id === shapeKeyId);
+      if (!node || !key) {
+        return;
+      }
+      const track = this.document.animation.ensureWeightTrack(
+        node.id,
+        key.id
+      );
+      track.setKey(
+        keyFrame,
+        node.shapeKeyWeight(key),
+        this.animationInterpolation
+      );
+    } else {
+      const target =
+        targetKind === 'group'
+          ? this.document.getGroup(targetId)
+          : this.document.getNode(targetId);
+      if (!target) {
+        return;
+      }
+      const track = this.document.animation.ensureTrack(targetId, targetKind);
+      track.setKey(
+        keyFrame,
+        this.animationPose.get(targetId) ?? target.transform,
+        this.animationInterpolation
+      );
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        this.document.animation.snapshot(),
+        kind === 'shape' ? 'Key shape weight' : 'Key transform'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Remove one key from a transform or shape-weight track. */
+  deleteAnimationKeyAt(
+    targetId: string,
+    kind: 'transform' | 'shape',
+    shapeKeyId: string | null,
+    frame: number
+  ): void {
+    const before = this.document.animation.snapshot();
+    if (kind === 'shape' && shapeKeyId) {
+      const track = this.document.animation.getWeightTrack(
+        targetId,
+        shapeKeyId
+      );
+      if (!track) {
+        return;
+      }
+      track.removeKey(frame);
+      if (track.keyframes.length === 0) {
+        this.document.animation.removeWeightTrack(targetId, shapeKeyId);
+      }
+    } else {
+      const track = this.document.animation.getTrack(targetId);
+      if (!track) {
+        return;
+      }
+      track.removeKey(frame);
+      if (track.keyframes.length === 0) {
+        this.document.animation.removeTrack(targetId);
+      }
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        this.document.animation.snapshot(),
+        'Delete keyframe'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Move one key to another integer frame as one undoable edit. */
+  moveAnimationKey(
+    targetId: string,
+    kind: 'transform' | 'shape',
+    shapeKeyId: string | null,
+    fromFrame: number,
+    toFrame: number
+  ): void {
+    const start = Math.min(
+      this.document.animation.startFrame,
+      this.document.animation.endFrame
+    );
+    const end = Math.max(
+      this.document.animation.startFrame,
+      this.document.animation.endFrame
+    );
+    const targetFrame = Math.max(start, Math.min(end, Math.round(toFrame)));
+    if (targetFrame === fromFrame) {
+      return;
+    }
+    const before = this.document.animation.snapshot();
+    if (kind === 'shape' && shapeKeyId) {
+      const track = this.document.animation.getWeightTrack(
+        targetId,
+        shapeKeyId
+      );
+      const key = track?.keyframes.find((item) => item.frame === fromFrame);
+      if (!track || !key) {
+        return;
+      }
+      track.removeKey(fromFrame);
+      track.setKey(targetFrame, key.weight, key.interpolation);
+    } else {
+      const track = this.document.animation.getTrack(targetId);
+      const key = track?.keyframes.find((item) => item.frame === fromFrame);
+      if (!track || !key) {
+        return;
+      }
+      track.removeKey(fromFrame);
+      track.setKey(targetFrame, key.transform, key.interpolation);
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        this.document.animation.snapshot(),
+        'Move keyframe'
+      )
+    );
+    this.animationFrame = targetFrame;
+    this.applyAnimationPose();
   }
 
   /** Update an existing transform key when the current frame is keyed. */
@@ -4767,9 +4954,20 @@ export class EditorRuntime {
     }
     const before = this.cloneShapeKeys(node);
     const key = node.addShapeKey();
+    this.activeShapeKeyId = key.id;
     this.history.execute(
       new SetShapeKeysCommand(node, before, node.shapeKeys, `Add ${key.name}`)
     );
+    this.publish();
+  }
+
+  /** Select one shape key for the contextual controls. */
+  selectShapeKey(id: string): void {
+    const node = this.getActiveNode();
+    if (!node?.shapeKeys.some((key) => key.id === id)) {
+      return;
+    }
+    this.activeShapeKeyId = id;
     this.publish();
   }
 
@@ -4784,6 +4982,9 @@ export class EditorRuntime {
     this.history.execute(
       new SetShapeKeysCommand(node, before, node.shapeKeys, 'Remove shape key')
     );
+    if (this.activeShapeKeyId === id) {
+      this.activeShapeKeyId = node.shapeKeys[0]?.id ?? null;
+    }
     const track = this.document.animation.getWeightTrack(node.id, id);
     if (track) {
       const animationBefore = this.document.animation.snapshot();
@@ -4845,6 +5046,7 @@ export class EditorRuntime {
     if (!node || !key) {
       return;
     }
+    this.activeShapeKeyId = id;
     const beforeKeys = this.cloneShapeKeys(node);
     const baseMesh = node.mesh;
     node.mesh = baseMesh.withPositions(key.targetPositions);

@@ -10,6 +10,8 @@ export type WorkspaceCapability =
   | 'paintTexture'
   | 'paintProjected'
   | 'editRender'
+  | 'editTopology'
+  | 'editLook'
   | 'editCamera'
   | 'editAnimation'
   | 'editShapes'
@@ -21,7 +23,9 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
   model: new Set([
     'select3d',
     'edit3d',
+    'editTopology',
     'editRender',
+    'editLook',
     'navigate3d'
   ]),
   light: new Set([
@@ -40,7 +44,6 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
   animation: new Set([
     'select3d',
     'edit3d',
-    'editRender',
     'editAnimation',
     'editShapes',
     'navigate3d'

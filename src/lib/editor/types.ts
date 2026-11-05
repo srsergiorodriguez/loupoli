@@ -170,6 +170,7 @@ export interface AnimationTrackSummary {
   readonly targetKind: AnimationTargetKind;
   readonly targetName: string;
   readonly shapeKeyId?: string;
+  readonly hasTrack: boolean;
   readonly keyframes: readonly {
     readonly frame: number;
     readonly interpolation: AnimationInterpolation;
@@ -283,6 +284,7 @@ export interface EditorSnapshot {
   readonly animationTracks: readonly AnimationTrackSummary[];
   readonly animationInterpolation: AnimationInterpolation;
   readonly shapeEditingId: string | null;
+  readonly activeShapeKeyId: string | null;
   readonly shapeKeys: readonly ShapeKeySummary[];
   readonly groups: readonly GroupSummary[];
   readonly selectedNodeIds: readonly string[];

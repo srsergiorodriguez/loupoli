@@ -96,21 +96,15 @@
     renderKindOptions.find((option) => option.value === session.snapshot.renderKind)?.label ??
       'Still PNG'
   );
-  const animationTargetId = $derived(
-    session.snapshot.activeGroupId ?? session.snapshot.activeNodeId
-  );
   const shapeKeys = $derived(session.snapshot.shapeKeys);
   const shapeEditingId = $derived(session.snapshot.shapeEditingId);
   const editingShapeName = $derived(
     shapeKeys.find((key) => key.id === shapeEditingId)?.name ?? 'Shape'
   );
-  const activeAnimationTrack = $derived(
-    animationTracks.find((track) => track.targetId === animationTargetId) ?? null
-  );
-  const currentKey = $derived(
-    activeAnimationTrack?.keyframes.find(
-      (key) => key.frame === Math.round(session.snapshot.animationFrame)
-    ) ?? null
+  const activeShapeKey = $derived(
+    shapeKeys.find((key) => key.id === session.snapshot.activeShapeKeyId) ??
+      shapeKeys[0] ??
+      null
   );
   const activeLight = $derived(
     lights.find((light) => light.id === session.snapshot.activeLightId) ?? null
@@ -634,32 +628,42 @@
         </div>
       {/if}
 
-      <div class="scene-action-row">
-        <ActionButton
-          label="Import OBJ"
+      <ActionRow>
+        <ActionMenu
+          label="Import / Export"
           icon="open"
+          align="end"
+          menuTitle="Model interchange"
           disabled={session.snapshot.fileBusy}
-          onActivate={() => void session.importObj()}
+          options={[
+            {
+              label: 'Import OBJ',
+              icon: 'open',
+              disabled: session.snapshot.fileBusy,
+              onSelect: () => void session.importObj()
+            },
+            {
+              label: 'Import GLB',
+              icon: 'open',
+              disabled: session.snapshot.fileBusy,
+              onSelect: () => void session.importGlb()
+            },
+            {
+              label: 'Export OBJ',
+              icon: 'save',
+              separatorBefore: true,
+              disabled: session.snapshot.fileBusy || nodes.length === 0,
+              onSelect: () => void session.exportObj()
+            },
+            {
+              label: 'Export GLB',
+              icon: 'save',
+              disabled: session.snapshot.fileBusy || nodes.length === 0,
+              onSelect: () => void session.exportGlb()
+            }
+          ]}
         />
-        <ActionButton
-          label="Export OBJ"
-          icon="save"
-          disabled={session.snapshot.fileBusy || nodes.length === 0}
-          onActivate={() => void session.exportObj()}
-        />
-        <ActionButton
-          label="Import GLB"
-          icon="open"
-          disabled={session.snapshot.fileBusy}
-          onActivate={() => void session.importGlb()}
-        />
-        <ActionButton
-          label="Export GLB"
-          icon="save"
-          disabled={session.snapshot.fileBusy || nodes.length === 0}
-          onActivate={() => void session.exportGlb()}
-        />
-      </div>
+      </ActionRow>
       <p class="hint">OBJ and GLB use Y-up at the file boundary; geometry and UVs are preserved.</p>
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
@@ -710,7 +714,7 @@
     {#snippet animationSection()}
 <InspectorSection
       title="Animation"
-      meta={`${animationTracks.length} track${animationTracks.length === 1 ? '' : 's'}`}
+      meta={`${animationTracks.filter((track) => track.hasTrack).length} track${animationTracks.filter((track) => track.hasTrack).length === 1 ? '' : 's'}`}
       open={sections.animation}
       onToggle={(open) => setSection('animation', open)}
     >
@@ -764,66 +768,6 @@
           onChange={(value) =>
             session.setAnimationInterpolation(value as 'linear' | 'step')}
         />
-        {#if animationTargetId}
-          <p class="hint">
-            When a track is posed, transform edits show immediately. Press Key
-            transform to write the current rest transform into the timeline.
-          </p>
-          <div class="texture-action-row">
-            <ActionButton
-              label="Key transform"
-              icon="plus"
-              onActivate={() => session.keyActiveTransform()}
-            />
-            <ActionButton
-              label="Delete transform key"
-              icon="trash"
-              variant="danger"
-              disabled={currentKey === null}
-              onActivate={() => session.deleteActiveAnimationKey()}
-            />
-          </div>
-        {:else}
-          <p class="hint">Select an object or group to key its transform.</p>
-        {/if}
-        {#if animationTracks.length > 0}
-          <div class="light-divider"></div>
-          <div class="animation-track-list">
-            {#each animationTracks as track (track.id)}
-              <OutlinerRow
-                active={activeAnimationTrack?.id === track.id}
-                showVisibility={false}
-                visible={true}
-                visibilityLabel={track.targetName}
-                selectLabel={`Select ${track.targetName}`}
-                onToggleVisibility={() => {}}
-                onSelect={() => {
-                  if (track.targetKind === 'node') session.selectNode(track.targetId);
-                  else session.selectGroup(track.targetId);
-                }}
-              >
-                <span class="object-glyph"><Icon name="play" size={12} /></span>
-                <span class="object-name">{track.targetName}</span>
-                <span class="object-kind">{track.keyframes.length} keys</span>
-              </OutlinerRow>
-            {/each}
-          </div>
-        {/if}
-        {#if activeAnimationTrack && activeAnimationTrack.keyframes.length > 0}
-          <div class="animation-keys">
-            {#each activeAnimationTrack.keyframes as key (key.frame)}
-              <button
-                type="button"
-                class="animation-key"
-                class:selected={key.frame === Math.round(session.snapshot.animationFrame)}
-                onclick={() => session.setAnimationFrame(key.frame)}
-              >
-                {key.frame}
-                <span>{key.interpolation}</span>
-              </button>
-            {/each}
-          </div>
-        {/if}
       </div>
     </InspectorSection>
     {/snippet}
@@ -1668,79 +1612,90 @@
                 />
               </div>
             </div>
-            <p class="hint">
-              Edit the target with the viewport tools. The base mesh is
-              restored when you finish or cancel.
-            </p>
           {:else}
-            <div class="texture-action-row">
+            <ActionRow>
               <ActionButton
                 label="Add shape key"
                 icon="plus"
                 onActivate={() => session.addShapeKey()}
               />
-            </div>
+            </ActionRow>
           {/if}
           {#if shapeKeys.length === 0}
             <p class="hint">
-              Add a key, edit the object with the vertex tools, then Capture.
-              Capture stores the edited mesh, restores the source base, and
-              leaves weight at 0 so the base stays editable.
+              Add a key, then edit its target directly or edit the base and
+              capture it. Shape weights are keyed from the timeline track.
             </p>
           {:else}
             <div class="shape-key-list">
               {#each shapeKeys as key (key.id)}
-                <div class="shape-key-row">
+                <OutlinerRow
+                  active={key.id === activeShapeKey?.id}
+                  showVisibility={false}
+                  visible={true}
+                  visibilityLabel={key.name}
+                  selectLabel={`Select ${key.name}`}
+                  onToggleVisibility={() => {}}
+                  onSelect={() => {
+                    if (!shapeEditingId) session.selectShapeKey(key.id);
+                  }}
+                >
+                  <span class="object-glyph"><Icon name="checker" size={13} /></span>
+                  <span class="object-name">{key.name}</span>
+                  <span class="object-kind">{key.weight.toFixed(2)}</span>
+                </OutlinerRow>
+              {/each}
+            </div>
+            {#if activeShapeKey}
+              <div class="shape-key-detail">
+                {#if shapeEditingId}
+                  <p class="hint">
+                    Edit the target with the viewport tools. Finish records one
+                    undo step and restores the base mesh.
+                  </p>
+                {:else}
                   <SliderField
-                    label={key.name}
-                    value={key.weight}
+                    label="Weight"
+                    value={activeShapeKey.weight}
                     min={0}
                     max={1}
                     step={0.01}
                     precision={2}
-                    onChange={(value) => session.setShapeKeyWeight(key.id, value)}
+                    onChange={(value) =>
+                      session.setShapeKeyWeight(activeShapeKey.id, value)}
                   />
-                  {#if shapeEditingId === key.id}
-                    <span class="shape-editing-label">Editing target</span>
-                  {:else if shapeEditingId === null}
-                    <div class="shape-key-actions">
+                  <ActionRow>
+                    <div class="shape-key-primary-actions">
                       <ActionButton
-                        label="Edit"
+                        label="Edit target"
                         icon="cursor"
                         variant="primary"
-                        onActivate={() => session.beginShapeEdit(key.id)}
+                        onActivate={() => session.beginShapeEdit(activeShapeKey.id)}
                       />
                       <ActionButton
-                        label="Capture"
+                        label="Capture base"
                         icon="checker"
-                        onActivate={() => session.captureShapeKeyFromMesh(key.id)}
-                      />
-                      <ActionButton
-                        label="Key"
-                        icon="plus"
-                        onActivate={() => session.keyShapeWeight(key.id)}
-                      />
-                      <ActionButton
-                        label="Unkey"
-                        icon="minus"
-                        onActivate={() => session.deleteShapeWeightKey(key.id)}
-                      />
-                      <ActionButton
-                        label="Delete"
-                        icon="trash"
-                        variant="danger"
-                        onActivate={() => session.removeShapeKey(key.id)}
+                        onActivate={() =>
+                          session.captureShapeKeyFromMesh(activeShapeKey.id)}
                       />
                     </div>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-            <p class="hint">
-              Edit updates the stored shape target directly. Capture stores the
-              current base mesh as a new target. Key adds a weight track with
-              the same linear/step interpolation as transform keys.
-            </p>
+                  </ActionRow>
+                  <div class="shape-danger-row">
+                    <ActionButton
+                      label="Delete shape key"
+                      icon="trash"
+                      variant="danger"
+                      onActivate={() => session.removeShapeKey(activeShapeKey.id)}
+                    />
+                  </div>
+                  <p class="hint">
+                    Use the key button on this shape's timeline track to add a
+                    weight key. Shape weights use the same Linear/Step
+                    interpolation as transform keys.
+                  </p>
+                {/if}
+              </div>
+            {/if}
           {/if}
         {:else}
           <p class="hint">Select an object to edit its shape keys.</p>
@@ -2002,6 +1957,17 @@
                 onSelect: () => session.createTextureAsset(size, size)
               }))}
             />
+            <ActionButton
+              label={selectionUsesActiveTexture ? 'Unassign' : 'Assign'}
+              icon={selectionUsesActiveTexture ? 'close' : 'texture-wire'}
+              onActivate={() =>
+                session.assignTextureToSelection(
+                  selectionUsesActiveTexture
+                    ? null
+                    : session.snapshot.textureAssetId
+                )}
+            />
+            <span class="scene-action-spacer"></span>
             <ThreeDotMenu
               menuTitle="Texture actions"
               options={[
@@ -2024,16 +1990,6 @@
                   onSelect: () => session.deleteActiveTextureAsset()
                 }
               ]}
-            />
-            <ActionButton
-              label={selectionUsesActiveTexture ? 'Unassign' : 'Assign'}
-              icon={selectionUsesActiveTexture ? 'close' : 'texture-wire'}
-              onActivate={() =>
-                session.assignTextureToSelection(
-                  selectionUsesActiveTexture
-                    ? null
-                    : session.snapshot.textureAssetId
-                )}
             />
           </ActionRow>
           <div class="texture-property-pair">
@@ -2983,67 +2939,28 @@
     overflow-y: auto;
   }
 
-  .animation-key {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    min-height: var(--control-h);
-    padding: 0 7px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: var(--bg-input);
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-  }
-
-  .animation-key span {
-    color: var(--text-tertiary);
-    font-size: 9px;
-  }
-
-  .animation-key.selected {
-    border-color: var(--accent-primary);
-    color: var(--text-primary);
-  }
-
   .shape-key-list {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 2px;
   }
 
-  .shape-key-row {
+  .shape-key-detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-top: var(--space-1);
+  }
+
+  .shape-key-primary-actions {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-2);
-    min-width: 0;
+    gap: var(--space-1);
   }
 
-  .shape-key-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
-    width: 100%;
-  }
-
-  .shape-key-actions :global(.action-button) {
-    width: 100%;
-  }
-
-  .shape-key-actions :global(.action-button:nth-child(5)) {
-    grid-column: span 2;
-  }
-
-  .shape-editing-label {
-    width: 100%;
-    color: var(--accent-primary);
-    font-family: var(--font-ui);
-    font-size: var(--text-2xs);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+  .shape-danger-row {
+    display: flex;
+    justify-content: flex-end;
   }
 
   .shape-edit-banner {
@@ -3077,15 +2994,6 @@
   .shape-edit-actions {
     display: flex;
     gap: 4px;
-    flex: 0 0 auto;
-  }
-
-  .shape-key-row :global(.slider-field) {
-    flex: 1 0 100%;
-    min-width: 0;
-  }
-
-  .shape-key-row :global(.action-button) {
     flex: 0 0 auto;
   }
 

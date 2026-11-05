@@ -26,13 +26,13 @@ These are implementation constraints, not style suggestions. A change that viola
 Every command has exactly one visible home. Contextual behavior changes the target, not the location of the control.
 
 - Selection modes and combination: Selection Bar.
-- Pointer tools: Tool Rail. ActionDock is 3D-only and is hidden while the UV split is open.
+- Pointer tools: Tool Rail. ActionDock is Model-only and is hidden while the UV split is open or in Animate.
 - Paint uses a fixed two-row toolbar: icon tool strip, then brush preview/quick controls. Detailed brush options live in the Brush Inspector section; tool changes must not resize the canvas.
 - Inspector sections are filtered and ordered by the shared workspace capability policy. Never hardcode workspace checks inside a section; require a capability and let the Inspector shell order the visible sections. Hidden sections keep their open state.
 - Edge-loop selection is a sticky toggle shown only in 3D Edge mode; it expands an edge pick across the quad loop.
 - UV-only operations: UV Toolbar.
 - Document actions: Application Bar.
-- Topology one-shots: Action Dock.
+- Topology one-shots: Action Dock (Model only; not Animate).
 
 Do not add a duplicate button to a pane because it is convenient. Shared primitives (`InspectorSection`, `SegmentedControl`, `NumberField`, `Vector3Field`, `ToolButton`, `IconButton`) cover repeated structures.
 
@@ -111,8 +111,13 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Scene | primitive select + Add | Multi, Group, Join/Ungroup | Delete object, last/right |
 | Texture assets | New, import/duplicate overflow | Assign/Unassign, filter, alpha | Delete texture in overflow |
 | Texture layers | Add layer | selection properties | Delete layer, last/right |
+| Animation | — | track + key in timeline | Delete key in timeline header, last/right |
+| Shape keys | Add shape key | selected key: Edit target, Capture base | Delete shape key, last/right |
 
-- Labels name the noun: `Delete object`, `Delete layer`, `Delete texture`, `Delete elements`.
+- Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.
+- Shape-key weight keys are timeline keys; the Shape keys Inspector does not duplicate Key/Unkey.
+- A more-actions (`ThreeDotMenu`) or overflow menu is always the last control in its action row.
+- Labels name the noun: `Delete object`, `Delete layer`, `Delete texture`, `Delete shape key`, `Delete key`, `Delete elements`.
 - Destructive controls are neutral at rest and use `--accent-danger` on hover/focus. Overflow destructive items follow the same neutral/red-hover rule.
 - `--accent-warning` is reserved for warnings and recoverable errors; never use amber for deletion.
 

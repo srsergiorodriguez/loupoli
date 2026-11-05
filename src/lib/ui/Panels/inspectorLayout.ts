@@ -37,10 +37,10 @@ export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'render', requires: 'editCamera', order: 25, defaultOpen: true },
   { id: 'transform', requires: 'edit3d', order: 26, defaultOpen: false },
   { id: 'selection', requires: 'select3d', order: 28, defaultOpen: true },
-  { id: 'mesh', requires: 'edit3d', order: 30, defaultOpen: false },
+  { id: 'mesh', requires: 'editTopology', order: 30, defaultOpen: false },
   { id: 'shapes', requires: 'editShapes', order: 24, defaultOpen: false },
-  { id: 'modifiers', requires: 'edit3d', order: 40, defaultOpen: false },
-  { id: 'ps1', requires: 'editRender', order: 50, defaultOpen: false },
+  { id: 'modifiers', requires: 'editTopology', order: 40, defaultOpen: false },
+  { id: 'ps1', requires: 'editLook', order: 50, defaultOpen: false },
   { id: 'brush', requires: 'paintTexture', order: 70, defaultOpen: true },
   { id: 'texture', requires: 'paintTexture', order: 80, defaultOpen: true },
   { id: 'controls', order: 90, defaultOpen: false }

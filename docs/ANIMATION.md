@@ -33,19 +33,18 @@ The `Animate` workspace is a 3D workspace with a bottom timeline.
 ![Animation workspace](media/animation-workspace.png)
 
 - Scene outliner remains available for target selection.
-- Inspector sections are ordered **Scene**, **Animation**, **Shape keys**, **Transform**, **Selection**, **Mesh**, **Modifiers**, **PS1 look**, and **Controls**. Animate has the modeling tools needed to edit vertices and shape keys; shape keys are authored in Animate only.
+- Inspector sections are ordered **Scene**, **Animation**, **Shape keys**, **Transform**, **Selection**, and **Controls**. Animate does not expose Mesh, Modifiers, or PS1 look, and it does not show the ActionDock. Shape keys are authored in Animate only.
 - Timeline:
   - Play/pause
   - Scrubbable ruler
   - Tracks and key diamonds
   - Current frame and FPS
-- Key insertion rounds the playhead to the exact integer key frame, and the ruler/track lanes share the same horizontal inset so diamonds and playhead align. The timeline sits above the status bar and is inset beside the ActionDock. Animate keeps the modeling tool rail and selection controls, but hides the view gizmo so the timeline remains unobstructed. Transform edits show from the current animated pose; an existing key at the current frame updates automatically, while an unkeyed frame requires Key transform.
+- The timeline sits above the status bar and uses the full width because Animate has no ActionDock. It shows an empty transform row for the active object/group and a weight row for every shape key, so the first transform and shape-weight keys are created in the timeline. Each row has a **+ Key** button. Selecting a diamond enables **Delete key** and Delete/Backspace. Diamonds can be dragged horizontally, snap to integer frames, and commit one undo step. Key insertion rounds to the exact frame. Transform edits show from the current animated pose; an existing key at the current frame updates automatically, while an unkeyed frame requires a timeline key.
 - Animation Inspector:
   - FPS, start/end frame
   - Loop toggle
   - New-key interpolation
-  - Key/delete key
-  - Track list and key list
+  - No duplicate key/delete controls; those live in the timeline
 
 ## Playback rules
 

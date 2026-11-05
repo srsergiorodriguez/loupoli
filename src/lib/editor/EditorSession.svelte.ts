@@ -129,6 +129,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationTracks: [],
   animationInterpolation: 'linear',
   shapeEditingId: null,
+  activeShapeKeyId: null,
   shapeKeys: [],
   groups: [],
   selectedNodeIds: [],
@@ -897,6 +898,10 @@ export class EditorSession {
     this.runtime?.captureShapeKeyFromMesh(id);
   }
 
+  selectShapeKey(id: string): void {
+    this.runtime?.selectShapeKey(id);
+  }
+
   beginShapeEdit(id: string): void {
     this.runtime?.beginShapeEdit(id);
   }
@@ -907,6 +912,41 @@ export class EditorSession {
 
   cancelShapeEdit(): void {
     this.runtime?.cancelShapeEdit();
+  }
+
+  keyAnimationTrack(track: import('./types').AnimationTrackSummary): void {
+    this.runtime?.keyAnimationTrack(
+      track.targetId,
+      track.targetKind,
+      track.kind,
+      track.shapeKeyId
+    );
+  }
+
+  deleteAnimationKeyAt(
+    track: import('./types').AnimationTrackSummary,
+    frame: number
+  ): void {
+    this.runtime?.deleteAnimationKeyAt(
+      track.targetId,
+      track.kind,
+      track.shapeKeyId ?? null,
+      frame
+    );
+  }
+
+  moveAnimationKey(
+    track: import('./types').AnimationTrackSummary,
+    fromFrame: number,
+    toFrame: number
+  ): void {
+    this.runtime?.moveAnimationKey(
+      track.targetId,
+      track.kind,
+      track.shapeKeyId ?? null,
+      fromFrame,
+      toFrame
+    );
   }
 
   keyShapeWeight(id: string): void {

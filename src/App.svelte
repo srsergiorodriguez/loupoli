@@ -231,9 +231,7 @@
       {/if}
 
       <TransformHud modal={session.snapshot.modalTransform} />
-      {#if !session.snapshot.uvOpen &&
-        session.snapshot.workspace !== 'light' &&
-        session.snapshot.workspace !== 'render'}
+      {#if !session.snapshot.uvOpen && session.snapshot.workspace === 'model'}
         <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />

@@ -49,7 +49,9 @@ This is the authoritative map of the application shell. New controls must be ass
 - **Paint:** Scene → Brush → Texture → Controls. Brush and Texture are adjacent; 3D selection overlays are hidden while the selection set persists.
 - **Light:** Scene → Lighting → Controls. Mesh editing and selection chrome are hidden; Scene remains for choosing the bake target.
 - **Render:** Scene → Camera → Render → Controls. Mesh editing and selection chrome are hidden; the active camera and output settings drive the clean render.
-- **Animate:** Scene → Animation → Shape keys → Transform → Selection → Mesh → Modifiers → PS1 Look → Controls. Selection chrome is hidden; the timeline dock owns transport and scrubbing.
+- **Animate:** Scene → Animation → Shape keys → Transform → Selection → Controls. Animate has no Mesh, Modifiers, PS1 look, or ActionDock.
+- **Timeline:** per-track **+ Key**, selected-key **Delete key**, integer-frame diamond dragging; transform and shape-weight tracks share the same interaction. The timeline dock owns transport, track keying, key deletion, and diamond movement.
+- **Scene import/export:** one labeled **Import / Export** menu; import options precede a separator and export options. The primitive selector remains below the object list because new objects append there.
 - **Tooltip** — command label plus shortcut, from the command registry.
 
 ## Ownership rules

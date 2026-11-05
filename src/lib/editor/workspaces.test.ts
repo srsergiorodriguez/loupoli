@@ -42,10 +42,13 @@ describe('inspector layout', () => {
     expect(workspaceCan('light', 'editLighting')).toBe(true);
     expect(workspaceCan('light', 'bakeLighting')).toBe(true);
     expect(workspaceCan('light', 'edit3d')).toBe(false);
+    expect(workspaceCan('light', 'editTopology')).toBe(false);
     expect(inspectorSectionsFor('light')).toEqual(['scene', 'light', 'controls']);
   });
 
   it('exposes the full modeling order only in Model', () => {
+    expect(workspaceCan('model', 'editTopology')).toBe(true);
+    expect(workspaceCan('model', 'editLook')).toBe(true);
     expect(inspectorSectionsFor('model')).toEqual([
       'scene',
       'transform',
@@ -71,15 +74,14 @@ describe('inspector layout', () => {
   it('gives Animation its own timeline section', () => {
     expect(workspaceCan('animation', 'editAnimation')).toBe(true);
     expect(workspaceCan('animation', 'edit3d')).toBe(true);
+    expect(workspaceCan('animation', 'editTopology')).toBe(false);
+    expect(workspaceCan('animation', 'editLook')).toBe(false);
     expect(inspectorSectionsFor('animation')).toEqual([
       'scene',
       'animation',
       'shapes',
       'transform',
       'selection',
-      'mesh',
-      'modifiers',
-      'ps1',
       'controls'
     ]);
   });

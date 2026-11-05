@@ -11,6 +11,16 @@
 
   let { session }: Props = $props();
   let scrubbing = $state(false);
+  let selectedTrackId = $state<string | null>(null);
+  let selectedKey = $state<{ trackId: string; frame: number } | null>(null);
+  let keyDrag = $state<{
+    track: AnimationTrackSummary;
+    from: number;
+    to: number;
+    startX: number;
+    pointerId: number;
+    moved: boolean;
+  } | null>(null);
 
   const snapshot = $derived(session.snapshot);
   const start = $derived(snapshot.animationStartFrame);
@@ -23,7 +33,23 @@
     snapshot.animationTracks.find((track) => track.targetId === activeTargetId) ??
       null
   );
-  const keyDisabled = $derived(activeTargetId === null);
+  const selectedTrack = $derived(
+    snapshot.animationTracks.find((track) => track.id === selectedTrackId) ?? null
+  );
+  const readoutTrack = $derived(selectedTrack ?? activeTrack);
+  const selectedKeyData = $derived.by(() => {
+    const selection = selectedKey;
+    if (!selection) {
+      return null;
+    }
+    const track = snapshot.animationTracks.find(
+      (item) => item.id === selection.trackId
+    );
+    const key = track?.keyframes.find(
+      (item) => item.frame === selection.frame
+    );
+    return track && key ? { track, key } : null;
+  });
 
   function percent(frame: number): number {
     return Math.max(0, Math.min(100, ((frame - start) / span) * 100));
@@ -76,16 +102,106 @@
   }
 
   function selectTrack(track: AnimationTrackSummary): void {
+    selectedTrackId = track.id;
     if (track.targetKind === 'node') {
       session.selectNode(track.targetId);
     } else {
       session.selectGroup(track.targetId);
     }
+    if (track.kind === 'shape' && track.shapeKeyId) {
+      session.selectShapeKey(track.shapeKeyId);
+    }
   }
 
   function selectKey(track: AnimationTrackSummary, frame: number): void {
     selectTrack(track);
+    selectedKey = { trackId: track.id, frame };
     session.setAnimationFrame(frame);
+  }
+
+  function keyTrack(track: AnimationTrackSummary): void {
+    selectedTrackId = track.id;
+    session.keyAnimationTrack(track);
+  }
+
+  function deleteSelectedKey(): void {
+    if (!selectedKeyData) {
+      return;
+    }
+    const { track, key } = selectedKeyData;
+    session.deleteAnimationKeyAt(track, key.frame);
+    selectedKey = null;
+  }
+
+  function beginKeyDrag(
+    event: PointerEvent,
+    track: AnimationTrackSummary,
+    frame: number
+  ): void {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    selectTrack(track);
+    selectedKey = { trackId: track.id, frame };
+    const element = event.currentTarget as HTMLElement;
+    try {
+      element.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is best-effort.
+    }
+    keyDrag = {
+      track,
+      from: frame,
+      to: frame,
+      startX: event.clientX,
+      pointerId: event.pointerId,
+      moved: false
+    };
+  }
+
+  function moveKeyDrag(event: PointerEvent): void {
+    const drag = keyDrag;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (Math.abs(event.clientX - drag.startX) > 3) {
+      drag.moved = true;
+    }
+    const lane = (event.currentTarget as HTMLElement).parentElement;
+    if (!lane) {
+      return;
+    }
+    const rect = lane.getBoundingClientRect();
+    const ratio = Math.max(
+      0,
+      Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width))
+    );
+    drag.to = Math.round(start + ratio * span);
+  }
+
+  function endKeyDrag(event: PointerEvent): void {
+    const drag = keyDrag;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    keyDrag = null;
+    if (drag.moved && drag.to !== drag.from) {
+      session.moveAnimationKey(drag.track, drag.from, drag.to);
+      selectedKey = { trackId: drag.track.id, frame: drag.to };
+      selectedTrackId = drag.track.id;
+    } else if (!drag.moved) {
+      selectKey(drag.track, drag.from);
+    }
+  }
+
+  function cancelKeyDrag(): void {
+    keyDrag = null;
   }
 </script>
 
@@ -102,18 +218,18 @@
             : session.playAnimation()}
       />
       <ActionButton
-        label="Key"
-        icon="plus"
-        disabled={keyDisabled}
-        onActivate={() => session.keyActiveTransform()}
+        label="Delete key"
+        icon="trash"
+        disabled={selectedKeyData === null}
+        onActivate={deleteSelectedKey}
       />
     </div>
     <div class="timeline-readout">
       <strong>{Math.round(snapshot.animationFrame)}</strong>
       <span>/ {end} f</span>
       <span>{snapshot.animationFps} fps</span>
-      {#if activeTrack}
-        <span class="timeline-target">{activeTrack.targetName}</span>
+      {#if readoutTrack}
+        <span class="timeline-target">{readoutTrack.targetName}</span>
       {/if}
     </div>
   </div>
@@ -144,13 +260,14 @@
     </span>
     {#if snapshot.animationTracks.length === 0}
       <p class="timeline-empty">
-        Select an object or group, set a frame, and press Key.
+        Select an object or group. Use the + button on a track to add a key.
       </p>
     {:else}
       {#each snapshot.animationTracks as track (track.id)}
         <div
           class="timeline-track"
-          class:active={activeTrack?.id === track.id}
+          class:active={selectedTrack?.id === track.id ||
+            (!selectedTrack && activeTrack?.id === track.id)}
           class:shape-track={track.kind === 'shape'}
           role="button"
           tabindex="0"
@@ -162,18 +279,47 @@
             }
           }}
         >
-          <span class="track-name">{track.targetName}</span>
+          <span class="track-label">
+            <span class="track-name">{track.targetName}</span>
+            <button
+              type="button"
+              class="track-key-action"
+              aria-label={`Key ${track.targetName}`}
+              title={`Key ${track.targetName}`}
+              onpointerdown={(event) => event.stopPropagation()}
+              onclick={(event) => {
+                event.stopPropagation();
+                keyTrack(track);
+              }}
+            >+</button>
+          </span>
           <span class="track-lane">
             {#each track.keyframes as key (key.frame)}
               <button
                 type="button"
                 class="track-key"
-                class:selected={Math.round(snapshot.animationFrame) === key.frame}
-                style:left={`${percent(key.frame)}%`}
-                aria-label={`Go to frame ${key.frame}`}
-                onclick={(event) => {
-                  event.stopPropagation();
-                  selectKey(track, key.frame);
+                class:selected={selectedKey?.trackId === track.id &&
+                  selectedKey.frame === key.frame}
+                class:dragging={keyDrag?.track.id === track.id &&
+                  keyDrag.from === key.frame}
+                style:left={`${percent(
+                  keyDrag?.track.id === track.id && keyDrag.from === key.frame
+                    ? keyDrag.to
+                    : key.frame
+                )}%`}
+                aria-label={`Frame ${key.frame}`}
+                title={`Frame ${key.frame} · ${key.interpolation}`}
+                onpointerdown={(event) => beginKeyDrag(event, track, key.frame)}
+                onpointermove={moveKeyDrag}
+                onpointerup={endKeyDrag}
+                onpointercancel={cancelKeyDrag}
+                onkeydown={(event) => {
+                  if (event.key === 'Delete' || event.key === 'Backspace') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    session.deleteAnimationKeyAt(track, key.frame);
+                    selectedKey = null;
+                  }
                 }}
               ></button>
             {/each}
@@ -189,19 +335,13 @@
     position: absolute;
     right: 12px;
     bottom: calc(38px + env(safe-area-inset-bottom));
-    left: 178px;
+    left: 12px;
     z-index: 30;
     display: flex;
     flex-direction: column;
     min-width: 0;
     padding: 8px 10px 10px;
     pointer-events: auto;
-  }
-
-  @media (max-width: 899px) {
-    .animation-timeline {
-      left: 12px;
-    }
   }
 
   .timeline-head {
@@ -327,12 +467,56 @@
     background: var(--bg-selected);
   }
 
+  .track-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .track-name {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     color: var(--text-secondary);
     font-size: var(--text-2xs);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .track-key-action {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--bg-input);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .track-key-action::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+
+  .track-key-action:hover {
+    border-color: var(--border-strong);
+    color: var(--accent-primary);
+  }
+
+  .track-key-action:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
   }
 
   .track-lane {
@@ -345,6 +529,7 @@
 
   .track-key {
     position: absolute;
+    touch-action: none;
     top: 50%;
     width: 11px;
     height: 11px;
@@ -357,13 +542,33 @@
     cursor: pointer;
   }
 
+  .track-key::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+  }
+
   .track-key.selected {
     background: var(--accent-primary);
+  }
+
+  .track-key.dragging {
+    cursor: grabbing;
+    transform: rotate(45deg) scale(1.35);
   }
 
   :global(:root[data-density='touch']) .track-key {
     width: 18px;
     height: 18px;
     margin: -9px 0 0 -9px;
+  }
+
+  :global(:root[data-density='touch']) .track-key::after {
+    inset: -13px;
+  }
+
+  :global(:root[data-density='touch']) .track-key-action {
+    width: var(--hit-min);
+    height: var(--hit-min);
   }
 </style>

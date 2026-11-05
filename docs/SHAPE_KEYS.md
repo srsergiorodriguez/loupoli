@@ -22,12 +22,13 @@ interface ShapeKey {
 
 Animate Inspector → **Shape keys**:
 
-- Add shape key
-- **Edit**: enter the stored target, edit it live with the normal mesh tools, then **Finish** to record one undoable capture or **Cancel** to discard
-- Weight slider per key
-- Key/Unkey: add or remove a shape-weight timeline key
-- Capture: stores the current edited base mesh as the key target, restores the source base, and leaves weight at 0
-- Delete key
+- Add shape key above the list.
+- Selectable shape-key rows with name and current weight.
+- Selected-key controls: weight, **Edit target**, **Capture base**.
+- **Edit target**: enter the stored target, edit it live with the normal mesh tools, then **Finish** to record one undoable capture or **Cancel** to discard.
+- **Capture base**: stores the current edited base mesh as the key target, restores the source base, and leaves weight at 0.
+- **Delete shape key**: last, right-aligned, danger.
+- Shape-weight keys are created and removed from the shape key's timeline track, not from this section.
 
 ![Shape keys](media/shape-keys.png)
 
