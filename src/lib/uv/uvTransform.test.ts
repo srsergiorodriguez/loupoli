@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { uvScaleFactor } from './uvTransform';
+import { rotateUv, uvScaleFactor } from './uvTransform';
 
 describe('UV scale gesture factor', () => {
   it('stays neutral at the drag start', () => {
@@ -16,5 +16,13 @@ describe('UV scale gesture factor', () => {
 
   it('slows the factor in fine mode', () => {
     expect(uvScaleFactor(80, 120, 0.1)).toBeLessThan(uvScaleFactor(80, 120, 1));
+  });
+});
+
+describe('UV rotation direction', () => {
+  it('rotates positive angles counterclockwise in UV space', () => {
+    const rotated = rotateUv([100, 0], [0, 0], Math.PI / 2);
+    expect(rotated[0]).toBeCloseTo(0);
+    expect(rotated[1]).toBeCloseTo(100);
   });
 });
