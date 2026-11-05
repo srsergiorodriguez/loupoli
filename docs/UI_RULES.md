@@ -52,13 +52,13 @@ Every Inspector Section uses `InspectorSection` (`<details>/<summary>`). No cust
 
 All editable numbers use `NumberField`; all editable vectors use `Vector3Field`. Read-only numeric text is not a field and must not look like one. Single-vertex Selection uses `Vector3Field` and commits through an undoable vertex move.
 
-Inspector field rows share one rhythm:
+Inspector field rows share one compact rhythm:
 
-- Module bodies stack direct children with `--field-gap` (8 px). Do not add per-field `margin-top`/`margin-bottom`.
+- Section bodies and module bodies stack direct children with `--inspector-row-gap` (6 px). Section padding is `--inspector-section-pad` (12 px). Do not add per-field `margin-top`/`margin-bottom`.
 - A vector field is one row. Its label-to-control gap is `--field-label-gap` (4 px), matching a field label above its control.
 - Labels use the shared UI label style; numeric prefixes and values remain monospace.
-- Nested lists keep their own compact 2 px row gap. Grouped cards may keep internal gaps but must not add outer margins.
-- Actions use `ActionRow`; they never create a second field-row style.
+- Nested outliner/track lists keep their own 2 px row gap. Grouped cards may keep internal gaps but must not add outer margins.
+- Actions use `ActionRow` with a 4 px internal gap; they never create a second field-row style.
 
 ![Inspector field rhythm](media/inspector-spacing.png)
 
@@ -155,7 +155,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 ### Controls and rhythm
 
 - Inputs, selects, action buttons, and outliner rows share `--control-h`: 32 px desktop, 44 px touch.
-- Inspector row gaps are 2 px unless a section has a documented grouping reason.
+- Form rows use a 6 px gap; outliner and track-list rows use 2 px; controls inside one action row use 4 px.
 - Inputs and selects must be the same height as adjacent controls; do not put a small input inside a tall row.
 - Use the shared `SliderField`, `SelectField`, `ColorField`, `InlineNameField`, and `NumberField` shapes.
 

@@ -2441,7 +2441,7 @@
   .transform-stack {
     display: flex;
     flex-direction: column;
-    gap: var(--field-gap);
+    gap: var(--inspector-row-gap);
   }
 
   .stats {
@@ -2646,10 +2646,13 @@
   .modifier-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--inspector-row-gap);
   }
 
   .modifier-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--inspector-row-gap);
     padding: var(--space-2);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
@@ -2739,7 +2742,6 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-1);
-    margin-top: var(--space-1);
   }
 
   .modifier-field {
@@ -2813,18 +2815,12 @@
   .texture-block {
     display: flex;
     flex-direction: column;
-    gap: var(--field-gap);
-    padding: var(--space-1) 0;
+    gap: var(--inspector-row-gap);
     border-bottom: var(--hairline) solid var(--border-subtle);
-  }
-
-  .texture-block:first-child {
-    padding-top: 0;
   }
 
   .texture-block:last-child {
     border-bottom: 0;
-    padding-bottom: 0;
   }
 
   .texture-asset-meta {
@@ -2839,7 +2835,7 @@
   .texture-property-pair {
     display: flex;
     flex-direction: column;
-    gap: var(--field-gap);
+    gap: var(--inspector-row-gap);
   }
 
   .texture-usage {
@@ -2849,6 +2845,7 @@
   }
 
   .texture-note {
+    margin: 0;
     color: var(--text-tertiary);
     font-family: var(--font-mono);
     font-size: var(--text-2xs);
@@ -2868,7 +2865,6 @@
 
   .light-divider {
     height: var(--hairline);
-    margin: var(--space-1) 0;
     background: var(--border-subtle);
   }
 
@@ -2883,7 +2879,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--space-2);
+    gap: var(--inspector-row-gap);
     color: var(--text-tertiary);
     font-size: var(--text-2xs);
     line-height: var(--leading-ui);
@@ -2979,8 +2975,7 @@
   .shape-key-detail {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    padding-top: var(--space-1);
+    gap: var(--inspector-row-gap);
   }
 
   .shape-key-primary-actions {
@@ -3031,8 +3026,7 @@
   .module-body {
     display: flex;
     flex-direction: column;
-    gap: var(--field-gap);
-    padding-bottom: var(--space-4);
+    gap: var(--inspector-row-gap);
   }
 
   @media (max-width: 899px) {

@@ -40,7 +40,7 @@
     align-items: center;
     gap: var(--space-2);
     min-height: var(--hit-min);
-    padding: 0 var(--space-4);
+    padding: 0 var(--inspector-section-pad);
     color: var(--text-primary);
     cursor: pointer;
     list-style: none;
@@ -95,6 +95,9 @@
   }
 
   .section-body {
-    padding: 0 var(--space-4) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--inspector-row-gap);
+    padding: 0 var(--inspector-section-pad) var(--inspector-section-pad);
   }
 </style>
