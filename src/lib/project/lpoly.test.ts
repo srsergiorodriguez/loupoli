@@ -212,6 +212,38 @@ describe('.lpoly v4', () => {
     );
   });
 
+  it('round-trips shape-key visibility and list order', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    const first = node.addShapeKey('First');
+    const second = node.addShapeKey('Second');
+    second.targetPositions[0] += 2;
+    second.weight = 1;
+    first.visible = false;
+    node.reorderShapeKeys(second.id, first.id, false);
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS)).document.nodes[0];
+    expect(decoded.shapeKeys.map((key) => key.name)).toEqual(['Second', 'First']);
+    expect(decoded.shapeKeys[1].visible).toBe(false);
+    expect(decoded.shapeKeys[0].visible).toBe(true);
+    expect(decoded.shapeKeys[1].weight).toBe(0);
+  });
+
+  it('excludes hidden shape keys from evaluation', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    const key = node.addShapeKey('Hidden');
+    key.targetPositions[0] += 2;
+    key.weight = 1;
+    key.visible = false;
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(
+      node.mesh.positions[0]
+    );
+    key.visible = true;
+    expect(node.getEvaluatedMesh().mesh.positions[0]).toBeCloseTo(
+      node.mesh.positions[0] + 2
+    );
+  });
+
   it('round-trips simple node material palettes', () => {
     const document = makeDocument();
     const node = document.nodes[0];

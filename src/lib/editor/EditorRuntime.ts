@@ -872,7 +872,8 @@ export class EditorRuntime {
       shapeKeys: (this.getActiveNode()?.shapeKeys ?? []).map((key) => ({
         id: key.id,
         name: key.name,
-        weight: this.getActiveNode()?.shapeKeyWeight(key) ?? key.weight
+        weight: this.getActiveNode()?.shapeKeyWeight(key) ?? key.weight,
+        visible: key.visible
       })),
       projectError: this.projectError,
       renderCount: this.renderer.getRenderCount()
@@ -4259,6 +4260,41 @@ export class EditorRuntime {
     this.applyAnimationPose();
   }
 
+  /** Change the interpolation of one selected key without moving it. */
+  setAnimationKeyInterpolation(
+    targetId: string,
+    kind: 'transform' | 'shape',
+    shapeKeyId: string | null,
+    frame: number,
+    interpolation: import('../scene/SceneAnimation').AnimationInterpolation
+  ): void {
+    const before = this.document.animation.snapshot();
+    if (kind === 'shape' && shapeKeyId) {
+      const track = this.document.animation.getWeightTrack(targetId, shapeKeyId);
+      const key = track?.keyframes.find((item) => item.frame === frame);
+      if (!track || !key || key.interpolation === interpolation) {
+        return;
+      }
+      track.setKey(frame, key.weight, interpolation);
+    } else {
+      const track = this.document.animation.getTrack(targetId);
+      const key = track?.keyframes.find((item) => item.frame === frame);
+      if (!track || !key || key.interpolation === interpolation) {
+        return;
+      }
+      track.setKey(frame, key.transform, interpolation);
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        this.document.animation.snapshot(),
+        'Change key interpolation'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
   /** Remove one key from a transform or shape-weight track. */
   deleteAnimationKeyAt(
     targetId: string,
@@ -4944,6 +4980,53 @@ export class EditorRuntime {
       ...key,
       targetPositions: key.targetPositions.slice()
     }));
+  }
+
+  /** Rename one shape key as an undoable list edit. */
+  renameShapeKey(id: string, name: string): void {
+    const node = this.getActiveNode();
+    if (!node || !node.shapeKeys.some((key) => key.id === id)) {
+      return;
+    }
+    const before = this.cloneShapeKeys(node);
+    node.renameShapeKey(id, name);
+    this.history.execute(
+      new SetShapeKeysCommand(node, before, node.shapeKeys, 'Rename shape key')
+    );
+    this.publish();
+  }
+
+  /** Toggle one shape key's visibility without changing its weight. */
+  setShapeKeyVisible(id: string, visible: boolean): void {
+    const node = this.getActiveNode();
+    if (!node || !node.shapeKeys.some((key) => key.id === id)) {
+      return;
+    }
+    const before = this.cloneShapeKeys(node);
+    node.setShapeKeyVisible(id, visible);
+    this.history.execute(
+      new SetShapeKeysCommand(
+        node,
+        before,
+        node.shapeKeys,
+        visible ? 'Show shape key' : 'Hide shape key'
+      )
+    );
+    this.publish();
+  }
+
+  /** Reorder one shape key in the list as an undoable edit. */
+  reorderShapeKeys(sourceId: string, targetId: string, after: boolean): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const before = this.cloneShapeKeys(node);
+    node.reorderShapeKeys(sourceId, targetId, after);
+    this.history.execute(
+      new SetShapeKeysCommand(node, before, node.shapeKeys, 'Reorder shape keys')
+    );
+    this.publish();
   }
 
   /** Add an identity shape key to the active object. */

@@ -10,6 +10,7 @@ function snapshots(keys: readonly ShapeKey[]): ShapeKeySnapshot[] {
     id: key.id,
     name: key.name,
     weight: key.weight,
+    visible: key.visible,
     targetPositions: key.targetPositions.slice()
   }));
 }

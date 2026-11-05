@@ -112,11 +112,12 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Texture assets | New, import/duplicate overflow | Assign/Unassign, filter, alpha | Delete texture in overflow |
 | Texture layers | Add layer | selection properties | Delete layer, last/right |
 | Animation | — | track + key in timeline | Delete key in timeline header, last/right |
-| Shape keys | Add shape key | selected key: Edit target, Capture base | Delete shape key, last/right |
+| Shape keys | Add shape key | selected key: name, weight, Edit target, Capture base; rows support visibility and drag reorder | Delete shape key, last/right |
 
 - Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.
-- Shape-key weight keys are timeline keys; the Shape keys Inspector does not duplicate Key/Unkey.
+- Shape-key weight keys are timeline keys; the Shape keys Inspector does not duplicate Key/Unkey. Shape-key rows use the same outliner grouping, visibility, and drag-reorder behavior as scene objects and texture layers.
 - A more-actions (`ThreeDotMenu`) or overflow menu is always the last control in its action row.
+- Timeline zoom uses minus/Fit/plus in the timeline header. Ruler ticks adapt to the visible range; wheel pans and Ctrl/Cmd+wheel zooms.
 - Labels name the noun: `Delete object`, `Delete layer`, `Delete texture`, `Delete shape key`, `Delete key`, `Delete elements`.
 - Destructive controls are neutral at rest and use `--accent-danger` on hover/focus. Overflow destructive items follow the same neutral/red-hover rule.
 - `--accent-warning` is reserved for warnings and recoverable errors; never use amber for deletion.

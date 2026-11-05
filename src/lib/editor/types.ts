@@ -160,6 +160,7 @@ export interface ShapeKeySummary {
   readonly id: string;
   readonly name: string;
   readonly weight: number;
+  readonly visible: boolean;
 }
 
 /** Reactive-safe animation track projection. */

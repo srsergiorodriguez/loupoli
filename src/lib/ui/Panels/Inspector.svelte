@@ -255,10 +255,15 @@
   let layerDropTargetId = $state<string | null>(null);
   let layerDropAfter = $state(false);
   let layerReorderPointerId: number | null = null;
+  let draggedShapeKeyId = $state<string | null>(null);
+  let shapeDropTargetId = $state<string | null>(null);
+  let shapeDropAfter = $state(false);
+  let shapeReorderPointerId: number | null = null;
 
   onDestroy(() => {
     cleanupReorder();
     cleanupLayerReorder();
+    cleanupShapeReorder();
   });
 
   function beginReorder(event: PointerEvent, nodeId: string): void {
@@ -375,6 +380,64 @@
     draggedLayerId = null;
     layerDropTargetId = null;
     layerDropAfter = false;
+  }
+
+  function beginShapeReorder(event: PointerEvent, keyId: string): void {
+    if (event.pointerType === 'mouse' && event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    draggedShapeKeyId = keyId;
+    shapeDropTargetId = null;
+    shapeReorderPointerId = event.pointerId;
+    window.addEventListener('pointermove', reorderShapeMove);
+    window.addEventListener('pointerup', reorderShapeEnd);
+    window.addEventListener('pointercancel', cleanupShapeReorder);
+  }
+
+  function reorderShapeMove(event: PointerEvent): void {
+    if (event.pointerId !== shapeReorderPointerId || !draggedShapeKeyId) {
+      return;
+    }
+    event.preventDefault();
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-shape-key-id]');
+    if (!target) {
+      shapeDropTargetId = null;
+      return;
+    }
+    const id = target.dataset.shapeKeyId ?? null;
+    if (!id || id === draggedShapeKeyId) {
+      shapeDropTargetId = null;
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    shapeDropTargetId = id;
+    shapeDropAfter = event.clientY > rect.top + rect.height / 2;
+  }
+
+  function reorderShapeEnd(event: PointerEvent): void {
+    if (event.pointerId !== shapeReorderPointerId) {
+      return;
+    }
+    const source = draggedShapeKeyId;
+    const target = shapeDropTargetId;
+    const after = shapeDropAfter;
+    cleanupShapeReorder();
+    if (source && target) {
+      session.reorderShapeKeys(source, target, after);
+    }
+  }
+
+  function cleanupShapeReorder(): void {
+    window.removeEventListener('pointermove', reorderShapeMove);
+    window.removeEventListener('pointerup', reorderShapeEnd);
+    window.removeEventListener('pointercancel', cleanupShapeReorder);
+    shapeReorderPointerId = null;
+    draggedShapeKeyId = null;
+    shapeDropTargetId = null;
+    shapeDropAfter = false;
   }
 
   function toggleNodeVisibility(
@@ -759,7 +822,7 @@
           onChange={(value) => session.setAnimationLoop(value)}
         />
         <SelectField
-          label="New key interpolation"
+          label="Default key interpolation"
           value={session.snapshot.animationInterpolation}
           options={[
             { value: 'linear', label: 'Linear' },
@@ -768,6 +831,10 @@
           onChange={(value) =>
             session.setAnimationInterpolation(value as 'linear' | 'step')}
         />
+        <p class="hint">
+          Used for new keys. Select a timeline diamond to change its existing
+          interpolation.
+        </p>
       </div>
     </InspectorSection>
     {/snippet}
@@ -1629,25 +1696,39 @@
           {:else}
             <div class="shape-key-list">
               {#each shapeKeys as key (key.id)}
-                <OutlinerRow
-                  active={key.id === activeShapeKey?.id}
-                  showVisibility={false}
-                  visible={true}
-                  visibilityLabel={key.name}
-                  selectLabel={`Select ${key.name}`}
-                  onToggleVisibility={() => {}}
-                  onSelect={() => {
-                    if (!shapeEditingId) session.selectShapeKey(key.id);
-                  }}
-                >
-                  <span class="object-glyph"><Icon name="checker" size={13} /></span>
-                  <span class="object-name">{key.name}</span>
-                  <span class="object-kind">{key.weight.toFixed(2)}</span>
-                </OutlinerRow>
+                <div data-shape-key-id={key.id}>
+                  <OutlinerRow
+                    active={key.id === activeShapeKey?.id}
+                    hidden={!key.visible}
+                    dragging={draggedShapeKeyId === key.id}
+                    dropTarget={shapeDropTargetId === key.id}
+                    dropAfter={shapeDropAfter}
+                    showVisibility
+                    visible={key.visible}
+                    visibilityLabel={key.visible ? `Hide ${key.name}` : `Show ${key.name}`}
+                    dragLabel={`Reorder ${key.name}`}
+                    dragTitle="Drag to reorder"
+                    onDragStart={(event) => beginShapeReorder(event, key.id)}
+                    onToggleVisibility={() => session.setShapeKeyVisible(key.id, !key.visible)}
+                    selectLabel={`Select ${key.name}`}
+                    onSelect={() => {
+                      if (!shapeEditingId) session.selectShapeKey(key.id);
+                    }}
+                  >
+                    <span class="object-glyph"><Icon name="checker" size={13} /></span>
+                    <span class="object-name">{key.name}</span>
+                    <span class="object-kind">{key.weight.toFixed(2)}</span>
+                  </OutlinerRow>
+                </div>
               {/each}
             </div>
             {#if activeShapeKey}
               <div class="shape-key-detail">
+                <InlineNameField
+                  label="Shape key name"
+                  value={activeShapeKey.name}
+                  onCommit={(value) => session.renameShapeKey(activeShapeKey.id, value)}
+                />
                 {#if shapeEditingId}
                   <p class="hint">
                     Edit the target with the viewport tools. Finish records one

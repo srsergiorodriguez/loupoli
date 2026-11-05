@@ -7,6 +7,7 @@ export interface ShapeKeySnapshot {
   readonly id: string;
   readonly name: string;
   readonly weight: number;
+  readonly visible: boolean;
   readonly targetPositions: Float32Array;
 }
 
@@ -15,6 +16,7 @@ function snapshot(keys: readonly ShapeKey[]): ShapeKeySnapshot[] {
     id: key.id,
     name: key.name,
     weight: key.weight,
+    visible: key.visible,
     targetPositions: key.targetPositions.slice()
   }));
 }

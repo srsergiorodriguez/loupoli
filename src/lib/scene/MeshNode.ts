@@ -31,6 +31,7 @@ export interface ShapeKey {
   id: string;
   name: string;
   weight: number;
+  visible: boolean;
   readonly targetPositions: Float32Array;
 }
 
@@ -136,6 +137,7 @@ export class MeshNode {
       id: createShapeKeyId(),
       name,
       weight: 0,
+      visible: true,
       targetPositions: this.mesh.positions.slice()
     };
     this.shapeKeys.push(key);
@@ -149,6 +151,7 @@ export class MeshNode {
       id: key.id,
       name: key.name,
       weight: Math.max(0, Math.min(1, key.weight)),
+      visible: key.visible !== false,
       targetPositions: key.targetPositions.slice()
     }));
     if (this.shapeKeys.length === 0) {
@@ -185,6 +188,29 @@ export class MeshNode {
       return;
     }
     key.name = name.trim().slice(0, 64) || key.name;
+    this.invalidateShapeKeys();
+  }
+
+  /** Toggle whether a shape key contributes to the evaluated mesh. */
+  setShapeKeyVisible(id: string, visible: boolean): void {
+    const key = this.shapeKeys.find((item) => item.id === id);
+    if (!key) {
+      return;
+    }
+    key.visible = visible;
+    this.invalidateShapeKeys();
+  }
+
+  /** Move a shape key within the list without changing its target. */
+  reorderShapeKeys(sourceId: string, targetId: string, after: boolean): void {
+    const source = this.shapeKeys.findIndex((key) => key.id === sourceId);
+    const target = this.shapeKeys.findIndex((key) => key.id === targetId);
+    if (source < 0 || target < 0 || source === target) {
+      return;
+    }
+    const [key] = this.shapeKeys.splice(source, 1);
+    const targetIndex = this.shapeKeys.findIndex((item) => item.id === targetId);
+    this.shapeKeys.splice(targetIndex + (after ? 1 : 0), 0, key);
     this.invalidateShapeKeys();
   }
 
@@ -239,7 +265,9 @@ export class MeshNode {
 
   /** Whether any shape key currently contributes to the evaluated mesh. */
   get shapeKeysActive(): boolean {
-    return this.shapeKeys.some((key) => this.shapeKeyWeight(key) > 0);
+    return this.shapeKeys.some(
+      (key) => key.visible && this.shapeKeyWeight(key) > 0
+    );
   }
 
   private invalidateShapeKeys(): void {
@@ -253,6 +281,9 @@ export class MeshNode {
     }
     const positions = this.mesh.positions.slice();
     for (const key of this.shapeKeys) {
+      if (!key.visible) {
+        continue;
+      }
       const weight = this.shapeKeyWeight(key);
       if (weight <= 0) {
         continue;

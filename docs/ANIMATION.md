@@ -39,11 +39,14 @@ The `Animate` workspace is a 3D workspace with a bottom timeline.
   - Scrubbable ruler
   - Tracks and key diamonds
   - Current frame and FPS
-- The timeline sits above the status bar and uses the full width because Animate has no ActionDock. It shows an empty transform row for the active object/group and a weight row for every shape key, so the first transform and shape-weight keys are created in the timeline. Each row has a **+ Key** button. Selecting a diamond enables **Delete key** and Delete/Backspace. Diamonds can be dragged horizontally, snap to integer frames, and commit one undo step. Key insertion rounds to the exact frame. Transform edits show from the current animated pose; an existing key at the current frame updates automatically, while an unkeyed frame requires a timeline key.
+  - Adaptive ruler ticks
+  - Minus/Fit/plus zoom; wheel pans and Ctrl/Cmd+wheel zooms
+  - Selected-key interpolation editor
+- The timeline sits above the status bar and uses the full width because Animate has no ActionDock. It shows an empty transform row for the active object/group and a weight row for every shape key, so the first transform and shape-weight keys are created in the timeline. Each row has a **+ Key** button. Selecting a diamond enables **Delete key**, Delete/Backspace, and an interpolation selector for that key. Diamonds can be dragged horizontally, snap to integer frames, and commit one undo step. Ruler ticks adapt to the visible range; minus/Fit/plus zoom, wheel panning, and Ctrl/Cmd+wheel zooming are available. Key insertion rounds to the exact frame. Transform edits show from the current animated pose; an existing key at the current frame updates automatically, while an unkeyed frame requires a timeline key.
 - Animation Inspector:
   - FPS, start/end frame
   - Loop toggle
-  - New-key interpolation
+  - Default interpolation for new keys; select a diamond to edit its existing interpolation in the timeline
   - No duplicate key/delete controls; those live in the timeline
 
 ## Playback rules

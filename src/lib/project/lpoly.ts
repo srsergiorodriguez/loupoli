@@ -100,6 +100,7 @@ export interface NodeSnapshot {
     readonly id: string;
     readonly name: string;
     readonly weight: number;
+    readonly visible?: boolean;
     readonly targetPositions: Float32Array;
   }[];
   readonly modifiers: readonly Modifier[];
@@ -134,6 +135,7 @@ interface NodeManifest {
     readonly id: string;
     readonly name: string;
     readonly weight: number;
+    readonly visible?: boolean;
     readonly vertexCount: number;
   }[];
   readonly modifiers?: readonly Modifier[];
@@ -445,6 +447,7 @@ export function snapshotNode(node: MeshNode): NodeSnapshot {
       id: key.id,
       name: key.name,
       weight: key.weight,
+      visible: key.visible,
       targetPositions: key.targetPositions.slice()
     })),
     modifiers: cloneModifiers(node.modifiers),
@@ -504,7 +507,12 @@ export function restoreNode(snapshot: NodeSnapshot): MeshNode {
   );
   node.visible = snapshot.visible;
   node.setMaterialPalette(snapshot.materialPalette ?? []);
-  node.setShapeKeys(snapshot.shapeKeys ?? []);
+  node.setShapeKeys(
+    (snapshot.shapeKeys ?? []).map((key) => ({
+      ...key,
+      visible: key.visible !== false
+    }))
+  );
   node.transform = validateTransform(snapshot.transform);
   node.parentId = snapshot.parentId ?? null;
   node.setModifiers(validateModifiers(snapshot.modifiers));
@@ -850,6 +858,7 @@ function encodeInternal(
       id: key.id,
       name: key.name,
       weight: key.weight,
+      visible: key.visible,
       vertexCount: node.mesh.vertexCount
     })),
     modifiers: cloneModifiers(node.modifiers),
@@ -1228,6 +1237,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
               !Number.isFinite(key.weight) ||
               key.weight < 0 ||
               key.weight > 1 ||
+              (key.visible !== undefined && typeof key.visible !== 'boolean') ||
               key.vertexCount !== counts.vertexCount
           )))
     ) {
@@ -1283,6 +1293,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
           id: key.id,
           name: key.name,
           weight: key.weight,
+          visible: key.visible ?? true,
           targetPositions
         });
       }

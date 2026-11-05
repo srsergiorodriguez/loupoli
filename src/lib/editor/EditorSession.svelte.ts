@@ -902,6 +902,18 @@ export class EditorSession {
     this.runtime?.selectShapeKey(id);
   }
 
+  renameShapeKey(id: string, name: string): void {
+    this.runtime?.renameShapeKey(id, name);
+  }
+
+  setShapeKeyVisible(id: string, visible: boolean): void {
+    this.runtime?.setShapeKeyVisible(id, visible);
+  }
+
+  reorderShapeKeys(sourceId: string, targetId: string, after: boolean): void {
+    this.runtime?.reorderShapeKeys(sourceId, targetId, after);
+  }
+
   beginShapeEdit(id: string): void {
     this.runtime?.beginShapeEdit(id);
   }
@@ -932,6 +944,20 @@ export class EditorSession {
       track.kind,
       track.shapeKeyId ?? null,
       frame
+    );
+  }
+
+  setAnimationKeyInterpolation(
+    track: import('./types').AnimationTrackSummary,
+    frame: number,
+    interpolation: 'linear' | 'step'
+  ): void {
+    this.runtime?.setAnimationKeyInterpolation(
+      track.targetId,
+      track.kind,
+      track.shapeKeyId ?? null,
+      frame,
+      interpolation
     );
   }
 

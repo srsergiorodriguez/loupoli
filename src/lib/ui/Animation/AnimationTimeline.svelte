@@ -1,6 +1,7 @@
 <script lang="ts">
   import IconButton from '../Primitives/IconButton.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
+  import SelectField from '../Primitives/SelectField.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import type { AnimationTrackSummary } from '../../editor/types';
 
@@ -21,11 +22,39 @@
     pointerId: number;
     moved: boolean;
   } | null>(null);
+  let zoomStart = $state<number | null>(null);
+  let zoomEnd = $state<number | null>(null);
 
   const snapshot = $derived(session.snapshot);
   const start = $derived(snapshot.animationStartFrame);
   const end = $derived(Math.max(start + 1, snapshot.animationEndFrame));
   const span = $derived(Math.max(1, end - start));
+  const viewStart = $derived(
+    zoomStart === null
+      ? start
+      : Math.max(start, Math.min(end - 2, Math.round(zoomStart)))
+  );
+  const viewEnd = $derived(
+    zoomEnd === null
+      ? end
+      : Math.max(viewStart + 1, Math.min(end, Math.round(zoomEnd)))
+  );
+  const viewSpan = $derived(Math.max(1, viewEnd - viewStart));
+  const tickStep = $derived(niceStep(viewSpan, 8));
+  const ticks = $derived.by(() => {
+    const result: { frame: number; label: string; major: boolean }[] = [];
+    const minor = Math.max(1, Math.floor(tickStep / 5));
+    const first = Math.ceil(viewStart / minor) * minor;
+    for (let frame = first; frame <= viewEnd; frame += minor) {
+      const major = frame % tickStep === 0;
+      result.push({
+        frame,
+        label: major ? String(frame) : '',
+        major
+      });
+    }
+    return result;
+  });
   const activeTargetId = $derived(
     snapshot.activeGroupId ?? snapshot.activeNodeId
   );
@@ -51,8 +80,71 @@
     return track && key ? { track, key } : null;
   });
 
+  function niceStep(spanFrames: number, targetTicks: number): number {
+    const raw = Math.max(1, spanFrames / Math.max(1, targetTicks));
+    const power = 10 ** Math.floor(Math.log10(raw));
+    const unit = raw / power;
+    const nice = unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10;
+    return Math.max(1, Math.round(nice * power));
+  }
+
   function percent(frame: number): number {
-    return Math.max(0, Math.min(100, ((frame - start) / span) * 100));
+    return Math.max(
+      0,
+      Math.min(100, ((frame - viewStart) / viewSpan) * 100)
+    );
+  }
+
+  function zoomTo(nextStart: number, nextEnd: number): void {
+    const minimum = Math.min(4, span);
+    const nextSpan = Math.max(minimum, Math.min(span, Math.round(nextEnd - nextStart)));
+    const center = (nextStart + nextEnd) / 2;
+    let clampedStart = Math.round(center - nextSpan / 2);
+    clampedStart = Math.max(start, Math.min(end - nextSpan, clampedStart));
+    zoomStart = clampedStart;
+    zoomEnd = clampedStart + nextSpan;
+  }
+
+  function zoomBy(factor: number): void {
+    const current = Math.round(snapshot.animationFrame);
+    const center =
+      current >= viewStart && current <= viewEnd
+        ? current
+        : (viewStart + viewEnd) / 2;
+    const nextSpan = Math.max(
+      Math.min(4, span),
+      Math.min(span, viewSpan * factor)
+    );
+    zoomTo(center - nextSpan / 2, center + nextSpan / 2);
+  }
+
+  function fitTimeline(): void {
+    zoomStart = null;
+    zoomEnd = null;
+  }
+
+  function panBy(frames: number): void {
+    if (viewSpan >= span) {
+      return;
+    }
+    const nextStart = Math.max(
+      start,
+      Math.min(end - viewSpan, viewStart + Math.round(frames))
+    );
+    zoomStart = nextStart;
+    zoomEnd = nextStart + viewSpan;
+  }
+
+  function wheelTimeline(event: WheelEvent): void {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      zoomBy(event.deltaY > 0 ? 1.25 : 0.8);
+      return;
+    }
+    if (viewSpan < span) {
+      event.preventDefault();
+      panBy(event.deltaY > 0 ? viewSpan * 0.12 : -viewSpan * 0.12);
+    }
   }
 
   function frameAt(clientX: number, element: HTMLElement): number {
@@ -65,7 +157,7 @@
       element;
     const rect = lane.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
-    return Math.round(start + ratio * span);
+    return Math.round(viewStart + ratio * viewSpan);
   }
 
   function scrub(event: PointerEvent): void {
@@ -180,7 +272,7 @@
       0,
       Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width))
     );
-    drag.to = Math.round(start + ratio * span);
+    drag.to = Math.round(viewStart + ratio * viewSpan);
   }
 
   function endKeyDrag(event: PointerEvent): void {
@@ -205,7 +297,7 @@
   }
 </script>
 
-<section class="animation-timeline loupoli-panel" aria-label="Animation timeline">
+<section class="animation-timeline loupoli-panel" aria-label="Animation timeline" onwheel={wheelTimeline}>
   <div class="timeline-head">
     <div class="timeline-transport">
       <IconButton
@@ -224,6 +316,29 @@
         onActivate={deleteSelectedKey}
       />
     </div>
+    <div class="timeline-zoom">
+      <IconButton
+        label="Zoom out timeline"
+        icon="minus"
+        tooltip="Zoom out"
+        disabled={viewSpan >= span}
+        onActivate={() => zoomBy(1.5)}
+      />
+      <IconButton
+        label="Fit timeline"
+        icon="frame"
+        tooltip="Fit timeline"
+        disabled={viewSpan >= span}
+        onActivate={fitTimeline}
+      />
+      <IconButton
+        label="Zoom in timeline"
+        icon="plus"
+        tooltip="Zoom in"
+        disabled={viewSpan <= Math.min(4, span)}
+        onActivate={() => zoomBy(0.67)}
+      />
+    </div>
     <div class="timeline-readout">
       <strong>{Math.round(snapshot.animationFrame)}</strong>
       <span>/ {end} f</span>
@@ -234,10 +349,33 @@
     </div>
   </div>
 
+  {#if selectedKeyData}
+    <div class="timeline-key-editor">
+      <SelectField
+        label="Key interpolation"
+        value={selectedKeyData.key.interpolation}
+        options={[
+          { value: 'linear', label: 'Linear' },
+          { value: 'step', label: 'Step' }
+        ]}
+        onChange={(value) =>
+          session.setAnimationKeyInterpolation(
+            selectedKeyData.track,
+            selectedKeyData.key.frame,
+            value as 'linear' | 'step'
+          )}
+      />
+    </div>
+  {/if}
+
   <div class="timeline-ruler" aria-hidden="true">
     <div class="timeline-ruler-lane">
-      {#each [0, 0.25, 0.5, 0.75, 1] as ratio (ratio)}
-        <span style:left={`${ratio * 100}%`}>{Math.round(start + ratio * span)}</span>
+      {#each ticks as tick (tick.frame)}
+        <span
+          class="timeline-tick"
+          class:major={tick.major}
+          style:left={`${percent(tick.frame)}%`}
+        >{tick.label}</span>
       {/each}
     </div>
   </div>
@@ -252,12 +390,14 @@
     onpointerup={endScrub}
     onpointercancel={() => (scrubbing = false)}
   >
-    <span class="timeline-lane-overlay" aria-hidden="true">
-      <span
-        class="timeline-playhead"
-        style:left={`${percent(snapshot.animationFrame)}%`}
-      ></span>
-    </span>
+    {#if snapshot.animationFrame >= viewStart && snapshot.animationFrame <= viewEnd}
+      <span class="timeline-lane-overlay" aria-hidden="true">
+        <span
+          class="timeline-playhead"
+          style:left={`${percent(snapshot.animationFrame)}%`}
+        ></span>
+      </span>
+    {/if}
     {#if snapshot.animationTracks.length === 0}
       <p class="timeline-empty">
         Select an object or group. Use the + button on a track to add a key.
@@ -294,7 +434,7 @@
             >+</button>
           </span>
           <span class="track-lane">
-            {#each track.keyframes as key (key.frame)}
+            {#each track.keyframes.filter((key) => key.frame >= viewStart && key.frame <= viewEnd) as key (key.frame)}
               <button
                 type="button"
                 class="track-key"
@@ -358,6 +498,12 @@
     gap: var(--space-2);
   }
 
+  .timeline-zoom {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+  }
+
   .timeline-readout {
     display: flex;
     align-items: center;
@@ -381,6 +527,15 @@
     white-space: nowrap;
   }
 
+  .timeline-key-editor {
+    margin: 2px 4px 0 132px;
+  }
+
+  .timeline-key-editor :global(.select-field) {
+    grid-template-columns: auto minmax(90px, 140px);
+    justify-content: start;
+  }
+
   .timeline-ruler {
     position: relative;
     height: 14px;
@@ -401,6 +556,21 @@
     bottom: 2px;
     transform: translateX(-50%);
     white-space: nowrap;
+  }
+
+  .timeline-ruler-lane span::after {
+    content: '';
+    position: absolute;
+    right: 50%;
+    bottom: -4px;
+    width: 1px;
+    height: 3px;
+    background: var(--border-strong);
+  }
+
+  .timeline-ruler-lane span.major::after {
+    height: 5px;
+    background: var(--text-tertiary);
   }
 
   .timeline-ruler-lane span:first-child {
