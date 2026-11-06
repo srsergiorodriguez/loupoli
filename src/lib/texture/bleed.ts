@@ -7,13 +7,15 @@ export const TEXTURE_BLEED_PIXELS = 4;
  * Atlas charts are clipped exactly to their UV faces. Without a gutter, linear
  * filtering at a chart edge samples transparent pixels and produces white or
  * dark lines. This dilation copies edge RGBA into the surrounding padding while
- * leaving the interior untouched.
+ * leaving the interior untouched. Pass `allowed` to restrict the fill to the
+ * actual UV coverage so neighboring islands cannot bleed into each other.
  */
 export function bleedImageData(
   data: Uint8ClampedArray,
   width: number,
   height: number,
-  passes = TEXTURE_BLEED_PIXELS
+  passes = TEXTURE_BLEED_PIXELS,
+  allowed?: Uint8Array
 ): void {
   const count = width * height;
   if (count === 0 || data.length < count * 4) {
@@ -83,7 +85,7 @@ export function bleedImageData(
           continue;
         }
         const target = ny * width + nx;
-        if (filled[target] !== 0) {
+        if (filled[target] !== 0 || (allowed && allowed[target] === 0)) {
           continue;
         }
         const sourceOffset = donor * 4;

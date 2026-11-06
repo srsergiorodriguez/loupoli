@@ -491,6 +491,13 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       position: new Vector3(...light.position)
     }));
   let covered = false;
+  const coverageCanvas = new OffscreenCanvas(width, height);
+  const coverageContext = coverageCanvas.getContext('2d', {
+    willReadFrequently: true
+  });
+  if (coverageContext) {
+    coverageContext.fillStyle = '#fff';
+  }
   const normalSign = bakeNormalSign(mesh, matrix);
   for (let face = 0; face < mesh.faceCount; face += 1) {
     const first = mesh.faceHalfEdge[face];
@@ -516,6 +523,18 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       mesh.heUv[edge * 2] * width,
       (1 - mesh.heUv[edge * 2 + 1]) * height
     ] as const);
+    if (coverageContext) {
+      const path = new Path2D();
+      uv.forEach((point, index) => {
+        if (index === 0) {
+          path.moveTo(point[0], point[1]);
+        } else {
+          path.lineTo(point[0], point[1]);
+        }
+      });
+      path.closePath();
+      coverageContext.fill(path);
+    }
 
     for (let triangle = 1; triangle < loop.length - 1; triangle += 1) {
       const ia = 0;
@@ -602,8 +621,17 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
     return null;
   }
   // Close the one-texel gaps between separately rasterized face triangles.
-  // They would otherwise remain neutral white and show as bright seams.
-  bleedImageData(data, width, height, 2);
+  // Constrain the fill to UV coverage so lit texels cannot bleed across a UV
+  // seam into a shadowed island.
+  const coverageMask = new Uint8Array(width * height);
+  if (coverageContext) {
+    const coverage = coverageContext.getImageData(0, 0, width, height);
+    for (let pixel = 0; pixel < coverageMask.length; pixel += 1) {
+      coverageMask[pixel] =
+        coverage.data[pixel * 4 + 3] > 0 ? 1 : 0;
+    }
+  }
+  bleedImageData(data, width, height, 2, coverageMask);
   for (let offset = 3; offset < data.length; offset += 4) {
     data[offset] = 255;
   }

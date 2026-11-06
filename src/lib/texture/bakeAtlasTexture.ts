@@ -52,7 +52,7 @@ function chartBounds(
 }
 
 /** Pixels sampled inward before the outward bleed. */
-const EDGE_DONOR_PIXELS = 1;
+const EDGE_DONOR_PIXELS = 4;
 /** Gutter filled around every UV island. */
 const EDGE_BLEED_PIXELS = 4;
 
