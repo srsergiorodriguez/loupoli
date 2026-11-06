@@ -1,8 +1,8 @@
 /** Pixels of edge color copied outside UV coverage to stop filtered seams. */
-export const TEXTURE_BLEED_PIXELS = 4;
+export const TEXTURE_BLEED_PIXELS = 10;
 
 /** Pixels removed from a source edge before bleeding interior color outward. */
-export const TEXTURE_EDGE_ERODE_PIXELS = 3;
+export const TEXTURE_EDGE_ERODE_PIXELS = 8;
 
 /**
  * Remove transparent or background-colored pixels at the edge of drawn art.
