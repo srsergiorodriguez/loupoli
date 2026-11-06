@@ -225,7 +225,7 @@ export async function exportGlb(
     const texture = new Texture(image);
     texture.name = file.name;
     texture.colorSpace = SRGBColorSpace;
-    texture.flipY = false;
+    texture.flipY = true;
     texture.needsUpdate = true;
     textureCache.set(id, texture);
     textureImages.push(image);

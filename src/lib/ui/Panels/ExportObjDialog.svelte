@@ -57,10 +57,15 @@
   {#if hasTexture}
     <Switch
       label="Include texture PNG"
-      description="Exports the assigned composite texture beside the MTL."
+      description="Exports the composite texture beside the MTL. Baked lighting and shadows live in this PNG."
       checked={includeTexture}
       onChange={onIncludeTextureChange}
     />
+    {#if !includeTexture}
+      <p class="warning">
+        The exported OBJ will have no baked lighting or texture detail.
+      </p>
+    {/if}
   {:else}
     <p class="hint">
       No assigned texture. The export will contain OBJ and MTL only.
@@ -84,6 +89,13 @@
   .hint {
     margin: 0;
     color: var(--text-tertiary);
+    font-size: var(--text-2xs);
+    line-height: var(--leading-ui);
+  }
+
+  .warning {
+    margin: 0;
+    color: var(--accent-warning);
     font-size: var(--text-2xs);
     line-height: var(--leading-ui);
   }
