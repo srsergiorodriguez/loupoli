@@ -3,6 +3,7 @@ import type { MeshNode } from '../scene/MeshNode';
 import type { LightSummary } from '../scene/SceneLight';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
+import { bleedImageData } from '../texture/bleed';
 
 /** Direct-light bake inputs, including optional world-space shadow occluders. */
 export interface BakeLightingInput {
@@ -185,34 +186,54 @@ export function uvCoverage(mesh: HalfEdgeMesh): number {
   return area;
 }
 
-/** Moller-Trumbore ray/triangle test for hard shadow rays. */
+/** Scalar Möller-Trumbore ray/triangle test for hard shadow rays. */
 function rayHitsTriangle(
-  origin: Vector3,
-  direction: Vector3,
-  a: Vector3,
-  b: Vector3,
-  c: Vector3,
+  originX: number,
+  originY: number,
+  originZ: number,
+  directionX: number,
+  directionY: number,
+  directionZ: number,
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  cx: number,
+  cy: number,
+  cz: number,
   maxDistance: number
 ): boolean {
-  const edge1 = new Vector3().subVectors(b, a);
-  const edge2 = new Vector3().subVectors(c, a);
-  const p = new Vector3().crossVectors(direction, edge2);
-  const determinant = edge1.dot(p);
+  const edge1X = bx - ax;
+  const edge1Y = by - ay;
+  const edge1Z = bz - az;
+  const edge2X = cx - ax;
+  const edge2Y = cy - ay;
+  const edge2Z = cz - az;
+  const pX = directionY * edge2Z - directionZ * edge2Y;
+  const pY = directionZ * edge2X - directionX * edge2Z;
+  const pZ = directionX * edge2Y - directionY * edge2X;
+  const determinant = edge1X * pX + edge1Y * pY + edge1Z * pZ;
   if (Math.abs(determinant) < 1e-9) {
     return false;
   }
   const inverse = 1 / determinant;
-  const t = new Vector3().subVectors(origin, a);
-  const u = t.dot(p) * inverse;
+  const tX = originX - ax;
+  const tY = originY - ay;
+  const tZ = originZ - az;
+  const u = (tX * pX + tY * pY + tZ * pZ) * inverse;
   if (u < 0 || u > 1) {
     return false;
   }
-  const q = new Vector3().crossVectors(t, edge1);
-  const v = direction.dot(q) * inverse;
+  const qX = tY * edge1Z - tZ * edge1Y;
+  const qY = tZ * edge1X - tX * edge1Z;
+  const qZ = tX * edge1Y - tY * edge1X;
+  const v = (directionX * qX + directionY * qY + directionZ * qZ) * inverse;
   if (v < 0 || u + v > 1) {
     return false;
   }
-  const distance = edge2.dot(q) * inverse;
+  const distance = (edge2X * qX + edge2Y * qY + edge2Z * qZ) * inverse;
   return distance > 1e-4 && distance < maxDistance;
 }
 
@@ -223,27 +244,28 @@ function rayOccluded(
   maxDistance: number,
   occluders: readonly Float32Array[]
 ): boolean {
-  const a = new Vector3();
-  const b = new Vector3();
-  const c = new Vector3();
   for (const triangles of occluders) {
     for (let offset = 0; offset + 8 < triangles.length; offset += 9) {
-      a.set(
-        triangles[offset],
-        triangles[offset + 1],
-        triangles[offset + 2]
-      );
-      b.set(
-        triangles[offset + 3],
-        triangles[offset + 4],
-        triangles[offset + 5]
-      );
-      c.set(
-        triangles[offset + 6],
-        triangles[offset + 7],
-        triangles[offset + 8]
-      );
-      if (rayHitsTriangle(origin, direction, a, b, c, maxDistance)) {
+      if (
+        rayHitsTriangle(
+          origin.x,
+          origin.y,
+          origin.z,
+          direction.x,
+          direction.y,
+          direction.z,
+          triangles[offset],
+          triangles[offset + 1],
+          triangles[offset + 2],
+          triangles[offset + 3],
+          triangles[offset + 4],
+          triangles[offset + 5],
+          triangles[offset + 6],
+          triangles[offset + 7],
+          triangles[offset + 8],
+          maxDistance
+        )
+      ) {
         return true;
       }
     }
@@ -344,13 +366,22 @@ function shadowVisibility(
     light.shadowSoftness > 0
       ? Math.max(1, Math.min(32, Math.floor(sampleCount)))
       : 1;
+  // Resolve the common fully-lit and fully-occluded cases with four rays.
+  // Only texels on a penumbra need the full sample count.
+  const coarseCount = Math.min(4, count);
   let visible = 0;
-  for (let i = 0; i < count; i += 1) {
-    const ray = shadowRayForSample(light, origin, i, count);
-    if (!ray) {
-      continue;
+  for (let i = 0; i < coarseCount; i += 1) {
+    const ray = shadowRayForSample(light, origin, i, coarseCount);
+    if (ray && !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
+      visible += 1;
     }
-    if (!rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
+  }
+  if (visible === 0 || visible === coarseCount) {
+    return visible / coarseCount;
+  }
+  for (let i = coarseCount; i < count; i += 1) {
+    const ray = shadowRayForSample(light, origin, i, count);
+    if (ray && !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
       visible += 1;
     }
   }
@@ -429,6 +460,9 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   const { mesh, width, height } = input;
   const data = new Uint8ClampedArray(width * height * 4);
   data.fill(255);
+  for (let offset = 3; offset < data.length; offset += 4) {
+    data[offset] = 0;
+  }
   const nodeMatrix = new Matrix4().compose(
     new Vector3(...input.node.transform.position),
     new Quaternion().setFromEuler(
@@ -540,7 +574,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
             if (light.castShadows) {
               visibility = shadowVisibility(
                 light,
-                worldPosition.clone().addScaledVector(normal, 0.003),
+                worldPosition.clone().addScaledVector(normal, 0.02),
                 shadowSamples,
                 occluders
               );
@@ -566,6 +600,12 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   }
   if (!covered) {
     return null;
+  }
+  // Close the one-texel gaps between separately rasterized face triangles.
+  // They would otherwise remain neutral white and show as bright seams.
+  bleedImageData(data, width, height, 2);
+  for (let offset = 3; offset < data.length; offset += 4) {
+    data[offset] = 255;
   }
   const softness = Math.max(
     0,
