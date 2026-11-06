@@ -111,6 +111,68 @@ fn read_import_file(path: String) -> Result<Vec<u8>, String> {
   fs::read(&destination).map_err(|error| format!("Cannot read import file: {error}"))
 }
 
+/// Write directly to the destination when an atomic temp file cannot be made.
+///
+/// Some sandboxed or cloud-backed locations allow the selected destination file
+/// but deny creating an adjacent hidden temp file. Direct write sacrifices
+/// atomicity for those locations; normal saves still use the atomic path.
+fn write_direct(destination: &Path, data: &[u8], noun: &str) -> Result<(), String> {
+  let mut options = fs::OpenOptions::new();
+  options.write(true).create(true).truncate(true);
+  let mut file = options
+    .open(destination)
+    .map_err(|error| format!("Cannot open {noun} destination: {error}"))?;
+  file
+    .write_all(data)
+    .map_err(|error| format!("Cannot write {noun} destination: {error}"))?;
+  file
+    .sync_all()
+    .map_err(|error| format!("Cannot flush {noun} destination: {error}"))?;
+  Ok(())
+}
+
+/// Try the atomic temp-file path, then fall back to a direct destination write.
+fn write_with_fallback(
+  destination: &Path,
+  temp_path: &Path,
+  data: &[u8],
+  noun: &str,
+) -> Result<(), String> {
+  let atomic = (|| -> Result<(), String> {
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    let mut file = options
+      .open(temp_path)
+      .map_err(|error| format!("Cannot create temporary {noun} file: {error}"))?;
+    file
+      .write_all(data)
+      .map_err(|error| format!("Cannot write temporary {noun} file: {error}"))?;
+    file
+      .sync_all()
+      .map_err(|error| format!("Cannot flush temporary {noun} file: {error}"))?;
+    drop(file);
+    match fs::rename(temp_path, destination) {
+      Ok(()) => Ok(()),
+      Err(rename_error) => {
+        if destination.exists() {
+          fs::remove_file(destination)
+            .map_err(|error| format!("Cannot replace existing {noun}: {error}"))?;
+          fs::rename(temp_path, destination)
+            .map_err(|error| format!("Cannot commit {noun} file: {error}"))
+        } else {
+          Err(format!("Cannot commit {noun} file: {rename_error}"))
+        }
+      }
+    }
+  })();
+  if atomic.is_ok() {
+    return Ok(());
+  }
+  let atomic_error = atomic.err().unwrap_or_else(|| "Unknown atomic write error".into());
+  write_direct(destination, data, noun)
+    .map_err(|direct_error| format!("{atomic_error}; direct write failed: {direct_error}"))
+}
+
 /// Write an arbitrary export through a same-directory temporary file and rename.
 #[tauri::command]
 fn write_export_file(path: String, data: Vec<u8>) -> Result<(), String> {
@@ -130,33 +192,7 @@ fn write_export_file(path: String, data: Vec<u8>) -> Result<(), String> {
     .ok_or_else(|| "The export path has no file name.".to_string())?
     .to_string_lossy();
   let temp_path = temporary_path(parent, &file_name);
-  let result = (|| -> Result<(), String> {
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    let mut file = options
-      .open(&temp_path)
-      .map_err(|error| format!("Cannot create temporary export file: {error}"))?;
-    file
-      .write_all(&data)
-      .map_err(|error| format!("Cannot write temporary export file: {error}"))?;
-    file
-      .sync_all()
-      .map_err(|error| format!("Cannot flush temporary export file: {error}"))?;
-    drop(file);
-    match fs::rename(&temp_path, &destination) {
-      Ok(()) => Ok(()),
-      Err(rename_error) => {
-        if destination.exists() {
-          fs::remove_file(&destination)
-            .map_err(|error| format!("Cannot replace existing export: {error}"))?;
-          fs::rename(&temp_path, &destination)
-            .map_err(|error| format!("Cannot commit export file: {error}"))
-        } else {
-          Err(format!("Cannot commit export file: {rename_error}"))
-        }
-      }
-    }
-  })();
+  let result = write_with_fallback(&destination, &temp_path, &data, "export");
   if result.is_err() && temp_path.exists() {
     let _ = fs::remove_file(&temp_path);
   }
@@ -184,35 +220,7 @@ fn write_project_file(path: String, data: Vec<u8>) -> Result<(), String> {
     .to_string_lossy();
   let temp_path = temporary_path(parent, &file_name);
 
-  let write_result = (|| -> Result<(), String> {
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    let mut file = options
-      .open(&temp_path)
-      .map_err(|error| format!("Cannot create temporary project file: {error}"))?;
-    file
-      .write_all(&data)
-      .map_err(|error| format!("Cannot write temporary project file: {error}"))?;
-    file
-      .sync_all()
-      .map_err(|error| format!("Cannot flush temporary project file: {error}"))?;
-    drop(file);
-
-    match fs::rename(&temp_path, &destination) {
-      Ok(()) => Ok(()),
-      Err(rename_error) => {
-        // Windows does not replace an existing destination with `rename`.
-        if destination.exists() {
-          fs::remove_file(&destination)
-            .map_err(|error| format!("Cannot replace existing project: {error}"))?;
-          fs::rename(&temp_path, &destination)
-            .map_err(|error| format!("Cannot commit project file: {error}"))
-        } else {
-          Err(format!("Cannot commit project file: {rename_error}"))
-        }
-      }
-    }
-  })();
+  let write_result = write_with_fallback(&destination, &temp_path, &data, "project");
 
   if write_result.is_err() && temp_path.exists() {
     let _ = fs::remove_file(&temp_path);
@@ -307,4 +315,24 @@ mod tests {
     assert_eq!(read, bytes);
     let _ = fs::remove_file(path);
   }
+  #[test]
+  fn direct_write_fallback_recovers_when_temp_path_is_unavailable() {
+    let directory = std::env::temp_dir().join(format!(
+      "loupoli-fallback-{}-{}",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0)
+    ));
+    fs::create_dir(&directory).unwrap();
+    let destination = directory.join("model.obj");
+    let unavailable_temp = directory.join("blocked-temp");
+    fs::create_dir(&unavailable_temp).unwrap();
+    let bytes = b"v 0 0 0\n".to_vec();
+    write_with_fallback(&destination, &unavailable_temp, &bytes, "export").unwrap();
+    assert_eq!(fs::read(&destination).unwrap(), bytes);
+    let _ = fs::remove_dir_all(directory);
+  }
+
 }
