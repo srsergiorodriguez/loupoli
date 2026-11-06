@@ -388,6 +388,33 @@ function shadowVisibility(
   return visible / count;
 }
 
+/** Dilate a mask by a small Chebyshev radius for texture-edge padding. */
+function dilateMask(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  radius: number
+): Uint8Array {
+  const result = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (mask[y * width + x] === 0) {
+        continue;
+      }
+      const minY = Math.max(0, y - radius);
+      const maxY = Math.min(height - 1, y + radius);
+      const minX = Math.max(0, x - radius);
+      const maxX = Math.min(width - 1, x + radius);
+      for (let ny = minY; ny <= maxY; ny += 1) {
+        for (let nx = minX; nx <= maxX; nx += 1) {
+          result[ny * width + nx] = 1;
+        }
+      }
+    }
+  }
+  return result;
+}
+
 /**
  * Apply a separable box blur to the baked lighting image.
  *
@@ -593,7 +620,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
             if (light.castShadows) {
               visibility = shadowVisibility(
                 light,
-                worldPosition.clone().addScaledVector(normal, 0.02),
+                worldPosition.clone().addScaledVector(normal, 0.005),
                 shadowSamples,
                 occluders
               );
@@ -631,7 +658,13 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
         coverage.data[pixel * 4 + 3] > 0 ? 1 : 0;
     }
   }
-  bleedImageData(data, width, height, 2, coverageMask);
+  bleedImageData(
+    data,
+    width,
+    height,
+    2,
+    dilateMask(coverageMask, width, height, 2)
+  );
   for (let offset = 3; offset < data.length; offset += 4) {
     data[offset] = 255;
   }
