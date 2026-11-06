@@ -1,5 +1,5 @@
 import type { BakeAtlasChart, BakeAtlasPlan } from '../uv/bakeAtlas';
-import { bleedImageData, TEXTURE_EDGE_INSET_PIXELS } from './bleed';
+import { bleedImageData, erodeImageEdges } from './bleed';
 import type {
   TextureAssetData,
   TextureFilter,
@@ -28,75 +28,25 @@ export function bakeChartImageTransform(
   return [a, 0, 0, d, e, f] as const;
 }
 
-/** Shrink a destination face polygon toward its centroid for edge sampling. */
-function insetPolygon(
-  points: readonly (readonly [number, number])[],
-  amount: number
-): [number, number][] {
-  if (points.length < 3 || amount <= 0) {
-    return points.map((point) => [point[0], point[1]]);
-  }
-  let cx = 0;
-  let cy = 0;
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const [x, y] of points) {
-    cx += x;
-    cy += y;
-    minX = Math.min(minX, x);
-    maxX = Math.max(maxX, x);
-    minY = Math.min(minY, y);
-    maxY = Math.max(maxY, y);
-  }
-  cx /= points.length;
-  cy /= points.length;
-  const inset = Math.min(
-    amount,
-    Math.max(0, Math.min(maxX - minX, maxY - minY) * 0.3)
-  );
-  if (inset <= 0) {
-    return points.map((point) => [point[0], point[1]]);
-  }
-  return points.map(([x, y]) => {
-    const dx = cx - x;
-    const dy = cy - y;
-    const length = Math.hypot(dx, dy);
-    if (length <= 1e-6) {
-      return [x, y];
-    }
-    const scale = Math.min(0.5, inset / length);
-    return [x + dx * scale, y + dy * scale];
-  });
-}
-
 function buildChartDraws(
   plan: BakeAtlasPlan,
   sourceWidth: number,
   sourceHeight: number
 ): ChartDraw[] {
-  const draws: ChartDraw[] = [];
-  for (const chart of plan.charts) {
-    const transform = bakeChartImageTransform(
-      chart,
-      plan.width,
-      plan.height,
-      sourceWidth,
-      sourceHeight
-    );
+  return plan.charts.map((chart) => {
+    const path = new Path2D();
     for (const face of chart.faces) {
       if (face.length < 3) {
         continue;
       }
-      const points = face.map((uv): [number, number] => [
-        (chart.originU + (uv[0] - chart.minU) * chart.scale) * plan.width,
-        (1 - (chart.originV + (uv[1] - chart.minV) * chart.scale)) *
-          plan.height
-      ]);
-      const inner = insetPolygon(points, TEXTURE_EDGE_INSET_PIXELS);
-      const path = new Path2D();
-      inner.forEach(([x, y], index) => {
+      face.forEach((uv, index) => {
+        const x =
+          (chart.originU + (uv[0] - chart.minU) * chart.scale) *
+          plan.width;
+        const y =
+          (1 -
+            (chart.originV + (uv[1] - chart.minV) * chart.scale)) *
+          plan.height;
         if (index === 0) {
           path.moveTo(x, y);
         } else {
@@ -104,20 +54,26 @@ function buildChartDraws(
         }
       });
       path.closePath();
-      draws.push({ path, transform });
     }
-  }
-  return draws;
+    return {
+      path,
+      transform: bakeChartImageTransform(
+        chart,
+        plan.width,
+        plan.height,
+        sourceWidth,
+        sourceHeight
+      )
+    };
+  });
 }
 
 /**
  * Rebuild a texture layer stack in the unique bake-atlas layout.
  *
- * Each face is clipped slightly inward from its boundary, then its layer is
- * bled into the cell gutter. The interior mapping is untouched; only the edge
- * strip is replaced with interior color. Mirrored or previously stacked
- * islands retain their painted appearance while receiving independent texels
- * and clean edges.
+ * Each layer is transformed through the chart placement clips, so mirrored or
+ * previously stacked islands retain their painted appearance while receiving
+ * independent texels.
  */
 export async function resampleTextureDataForBakeAtlas(
   data: TextureAssetData,
@@ -155,6 +111,7 @@ export async function resampleTextureDataForBakeAtlas(
       plan.width,
       plan.height
     );
+    erodeImageEdges(pixels.data, plan.width, plan.height);
     bleedImageData(pixels.data, plan.width, plan.height);
     context.putImageData(pixels, 0, 0);
     const blob = await canvas.convertToBlob({ type: 'image/png' });
