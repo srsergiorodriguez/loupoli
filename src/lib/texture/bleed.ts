@@ -1,8 +1,8 @@
 /** Pixels of edge color copied outside UV coverage to stop filtered seams. */
-export const TEXTURE_BLEED_PIXELS = 8;
+export const TEXTURE_BLEED_PIXELS = 16;
 
 /** Pixels clipped inward before bleeding interior color outward. */
-export const TEXTURE_EDGE_INSET_PIXELS = 10;
+export const TEXTURE_EDGE_INSET_PIXELS = 12;
 
 /**
  * Extend non-transparent pixels into adjacent transparent pixels.

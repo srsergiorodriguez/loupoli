@@ -5642,8 +5642,7 @@ export class EditorRuntime {
    * Create a hidden-source duplicate with a unique bake atlas.
    *
    * The original object and texture remain untouched. Every layer is resampled
-   * into a larger unique UV layout; the existing Bake action can then add the
-   * lighting layer without overlapping texels.
+   * into a larger unique UV layout, then the copy is baked immediately.
    */
   async prepareBakeAtlas(): Promise<void> {
     if (this.bakeBusy) {
@@ -5673,6 +5672,7 @@ export class EditorRuntime {
     this.publish();
     let asset: TextureAsset | null = null;
     let inserted = false;
+    let shouldBake = false;
     try {
       await new Promise((resolve) => setTimeout(resolve, 0));
       if (source.layerCount >= 8 && source.lightingLayerId() === null) {
@@ -5756,10 +5756,11 @@ export class EditorRuntime {
       this.renderer.refreshTexture();
       this.syncScene();
       this.publish();
+      shouldBake = true;
       this.notify(
-        'success',
-        'Bake atlas ready',
-        `${plan.width}×${plan.height} · Press Bake lighting again`
+        'info',
+        'Bake copy ready',
+        `${plan.width}×${plan.height} · Baking lighting`
       );
     } catch (error) {
       if (!inserted) {
@@ -5771,6 +5772,9 @@ export class EditorRuntime {
     } finally {
       this.bakeBusy = false;
       this.publish();
+    }
+    if (shouldBake) {
+      await this.bakeLighting();
     }
   }
 
@@ -5900,6 +5904,11 @@ export class EditorRuntime {
       this.shading = 'unlit';
       this.renderer.setShadingMode('unlit');
       this.publish();
+      this.notify(
+        'success',
+        'Lighting baked',
+        `${target.width}×${target.height} · Baked lighting`
+      );
     } catch (error) {
       copy?.dispose();
       this.projectError = this.errorMessage(error);

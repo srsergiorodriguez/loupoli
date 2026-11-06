@@ -1261,7 +1261,7 @@
               <strong>select an object first</strong>
             {/if}
           </span>
-          <span class="texture-note">Hard shadows are included when enabled. Overlapping UVs use two steps: create the bake copy, then press Bake lighting again.</span>
+          <span class="texture-note">Hard shadows are included when enabled. Overlapping UVs create a unique bake copy and bake in one action.</span>
           <ActionButton
             label={session.snapshot.bakeBusy ? 'Baking…' : 'Bake lighting'}
             icon="lit"

@@ -28,6 +28,49 @@ export function bakeChartImageTransform(
   return [a, 0, 0, d, e, f] as const;
 }
 
+/** Shrink a destination face polygon toward its centroid for edge sampling. */
+function insetPolygon(
+  points: readonly (readonly [number, number])[],
+  amount: number
+): [number, number][] {
+  if (points.length < 3 || amount <= 0) {
+    return points.map((point) => [point[0], point[1]]);
+  }
+  let cx = 0;
+  let cy = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of points) {
+    cx += x;
+    cy += y;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  cx /= points.length;
+  cy /= points.length;
+  const inset = Math.min(
+    amount,
+    Math.max(0, Math.min(maxX - minX, maxY - minY) * 0.3)
+  );
+  if (inset <= 0) {
+    return points.map((point) => [point[0], point[1]]);
+  }
+  return points.map(([x, y]) => {
+    const dx = cx - x;
+    const dy = cy - y;
+    const length = Math.hypot(dx, dy);
+    if (length <= 1e-6) {
+      return [x, y];
+    }
+    const scale = Math.min(0.5, inset / length);
+    return [x + dx * scale, y + dy * scale];
+  });
+}
+
 function buildChartDraws(
   plan: BakeAtlasPlan,
   sourceWidth: number,
@@ -51,36 +94,9 @@ function buildChartDraws(
         (1 - (chart.originV + (uv[1] - chart.minV) * chart.scale)) *
           plan.height
       ]);
-      let minX = Infinity;
-      let maxX = -Infinity;
-      let minY = Infinity;
-      let maxY = -Infinity;
-      let cx = 0;
-      let cy = 0;
-      for (const [x, y] of points) {
-        minX = Math.min(minX, x);
-        maxX = Math.max(maxX, x);
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y);
-        cx += x;
-        cy += y;
-      }
-      cx /= points.length;
-      cy /= points.length;
-      const minDimension = Math.min(maxX - minX, maxY - minY);
-      const inset = Math.min(
-        TEXTURE_EDGE_INSET_PIXELS,
-        Math.max(0, minDimension * 0.3)
-      );
-      const scale =
-        inset > 0
-          ? Math.min(
-              1.9,
-              1 / Math.max(0.1, 1 - (2 * inset) / minDimension)
-            )
-          : 1;
+      const inner = insetPolygon(points, TEXTURE_EDGE_INSET_PIXELS);
       const path = new Path2D();
-      points.forEach(([x, y], index) => {
+      inner.forEach(([x, y], index) => {
         if (index === 0) {
           path.moveTo(x, y);
         } else {
@@ -88,20 +104,7 @@ function buildChartDraws(
         }
       });
       path.closePath();
-      // Enlarge the sampled source around the face center. The clip stays on
-      // the exact face, so boundary pixels come from inside the island instead
-      // of its background gutter; the bleed then fills the cell gutter.
-      draws.push({
-        path,
-        transform: [
-          transform[0] * scale,
-          0,
-          0,
-          transform[3] * scale,
-          transform[4] * scale + (1 - scale) * cx,
-          transform[5] * scale + (1 - scale) * cy
-        ]
-      });
+      draws.push({ path, transform });
     }
   }
   return draws;
@@ -110,9 +113,11 @@ function buildChartDraws(
 /**
  * Rebuild a texture layer stack in the unique bake-atlas layout.
  *
- * Each face is sampled slightly inward from its boundary, then its layer is
- * bled into the cell gutter. Mirrored or previously stacked islands retain
- * their painted appearance while receiving independent texels and clean edges.
+ * Each face is clipped slightly inward from its boundary, then its layer is
+ * bled into the cell gutter. The interior mapping is untouched; only the edge
+ * strip is replaced with interior color. Mirrored or previously stacked
+ * islands retain their painted appearance while receiving independent texels
+ * and clean edges.
  */
 export async function resampleTextureDataForBakeAtlas(
   data: TextureAssetData,
