@@ -3,7 +3,6 @@ import type { MeshNode } from '../scene/MeshNode';
 import type { LightSummary } from '../scene/SceneLight';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
-import { bleedImageData } from '../texture/bleed';
 
 /** Direct-light bake inputs, including optional world-space shadow occluders. */
 export interface BakeLightingInput {
@@ -361,14 +360,16 @@ function shadowVisibility(
 /**
  * Bake direct ambient/directional/point light into an RGBA lighting image.
  *
- * The result is a black-transparent image outside the UV-covered surface. The
- * caller stores it in a lighting-role layer and composites it with multiply.
+ * The result is opaque white outside the UV-covered surface. White is the
+ * neutral color for the multiply composite, so filtered atlas edges cannot
+ * pick up transparent black. The caller stores it in a lighting-role layer.
  * Flat face normals match the low-poly Lit path. Soft shadows average visibility rays through the supplied
  * world-space occluders; ambient is never shadowed.
  */
 export function bakeLighting(input: BakeLightingInput): ImageData | null {
   const { mesh, width, height } = input;
   const data = new Uint8ClampedArray(width * height * 4);
+  data.fill(255);
   const nodeMatrix = new Matrix4().compose(
     new Vector3(...input.node.transform.position),
     new Quaternion().setFromEuler(
@@ -507,7 +508,5 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   if (!covered) {
     return null;
   }
-  const result = new ImageData(data, width, height);
-  bleedImageData(result.data, width, height);
-  return result;
+  return new ImageData(data, width, height);
 }

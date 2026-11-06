@@ -5883,7 +5883,8 @@ export class EditorRuntime {
         ambientIntensity: this.document.ambientIntensity,
         width: target.width,
         height: target.height,
-        occluders: this.bakeOccluders()
+        occluders: this.bakeOccluders(),
+        shadowSamples: 16
       });
       if (!after) {
         throw new Error('The object has no UV-covered surface to bake.');
