@@ -39,7 +39,7 @@ This is the authoritative map of the application shell. New controls must be ass
 - **PaneToolbar** — optional second row for pane-specific commands, such as UV operations.
 - **View Actions** — Frame and Home in a vertical cluster left of the View Gizmo.
 - **View Gizmo** — signed axis endpoints and center frame.
-- **UV Toolbar** — UV-only operations: U/V locks, Sync 3D, Pin, Unpin, Unwrap, Stack, Fit, Clamp.
+- **UV Toolbar** — UV-only operations: U/V locks, Sync 3D, Pin, Unpin, Unwrap, Stack, Mirror stack, Fit, Clamp.
 - **UV Canvas** — charts, texture, picking, lasso, paint.
 - **UV Footer** — exact UV values and transform hints.
 - **Inspector Section** — one collapsible disclosure with a title, optional meta, and body. Visibility and order come from the shared workspace capability policy and section registry, never from per-section workspace checks.

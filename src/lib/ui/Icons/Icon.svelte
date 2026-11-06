@@ -99,6 +99,9 @@
   {:else if name === 'save'}
     <path d="M5 4h12l2 2v14H5V4Z" />
     <path d="M8 4v6h8V4M8 20v-6h8v6" />
+  {:else if name === 'copy'}
+    <rect x="8" y="8" width="11" height="11" rx="1" />
+    <path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" />
   {:else if name === 'move'}
     <path d="M12 3v18M3 12h18M12 3 9.5 5.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5" />
   {:else if name === 'rotate'}
@@ -192,6 +195,9 @@
     <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
     <circle cx="9" cy="9" r="1.5" />
     <path d="m5 17 5-5 3 3 2-2 4 4" />
+  {:else if name === 'mirror'}
+    <path d="M12 3v18" stroke-dasharray="2 2" />
+    <path d="M9 6 3 12l6 6M15 6l6 6-6 6" />
   {:else if name === 'sync'}
     <path d="M20 7v5h-5M4 17v-5h5" />
     <path d="M6.2 8a7 7 0 0 1 11.5-1.5L20 9M4 15l2.3 2.5A7 7 0 0 0 17.8 16" />

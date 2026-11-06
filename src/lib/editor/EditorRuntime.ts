@@ -45,7 +45,8 @@ import {
   type GizmoAxis,
   type GizmoHandle
 } from '../render/gizmoMath';
-import type { MeshNode, NodeTransform, SelectionMode, ShapeKey } from '../scene/MeshNode';
+import { MeshNode } from '../scene/MeshNode';
+import type { NodeTransform, SelectionMode, ShapeKey } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { workspaceCan } from './workspaces';
@@ -62,6 +63,8 @@ import {
 } from '../uv/uvView';
 import { drawUvCanvas, drawUvWireframe } from '../uv/uvCanvas';
 import { extractUvCharts } from '../geometry/uvCharts';
+import { buildBakeAtlasPlan } from '../uv/bakeAtlas';
+import { resampleTextureDataForBakeAtlas } from '../texture/bakeAtlasTexture';
 import { LscmError, unwrapUvCharts } from '../geometry/lscm';
 import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
 import {
@@ -570,6 +573,7 @@ export class EditorRuntime {
   private recovered = false;
   private fileBusy = false;
   private bakeBusy = false;
+  private bakeAtlasPrompt: import('./types').BakeAtlasPrompt | null = null;
   private renderBusy = false;
   private renderCameraView = false;
   private renderKind: 'still' | 'sequence' | 'webm' | 'mp4' = 'still';
@@ -863,6 +867,7 @@ export class EditorRuntime {
       recovered: this.recovered,
       fileBusy: this.fileBusy,
       bakeBusy: this.bakeBusy,
+      bakeAtlasPrompt: this.bakeAtlasPrompt,
       renderBusy: this.renderBusy,
       renderCameraView: this.renderCameraView,
       renderKind: this.renderKind,
@@ -1952,7 +1957,7 @@ export class EditorRuntime {
    * island is translated, rotated, and uniformly scaled onto it. Both charts
    * must pass the topology signature check first.
    */
-  stackUvIslands(): void {
+  stackUvIslands(mirror = false): void {
     const node = this.getActiveNode();
     if (!node || !this.uvOpen) {
       return;
@@ -1994,11 +1999,13 @@ export class EditorRuntime {
       node.mesh,
       topology,
       reference,
-      moving
+      moving,
+      mirror ? 'mirror' : 'direct'
     );
     if (!alignment) {
-      this.uvError =
-        'The selected UV islands could not be mapped one-to-one.';
+      this.uvError = mirror
+        ? 'The selected UV islands could not be matched as mirrored charts.'
+        : 'The selected UV islands could not be mapped one-to-one.';
       this.uvRevision += 1;
       this.publish();
       return;
@@ -2016,6 +2023,11 @@ export class EditorRuntime {
     this.uvError = null;
     this.uvRevision += 1;
     this.publish();
+  }
+
+  /** Stack two selected islands using a reflected correspondence. */
+  mirrorStackUvIslands(): void {
+    this.stackUvIslands(true);
   }
 
   /** Pin two selected UV corners, or clear existing pins. */
@@ -5591,6 +5603,150 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Dismiss the bake-atlas confirmation without changing the scene. */
+  dismissBakeAtlasPrompt(): void {
+    if (this.bakeAtlasPrompt === null) {
+      return;
+    }
+    this.bakeAtlasPrompt = null;
+    this.publish();
+  }
+
+  /**
+   * Create a hidden-source duplicate with a unique bake atlas.
+   *
+   * The original object and texture remain untouched. Every layer is resampled
+   * into a larger unique UV layout; the existing Bake action can then add the
+   * lighting layer without overlapping texels.
+   */
+  async prepareBakeAtlas(): Promise<void> {
+    if (this.bakeBusy) {
+      return;
+    }
+    const prompt = this.bakeAtlasPrompt;
+    const node = prompt
+      ? this.document.getNode(prompt.nodeId)
+      : this.getActiveNode();
+    if (!node) {
+      this.projectError = 'Select an object before preparing a bake atlas.';
+      this.bakeAtlasPrompt = null;
+      this.publish();
+      return;
+    }
+    const source = this.textureLibrary.get(node.textureId);
+    if (!source) {
+      this.projectError = 'Assign a texture to the object before preparing a bake atlas.';
+      this.bakeAtlasPrompt = null;
+      this.publish();
+      return;
+    }
+    const targetSize = Math.min(
+      2048,
+      Math.max(64, Math.max(source.width, source.height) * 2)
+    );
+    this.bakeBusy = true;
+    this.bakeAtlasPrompt = null;
+    this.projectError = null;
+    this.publish();
+    let asset: TextureAsset | null = null;
+    let inserted = false;
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (source.layerCount >= 8 && source.lightingLayerId() === null) {
+        throw new Error(
+          'This texture already has eight layers. Remove a layer before creating a bake atlas.'
+        );
+      }
+      const plan = buildBakeAtlasPlan(node.mesh, targetSize);
+      if (!plan) {
+        throw new Error(
+          'The UV charts could not be packed into a unique atlas at the supported texture size.'
+        );
+      }
+      const data = await source.exportData();
+      const resampled = await resampleTextureDataForBakeAtlas(
+        data,
+        plan,
+        source.textureFilter
+      );
+      asset = this.textureLibrary.build(
+        plan.targetSize,
+        plan.targetSize,
+        `${source.name} Bake`.slice(0, 64),
+        source.textureFilter
+      );
+      await asset.importData(resampled);
+      asset.setAlphaMode(source.textureAlphaMode);
+
+      const mesh = node.mesh.withPositions(node.mesh.positions);
+      mesh.setAllCornerUvs(plan.uvs);
+      const bakeNode = new MeshNode(
+        mesh,
+        node.primitive,
+        `${node.name} Bake`.slice(0, 64),
+        undefined,
+        asset.id,
+        node.materialPalette
+      );
+      bakeNode.setTransform(node.transform);
+      bakeNode.parentId = node.parentId;
+      bakeNode.visible = true;
+      bakeNode.setModifiers(node.modifiers);
+      bakeNode.setShapeKeys(
+        node.shapeKeys.map((key) => ({
+          ...key,
+          targetPositions: key.targetPositions.slice()
+        }))
+      );
+      bakeNode.shapeBasePositions = node.shapeBasePositions?.slice() ?? null;
+      if (hasUvOverlap(bakeNode.getEvaluatedMesh().mesh)) {
+        throw new Error(
+          'The repacked atlas still contains overlapping UV faces. The object needs different seams before baking.'
+        );
+      }
+      const index = this.document.nodes.indexOf(node);
+      const commands: import('./commands/EditorCommand').EditorCommand[] = [
+        new CreateTextureAssetCommand(this.textureLibrary, asset),
+        new CreateMeshNodeCommand(this.document, bakeNode, index + 1)
+      ];
+      if (node.visible) {
+        commands.push(new SetNodeVisibilityCommand(node, false));
+      }
+      this.history.execute(
+        new CompositeCommand('Prepare bake atlas', commands)
+      );
+      inserted = true;
+      this.activeGroupId = null;
+      this.activeNodeId = bakeNode.id;
+      this.selectedNodeIds.clear();
+      this.selectedNodeIds.add(bakeNode.id);
+      this.selection.clear();
+      this.selection.setContext(bakeNode.id, this.selection.mode);
+      this.textureLibrary.setActive(asset.id);
+      this.uvSelection.clear();
+      this.uvPins.clear();
+      this.uvRevision += 1;
+      this.renderer.refreshTexture();
+      this.syncScene();
+      this.publish();
+      this.notify(
+        'success',
+        'Bake atlas ready',
+        `${plan.targetSize}² · Bake lighting to finish`
+      );
+    } catch (error) {
+      if (!inserted) {
+        asset?.dispose();
+      }
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Bake atlas failed', message);
+    } finally {
+      this.bakeBusy = false;
+      this.publish();
+    }
+  }
+
   /** Bake direct lights into the active object's texture lighting layer. */
   async bakeLighting(): Promise<void> {
     if (this.bakeBusy) {
@@ -5611,8 +5767,29 @@ export class EditorRuntime {
     const bakeMesh = node.getEvaluatedMesh().mesh;
     const coverage = uvCoverage(bakeMesh);
     if (hasUvOverlap(bakeMesh)) {
-      this.projectError =
-        'UV islands overlap. Unwrap the object before baking lighting.';
+      if (source.layerCount >= 8 && source.lightingLayerId() === null) {
+        this.projectError =
+          'This texture already has eight layers. Remove a layer before baking or preparing a bake atlas.';
+        this.publish();
+        return;
+      }
+      const targetSize = Math.min(
+        2048,
+        Math.max(64, Math.max(source.width, source.height) * 2)
+      );
+      this.bakeAtlasPrompt = {
+        nodeId: node.id,
+        nodeName: node.name,
+        textureName: source.name,
+        fromWidth: source.width,
+        fromHeight: source.height,
+        targetSize,
+        layerCount: source.layerCount,
+        chartCount: extractUvCharts(bakeMesh).length,
+        estimatedBytes:
+          targetSize * targetSize * 4 * Math.max(1, source.layerCount)
+      };
+      this.projectError = null;
       this.publish();
       return;
     }
@@ -9409,7 +9586,8 @@ export class EditorRuntime {
       event.command instanceof RenameTextureAssetCommand ||
       event.command instanceof BakeLightingCommand ||
       (event.command instanceof CompositeCommand &&
-        event.command.label === 'Bake lighting')
+        (event.command.label === 'Bake lighting' ||
+          event.command.label === 'Prepare bake atlas'))
     ) {
       this.autosave.markTextureDirty();
     }

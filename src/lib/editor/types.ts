@@ -192,6 +192,19 @@ export interface ToastMessage {
   readonly detail?: string;
 }
 
+/** Confirmation data for creating a unique bake atlas copy. */
+export interface BakeAtlasPrompt {
+  readonly nodeId: string;
+  readonly nodeName: string;
+  readonly textureName: string;
+  readonly fromWidth: number;
+  readonly fromHeight: number;
+  readonly targetSize: number;
+  readonly layerCount: number;
+  readonly chartCount: number;
+  readonly estimatedBytes: number;
+}
+
 export interface EditorSnapshot {
   readonly shading: ShadingMode;
   readonly transformMode: TransformMode;
@@ -278,6 +291,7 @@ export interface EditorSnapshot {
   readonly ambientColor: string;
   readonly ambientIntensity: number;
   readonly bakeBusy: boolean;
+  readonly bakeAtlasPrompt: BakeAtlasPrompt | null;
   readonly renderBusy: boolean;
   readonly renderCameraView: boolean;
   readonly renderKind: 'still' | 'sequence' | 'webm' | 'mp4';

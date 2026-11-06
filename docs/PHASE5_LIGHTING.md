@@ -83,6 +83,8 @@ Light markers show each light’s editor position in the viewport. Directional l
 
 ## 4. Bake
 
+![Prepare bake atlas confirmation](media/bake-atlas-dialog.png)
+
 ![Baked lighting preview](media/light-baked.png)
 
 ![Hard/soft shadows in Lit](media/light-shadows.png)
@@ -108,6 +110,8 @@ Algorithm:
 Safety rules:
 
 - UV islands must not overlap. A per-face coverage raster rejects local overlaps even when total UV area is below 1.
+- When a bake target has overlapping islands, Bake offers **Prepare bake atlas** instead of bypassing the check. It creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps both original object and texture. Each source chart is split into face units when the chart itself contains an intentional stack; a final overlap check rejects self-overlapping faces.
+- The prepared atlas enlarges the texture where possible (2× per side, capped at 2048), preserves every texture layer, and warns that symmetric painting ends on the duplicate. Bake lighting afterward adds the lighting layer normally.
 - If the active object’s texture is shared, bake into a new unique texture copy and assign it to the object. Never silently modify another object’s atlas.
 - If the texture has a free layer, reuse a `lighting` role layer; otherwise create `Baked lighting`.
 - The bake switches the viewport to `Texture`/Unlit for inspection.

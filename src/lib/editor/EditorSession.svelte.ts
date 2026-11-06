@@ -109,6 +109,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   ambientColor: '#ffffff',
   ambientIntensity: 0.22,
   bakeBusy: false,
+  bakeAtlasPrompt: null,
   renderBusy: false,
   renderCameraView: false,
   renderKind: 'still',
@@ -524,6 +525,10 @@ export class EditorSession {
     this.runtime?.stackUvIslands();
   }
 
+  mirrorStackUvIslands(): void {
+    this.runtime?.mirrorStackUvIslands();
+  }
+
   setUvPaintMode(enabled: boolean): void {
     this.runtime?.setUvPaintMode(enabled);
   }
@@ -807,6 +812,14 @@ export class EditorSession {
 
   bakeLighting(): Promise<void> {
     return this.runtime?.bakeLighting() ?? Promise.resolve();
+  }
+
+  prepareBakeAtlas(): Promise<void> {
+    return this.runtime?.prepareBakeAtlas() ?? Promise.resolve();
+  }
+
+  dismissBakeAtlasPrompt(): void {
+    this.runtime?.dismissBakeAtlasPrompt();
   }
 
   selectCamera(id: string): void {

@@ -72,7 +72,8 @@ export function alignUvChart(
   mesh: HalfEdgeMesh,
   topology: UvTopology,
   referenceChart: number,
-  movingChart: number
+  movingChart: number,
+  reflection: 'none' | 'x' | 'y' = 'none'
 ): UvChartAlignment | null {
   const referenceCorners = topology.chartCorners[referenceChart];
   const movingCorners = topology.chartCorners[movingChart];
@@ -84,7 +85,10 @@ export function alignUvChart(
   ) {
     return null;
   }
-  const stats = (corners: readonly number[]) => {
+  const stats = (
+    corners: readonly number[],
+    reflected = false
+  ) => {
     let x = 0;
     let y = 0;
     for (const corner of corners) {
@@ -97,8 +101,12 @@ export function alignUvChart(
     let maxAngle = 0;
     let radiusSq = 0;
     for (const corner of corners) {
-      const dx = mesh.heUv[corner * 2] - x;
-      const dy = mesh.heUv[corner * 2 + 1] - y;
+      const dx =
+        (mesh.heUv[corner * 2] - x) *
+        (reflected && reflection === 'x' ? -1 : 1);
+      const dy =
+        (mesh.heUv[corner * 2 + 1] - y) *
+        (reflected && reflection === 'y' ? -1 : 1);
       const distance = Math.hypot(dx, dy);
       radiusSq += distance * distance;
       if (distance > maxRadius) {
@@ -114,7 +122,7 @@ export function alignUvChart(
     };
   };
   const reference = stats(referenceCorners);
-  const moving = stats(movingCorners);
+  const moving = stats(movingCorners, true);
   if (reference.radius <= 1e-6 || moving.radius <= 1e-6) {
     return null;
   }
@@ -125,8 +133,14 @@ export function alignUvChart(
   const corners = [...movingCorners].sort((a, b) => a - b);
   const before = corners.map((corner) => mesh.getCornerUv(corner));
   const after = before.map(([u, v]) => {
-    const dx = (u - moving.x) * scale;
-    const dy = (v - moving.y) * scale;
+    const dx =
+      (u - moving.x) *
+      scale *
+      (reflection === 'x' ? -1 : 1);
+    const dy =
+      (v - moving.y) *
+      scale *
+      (reflection === 'y' ? -1 : 1);
     return [
       reference.x + dx * cosine - dy * sine,
       reference.y + dx * sine + dy * cosine
@@ -145,27 +159,19 @@ export function alignUvChart(
  * means the predicted mapping was not bijective, so a misleading overlay is not
  * applied.
  */
-export function copyUvChart(
+function mapAlignment(
   mesh: HalfEdgeMesh,
   topology: UvTopology,
   referenceChart: number,
-  movingChart: number
-): UvChartAlignment | null {
-  const alignment = alignUvChart(
-    mesh,
-    topology,
-    referenceChart,
-    movingChart
-  );
-  if (!alignment) {
-    return null;
-  }
+  alignment: UvChartAlignment
+): { after: Vec2[]; error: number } | null {
   const referenceCorners = topology.chartCorners[referenceChart];
   const referenceUvs = referenceCorners.map((corner) =>
     mesh.getCornerUv(corner)
   );
   const used = new Set<number>();
   const mapped: Vec2[] = [];
+  let error = 0;
   for (const predicted of alignment.after) {
     let best = -1;
     let bestDistance = Infinity;
@@ -186,14 +192,65 @@ export function copyUvChart(
       return null;
     }
     used.add(best);
+    error += bestDistance;
     mapped.push([...referenceUvs[best]] as Vec2);
   }
   if (used.size !== referenceUvs.length) {
     return null;
   }
+  return { after: mapped, error };
+}
+
+/**
+ * Copy the reference chart's UV layout onto the moving chart.
+ *
+ * Direct mode is orientation-preserving. Mirror mode tries both reflected
+ * correspondences and keeps the bijective mapping with the lowest error. A
+ * reflected mapping is intentional for symmetric albedo; it is not a bake
+ * layout, because overlapping UVs still share texture texels.
+ */
+export function copyUvChart(
+  mesh: HalfEdgeMesh,
+  topology: UvTopology,
+  referenceChart: number,
+  movingChart: number,
+  mode: 'direct' | 'mirror' = 'direct'
+): UvChartAlignment | null {
+  const candidates =
+    mode === 'mirror'
+      ? (['x', 'y'] as const)
+      : (['none'] as const);
+  let best: { alignment: UvChartAlignment; mapped: Vec2[]; error: number } | null =
+    null;
+  for (const reflection of candidates) {
+    const alignment = alignUvChart(
+      mesh,
+      topology,
+      referenceChart,
+      movingChart,
+      reflection
+    );
+    if (!alignment) {
+      continue;
+    }
+    const mapped = mapAlignment(mesh, topology, referenceChart, alignment);
+    if (!mapped) {
+      continue;
+    }
+    if (!best || mapped.error < best.error) {
+      best = {
+        alignment,
+        mapped: mapped.after,
+        error: mapped.error
+      };
+    }
+  }
+  if (!best) {
+    return null;
+  }
   return {
-    corners: alignment.corners,
-    before: alignment.before,
-    after: mapped
+    corners: best.alignment.corners,
+    before: best.alignment.before,
+    after: best.mapped
   };
 }

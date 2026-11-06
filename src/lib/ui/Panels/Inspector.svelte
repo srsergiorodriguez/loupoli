@@ -1259,7 +1259,7 @@
               <strong>select an object first</strong>
             {/if}
           </span>
-          <span class="texture-note">Requires non-overlapping UVs. Hard shadows are included when enabled.</span>
+          <span class="texture-note">Hard shadows are included when enabled. Overlapping UVs open a confirmed bake-atlas copy step.</span>
           <ActionButton
             label={session.snapshot.bakeBusy ? 'Baking…' : 'Bake lighting'}
             icon="lit"

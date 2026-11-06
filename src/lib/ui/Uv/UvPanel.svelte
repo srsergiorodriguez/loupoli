@@ -568,6 +568,12 @@
         tooltip="Stack selected islands"
         onActivate={() => session.stackUvIslands()}
       />
+      <IconButton
+        label="Mirror stack islands"
+        icon="mirror"
+        tooltip="Stack selected islands with mirrored correspondence"
+        onActivate={() => session.mirrorStackUvIslands()}
+      />
     </div>
     <span class="uv-divider" aria-hidden="true"></span>
     <div class="uv-group" role="group" aria-label="UV view">

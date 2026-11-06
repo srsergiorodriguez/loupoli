@@ -19,6 +19,7 @@
   import TooltipLayer from './lib/ui/Primitives/TooltipLayer.svelte';
   import AnimationTimeline from './lib/ui/Animation/AnimationTimeline.svelte';
   import RenderPreviewPanel from './lib/ui/Render/RenderPreviewPanel.svelte';
+  import BakeAtlasDialog from './lib/ui/Light/BakeAtlasDialog.svelte';
   import ToastStack from './lib/ui/Chrome/ToastStack.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
@@ -314,6 +315,9 @@
   <Inspector {session} />
   <StatusBar {session} />
   <ToastStack {session} />
+  {#if session.snapshot.bakeAtlasPrompt}
+    <BakeAtlasDialog {session} />
+  {/if}
   <TooltipLayer />
 </div>
 

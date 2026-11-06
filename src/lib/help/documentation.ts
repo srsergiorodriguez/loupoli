@@ -84,9 +84,10 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Editing the layout',
         paragraphs: [
           'Fit frames the current charts in the pane. Drag selected corners, or use G, R, and S for move, rotate, and scale. U and V lock the transform to one texture axis. Clamp keeps direct transforms inside the 0–1 square; it is off by default because rotation can move a different corner outside first.',
-          'Stack compares the topology of two islands and copies the active island layout when vertex, edge, face, and boundary counts match. It is useful for repeated shapes that need identical UV layouts.'
+          'Stack compares the topology of two islands and copies the active island layout when vertex, edge, face, and boundary counts match. It is useful for repeated shapes that need identical UV layouts. Mirror stack applies a reflected correspondence for symmetric albedo; the texture is intentionally mirrored on the copied island.'
         ],
         controls: [
+          'Stack / Mirror stack: copy an island layout directly or with reflected correspondence',
           'G / R / S: move, rotate, or scale UV corners',
           'U / V: lock the U or V axis',
           'Shift: fine transform precision',
@@ -170,11 +171,12 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Baking',
         paragraphs: [
-          'Bake lighting writes direct light and shadows into a multiply layer on the active texture. The active object needs an assigned texture and a UV layout without overlapping islands. The result is a normal texture layer, so it can be previewed in Texture, edited in Paint, and removed with undo.',
+          'Bake lighting writes direct light and shadows into a multiply layer on the active texture. If the active object has overlapping UV islands, Bake offers a confirmed Prepare bake atlas step: it creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps the original object and texture for recovery. Symmetric painting ends on the duplicate. The result is a normal texture layer, so it can be previewed in Texture, edited in Paint, and removed with undo.',
           'If several objects share the texture, the bake creates a copy for the active object before adding the lighting layer. Other objects keep their original asset.'
         ],
         controls: [
           'Bake lighting: direct diffuse light plus shadows',
+          'Prepare bake atlas: unique UVs and resized texture for overlapping islands',
           'Intensity: light energy; higher values brighten the Lit surface',
           'Ambient: unshadowed fill for the document'
         ]
