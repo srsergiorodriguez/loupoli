@@ -86,6 +86,28 @@ function layerId(): string {
   return id;
 }
 
+/** sRGB byte to linear-light lookup for composite math. */
+const SRGB_TO_LINEAR = (() => {
+  const table = new Float32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    const c = i / 255;
+    table[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  }
+  return table;
+})();
+
+/** Linear-light value quantized to a display sRGB byte. */
+const LINEAR_TO_SRGB = (() => {
+  const table = new Uint8ClampedArray(256);
+  for (let i = 0; i < 256; i += 1) {
+    const c = i / 255;
+    const srgb =
+      c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
+    table[i] = Math.round(srgb * 255);
+  }
+  return table;
+})();
+
 function createLayerCanvas(width: number, height: number): OffscreenCanvas {
   if (typeof OffscreenCanvas === 'undefined') {
     throw new Error('Texture layers require OffscreenCanvas support.');
@@ -942,10 +964,59 @@ export class TextureAsset {
     }
   }
 
+  /**
+   * Multiply one lighting-role layer in linear light.
+   *
+   * Canvas 2D `multiply` operates on sRGB bytes. The viewport multiplies the
+   * linear-light illumination, so doing the same multiply in sRGB makes baked
+   * shadows and midtones too dark. This path keeps normal/detail layers on the
+   * fast canvas path and applies only lighting layers with the correct transfer
+   * curve.
+   */
+  private compositeLightingLayer(layer: TextureLayer): void {
+    const base = this.compositeContext.getImageData(
+      0,
+      0,
+      this.width,
+      this.height
+    );
+    const lighting = layer.context.getImageData(
+      0,
+      0,
+      this.width,
+      this.height
+    );
+    const pixels = base.data;
+    const source = lighting.data;
+    const opacity = layer.opacity;
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      if (pixels[offset + 3] === 0) {
+        continue;
+      }
+      const alpha = (source[offset + 3] / 255) * opacity;
+      if (alpha <= 0) {
+        continue;
+      }
+      for (let channel = 0; channel < 3; channel += 1) {
+        const light = 1 + (source[offset + channel] / 255 - 1) * alpha;
+        const linear = SRGB_TO_LINEAR[pixels[offset + channel]] * light;
+        pixels[offset + channel] =
+          LINEAR_TO_SRGB[Math.round(Math.min(1, Math.max(0, linear)) * 255)];
+      }
+    }
+    this.compositeContext.putImageData(base, 0, 0);
+  }
+
   private compositeLayers(usePreview = false): void {
     this.compositeContext.clearRect(0, 0, this.width, this.height);
     for (const layer of this.layers) {
       if (!layer.visible || layer.opacity <= 0) {
+        continue;
+      }
+      if (layer.role === 'lighting' && layer.blendMode === 'multiply') {
+        this.compositeContext.globalAlpha = 1;
+        this.compositeContext.globalCompositeOperation = 'source-over';
+        this.compositeLightingLayer(layer);
         continue;
       }
       this.compositeContext.globalAlpha = layer.opacity;

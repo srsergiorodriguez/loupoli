@@ -130,6 +130,7 @@ import { SetEdgeSeamsCommand } from './commands/SetEdgeSeamsCommand';
 import { AssignTextureCommand } from './commands/AssignTextureCommand';
 import { BakeLightingCommand } from './commands/BakeLightingCommand';
 import { CompositeCommand } from './commands/CompositeCommand';
+import { WithShadingCommand } from './commands/WithShadingCommand';
 import { bakeLighting, hasUvOverlap, uvCoverage } from '../lighting/bake';
 import {
   CreateTextureAssetCommand,
@@ -5897,16 +5898,21 @@ export class EditorRuntime {
       commands.push(
         new BakeLightingCommand(target, existingLayerId, before, after)
       );
-      this.history.execute(
+      const bakeCommand =
         commands.length === 1
           ? commands[0]
-          : new CompositeCommand('Bake lighting', commands)
+          : new CompositeCommand('Bake lighting', commands);
+      this.history.execute(
+        new WithShadingCommand(
+          bakeCommand,
+          (mode) => this.setShadingMode(mode),
+          this.shading,
+          'unlit'
+        )
       );
       this.textureLibrary.setActive(target.id);
       this.autosave.markTextureDirty();
       this.renderer.refreshTexture();
-      this.shading = 'unlit';
-      this.renderer.setShadingMode('unlit');
       this.publish();
       this.notify(
         'success',

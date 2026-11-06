@@ -76,6 +76,7 @@ Light markers show each light’s editor position in the viewport. Directional l
 - Lighting Inspector owns add/edit/delete and ambient controls
 - Visibility uses the shared outliner eye
 - Per-light **Cast shadows** switch and **Shadow softness** slider control both Lit and bake
+- Baked lighting composites in linear light with a softness-scaled penumbra; undoing a bake restores the previous viewport shading mode
 - Light markers show position; directional markers add a cone-tipped direction arrow
 - Marker drag updates position; arrow-tip drag updates direction; each is one undoable command
 - Naming uses `InlineNameField`

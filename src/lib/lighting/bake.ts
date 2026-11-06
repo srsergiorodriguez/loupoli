@@ -358,6 +358,65 @@ function shadowVisibility(
 }
 
 /**
+ * Apply a separable box blur to the baked lighting image.
+ *
+ * Ray-traced shadows alone produce a hard boundary per texel. The viewport uses
+ * PCF-soft shadow maps, so a resolution-scaled penumbra makes the baked result
+ * read like the Lit preview.
+ */
+function blurLighting(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  if (radius <= 0 || width === 0 || height === 0) {
+    return;
+  }
+  const source = new Uint8ClampedArray(data);
+  const horizontal = new Uint8ClampedArray(data.length);
+  const kernel = radius * 2 + 1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let offset = -radius; offset <= radius; offset += 1) {
+        const sx = Math.min(width - 1, Math.max(0, x + offset));
+        const index = (y * width + sx) * 4;
+        r += source[index];
+        g += source[index + 1];
+        b += source[index + 2];
+      }
+      const out = (y * width + x) * 4;
+      horizontal[out] = r / kernel;
+      horizontal[out + 1] = g / kernel;
+      horizontal[out + 2] = b / kernel;
+      horizontal[out + 3] = 255;
+    }
+  }
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let offset = -radius; offset <= radius; offset += 1) {
+        const sy = Math.min(height - 1, Math.max(0, y + offset));
+        const index = (sy * width + x) * 4;
+        r += horizontal[index];
+        g += horizontal[index + 1];
+        b += horizontal[index + 2];
+      }
+      const out = (y * width + x) * 4;
+      data[out] = r / kernel;
+      data[out + 1] = g / kernel;
+      data[out + 2] = b / kernel;
+      data[out + 3] = 255;
+    }
+  }
+}
+
+/**
  * Bake direct ambient/directional/point light into an RGBA lighting image.
  *
  * The result is opaque white outside the UV-covered surface. White is the
@@ -508,5 +567,13 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   if (!covered) {
     return null;
   }
+  const softness = Math.max(
+    0,
+    ...lights
+      .filter((light) => light.castShadows)
+      .map((light) => light.shadowSoftness)
+  );
+  const blurRadius = Math.round(1 + softness * 5);
+  blurLighting(data, width, height, blurRadius);
   return new ImageData(data, width, height);
 }
