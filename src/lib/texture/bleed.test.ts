@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bleedImageData, erodeImageEdges } from './bleed';
+import { bleedImageData } from './bleed';
 
 describe('texture edge bleed', () => {
   it('copies opaque edge color into transparent padding', () => {
@@ -33,22 +33,3 @@ describe('texture edge bleed', () => {
 });
 
 
-describe('source edge cleanup', () => {
-  it('removes the outer ring before the bleed fills it', () => {
-    const width = 7;
-    const height = 7;
-    const data = new Uint8ClampedArray(width * height * 4);
-    for (let pixel = 0; pixel < width * height; pixel += 1) {
-      data[pixel * 4] = 255;
-      data[pixel * 4 + 1] = 255;
-      data[pixel * 4 + 2] = 255;
-      data[pixel * 4 + 3] = 255;
-    }
-    erodeImageEdges(data, width, height, 3);
-    expect(data[(0 * width + 3) * 4 + 3]).toBe(0);
-    expect(data[(2 * width + 2) * 4 + 3]).toBe(0);
-    expect(data[(3 * width + 3) * 4 + 3]).toBe(255);
-    bleedImageData(data, width, height, 4);
-    expect(data[(0 * width + 3) * 4 + 3]).toBe(255);
-  });
-});

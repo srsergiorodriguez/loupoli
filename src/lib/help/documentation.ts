@@ -171,12 +171,12 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Baking',
         paragraphs: [
-          'Bake lighting writes direct light and shadows into a multiply layer on the active texture. If the active object has overlapping UV islands, Bake offers a confirmed Prepare bake atlas step: it creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps the original object and texture for recovery. Existing non-overlapping UV layers are preserved, a four-pixel bleed protects chart edges, and symmetric painting ends on the duplicate. Bake normals follow authored winding on concave surfaces instead of a per-face center test. The result is a normal texture layer, so it can be previewed in Texture, edited in Paint, and removed with undo.',
+          'Bake lighting writes direct light and shadows into a multiply layer on the active texture. If the active object has overlapping UV islands, Bake offers a confirmed Prepare bake atlas step: it creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps the original object and texture for recovery. This is a two-step flow: prepare the copy, then press Bake lighting again to write the lighting layer. Existing non-overlapping UV layers are preserved, inward sampling and an eight-pixel bleed protect island edges, and symmetric painting ends on the duplicate. Bake normals follow authored winding on concave surfaces instead of a per-face center test. The result is a normal texture layer, so it can be previewed in Texture, edited in Paint, and removed with undo.',
           'If several objects share the texture, the bake creates a copy for the active object before adding the lighting layer. Other objects keep their original asset.'
         ],
         controls: [
           'Bake lighting: direct diffuse light plus shadows',
-          'Prepare bake atlas: unique UV layers, resized texture, and edge bleed for overlapping islands',
+          'Prepare bake copy: unique UV layers and resized texture; then Bake lighting again',
           'Intensity: light energy; higher values brighten the Lit surface',
           'Ambient: unshadowed fill for the document'
         ]

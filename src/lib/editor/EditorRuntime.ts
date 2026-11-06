@@ -5759,7 +5759,7 @@ export class EditorRuntime {
       this.notify(
         'success',
         'Bake atlas ready',
-        `${plan.width}×${plan.height} · Bake lighting to finish`
+        `${plan.width}×${plan.height} · Press Bake lighting again`
       );
     } catch (error) {
       if (!inserted) {

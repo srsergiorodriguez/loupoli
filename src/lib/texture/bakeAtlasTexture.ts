@@ -1,5 +1,5 @@
 import type { BakeAtlasChart, BakeAtlasPlan } from '../uv/bakeAtlas';
-import { bleedImageData, erodeImageEdges } from './bleed';
+import { bleedImageData, TEXTURE_EDGE_INSET_PIXELS } from './bleed';
 import type {
   TextureAssetData,
   TextureFilter,
@@ -33,20 +33,54 @@ function buildChartDraws(
   sourceWidth: number,
   sourceHeight: number
 ): ChartDraw[] {
-  return plan.charts.map((chart) => {
-    const path = new Path2D();
+  const draws: ChartDraw[] = [];
+  for (const chart of plan.charts) {
+    const transform = bakeChartImageTransform(
+      chart,
+      plan.width,
+      plan.height,
+      sourceWidth,
+      sourceHeight
+    );
     for (const face of chart.faces) {
       if (face.length < 3) {
         continue;
       }
-      face.forEach((uv, index) => {
-        const x =
-          (chart.originU + (uv[0] - chart.minU) * chart.scale) *
-          plan.width;
-        const y =
-          (1 -
-            (chart.originV + (uv[1] - chart.minV) * chart.scale)) *
-          plan.height;
+      const points = face.map((uv): [number, number] => [
+        (chart.originU + (uv[0] - chart.minU) * chart.scale) * plan.width,
+        (1 - (chart.originV + (uv[1] - chart.minV) * chart.scale)) *
+          plan.height
+      ]);
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      let cx = 0;
+      let cy = 0;
+      for (const [x, y] of points) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+        cx += x;
+        cy += y;
+      }
+      cx /= points.length;
+      cy /= points.length;
+      const minDimension = Math.min(maxX - minX, maxY - minY);
+      const inset = Math.min(
+        TEXTURE_EDGE_INSET_PIXELS,
+        Math.max(0, minDimension * 0.3)
+      );
+      const scale =
+        inset > 0
+          ? Math.min(
+              1.9,
+              1 / Math.max(0.1, 1 - (2 * inset) / minDimension)
+            )
+          : 1;
+      const path = new Path2D();
+      points.forEach(([x, y], index) => {
         if (index === 0) {
           path.moveTo(x, y);
         } else {
@@ -54,26 +88,31 @@ function buildChartDraws(
         }
       });
       path.closePath();
+      // Enlarge the sampled source around the face center. The clip stays on
+      // the exact face, so boundary pixels come from inside the island instead
+      // of its background gutter; the bleed then fills the cell gutter.
+      draws.push({
+        path,
+        transform: [
+          transform[0] * scale,
+          0,
+          0,
+          transform[3] * scale,
+          transform[4] * scale + (1 - scale) * cx,
+          transform[5] * scale + (1 - scale) * cy
+        ]
+      });
     }
-    return {
-      path,
-      transform: bakeChartImageTransform(
-        chart,
-        plan.width,
-        plan.height,
-        sourceWidth,
-        sourceHeight
-      )
-    };
-  });
+  }
+  return draws;
 }
 
 /**
  * Rebuild a texture layer stack in the unique bake-atlas layout.
  *
- * Each layer is transformed through the chart placement clips, so mirrored or
- * previously stacked islands retain their painted appearance while receiving
- * independent texels.
+ * Each face is sampled slightly inward from its boundary, then its layer is
+ * bled into the cell gutter. Mirrored or previously stacked islands retain
+ * their painted appearance while receiving independent texels and clean edges.
  */
 export async function resampleTextureDataForBakeAtlas(
   data: TextureAssetData,
@@ -111,7 +150,6 @@ export async function resampleTextureDataForBakeAtlas(
       plan.width,
       plan.height
     );
-    erodeImageEdges(pixels.data, plan.width, plan.height);
     bleedImageData(pixels.data, plan.width, plan.height);
     context.putImageData(pixels, 0, 0);
     const blob = await canvas.convertToBlob({ type: 'image/png' });

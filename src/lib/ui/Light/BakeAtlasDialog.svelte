@@ -31,9 +31,11 @@
       store different light for two surfaces that share the same texel.
     </p>
     <p>
-      This creates a duplicate object with unique UVs and a resampled texture.
-      The original object is hidden and kept. Symmetric painting ends on the
-      duplicate, so finish symmetric paint before continuing.
+      This is the first step: it creates a duplicate object with unique UVs
+      and a resampled texture. The original object is hidden and kept. After
+      the copy is ready, press <strong>Bake lighting</strong> again to write the
+      lighting layer. Symmetric painting ends on the duplicate, so finish
+      symmetric paint before continuing.
     </p>
     <dl class="atlas-stats">
       <div><dt>Texture</dt><dd>{prompt.textureName}</dd></div>

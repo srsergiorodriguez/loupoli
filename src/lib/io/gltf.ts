@@ -5,7 +5,7 @@ import {
   Matrix3,
   Matrix4,
   Mesh,
-  MeshStandardMaterial,
+  MeshBasicMaterial,
   Object3D,
   Scene,
   SRGBColorSpace,
@@ -200,11 +200,12 @@ export interface GlbTextureFile {
   readonly bytes: Uint8Array;
 }
 
-function makeMaterial(color: string): MeshStandardMaterial {
-  return new MeshStandardMaterial({
-    color,
-    roughness: 0.85,
-    metalness: 0
+function makeMaterial(color: string, textured: boolean): MeshBasicMaterial {
+  // Baked illumination is already in the texture. An unlit basic material keeps
+  // a viewer from adding a second PBR highlight or metallic response.
+  return new MeshBasicMaterial({
+    color: textured ? 0xffffff : color,
+    toneMapped: false
   });
 }
 
@@ -385,11 +386,15 @@ export async function exportGlb(
       }
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
-      const material = makeMaterial(palette[materialIndex] ?? palette[0]);
-      material.name = `${node.name}_mat${materialIndex}`;
-      material.map = node.textureId
+      const texture = node.textureId
         ? textureCache.get(node.textureId) ?? null
         : null;
+      const material = makeMaterial(
+        palette[materialIndex] ?? palette[0],
+        texture !== null
+      );
+      material.name = `${node.name}_mat${materialIndex}`;
+      material.map = texture;
       const meshObject = new Mesh(geometry, material);
       meshObject.name = `${node.name}_${objectIndex}`;
       if (morphKeys.length > 0) {

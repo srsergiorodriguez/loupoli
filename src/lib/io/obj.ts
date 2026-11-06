@@ -300,7 +300,17 @@ export function exportObj(
       const r = parseInt(hex.slice(0, 2), 16) / 255;
       const g = parseInt(hex.slice(2, 4), 16) / 255;
       const b = parseInt(hex.slice(4, 6), 16) / 255;
-      mtl.push(`newmtl ${materialName}`, `Kd ${r} ${g} ${b}`, 'd 1', 'illum 1');
+      // A textured MTL must not tint the baked image; use white diffuse.
+      const kd = texture ? '1 1 1' : `${r} ${g} ${b}`;
+      mtl.push(
+        `newmtl ${materialName}`,
+        `Ka 0 0 0`,
+        `Kd ${kd}`,
+        `Ks 0 0 0`,
+        `Ns 0`,
+        'd 1',
+        'illum 1'
+      );
       if (texture) {
         mtl.push(`map_Kd ${texture.name}`);
       }

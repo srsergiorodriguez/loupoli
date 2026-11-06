@@ -68,6 +68,9 @@ describe('OBJ interchange', () => {
       textures: new Map([['texture-1', texture]])
     });
     expect(exported.mtl).toContain('map_Kd Cube-Texture.png');
+    expect(exported.mtl).toContain('Kd 1 1 1');
+    expect(exported.mtl).toContain('Ks 0 0 0');
+    expect(exported.mtl).toContain('Ns 0');
     expect(exported.textures).toEqual([texture]);
   });
 

@@ -1,76 +1,16 @@
 /** Pixels of edge color copied outside UV coverage to stop filtered seams. */
-export const TEXTURE_BLEED_PIXELS = 4;
+export const TEXTURE_BLEED_PIXELS = 8;
 
-/** Pixels removed from a source edge before bleeding interior color outward. */
-export const TEXTURE_EDGE_ERODE_PIXELS = 3;
-
-/**
- * Remove transparent or background-colored pixels at the edge of drawn art.
- *
- * Source atlases often have an opaque white gutter around painted islands. If
- * that gutter is clipped directly, linear filtering produces a bright outline
- * around every UV face. Eroding a few pixels and then bleeding from the
- * remaining interior replaces the gutter with the island's own color.
- */
-export function erodeImageEdges(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  passes = TEXTURE_EDGE_ERODE_PIXELS
-): void {
-  const count = width * height;
-  if (count === 0 || data.length < count * 4) {
-    return;
-  }
-  const passCount = Math.max(0, Math.floor(passes));
-  for (let pass = 0; pass < passCount; pass += 1) {
-    const remove: number[] = [];
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const pixel = y * width + x;
-        if (data[pixel * 4 + 3] === 0) {
-          continue;
-        }
-        let boundary =
-          x === 0 || x === width - 1 || y === 0 || y === height - 1;
-        for (let oy = -1; oy <= 1 && !boundary; oy += 1) {
-          const ny = y + oy;
-          if (ny < 0 || ny >= height) {
-            continue;
-          }
-          for (let ox = -1; ox <= 1; ox += 1) {
-            const nx = x + ox;
-            if (nx < 0 || nx >= width || (ox === 0 && oy === 0)) {
-              continue;
-            }
-            if (data[(ny * width + nx) * 4 + 3] === 0) {
-              boundary = true;
-              break;
-            }
-          }
-        }
-        if (boundary) {
-          remove.push(pixel);
-        }
-      }
-    }
-    for (const pixel of remove) {
-      const offset = pixel * 4;
-      data[offset] = 0;
-      data[offset + 1] = 0;
-      data[offset + 2] = 0;
-      data[offset + 3] = 0;
-    }
-  }
-}
+/** Pixels clipped inward before bleeding interior color outward. */
+export const TEXTURE_EDGE_INSET_PIXELS = 10;
 
 /**
  * Extend non-transparent pixels into adjacent transparent pixels.
  *
- * Atlas charts are clipped exactly to their UV faces. Without a gutter, linear
- * filtering at a chart edge samples transparent pixels and produces white or
- * dark lines. This dilation copies edge RGBA into the surrounding padding while
- * leaving the interior untouched.
+ * Resampled face content is inset from its UV boundary. Without a gutter,
+ * linear filtering at a chart edge samples transparent pixels and produces
+ * white or dark lines. This dilation copies edge RGBA into the surrounding
+ * padding while leaving the interior untouched.
  */
 export function bleedImageData(
   data: Uint8ClampedArray,
