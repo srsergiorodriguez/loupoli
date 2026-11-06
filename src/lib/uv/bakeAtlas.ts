@@ -1,5 +1,4 @@
 import type { HalfEdgeMesh, Vec2 } from '../geometry/HalfEdgeMesh';
-import { extractUvCharts, type UvChart } from '../geometry/uvCharts';
 import { TEXTURE_BLEED_PIXELS } from '../texture/bleed';
 import { MAX_TEXTURE_DIMENSION, MAX_TEXTURE_PIXELS } from '../texture/size';
 
@@ -158,14 +157,79 @@ function unitFromFaces(
   return { id, faces, corners, minU, minV, maxU, maxV };
 }
 
-function chartUnits(
+/**
+ * Split faces into true UV islands using shared UV coordinates.
+ *
+ * Seam flags alone are not enough for imported meshes: two faces can meet on a
+ * non-seam mesh edge but carry different UVs. Unioning only across edges whose
+ * endpoint UVs match keeps each painted island intact.
+ */
+function uvIslandFaces(mesh: HalfEdgeMesh): number[][] {
+  const parent = new Int32Array(mesh.faceCount);
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    parent[face] = face;
+  }
+  const find = (value: number): number => {
+    let current = value;
+    while (parent[current] !== current) {
+      parent[current] = parent[parent[current]];
+      current = parent[current];
+    }
+    return current;
+  };
+  const union = (a: number, b: number): void => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) {
+      parent[rootB] = rootA;
+    }
+  };
+  for (let halfEdge = 0; halfEdge < mesh.halfEdgeCount; halfEdge += 1) {
+    const twin = mesh.heTwin[halfEdge];
+    if (twin <= halfEdge || mesh.heFace[twin] < 0) {
+      continue;
+    }
+    if (mesh.isEdgeSeam(mesh.heEdge[halfEdge])) {
+      continue;
+    }
+    const next = mesh.heNext[halfEdge];
+    const twinNext = mesh.heNext[twin];
+    const a0 = mesh.heUv[halfEdge * 2];
+    const a1 = mesh.heUv[halfEdge * 2 + 1];
+    const b0 = mesh.heUv[next * 2];
+    const b1 = mesh.heUv[next * 2 + 1];
+    const twinA0 = mesh.heUv[twinNext * 2];
+    const twinA1 = mesh.heUv[twinNext * 2 + 1];
+    const twinB0 = mesh.heUv[twin * 2];
+    const twinB1 = mesh.heUv[twin * 2 + 1];
+    const epsilon = 1e-6;
+    if (
+      Math.abs(a0 - twinA0) <= epsilon &&
+      Math.abs(a1 - twinA1) <= epsilon &&
+      Math.abs(b0 - twinB0) <= epsilon &&
+      Math.abs(b1 - twinB1) <= epsilon
+    ) {
+      union(mesh.heFace[halfEdge], mesh.heFace[twin]);
+    }
+  }
+  const groups = new Map<number, number[]>();
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const root = find(face);
+    const list = groups.get(root) ?? [];
+    list.push(face);
+    groups.set(root, list);
+  }
+  return [...groups.values()].sort((a, b) => a[0] - b[0]);
+}
+
+function islandUnits(
   mesh: HalfEdgeMesh,
-  chart: UvChart,
+  islandFaces: readonly number[],
   startId: number
 ): PackingUnit[] | null {
   const faces: Vec2[][] = [];
   const corners: number[][] = [];
-  for (const face of chart.faces) {
+  for (const face of islandFaces) {
     const data = faceData(mesh, face);
     if (!data) {
       return null;
@@ -205,9 +269,8 @@ function chartUnits(
     const unit = unitFromFaces(startId, faces, corners);
     return unit ? [unit] : null;
   }
-  // Stacked faces are separated into non-overlapping UV layers. Each layer
-  // keeps its original layout, so symmetric charts become two coherent cells
-  // instead of one disconnected cell per face.
+  // A genuinely self-overlapping island still needs independent layers. This
+  // split never crosses a true UV island boundary.
   const units: PackingUnit[] = [];
   for (let index = 0; index < layers.length; index += 1) {
     const faceIndices = layers[index];
@@ -275,11 +338,11 @@ function tryPack(
 }
 
 /**
- * Pack every non-overlapping UV chart into a unique shelf cell.
+ * Pack every true UV island into a unique shelf cell.
  *
- * Charts with intentionally stacked faces are split into non-overlapping
- * layers. Each layer preserves its source layout, so a mirrored pair becomes
- * two coherent cells rather than a disconnected cell for every face.
+ * Islands are detected by UV continuity, not seam flags alone. Each island
+ * keeps its internal color arrangement; only a self-overlapping island is split
+ * into separate layers.
  */
 export function buildBakeAtlasPlan(
   mesh: HalfEdgeMesh,
@@ -297,14 +360,14 @@ export function buildBakeAtlasPlan(
   ) {
     return null;
   }
-  const charts = extractUvCharts(mesh);
-  if (charts.length === 0) {
+  const islands = uvIslandFaces(mesh);
+  if (islands.length === 0) {
     return null;
   }
   const units: PackingUnit[] = [];
   let nextId = 0;
-  for (const chart of charts) {
-    const created = chartUnits(mesh, chart, nextId);
+  for (const island of islands) {
+    const created = islandUnits(mesh, island, nextId);
     if (!created) {
       return null;
     }

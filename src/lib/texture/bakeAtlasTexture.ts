@@ -1,5 +1,5 @@
 import type { BakeAtlasChart, BakeAtlasPlan } from '../uv/bakeAtlas';
-import { bleedImageData, erodeImageEdges } from './bleed';
+import { bleedImageData } from './bleed';
 import type {
   TextureAssetData,
   TextureFilter,
@@ -111,7 +111,6 @@ export async function resampleTextureDataForBakeAtlas(
       plan.width,
       plan.height
     );
-    erodeImageEdges(pixels.data, plan.width, plan.height);
     bleedImageData(pixels.data, plan.width, plan.height);
     context.putImageData(pixels, 0, 0);
     const blob = await canvas.convertToBlob({ type: 'image/png' });
