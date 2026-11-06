@@ -12,6 +12,7 @@
   import ActionRow from '../Primitives/ActionRow.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import ExportObjDialog from './ExportObjDialog.svelte';
+  import NewTextureDialog from './NewTextureDialog.svelte';
   import type { ObjExportScope } from '../../io/obj';
   import ThreeDotMenu from '../Primitives/ThreeDotMenu.svelte';
   import InlineNameField from '../Primitives/InlineNameField.svelte';
@@ -215,7 +216,7 @@
           : 'Disabled'
   );
   const textureMeta = $derived(
-    `${activeTextureAsset?.width ?? session.snapshot.textureSize}² · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
+    `${activeTextureAsset?.width ?? session.snapshot.textureSize} × ${activeTextureAsset?.height ?? session.snapshot.textureHeight} · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
   );
   const visibleSections = $derived(
     inspectorSectionsFor(session.snapshot.workspace)
@@ -243,6 +244,7 @@
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
   let objExportOpen = $state(false);
+  let newTextureOpen = $state(false);
   let objExportScope = $state<ObjExportScope>('scene');
   let objExportIncludeTexture = $state(true);
   const exportHasTexture = $derived(
@@ -2010,7 +2012,7 @@
               onCommit={(value) => session.renameTextureAsset(value)}
             />
             <span class="texture-kind">
-              {activeTextureAsset?.width ?? session.snapshot.textureSize}²
+              {activeTextureAsset?.width ?? session.snapshot.textureSize} × {activeTextureAsset?.height ?? session.snapshot.textureHeight}
             </span>
           </div>
           <div class="texture-asset-meta">
@@ -2022,10 +2024,17 @@
               label="New"
               icon="plus"
               menuTitle="New texture"
-              options={[64, 128, 256, 512, 1024, 2048].map((size) => ({
-                label: `${size}² texture`,
-                onSelect: () => session.createTextureAsset(size, size)
-              }))}
+              options={[
+                ...[64, 128, 256, 512, 1024, 2048, 4096].map((size) => ({
+                  label: `${size}² texture`,
+                  onSelect: () => session.createTextureAsset(size, size)
+                })),
+                {
+                  label: 'Custom size…',
+                  separatorBefore: true,
+                  onSelect: () => (newTextureOpen = true)
+                }
+              ]}
             />
             <ActionButton
               label={selectionUsesActiveTexture ? 'Unassign' : 'Assign'}
@@ -2292,6 +2301,15 @@
       {/key}
   </div>
 
+  {#if newTextureOpen}
+    <NewTextureDialog
+      onCancel={() => (newTextureOpen = false)}
+      onCreate={(width, height) => {
+        newTextureOpen = false;
+        session.createTextureAsset(width, height);
+      }}
+    />
+  {/if}
   {#if objExportOpen}
     <ExportObjDialog
       scope={objExportScope}

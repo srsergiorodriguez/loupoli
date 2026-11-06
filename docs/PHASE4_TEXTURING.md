@@ -47,9 +47,9 @@
 
 - Each layer owns an `OffscreenCanvas` 2D context, optional PNG backing bytes, metadata, and a CPU dirty flag.
 - Layer order is bottom-to-top; each layer has visibility, opacity, blend mode, name, and a stable ID.
-- Default texture size is **512²** per asset, with 64–2048 presets; hard maximum is **2048²**.
+- Default texture size is **512²** per asset. New assets accept arbitrary width and height up to **4096 px** and the texture pixel budget; 64–4096 presets remain shortcuts.
 - Default layer limit is **8**; the Inspector surfaces the remaining budget before adding a layer.
-- Layer dimensions are fixed for a project. Changing the project texture size requires an explicit, undoable resample.
+- Layer dimensions are fixed after asset creation. New assets accept arbitrary width and height; changing an existing asset requires an explicit, undoable resample (future work).
 - The viewport uploads one composite `CanvasTexture`, not one texture per layer.
 - OffscreenCanvas is required by the iPadOS 16.4 baseline. A canvas-2D fallback may exist for development but is not a second rendering path.
 - No base64 PNG or layer pixels are retained as strings.
@@ -132,7 +132,7 @@ Initial targets, to be confirmed on hardware:
 
 | Item | Budget |
 |---|---|
-| Texture size | 512² default, 2048² hard maximum |
+| Texture size | 512² default, 4096 px / 16.7 MP hard limits |
 | Layer count | 8 default maximum |
 | One RGBA layer at 1024² | ~4 MB CPU + ~4 MB GPU |
 | Composite at 1024² | ~4 MB CPU + ~4 MB GPU |
@@ -159,5 +159,5 @@ Gate-by-gate evidence and residual deferrals live in the [Phase 4 exit audit](./
 - **LSCM robustness:** bespoke solvers can produce flipped or overlapping charts. The implementation needs explicit chart validation and a clear failure UI, not an invisible fallback.
 - **UV selection model:** corner-based selection is required for seams; face/vertex UV grouping must be defined before the UV transform UI ships.
 - **Texture undo granularity:** whole-layer snapshots are too large. Stroke patches and layer-operation patches need separate budgets.
-- **iOS profiling:** 2048² layers may be too expensive on older iPads. The default and cap remain provisional until hardware validation.
+- **iOS profiling:** 4096² layers may be too expensive on older iPads. The default, pixel budget, and layer cap remain provisional until hardware validation.
 - **Format churn:** v2 must be additive and versioned; do not retrofit texture chunks into v1.

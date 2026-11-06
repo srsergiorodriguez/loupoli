@@ -37,8 +37,8 @@
     </p>
     <dl class="atlas-stats">
       <div><dt>Texture</dt><dd>{prompt.textureName}</dd></div>
-      <div><dt>Atlas size</dt><dd>{prompt.fromWidth}×{prompt.fromHeight} → {prompt.targetSize}×{prompt.targetSize}</dd></div>
-      <div><dt>Source islands</dt><dd>{prompt.chartCount}</dd></div>
+      <div><dt>Atlas size</dt><dd>{prompt.fromWidth}×{prompt.fromHeight} → {prompt.targetWidth}×{prompt.targetHeight}</dd></div>
+      <div><dt>Unique cells</dt><dd>{prompt.chartCount}</dd></div>
       <div><dt>Layers</dt><dd>{prompt.layerCount}</dd></div>
       <div><dt>Approx. layer memory</dt><dd>{megabytes} MB</dd></div>
     </dl>

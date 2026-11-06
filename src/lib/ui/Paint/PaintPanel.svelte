@@ -29,7 +29,6 @@
   let pinchLastDistance = 0;
   const touchPointers = new Map<number, { x: number; y: number }>();
 
-  const textureSize = $derived(session.snapshot.textureSize);
   const textureAssets = $derived(session.snapshot.textureAssets);
   const activeAsset = $derived(
     textureAssets.find((asset) => asset.id === session.snapshot.textureAssetId) ?? null
@@ -369,7 +368,7 @@
     label="Paint"
     active={activeEditor === 'paint'}
     detail={activeAsset ? `${activeAsset.name} · ${activeLayer?.name ?? 'No layer'}` : activeLayer?.name ?? 'No layer'}
-    meta={`${textureSize}² · ${activeLayer?.kind ?? '—'}`}
+    meta={`${activeAsset?.width ?? 0} × ${activeAsset?.height ?? 0} · ${activeLayer?.kind ?? '—'}`}
   />
 {/snippet}
 

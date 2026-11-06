@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { Matrix4 } from 'three';
+import { importObjNodes } from '../io/obj';
 import { createCubeMesh } from '../geometry/primitives';
 import { extractUvCharts } from '../geometry/uvCharts';
 import { unwrapUvCharts } from '../geometry/lscm';
-import { hasUvOverlap, uvCoverage } from './bake';
+import { bakeNormalSign, hasUvOverlap, uvCoverage } from './bake';
 
 describe('UV bake coverage guard', () => {
   it('rejects the default folded cube UVs', () => {
@@ -43,5 +46,22 @@ describe('UV bake coverage guard', () => {
     mesh.setAllCornerUvs(uvs);
     expect(uvCoverage(mesh)).toBeLessThan(1);
     expect(hasUvOverlap(mesh)).toBe(true);
+  });
+});
+
+
+describe('bake normal orientation', () => {
+  it('keeps authored outward normals on a closed cube', () => {
+    const mesh = createCubeMesh();
+    expect(mesh.boundaryEdgeCount).toBe(0);
+    expect(bakeNormalSign(mesh, new Matrix4())).toBe(1);
+  });
+
+  it('does not invert concave surfaces on the gorilla', () => {
+    const source = readFileSync('gorillaModel/gorilla.obj', 'utf8');
+    const nodes = importObjNodes(source, '', { upAxis: 'y', scale: 1 });
+    const mesh = nodes[0].mesh;
+    expect(mesh.boundaryEdgeCount).toBe(0);
+    expect(bakeNormalSign(mesh, new Matrix4())).toBe(1);
   });
 });

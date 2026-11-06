@@ -74,7 +74,7 @@ describe('.lpoli v4', () => {
         id: 'texasset-1',
         name: 'Atlas',
         width: 64,
-        height: 64,
+        height: 32,
         filter: 'nearest',
         alphaMode: 'cutout',
         activeId: 'texlayer-1',
@@ -97,6 +97,7 @@ describe('.lpoli v4', () => {
     const decoded = decodeLpoly(bytes);
     expect(decoded.textures).toHaveLength(1);
     expect(decoded.textures?.[0].width).toBe(64);
+    expect(decoded.textures?.[0].height).toBe(32);
     expect(decoded.textures?.[0].filter).toBe('nearest');
     expect(decoded.textures?.[0].alphaMode).toBe('cutout');
     expect(decoded.textures?.[0].layers[0].pattern).toBe('transparent');

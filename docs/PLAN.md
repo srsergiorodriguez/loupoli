@@ -360,7 +360,7 @@ Required gesture checks: one-finger orbit, two-finger pinch/pan, two-finger tap 
 - **History:** ≤ 32 MB or 100 commands, whichever is reached first; configurable, never unbounded.
 - **Autosave journal:** ≤ 20 MB geometry per project before checkpoint compaction; texture journal budget separate.
 - **Canvas:** DPR capped at 2 desktop and initially 1.5 on iPadOS pending profiling.
-- **Textures (Phase 4):** 1024² default, 2048² hard maximum, memory budget surfaced before adding layers.
+- **Textures (Phase 4):** 512² default, arbitrary rectangular sizes up to 4096 px and the texture pixel budget, memory budget surfaced before adding layers.
 - **Idle JS heap:** instrumented per phase; any growth across repeated mount/edit/dispose cycles is a defect.
 
 ---

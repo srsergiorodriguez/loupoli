@@ -101,17 +101,17 @@ Baked lighting   role: lighting, blend: multiply
 Algorithm:
 
 1. Rasterize source faces into texture space.
-2. Interpolate world position with flat face normals.
+2. Interpolate world position with flat face normals. Closed meshes use signed shell volume only to decide whether the authored winding is globally inverted; per-face center tests are deliberately not used because they flip normals in concavities.
 3. Evaluate ambient + directional + point lights.
 4. For each shadow-enabled light, trace deterministic visibility rays through every visible scene mesh before adding its contribution. Softness widens directional cones or point-light source disks.
-5. Write a transparent-backed RGBA lighting image.
+5. Write a transparent-backed RGBA lighting image, then bleed its edge pixels into the transparent gutter so filtered sampling does not produce seams.
 6. Commit one undoable `Bake lighting` command.
 
 Safety rules:
 
 - UV islands must not overlap. A per-face coverage raster rejects local overlaps even when total UV area is below 1.
-- When a bake target has overlapping islands, Bake offers **Prepare bake atlas** instead of bypassing the check. It creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps both original object and texture. Each source chart is split into face units when the chart itself contains an intentional stack; a final overlap check rejects self-overlapping faces.
-- The prepared atlas enlarges the texture where possible (2× per side, capped at 2048), preserves every texture layer, and warns that symmetric painting ends on the duplicate. Bake lighting afterward adds the lighting layer normally.
+- When a bake target has overlapping islands, Bake offers **Prepare bake atlas** instead of bypassing the check. It creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps both original object and texture. A stacked chart is partitioned into non-overlapping layout layers, preserving the existing island arrangement inside each layer instead of making one cell per face; a final overlap check rejects self-overlapping faces.
+- The prepared atlas enlarges both dimensions by 2× while preserving aspect, capped at 4096 px and the texture pixel budget. It preserves every texture layer, adds a four-pixel edge bleed around chart cells, scales the pack down if the atlas is crowded, and warns that symmetric painting ends on the duplicate. Bake lighting afterward adds the lighting layer normally.
 - If the active object’s texture is shared, bake into a new unique texture copy and assign it to the object. Never silently modify another object’s atlas.
 - If the texture has a free layer, reuse a `lighting` role layer; otherwise create `Baked lighting`.
 - The bake switches the viewport to `Texture`/Unlit for inspection.

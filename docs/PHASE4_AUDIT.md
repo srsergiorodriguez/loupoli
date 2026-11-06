@@ -47,7 +47,7 @@ These are tracked below. They do not block starting Phase 5A lighting; they do b
 ## Accepted deferrals
 
 1. **Dedicated texture pixel deltas** — current behavior is safe: texture edits mark autosave dirty and force a fresh v4 checkpoint with PNG chunks. Pending delta journaling is an optimization, not a correctness gap.
-2. **Physical iPad/WKWebView memory and lifecycle validation** — blocked on target hardware. This includes the 96 MB texture working budget, 2048² behavior, and real WKWebView process-kill recovery.
+2. **Physical iPad/WKWebView memory and lifecycle validation** — blocked on target hardware. This includes the 96 MB texture working budget, 4096 px / 16.7 MP behavior, and real WKWebView process-kill recovery.
 3. **Multi-angle projected-paint tolerance** — implementation exists; add a repeatable visual/regression check with a documented pixel-distance threshold before claiming hardware-level acceptance.
 
 ## Exit actions completed

@@ -199,7 +199,8 @@ export interface BakeAtlasPrompt {
   readonly textureName: string;
   readonly fromWidth: number;
   readonly fromHeight: number;
-  readonly targetSize: number;
+  readonly targetWidth: number;
+  readonly targetHeight: number;
   readonly layerCount: number;
   readonly chartCount: number;
   readonly estimatedBytes: number;
@@ -262,6 +263,7 @@ export interface EditorSnapshot {
   readonly textureLayers: readonly TextureLayerSummary[];
   readonly textureActiveId: string | null;
   readonly textureSize: number;
+  readonly textureHeight: number;
   readonly activeTransform: NodeTransform | null;
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;

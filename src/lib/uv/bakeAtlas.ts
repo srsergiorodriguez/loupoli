@@ -1,5 +1,7 @@
 import type { HalfEdgeMesh, Vec2 } from '../geometry/HalfEdgeMesh';
 import { extractUvCharts, type UvChart } from '../geometry/uvCharts';
+import { TEXTURE_BLEED_PIXELS } from '../texture/bleed';
+import { MAX_TEXTURE_DIMENSION, MAX_TEXTURE_PIXELS } from '../texture/size';
 
 /** One unique source footprint placed into a bake atlas cell. */
 export interface BakeAtlasChart {
@@ -14,7 +16,8 @@ export interface BakeAtlasChart {
 
 /** A unique bake UV layout and the chart transforms used to resample texture. */
 export interface BakeAtlasPlan {
-  readonly targetSize: number;
+  readonly width: number;
+  readonly height: number;
   readonly scale: number;
   readonly uvs: Float32Array;
   readonly charts: readonly BakeAtlasChart[];
@@ -177,27 +180,41 @@ function chartUnits(
     const unit = unitFromFaces(startId, faces, corners);
     return unit ? [unit] : null;
   }
-  let overlapping = false;
-  for (let a = 0; a < faces.length && !overlapping; a += 1) {
-    for (let b = a + 1; b < faces.length; b += 1) {
-      if (facesOverlap(faces[a], faces[b])) {
-        overlapping = true;
+  const layers: number[][] = [];
+  for (let face = 0; face < faces.length; face += 1) {
+    let placed = false;
+    for (const layer of layers) {
+      let overlaps = false;
+      for (const other of layer) {
+        if (facesOverlap(faces[face], faces[other])) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) {
+        layer.push(face);
+        placed = true;
         break;
       }
     }
+    if (!placed) {
+      layers.push([face]);
+    }
   }
-  if (!overlapping) {
+  if (layers.length === 1) {
     const unit = unitFromFaces(startId, faces, corners);
     return unit ? [unit] : null;
   }
-  // A chart with an intentional stack cannot be baked as one cell. Split it
-  // into face units; the final overlap validation catches self-overlapping faces.
+  // Stacked faces are separated into non-overlapping UV layers. Each layer
+  // keeps its original layout, so symmetric charts become two coherent cells
+  // instead of one disconnected cell per face.
   const units: PackingUnit[] = [];
-  for (let index = 0; index < faces.length; index += 1) {
+  for (let index = 0; index < layers.length; index += 1) {
+    const faceIndices = layers[index];
     const unit = unitFromFaces(
       startId + index,
-      [faces[index]],
-      [corners[index]]
+      faceIndices.map((face) => faces[face]),
+      faceIndices.map((face) => corners[face])
     );
     if (!unit) {
       return null;
@@ -210,7 +227,8 @@ function chartUnits(
 function tryPack(
   units: readonly PackingUnit[],
   scale: number,
-  margin: number
+  marginU: number,
+  marginV: number
 ): Placement[] | null {
   const ordered = [...units].sort((a, b) => {
     const ah = (a.maxV - a.minV) * scale;
@@ -222,8 +240,8 @@ function tryPack(
     return a.id - b.id;
   });
   const placements: Placement[] = [];
-  let x = margin;
-  let y = margin;
+  let x = marginU;
+  let y = marginV;
   let rowHeight = 0;
   for (const unit of ordered) {
     const width = (unit.maxU - unit.minU) * scale;
@@ -231,17 +249,17 @@ function tryPack(
     if (
       width <= 0 ||
       height <= 0 ||
-      width > 1 - margin * 2 ||
-      height > 1 - margin * 2
+      width > 1 - marginU * 2 ||
+      height > 1 - marginV * 2
     ) {
       return null;
     }
-    if (x + width > 1 - margin) {
-      x = margin;
-      y += rowHeight + margin;
+    if (x + width > 1 - marginU) {
+      x = marginU;
+      y += rowHeight + marginV;
       rowHeight = 0;
     }
-    if (y + height > 1 - margin) {
+    if (y + height > 1 - marginV) {
       return null;
     }
     placements.push({
@@ -250,7 +268,7 @@ function tryPack(
       originV: y,
       scale
     });
-    x += width + margin;
+    x += width + marginU;
     rowHeight = Math.max(rowHeight, height);
   }
   return placements;
@@ -259,16 +277,26 @@ function tryPack(
 /**
  * Pack every non-overlapping UV chart into a unique shelf cell.
  *
- * Charts that contain intentionally stacked faces are split at face
- * boundaries. This is deliberately conservative: it guarantees a bakeable
- * layout for symmetric/overlapping source charts, at the cost of more atlas
- * space. Each cell preserves its source orientation and relative texel size.
+ * Charts with intentionally stacked faces are split into non-overlapping
+ * layers. Each layer preserves its source layout, so a mirrored pair becomes
+ * two coherent cells rather than a disconnected cell for every face.
  */
 export function buildBakeAtlasPlan(
   mesh: HalfEdgeMesh,
-  targetSize: number
+  targetWidth: number,
+  targetHeight: number
 ): BakeAtlasPlan | null {
-  const size = Math.max(64, Math.min(2048, Math.round(targetSize)));
+  const width = Math.max(1, Math.min(MAX_TEXTURE_DIMENSION, Math.round(targetWidth)));
+  const height = Math.max(1, Math.min(MAX_TEXTURE_DIMENSION, Math.round(targetHeight)));
+  if (
+    !Number.isFinite(targetWidth) ||
+    !Number.isFinite(targetHeight) ||
+    width < 1 ||
+    height < 1 ||
+    width * height > MAX_TEXTURE_PIXELS
+  ) {
+    return null;
+  }
   const charts = extractUvCharts(mesh);
   if (charts.length === 0) {
     return null;
@@ -283,22 +311,25 @@ export function buildBakeAtlasPlan(
     units.push(...created);
     nextId += created.length;
   }
-  const margin = Math.max(1e-4, 2 / size);
-  let placements = tryPack(units, 1, margin);
+  // Leave room for the post-resample bleed on both sides of every cell.
+  const gapPixels = TEXTURE_BLEED_PIXELS * 2 + 2;
+  const marginU = gapPixels / width;
+  const marginV = gapPixels / height;
+  let placements = tryPack(units, 1, marginU, marginV);
   let scale = 1;
   if (!placements) {
     let low = 1e-5;
     let high = 1;
     for (let iteration = 0; iteration < 40; iteration += 1) {
       const middle = (low + high) * 0.5;
-      if (tryPack(units, middle, margin)) {
+      if (tryPack(units, middle, marginU, marginV)) {
         low = middle;
         scale = middle;
       } else {
         high = middle;
       }
     }
-    placements = tryPack(units, scale, margin);
+    placements = tryPack(units, scale, marginU, marginV);
   }
   if (!placements) {
     return null;
@@ -331,7 +362,8 @@ export function buildBakeAtlasPlan(
     });
   }
   return {
-    targetSize: size,
+    width,
+    height,
     scale,
     uvs,
     charts: resultCharts

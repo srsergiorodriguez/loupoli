@@ -92,7 +92,7 @@ Texture edits and paint/bake strokes are not represented as autosave pixel delta
 | Faces per mesh | 2,000,000 |
 | History | 100 commands / 32 MB retained |
 
-Texture budget: 512² default per asset, 2048² format cap, 64–2048 presets, eight-layer stack cap, per-asset storage. Texture autosave stores full PNGs in the checkpoint, so texture-heavy projects increase the checkpoint size.
+Texture budget: 512² default per asset, 4096 px / 16.7 MP format limits, arbitrary custom sizes, 64–4096 presets, eight-layer stack cap, per-asset storage. Texture autosave stores full PNGs in the checkpoint, so texture-heavy projects increase the checkpoint size.
 
 ### 2.5 IndexedDB schema
 

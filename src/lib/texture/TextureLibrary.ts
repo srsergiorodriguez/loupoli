@@ -4,6 +4,7 @@ import {
   type TextureAlphaMode,
   type TextureFilter
 } from './TextureAsset';
+import { MAX_TEXTURE_DIMENSION, MAX_TEXTURE_PIXELS } from './size';
 
 /** Small reactive-safe summary of one texture asset. */
 export interface TextureAssetSummary {
@@ -102,11 +103,18 @@ export class TextureLibrary {
     name?: string,
     filter: TextureFilter = 'nearest'
   ): TextureAsset {
-    if (!Number.isInteger(width) || width < 1 || width > 2048) {
-      throw new Error('Texture width must be an integer between 1 and 2048.');
-    }
-    if (!Number.isInteger(height) || height < 1 || height > 2048) {
-      throw new Error('Texture height must be an integer between 1 and 2048.');
+    if (
+      !Number.isInteger(width) ||
+      !Number.isInteger(height) ||
+      width < 1 ||
+      height < 1 ||
+      width > MAX_TEXTURE_DIMENSION ||
+      height > MAX_TEXTURE_DIMENSION ||
+      width * height > MAX_TEXTURE_PIXELS
+    ) {
+      throw new Error(
+        `Texture dimensions must be whole pixels up to ${MAX_TEXTURE_DIMENSION} px and within the texture memory budget.`
+      );
     }
     const id = assetId();
     const nextName = name?.trim() || `Texture ${this.assets.size + 1}`;
@@ -212,8 +220,9 @@ export class TextureLibrary {
         !Number.isInteger(record.height) ||
         record.width < 1 ||
         record.height < 1 ||
-        record.width > 2048 ||
-        record.height > 2048
+        record.width > MAX_TEXTURE_DIMENSION ||
+        record.height > MAX_TEXTURE_DIMENSION ||
+        record.width * record.height > MAX_TEXTURE_PIXELS
       ) {
         throw new Error('Decoded texture dimensions are invalid.');
       }

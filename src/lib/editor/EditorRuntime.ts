@@ -64,6 +64,7 @@ import {
 import { drawUvCanvas, drawUvWireframe } from '../uv/uvCanvas';
 import { extractUvCharts } from '../geometry/uvCharts';
 import { buildBakeAtlasPlan } from '../uv/bakeAtlas';
+import { bakeAtlasTargetSize } from '../texture/size';
 import { resampleTextureDataForBakeAtlas } from '../texture/bakeAtlasTexture';
 import { LscmError, unwrapUvCharts } from '../geometry/lscm';
 import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
@@ -805,6 +806,7 @@ export class EditorRuntime {
       textureLayers: this.textureStack.summaries(),
       textureActiveId: this.textureStack.activeLayerId,
       textureSize: this.textureStack.width,
+      textureHeight: this.textureStack.height,
       modifiers: active ? active.modifiers.map((modifier) => ({ ...modifier })) : [],
       modifiersActive: evaluated?.modifiersActive ?? false,
       modifierError: evaluated?.error ?? null,
@@ -2145,14 +2147,30 @@ export class EditorRuntime {
     if (next === this.paintZoom) {
       return;
     }
-    const current = paintBounds(width, height, 24, this.paintViewState());
-    const u = (anchorX - current.x) / current.size;
-    const v = (anchorY - current.y) / current.size;
-    const baseSize = Math.max(1, Math.min(width, height) - 48);
+    const texture = this.textureStack;
+    const current = paintBounds(
+      width,
+      height,
+      texture.width,
+      texture.height,
+      24,
+      this.paintViewState()
+    );
+    const u = (anchorX - current.x) / current.width;
+    const v = (anchorY - current.y) / current.height;
     this.paintZoom = next;
-    const size = baseSize * next;
-    this.paintPanX = anchorX - u * size - (width - size) / 2;
-    this.paintPanY = anchorY - v * size - (height - size) / 2;
+    const nextBounds = paintBounds(
+      width,
+      height,
+      texture.width,
+      texture.height,
+      24,
+      { zoom: next, panX: 0, panY: 0 }
+    );
+    this.paintPanX =
+      anchorX - u * nextBounds.width - (width - nextBounds.width) / 2;
+    this.paintPanY =
+      anchorY - v * nextBounds.height - (height - nextBounds.height) / 2;
     this.uvRevision += 1;
     this.publish();
   }
@@ -2393,12 +2411,19 @@ export class EditorRuntime {
       return;
     }
     const { context } = prepared;
-    const bounds = paintBounds(width, height, 24, this.paintViewState());
+    const bounds = paintBounds(
+      width,
+      height,
+      this.textureStack.width,
+      this.textureStack.height,
+      24,
+      this.paintViewState()
+    );
     const textureRect = {
       x: bounds.x,
       y: bounds.y,
-      width: bounds.size,
-      height: bounds.size
+      width: bounds.width,
+      height: bounds.height
     };
     drawTextureChecker(context, textureRect);
     drawTextureSurface(context, this.textureStack, textureRect);
@@ -2406,7 +2431,7 @@ export class EditorRuntime {
     if (this.paintUvOverlay && node) {
       context.save();
       context.beginPath();
-      context.rect(bounds.x, bounds.y, bounds.size, bounds.size);
+      context.rect(bounds.x, bounds.y, bounds.width, bounds.height);
       context.clip();
       const rootStyle = getComputedStyle(document.documentElement);
       const wire =
@@ -2419,8 +2444,8 @@ export class EditorRuntime {
         context,
         node.mesh,
         (u, v) => [
-          bounds.x + u * bounds.size,
-          bounds.y + (1 - v) * bounds.size
+          bounds.x + u * bounds.width,
+          bounds.y + (1 - v) * bounds.height
         ],
         {
           color: wire,
@@ -2438,7 +2463,7 @@ export class EditorRuntime {
         .getPropertyValue('--border-subtle')
         .trim() || 'rgba(255,255,255,.12)';
     context.lineWidth = 1;
-    context.strokeRect(bounds.x, bounds.y, bounds.size, bounds.size);
+    context.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
   /** Update the 3D surface brush cursor during hover. */
@@ -2763,6 +2788,7 @@ export class EditorRuntime {
       width,
       height,
       asset.width,
+      asset.height,
       24,
       this.paintViewState()
     );
@@ -5640,10 +5666,7 @@ export class EditorRuntime {
       this.publish();
       return;
     }
-    const targetSize = Math.min(
-      2048,
-      Math.max(64, Math.max(source.width, source.height) * 2)
-    );
+    const target = bakeAtlasTargetSize(source.width, source.height);
     this.bakeBusy = true;
     this.bakeAtlasPrompt = null;
     this.projectError = null;
@@ -5657,7 +5680,11 @@ export class EditorRuntime {
           'This texture already has eight layers. Remove a layer before creating a bake atlas.'
         );
       }
-      const plan = buildBakeAtlasPlan(node.mesh, targetSize);
+      const plan = buildBakeAtlasPlan(
+        node.mesh,
+        target.width,
+        target.height
+      );
       if (!plan) {
         throw new Error(
           'The UV charts could not be packed into a unique atlas at the supported texture size.'
@@ -5670,8 +5697,8 @@ export class EditorRuntime {
         source.textureFilter
       );
       asset = this.textureLibrary.build(
-        plan.targetSize,
-        plan.targetSize,
+        plan.width,
+        plan.height,
         `${source.name} Bake`.slice(0, 64),
         source.textureFilter
       );
@@ -5732,7 +5759,7 @@ export class EditorRuntime {
       this.notify(
         'success',
         'Bake atlas ready',
-        `${plan.targetSize}² · Bake lighting to finish`
+        `${plan.width}×${plan.height} · Bake lighting to finish`
       );
     } catch (error) {
       if (!inserted) {
@@ -5773,21 +5800,26 @@ export class EditorRuntime {
         this.publish();
         return;
       }
-      const targetSize = Math.min(
-        2048,
-        Math.max(64, Math.max(source.width, source.height) * 2)
-      );
+      const target = bakeAtlasTargetSize(source.width, source.height);
+      const plan = buildBakeAtlasPlan(bakeMesh, target.width, target.height);
+      if (!plan) {
+        this.projectError =
+          'The UV layers could not be packed into a bake atlas at the supported texture size.';
+        this.publish();
+        return;
+      }
       this.bakeAtlasPrompt = {
         nodeId: node.id,
         nodeName: node.name,
         textureName: source.name,
         fromWidth: source.width,
         fromHeight: source.height,
-        targetSize,
+        targetWidth: plan.width,
+        targetHeight: plan.height,
         layerCount: source.layerCount,
-        chartCount: extractUvCharts(bakeMesh).length,
+        chartCount: plan.charts.length,
         estimatedBytes:
-          targetSize * targetSize * 4 * Math.max(1, source.layerCount)
+          plan.width * plan.height * 4 * Math.max(1, source.layerCount)
       };
       this.projectError = null;
       this.publish();

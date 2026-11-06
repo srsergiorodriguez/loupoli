@@ -1,4 +1,5 @@
 import type { BakeAtlasChart, BakeAtlasPlan } from '../uv/bakeAtlas';
+import { bleedImageData, erodeImageEdges } from './bleed';
 import type {
   TextureAssetData,
   TextureFilter,
@@ -13,15 +14,16 @@ interface ChartDraw {
 /** Source-image to destination-pixel matrix for one bake-atlas chart. */
 export function bakeChartImageTransform(
   chart: BakeAtlasChart,
-  targetSize: number,
+  targetWidth: number,
+  targetHeight: number,
   sourceWidth: number,
   sourceHeight: number
 ): readonly [number, number, number, number, number, number] {
-  const a = (chart.scale * targetSize) / sourceWidth;
-  const d = (chart.scale * targetSize) / sourceHeight;
-  const e = targetSize * (chart.originU - chart.minU * chart.scale);
+  const a = (chart.scale * targetWidth) / sourceWidth;
+  const d = (chart.scale * targetHeight) / sourceHeight;
+  const e = targetWidth * (chart.originU - chart.minU * chart.scale);
   const f =
-    targetSize *
+    targetHeight *
     (1 - (chart.originV + (1 - chart.minV) * chart.scale));
   return [a, 0, 0, d, e, f] as const;
 }
@@ -40,11 +42,11 @@ function buildChartDraws(
       face.forEach((uv, index) => {
         const x =
           (chart.originU + (uv[0] - chart.minU) * chart.scale) *
-          plan.targetSize;
+          plan.width;
         const y =
           (1 -
             (chart.originV + (uv[1] - chart.minV) * chart.scale)) *
-          plan.targetSize;
+          plan.height;
         if (index === 0) {
           path.moveTo(x, y);
         } else {
@@ -57,7 +59,8 @@ function buildChartDraws(
       path,
       transform: bakeChartImageTransform(
         chart,
-        plan.targetSize,
+        plan.width,
+        plan.height,
         sourceWidth,
         sourceHeight
       )
@@ -87,13 +90,13 @@ export async function resampleTextureDataForBakeAtlas(
     const bitmap = await createImageBitmap(
       new Blob([pngBuffer], { type: 'image/png' })
     );
-    const canvas = new OffscreenCanvas(plan.targetSize, plan.targetSize);
+    const canvas = new OffscreenCanvas(plan.width, plan.height);
     const context = canvas.getContext('2d');
     if (!context) {
       bitmap.close();
       throw new Error('Unable to create the bake atlas layer.');
     }
-    context.clearRect(0, 0, plan.targetSize, plan.targetSize);
+    context.clearRect(0, 0, plan.width, plan.height);
     context.imageSmoothingEnabled = filter === 'linear';
     for (const draw of draws) {
       context.save();
@@ -102,6 +105,15 @@ export async function resampleTextureDataForBakeAtlas(
       context.drawImage(bitmap, 0, 0);
       context.restore();
     }
+    const pixels = context.getImageData(
+      0,
+      0,
+      plan.width,
+      plan.height
+    );
+    erodeImageEdges(pixels.data, plan.width, plan.height);
+    bleedImageData(pixels.data, plan.width, plan.height);
+    context.putImageData(pixels, 0, 0);
     const blob = await canvas.convertToBlob({ type: 'image/png' });
     bitmap.close();
     layers.push({
@@ -110,8 +122,8 @@ export async function resampleTextureDataForBakeAtlas(
     });
   }
   return {
-    width: plan.targetSize,
-    height: plan.targetSize,
+    width: plan.width,
+    height: plan.height,
     activeId: data.activeId,
     layers
   };

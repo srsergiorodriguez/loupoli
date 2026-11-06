@@ -75,6 +75,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   textureLayers: [],
   textureActiveId: null,
   textureSize: 0,
+  textureHeight: 0,
   activeTransform: null,
   globalTransform: null,
   transformOrientation: 'local',

@@ -29,6 +29,10 @@ import type {
   TextureLayerRole
 } from '../texture/TextureAsset';
 import type { TextureAssetRecord } from '../texture/TextureLibrary';
+import {
+  MAX_TEXTURE_DIMENSION,
+  MAX_TEXTURE_PIXELS
+} from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
 const FORMAT_VERSION = 4;
@@ -49,7 +53,6 @@ const MAX_FACES = 2_000_000;
 const MAX_NAME_LENGTH = 200;
 const MAX_TEXTURE_LAYERS = 8;
 const MAX_TEXTURE_ASSETS = 32;
-const MAX_TEXTURE_DIMENSION = 2048;
 const MAX_TEXTURE_PNG_BYTES = 32 * 1024 * 1024;
 
 /** Project-level settings saved with a document but not part of its DCEL. */
@@ -554,6 +557,7 @@ function buildTextureManifest(
       asset.height < 1 ||
       asset.width > MAX_TEXTURE_DIMENSION ||
       asset.height > MAX_TEXTURE_DIMENSION ||
+      asset.width * asset.height > MAX_TEXTURE_PIXELS ||
       (asset.filter !== 'nearest' && asset.filter !== 'linear') ||
       !Array.isArray(asset.layers) ||
       asset.layers.length < 1 ||
@@ -1010,6 +1014,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
       (asset.height as number) < 1 ||
       (asset.width as number) > MAX_TEXTURE_DIMENSION ||
       (asset.height as number) > MAX_TEXTURE_DIMENSION ||
+      (asset.width as number) * (asset.height as number) > MAX_TEXTURE_PIXELS ||
       (asset.filter !== 'nearest' && asset.filter !== 'linear') ||
       !Array.isArray(asset.layers) ||
       asset.layers.length < 1 ||

@@ -3,6 +3,7 @@ import type { MeshNode } from '../scene/MeshNode';
 import type { LightSummary } from '../scene/SceneLight';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
+import { bleedImageData } from '../texture/bleed';
 
 /** Direct-light bake inputs, including optional world-space shadow occluders. */
 export interface BakeLightingInput {
@@ -49,6 +50,42 @@ function positionAt(
   const y = mesh.positions[vertex * 3 + 1];
   const z = mesh.positions[vertex * 3 + 2];
   return new Vector3(x, y, z).applyMatrix4(matrix);
+}
+
+
+/**
+ * Decide whether a closed mesh's authored winding needs a global inversion.
+ *
+ * Per-face center tests are unsafe on concave meshes: an inner face can point
+ * toward the average center while still being an outward surface. Signed
+ * volume tests the whole closed shell instead, so concavities preserve their
+ * authored normals. Open meshes keep authored winding because volume is not
+ * meaningful for them.
+ */
+export function bakeNormalSign(mesh: HalfEdgeMesh, matrix: Matrix4): 1 | -1 {
+  if (mesh.boundaryEdgeCount > 0) {
+    return 1;
+  }
+  let volume = 0;
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const first = mesh.faceHalfEdge[face];
+    const loop: number[] = [];
+    let halfEdge = first;
+    do {
+      loop.push(halfEdge);
+      halfEdge = mesh.heNext[halfEdge];
+    } while (halfEdge !== first && loop.length < 64);
+    if (loop.length < 3) {
+      continue;
+    }
+    const a = positionAt(mesh, loop[0], matrix);
+    for (let corner = 1; corner < loop.length - 1; corner += 1) {
+      const b = positionAt(mesh, loop[corner], matrix);
+      const c = positionAt(mesh, loop[corner + 1], matrix);
+      volume += a.dot(new Vector3().crossVectors(b, c)) / 6;
+    }
+  }
+  return volume < -1e-8 ? -1 : 1;
 }
 
 /**
@@ -360,20 +397,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       position: new Vector3(...light.position)
     }));
   let covered = false;
-  const meshCenter = new Vector3();
-  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
-    meshCenter.add(
-      new Vector3(
-        mesh.positions[vertex * 3],
-        mesh.positions[vertex * 3 + 1],
-        mesh.positions[vertex * 3 + 2]
-      ).applyMatrix4(matrix)
-    );
-  }
-  if (mesh.vertexCount > 0) {
-    meshCenter.multiplyScalar(1 / mesh.vertexCount);
-  }
-
+  const normalSign = bakeNormalSign(mesh, matrix);
   for (let face = 0; face < mesh.faceCount; face += 1) {
     const first = mesh.faceHalfEdge[face];
     const loop: number[] = [];
@@ -393,17 +417,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
     if (normal.lengthSq() < 1e-8) {
       continue;
     }
-    const faceCenter = new Vector3();
-    for (const position of world) {
-      faceCenter.add(position);
-    }
-    faceCenter.multiplyScalar(1 / world.length);
-    // Most low-poly meshes are closed; make outward normals deterministic even
-    // when the source face winding is inward. Open surfaces have a near-zero
-    // center offset and retain their authored winding.
-    if (normal.dot(faceCenter.sub(meshCenter)) < 0) {
-      normal.negate();
-    }
+    normal.multiplyScalar(normalSign);
     const uv = loop.map((edge) => [
       mesh.heUv[edge * 2] * width,
       (1 - mesh.heUv[edge * 2 + 1]) * height
@@ -490,5 +504,10 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       }
     }
   }
-  return covered ? new ImageData(data, width, height) : null;
+  if (!covered) {
+    return null;
+  }
+  const result = new ImageData(data, width, height);
+  bleedImageData(result.data, width, height);
+  return result;
 }
