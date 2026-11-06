@@ -102,6 +102,30 @@ describe('unique bake atlas planning', () => {
     const repacked = nodes[0].mesh.withPositions(nodes[0].mesh.positions);
     repacked.setAllCornerUvs(plan!.uvs);
     expect(hasUvOverlap(repacked)).toBe(false);
+    for (const chart of plan!.charts) {
+      expect(chart.faceIndices.length).toBe(chart.faces.length);
+      const inChart = new Set(chart.faceIndices);
+      const seen = new Set<number>();
+      const stack = [chart.faceIndices[0]];
+      seen.add(chart.faceIndices[0]);
+      while (stack.length > 0) {
+        const face = stack.pop()!;
+        const start = nodes[0].mesh.faceHalfEdge[face];
+        let halfEdge = start;
+        do {
+          const twin = nodes[0].mesh.heTwin[halfEdge];
+          if (twin >= 0) {
+            const neighbor = nodes[0].mesh.heFace[twin];
+            if (inChart.has(neighbor) && !seen.has(neighbor)) {
+              seen.add(neighbor);
+              stack.push(neighbor);
+            }
+          }
+          halfEdge = nodes[0].mesh.heNext[halfEdge];
+        } while (halfEdge !== start);
+      }
+      expect(seen.size).toBe(inChart.size);
+    }
   });
 
   it('supports rectangular atlas dimensions without distortion', () => {

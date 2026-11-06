@@ -11,6 +11,7 @@ function chart(overrides: Partial<BakeAtlasChart> = {}): BakeAtlasChart {
     originV: 0,
     scale: 1,
     faces: [],
+    faceIndices: [],
     ...overrides
   };
 }

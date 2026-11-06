@@ -11,6 +11,7 @@ export interface BakeAtlasChart {
   readonly originV: number;
   readonly scale: number;
   readonly faces: readonly (readonly Vec2[])[];
+  readonly faceIndices: readonly number[];
 }
 
 /** A unique bake UV layout and the chart transforms used to resample texture. */
@@ -26,6 +27,7 @@ interface PackingUnit {
   readonly id: number;
   readonly faces: readonly (readonly Vec2[])[];
   readonly corners: readonly (readonly number[])[];
+  readonly faceIndices: readonly number[];
   readonly minU: number;
   readonly minV: number;
   readonly maxU: number;
@@ -130,7 +132,8 @@ function facesOverlap(
 function unitFromFaces(
   id: number,
   faces: readonly (readonly Vec2[])[],
-  corners: readonly (readonly number[])[]
+  corners: readonly (readonly number[])[],
+  faceIndices: readonly number[]
 ): PackingUnit | null {
   let minU = Infinity;
   let minV = Infinity;
@@ -154,7 +157,7 @@ function unitFromFaces(
   ) {
     return null;
   }
-  return { id, faces, corners, minU, minV, maxU, maxV };
+  return { id, faces, corners, faceIndices, minU, minV, maxU, maxV };
 }
 
 /**
@@ -222,6 +225,48 @@ function uvIslandFaces(mesh: HalfEdgeMesh): number[][] {
   return [...groups.values()].sort((a, b) => a[0] - b[0]);
 }
 
+/** Split local face indices into mesh-connected groups. */
+function connectedFaceGroups(
+  mesh: HalfEdgeMesh,
+  islandFaces: readonly number[],
+  localFaces: readonly number[]
+): number[][] {
+  const localByMeshFace = new Map<number, number>();
+  localFaces.forEach((local, index) => {
+    localByMeshFace.set(islandFaces[local], index);
+  });
+  const seen = new Uint8Array(localFaces.length);
+  const groups: number[][] = [];
+  for (let start = 0; start < localFaces.length; start += 1) {
+    if (seen[start] !== 0) {
+      continue;
+    }
+    const group: number[] = [];
+    const stack = [start];
+    seen[start] = 1;
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      group.push(localFaces[current]);
+      const face = islandFaces[localFaces[current]];
+      const first = mesh.faceHalfEdge[face];
+      let halfEdge = first;
+      do {
+        const twin = mesh.heTwin[halfEdge];
+        if (twin >= 0) {
+          const local = localByMeshFace.get(mesh.heFace[twin]);
+          if (local !== undefined && seen[local] === 0) {
+            seen[local] = 1;
+            stack.push(local);
+          }
+        }
+        halfEdge = mesh.heNext[halfEdge];
+      } while (halfEdge !== first);
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+
 function islandUnits(
   mesh: HalfEdgeMesh,
   islandFaces: readonly number[],
@@ -241,7 +286,7 @@ function islandUnits(
     return null;
   }
   if (faces.length === 1) {
-    const unit = unitFromFaces(startId, faces, corners);
+    const unit = unitFromFaces(startId, faces, corners, islandFaces);
     return unit ? [unit] : null;
   }
   const layers: number[][] = [];
@@ -265,24 +310,23 @@ function islandUnits(
       layers.push([face]);
     }
   }
-  if (layers.length === 1) {
-    const unit = unitFromFaces(startId, faces, corners);
-    return unit ? [unit] : null;
-  }
-  // A genuinely self-overlapping island still needs independent layers. This
-  // split never crosses a true UV island boundary.
+  // A genuinely self-overlapping island still needs independent layers, but a
+  // layer must not combine disconnected pieces from opposite body sides. Split
+  // each overlap layer into mesh-connected components before packing.
   const units: PackingUnit[] = [];
-  for (let index = 0; index < layers.length; index += 1) {
-    const faceIndices = layers[index];
-    const unit = unitFromFaces(
-      startId + index,
-      faceIndices.map((face) => faces[face]),
-      faceIndices.map((face) => corners[face])
-    );
-    if (!unit) {
-      return null;
+  for (const layer of layers) {
+    for (const component of connectedFaceGroups(mesh, islandFaces, layer)) {
+      const unit = unitFromFaces(
+        startId + units.length,
+        component.map((face) => faces[face]),
+        component.map((face) => corners[face]),
+        component.map((face) => islandFaces[face])
+      );
+      if (!unit) {
+        return null;
+      }
+      units.push(unit);
     }
-    units.push(unit);
   }
   return units;
 }
@@ -341,8 +385,9 @@ function tryPack(
  * Pack every true UV island into a unique shelf cell.
  *
  * Islands are detected by UV continuity, not seam flags alone. Each island
- * keeps its internal color arrangement; only a self-overlapping island is split
- * into separate layers.
+ * keeps its internal color arrangement. A self-overlapping island is split into
+ * non-overlapping layers, and every layer is then split into mesh-connected
+ * components so one cell never mixes unrelated body sides.
  */
 export function buildBakeAtlasPlan(
   mesh: HalfEdgeMesh,
@@ -421,7 +466,8 @@ export function buildBakeAtlasPlan(
       originU: placement.originU,
       originV: placement.originV,
       scale: placement.scale,
-      faces: unit.faces
+      faces: unit.faces,
+      faceIndices: unit.faceIndices
     });
   }
   return {
