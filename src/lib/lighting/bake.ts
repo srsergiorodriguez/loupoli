@@ -388,6 +388,63 @@ function shadowVisibility(
   return visible / count;
 }
 
+/**
+ * Remove one-texel bright cracks between dark baked faces.
+ *
+ * A bright texel with dark neighbors on opposite sides is a seam texel, not a
+ * lit surface. Replacing it from those neighbors keeps continuous shadows
+ * continuous without flattening real highlights.
+ */
+function fillBrightCracks(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  passes: number
+): void {
+  const luminance = (offset: number): number =>
+    (data[offset] + data[offset + 1] + data[offset + 2]) / 3;
+  for (let pass = 0; pass < passes; pass += 1) {
+    const source = new Uint8ClampedArray(data);
+    let changed = 0;
+    for (let y = 1; y < height - 1; y += 1) {
+      for (let x = 1; x < width - 1; x += 1) {
+        const offset = (y * width + x) * 4;
+        if (
+          source[offset + 3] < 255 ||
+          luminance(offset) < 240
+        ) {
+          continue;
+        }
+        const left = offset - 4;
+        const right = offset + 4;
+        const up = offset - width * 4;
+        const down = offset + width * 4;
+        const dark = (neighbor: number): boolean =>
+          source[neighbor + 3] > 0 && luminance(neighbor) < 100;
+        const horizontal = dark(left) && dark(right);
+        const vertical = dark(up) && dark(down);
+        if (!horizontal && !vertical) {
+          continue;
+        }
+        const donors = [
+          ...(horizontal ? [left, right] : []),
+          ...(vertical ? [up, down] : [])
+        ];
+        for (let channel = 0; channel < 3; channel += 1) {
+          data[offset + channel] = Math.round(
+            donors.reduce((sum, donor) => sum + source[donor + channel], 0) /
+              donors.length
+          );
+        }
+        changed += 1;
+      }
+    }
+    if (changed === 0) {
+      break;
+    }
+  }
+}
+
 /** Dilate a mask by a small Chebyshev radius for texture-edge padding. */
 function dilateMask(
   mask: Uint8Array,
@@ -662,12 +719,13 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
     data,
     width,
     height,
-    2,
-    dilateMask(coverageMask, width, height, 2)
+    4,
+    dilateMask(coverageMask, width, height, 4)
   );
   for (let offset = 3; offset < data.length; offset += 4) {
     data[offset] = 255;
   }
+  fillBrightCracks(data, width, height, 2);
   const softness = Math.max(
     0,
     ...lights
