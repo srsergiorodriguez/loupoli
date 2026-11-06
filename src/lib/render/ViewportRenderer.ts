@@ -472,6 +472,12 @@ export class ViewportRenderer {
     }
   }
 
+  /** Reset the orbit to the standard above-front three-quarter view. */
+  resetCameraOrientation(): void {
+    this.cameraRig.resetDefaultOrientation();
+    this.markCameraChanged();
+  }
+
   /** Frame the active node, or all nodes if there is no active node. */
   frameActiveNode(): void {
     if (this.activeGroupId !== null) {
@@ -1112,7 +1118,6 @@ export class ViewportRenderer {
       entry.target?.removeFromParent();
     }
     this.documentLights = [];
-    this.documentLightGroup.removeFromParent();
   }
 
   /** Schedule a frame after a texture composite or layer change. */

@@ -1422,6 +1422,7 @@ export class EditorRuntime {
     this.history.clear();
     this.syncScene();
     this.renderer.refreshTexture();
+    this.renderer.resetCameraOrientation();
     this.renderer.frameActiveNode();
     this.publish();
     void this.autosave.clear().then(() => this.initializePersistence());
@@ -9919,6 +9920,7 @@ export class EditorRuntime {
     this.renderer.setShadingMode(this.shading);
     this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
     this.syncScene();
+    this.renderer.resetCameraOrientation();
     this.renderer.frameActiveNode();
   }
 

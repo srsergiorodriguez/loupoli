@@ -204,6 +204,14 @@ export class CameraRig {
     this.beginTransition(-Math.PI / 2, 0);
   }
 
+  /** Snap to the standard above-front three-quarter framing orientation. */
+  resetDefaultOrientation(): void {
+    this.cancelTransition();
+    this.azimuth = INITIAL_AZIMUTH;
+    this.elevation = INITIAL_ELEVATION;
+    this.applyTransform();
+  }
+
   /** Advance an axis-view transition. Returns true while more frames are needed. */
   tick(timestamp: number): boolean {
     const transition = this.transition;
