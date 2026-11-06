@@ -1387,7 +1387,7 @@ export class EditorRuntime {
     this.document.ambientIntensity = fresh.ambientIntensity;
     this.projectName = 'Untitled';
     this.activeGroupId = null;
-    this.activeLightId = null;
+    this.activeLightId = this.document.lights[0]?.id ?? null;
     this.activeCameraId = this.document.cameras[0]?.id ?? null;
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     this.selectedNodeIds.clear();
@@ -1400,6 +1400,8 @@ export class EditorRuntime {
     this.uvPaintMode = false;
     this.activeEditor = '3d';
     this.workspace = 'model';
+    this.shading = 'lit';
+    this.renderer.setShadingMode('lit');
     this.renderer.setGridVisible(true);
     this.renderer.setSeamOverlayVisible(false);
     this.uvSelection.clear();
@@ -9901,7 +9903,7 @@ export class EditorRuntime {
     this.document.ambientIntensity = decoded.document.ambientIntensity;
     this.projectName = name;
     this.activeGroupId = null;
-    this.activeLightId = null;
+    this.activeLightId = this.document.lights[0]?.id ?? null;
     this.activeCameraId = this.document.cameras[0]?.id ?? null;
     this.activeNodeId = this.document.nodes[0]?.id ?? null;
     this.selectedNodeIds.clear();
