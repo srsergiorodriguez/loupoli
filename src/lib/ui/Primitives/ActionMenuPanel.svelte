@@ -22,13 +22,29 @@
       }
     };
     const closeOnLayout = (): void => onClose();
+    const closeOnScroll = (event: Event): void => {
+      if (event.target instanceof Node && host.contains(event.target)) {
+        return;
+      }
+      onClose();
+    };
+    const margin = 8;
+    const rect = host.getBoundingClientRect();
+    host.style.left = `${Math.max(
+      margin,
+      Math.min(window.innerWidth - rect.width - margin, x)
+    )}px`;
+    host.style.top = `${Math.max(
+      margin,
+      Math.min(window.innerHeight - rect.height - margin, y)
+    )}px`;
     document.addEventListener('pointerdown', outside);
     window.addEventListener('resize', closeOnLayout);
-    window.addEventListener('scroll', closeOnLayout, true);
+    window.addEventListener('scroll', closeOnScroll, true);
     return () => {
       document.removeEventListener('pointerdown', outside);
       window.removeEventListener('resize', closeOnLayout);
-      window.removeEventListener('scroll', closeOnLayout, true);
+      window.removeEventListener('scroll', closeOnScroll, true);
     };
   });
 
@@ -68,7 +84,11 @@
   .action-menu-items {
     position: fixed;
     z-index: var(--z-popover);
+    box-sizing: border-box;
     width: 240px;
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 6px;
     border: var(--hairline) solid var(--border-strong);
     border-radius: var(--radius-md);

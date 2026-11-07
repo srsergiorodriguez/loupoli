@@ -90,6 +90,8 @@ All tooltips come from the command registry. Format: `Label — Shortcut` when a
 - Hover is supplemental. Touch users must be able to identify every control without hover.
 
 
+Texture asset actions use visible commands: New and Duplicate sit together; Delete texture is a separate end-aligned danger action, disabled while assigned or last. Layer-local actions (including Import image and effect creation) live under Add layer. Do not use a three-dot asset menu for these actions.
+
 ## 9. Shared UI contracts
 
 These are mandatory reuse rules. A new surface that duplicates one of these patterns is incomplete.

@@ -14,7 +14,6 @@
   import ExportObjDialog from './ExportObjDialog.svelte';
   import NewTextureDialog from './NewTextureDialog.svelte';
   import type { ObjExportScope } from '../../io/obj';
-  import ThreeDotMenu from '../Primitives/ThreeDotMenu.svelte';
   import InlineNameField from '../Primitives/InlineNameField.svelte';
   import OutlinerRow from '../Primitives/OutlinerRow.svelte';
   import {
@@ -24,6 +23,7 @@
   } from './inspectorLayout';
   import InspectorSection from './InspectorSection.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
+  import type { TextureEffect } from '../../texture/effects';
   import {
     GRID_SNAP_STEPS,
     type AxisLock,
@@ -160,6 +160,20 @@
     await session.importTextureImage(file, file.name.replace(/\.[^.]+$/, ''));
     input.value = '';
   }
+  const activeTextureEffect = $derived(
+    activeTextureLayer?.kind === 'effect' ? activeTextureLayer.effect ?? null : null
+  );
+
+  function patchActiveEffect(patch: Record<string, unknown>): void {
+    if (!activeTextureLayer?.effect) {
+      return;
+    }
+    session.setTextureEffect(activeTextureLayer.id, {
+      ...activeTextureLayer.effect,
+      ...patch
+    } as TextureEffect);
+  }
+
   const textureLayersTopFirst = $derived(
     textureLayers
       .map((layer, index) => ({ layer, index }))
@@ -2037,6 +2051,12 @@
               ]}
             />
             <ActionButton
+              label="Duplicate"
+              icon="copy"
+              disabled={session.snapshot.fileBusy}
+              onActivate={() => void session.duplicateActiveTextureAsset()}
+            />
+            <ActionButton
               label={selectionUsesActiveTexture ? 'Unassign' : 'Assign'}
               icon={selectionUsesActiveTexture ? 'close' : 'texture-wire'}
               onActivate={() =>
@@ -2045,30 +2065,6 @@
                     ? null
                     : session.snapshot.textureAssetId
                 )}
-            />
-            <span class="scene-action-spacer"></span>
-            <ThreeDotMenu
-              menuTitle="Texture actions"
-              options={[
-                {
-                  label: 'Duplicate',
-                  icon: 'open',
-                  onSelect: () => session.duplicateActiveTextureAsset()
-                },
-                {
-                  label: 'Import image',
-                  icon: 'image',
-                  onSelect: () => textureImportInput?.click()
-                },
-                {
-                  label: 'Delete texture',
-                  icon: 'trash',
-                  destructive: true,
-                  separatorBefore: true,
-                  disabled: textureUsage > 0 || textureAssets.length <= 1,
-                  onSelect: () => session.deleteActiveTextureAsset()
-                }
-              ]}
             />
           </ActionRow>
           <div class="texture-property-pair">
@@ -2096,6 +2092,15 @@
                 )}
             />
           </div>
+          <ActionRow align="end">
+            <ActionButton
+              label="Delete texture"
+              icon="trash"
+              variant="danger"
+              disabled={textureUsage > 0 || textureAssets.length <= 1}
+              onActivate={() => session.deleteActiveTextureAsset()}
+            />
+          </ActionRow>
         </div>
 
         <div class="texture-block">
@@ -2125,6 +2130,22 @@
                   icon: 'image',
                   separatorBefore: true,
                   onSelect: () => textureImportInput?.click()
+                },
+                {
+                  label: 'Tone effect',
+                  icon: 'sliders',
+                  separatorBefore: true,
+                  onSelect: () => session.addTextureEffect('tone')
+                },
+                {
+                  label: 'Posterize effect',
+                  icon: 'checker',
+                  onSelect: () => session.addTextureEffect('posterize')
+                },
+                {
+                  label: 'Dither effect',
+                  icon: 'rows',
+                  onSelect: () => session.addTextureEffect('dither')
                 }
               ]}
             />
@@ -2152,11 +2173,14 @@
                   class:transparent={layer.pattern === 'transparent'}
                   class:checker={layer.pattern === 'checker'}
                   class:raster={layer.kind === 'raster'}
+                  class:effect={layer.kind === 'effect'}
                   style:background={layer.pattern === 'solid' ? layer.color : undefined}
                 ></span>
                 <span class="texture-layer-name">{layer.name}</span>
                 <span class="texture-layer-meta">
-                  {layer.kind === 'raster' ? 'raster' : layer.pattern} · {layer.role}
+                  {layer.kind === 'effect'
+                    ? `effect · ${layer.effect?.type ?? '—'}`
+                    : `${layer.kind === 'raster' ? 'raster' : layer.pattern} · ${layer.role}`}
                 </span>
               </OutlinerRow>
             {/each}
@@ -2182,7 +2206,11 @@
                   session.renameTextureLayer(activeTextureLayer.id, value)}
               />
               <span class="texture-kind">
-                {activeTextureLayer.kind === 'raster' ? 'raster' : activeTextureLayer.pattern}
+                {activeTextureLayer.kind === 'effect'
+                  ? `effect · ${activeTextureLayer.effect?.type ?? '—'}`
+                  : activeTextureLayer.kind === 'raster'
+                    ? 'raster'
+                    : activeTextureLayer.pattern}
               </span>
 
             </div>
@@ -2209,43 +2237,127 @@
               onChange={(value) =>
                 session.setTextureLayerOpacity(activeTextureLayer.id, value)}
             />
-            <div class="texture-property-pair">
-              <SelectField
-                label="Blend"
-                value={activeTextureLayer.blendMode}
-                options={[
-                  { value: 'normal', label: 'Normal' },
-                  { value: 'multiply', label: 'Multiply' },
-                  { value: 'screen', label: 'Screen' }
-                ]}
-                onChange={(value) =>
-                  session.setTextureLayerBlendMode(
-                    activeTextureLayer.id,
-                    value as 'normal' | 'multiply' | 'screen'
-                  )}
-              />
-              <SelectField
-                label="Role"
-                value={activeTextureLayer.role}
-                options={[
-                  { value: 'color', label: 'Color' },
-                  { value: 'detail', label: 'Detail' },
-                  { value: 'lighting', label: 'Lighting' }
-                ]}
-                onChange={(value) =>
-                  session.setTextureLayerRole(
-                    activeTextureLayer.id,
-                    value as 'color' | 'detail' | 'lighting'
-                  )}
-              />
-            </div>
-            {#if activeTextureLayer.kind === 'fill' && activeTextureLayer.pattern === 'solid'}
-              <ColorField
-                label="Color"
-                value={activeTextureLayer.color}
-                onChange={(value) =>
-                  session.setTextureLayerColor(activeTextureLayer.id, value)}
-              />
+            {#if activeTextureLayer.kind === 'effect' && activeTextureEffect}
+              {#if activeTextureEffect.type === 'tone'}
+                <SliderField
+                  label="Exposure"
+                  value={activeTextureEffect.exposure}
+                  min={-2}
+                  max={2}
+                  step={0.05}
+                  precision={2}
+                  onChange={(value) => patchActiveEffect({ exposure: value })}
+                />
+                <SliderField
+                  label="Contrast"
+                  value={activeTextureEffect.contrast}
+                  min={-1}
+                  max={1}
+                  step={0.01}
+                  precision={2}
+                  onChange={(value) => patchActiveEffect({ contrast: value })}
+                />
+                <SliderField
+                  label="Gamma"
+                  value={activeTextureEffect.gamma}
+                  min={0.2}
+                  max={3}
+                  step={0.05}
+                  precision={2}
+                  onChange={(value) => patchActiveEffect({ gamma: value })}
+                />
+              {:else if activeTextureEffect.type === 'posterize'}
+                <SliderField
+                  label="Levels"
+                  value={activeTextureEffect.levels}
+                  min={2}
+                  max={32}
+                  step={1}
+                  precision={0}
+                  onChange={(value) => patchActiveEffect({ levels: value })}
+                />
+              {:else}
+                <SelectField
+                  label="Method"
+                  value={activeTextureEffect.mode}
+                  options={[
+                    { value: 'ordered', label: 'Ordered' },
+                    { value: 'diffusion', label: 'Error diffusion' }
+                  ]}
+                  onChange={(value) => patchActiveEffect({ mode: value })}
+                />
+                {#if activeTextureEffect.mode === 'ordered'}
+                  <SelectField
+                    label="Matrix"
+                    value={String(activeTextureEffect.matrix)}
+                    options={[
+                      { value: '2', label: '2 × 2' },
+                      { value: '4', label: '4 × 4' },
+                      { value: '8', label: '8 × 8' }
+                    ]}
+                    onChange={(value) =>
+                      patchActiveEffect({ matrix: Number(value) })}
+                  />
+                {/if}
+                <SliderField
+                  label="Levels"
+                  value={activeTextureEffect.levels}
+                  min={2}
+                  max={32}
+                  step={1}
+                  precision={0}
+                  onChange={(value) => patchActiveEffect({ levels: value })}
+                />
+                <Switch
+                  label="Monochrome"
+                  description="Convert to a grayscale palette before dithering."
+                  checked={activeTextureEffect.monochrome}
+                  onChange={(value) => patchActiveEffect({ monochrome: value })}
+                />
+              {/if}
+              <p class="hint">
+                Applied to the layers below in sRGB. Alpha is preserved.
+                Select a raster layer to paint.
+              </p>
+            {:else}
+              <div class="texture-property-pair">
+                <SelectField
+                  label="Blend"
+                  value={activeTextureLayer.blendMode}
+                  options={[
+                    { value: 'normal', label: 'Normal' },
+                    { value: 'multiply', label: 'Multiply' },
+                    { value: 'screen', label: 'Screen' }
+                  ]}
+                  onChange={(value) =>
+                    session.setTextureLayerBlendMode(
+                      activeTextureLayer.id,
+                      value as 'normal' | 'multiply' | 'screen'
+                    )}
+                />
+                <SelectField
+                  label="Role"
+                  value={activeTextureLayer.role}
+                  options={[
+                    { value: 'color', label: 'Color' },
+                    { value: 'detail', label: 'Detail' },
+                    { value: 'lighting', label: 'Lighting' }
+                  ]}
+                  onChange={(value) =>
+                    session.setTextureLayerRole(
+                      activeTextureLayer.id,
+                      value as 'color' | 'detail' | 'lighting'
+                    )}
+                />
+              </div>
+              {#if activeTextureLayer.kind === 'fill' && activeTextureLayer.pattern === 'solid'}
+                <ColorField
+                  label="Color"
+                  value={activeTextureLayer.color}
+                  onChange={(value) =>
+                    session.setTextureLayerColor(activeTextureLayer.id, value)}
+                />
+              {/if}
             {/if}
           </div>
         {/if}
@@ -2896,6 +3008,15 @@
     border: var(--hairline) solid var(--border-strong);
     border-radius: 2px;
     background: var(--bg-input);
+  }
+
+  .texture-layer-swatch.effect {
+    border-color: var(--accent-primary);
+    background: linear-gradient(
+      135deg,
+      var(--accent-primary) 0 48%,
+      var(--bg-input) 52% 100%
+    );
   }
 
   .texture-layer-swatch.checker,

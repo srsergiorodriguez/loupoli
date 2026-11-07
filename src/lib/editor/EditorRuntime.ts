@@ -132,6 +132,10 @@ import { BakeLightingCommand } from './commands/BakeLightingCommand';
 import { CompositeCommand } from './commands/CompositeCommand';
 import { WithShadingCommand } from './commands/WithShadingCommand';
 import { bakeLighting, hasUvOverlap, uvCoverage } from '../lighting/bake';
+import type {
+  TextureEffect,
+  TextureEffectType
+} from '../texture/effects';
 import {
   CreateTextureAssetCommand,
   DeleteTextureAssetCommand,
@@ -1038,6 +1042,20 @@ export class EditorRuntime {
     });
   }
 
+  /** Add a non-destructive post-processing layer at the top. */
+  addTextureEffect(type: TextureEffectType): void {
+    this.commitTextureMutation('Add texture effect', () => {
+      this.textureStack.addEffectLayer(type);
+    });
+  }
+
+  /** Update one effect layer's bounded parameters. */
+  setTextureEffect(id: string, effect: TextureEffect): void {
+    this.commitTextureMutation('Change texture effect', () => {
+      this.textureStack.setEffect(id, effect);
+    });
+  }
+
   setTextureLayerPattern(id: string, pattern: TextureLayerPattern): void {
     this.commitTextureMutation('Change layer type', () => {
       this.textureStack.setPattern(id, pattern);
@@ -1139,6 +1157,7 @@ export class EditorRuntime {
     this.history.execute(
       new TextureAssetCommand(this.textureStack, before, after, label)
     );
+    this.autosave.markTextureDirty();
     this.renderer.refreshTexture();
     this.publish();
   }

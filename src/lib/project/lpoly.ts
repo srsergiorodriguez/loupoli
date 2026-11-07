@@ -30,6 +30,10 @@ import type {
 } from '../texture/TextureAsset';
 import type { TextureAssetRecord } from '../texture/TextureLibrary';
 import {
+  normalizeTextureEffect,
+  type TextureEffect
+} from '../texture/effects';
+import {
   MAX_TEXTURE_DIMENSION,
   MAX_TEXTURE_PIXELS
 } from '../texture/size';
@@ -171,8 +175,9 @@ interface TextureLayerManifest {
   readonly color: string;
   readonly pattern: 'checker' | 'solid';
   readonly blendMode?: TextureBlendMode;
-  readonly kind?: 'fill' | 'raster';
+  readonly kind?: 'fill' | 'raster' | 'effect';
   readonly role?: TextureLayerRole;
+  readonly effect?: TextureEffect | null;
   readonly pngLength: number;
 }
 
@@ -582,11 +587,22 @@ function buildTextureManifest(
         typeof layer.color !== 'string' ||
         layer.color.length > 32 ||
         (layer.pattern !== 'checker' && layer.pattern !== 'solid' && layer.pattern !== 'transparent') ||
+        (layer.kind !== undefined &&
+          layer.kind !== 'fill' &&
+          layer.kind !== 'raster' &&
+          layer.kind !== 'effect') ||
         !(layer.png instanceof Uint8Array) ||
         layer.png.byteLength < 1 ||
         layer.png.byteLength > MAX_TEXTURE_PNG_BYTES
       ) {
         throw new Error('Texture layer metadata is invalid.');
+      }
+      const effect =
+        layer.kind === 'effect'
+          ? normalizeTextureEffect(layer.effect)
+          : null;
+      if (layer.kind === 'effect' && !effect) {
+        throw new Error('Texture effect layer metadata is invalid.');
       }
       layerIds.add(layer.id);
       totalPngBytes += layer.png.byteLength;
@@ -600,6 +616,7 @@ function buildTextureManifest(
         blendMode: layer.blendMode,
         kind: layer.kind,
         role: layer.role,
+        ...(effect ? { effect } : {}),
         pngLength: layer.png.byteLength
       };
     });
@@ -1045,7 +1062,8 @@ function validateTextureManifest(value: unknown): TextureManifest {
         (layer.pattern !== 'checker' && layer.pattern !== 'solid' && layer.pattern !== 'transparent') ||
         (layer.kind !== undefined &&
           layer.kind !== 'fill' &&
-          layer.kind !== 'raster') ||
+          layer.kind !== 'raster' &&
+          layer.kind !== 'effect') ||
         (layer.role !== undefined &&
           layer.role !== 'color' &&
           layer.role !== 'detail' &&
@@ -1054,6 +1072,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
           layer.blendMode !== 'normal' &&
           layer.blendMode !== 'multiply' &&
           layer.blendMode !== 'screen') ||
+        (layer.kind === 'effect' && !normalizeTextureEffect(layer.effect)) ||
         !Number.isInteger(layer.pngLength) ||
         (layer.pngLength as number) < 1 ||
         (layer.pngLength as number) > MAX_TEXTURE_PNG_BYTES
@@ -1069,8 +1088,17 @@ function validateTextureManifest(value: unknown): TextureManifest {
         color: layer.color,
         pattern: layer.pattern,
         blendMode: layer.blendMode ?? 'normal',
-        kind: layer.kind === 'raster' ? 'raster' : 'fill',
+        kind:
+          layer.kind === 'raster'
+            ? 'raster'
+            : layer.kind === 'effect'
+              ? 'effect'
+              : 'fill',
         role: layer.role === 'lighting' || layer.role === 'detail' ? layer.role : 'color',
+        effect:
+          layer.kind === 'effect'
+            ? normalizeTextureEffect(layer.effect)
+            : null,
         pngLength: layer.pngLength as number
       };
     });
@@ -1368,6 +1396,10 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
           blendMode: layer.blendMode ?? 'normal',
           kind: layer.kind ?? 'fill',
           role: layer.role === 'lighting' || layer.role === 'detail' ? layer.role : 'color',
+          effect:
+            layer.kind === 'effect'
+              ? normalizeTextureEffect(layer.effect)
+              : null,
           png: bytes.slice(cursor, cursor + layer.pngLength)
         });
         cursor += layer.pngLength;

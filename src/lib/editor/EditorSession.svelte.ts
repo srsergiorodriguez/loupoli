@@ -665,6 +665,19 @@ export class EditorSession {
     this.runtime?.addTextureLayer(pattern);
   }
 
+  addTextureEffect(
+    type: 'tone' | 'posterize' | 'dither'
+  ): void {
+    this.runtime?.addTextureEffect(type);
+  }
+
+  setTextureEffect(
+    id: string,
+    effect: import('../texture/effects').TextureEffect
+  ): void {
+    this.runtime?.setTextureEffect(id, effect);
+  }
+
   setTextureLayerPattern(
     id: string,
     pattern: 'solid' | 'checker' | 'transparent'

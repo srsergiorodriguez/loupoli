@@ -109,6 +109,54 @@ describe('.lpoli v4', () => {
     expect(decoded.document.nodes[0].name).toBe('QuadSphere');
   });
 
+  it('round-trips non-destructive effect layer metadata', () => {
+    const document = makeDocument();
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 5, 6, 7, 8]);
+    const bytes = encodeLpoly(document, SETTINGS, [
+      {
+        id: 'texasset-effect',
+        name: 'Effect atlas',
+        width: 64,
+        height: 64,
+        filter: 'nearest',
+        alphaMode: 'opaque',
+        activeId: 'texlayer-effect',
+        layers: [
+          {
+            id: 'texlayer-base',
+            name: 'Base',
+            visible: true,
+            opacity: 1,
+            color: '#ffffff',
+            pattern: 'solid',
+            blendMode: 'normal',
+            kind: 'fill',
+            role: 'color',
+            effect: null,
+            png
+          },
+          {
+            id: 'texlayer-effect',
+            name: 'Posterize',
+            visible: true,
+            opacity: 1,
+            color: '#ffffff',
+            pattern: 'transparent',
+            blendMode: 'normal',
+            kind: 'effect',
+            role: 'color',
+            effect: { type: 'posterize', levels: 5 },
+            png
+          }
+        ]
+      }
+    ]);
+    const decoded = decodeLpoly(bytes);
+    const effect = decoded.textures?.[0].layers[1];
+    expect(effect?.kind).toBe('effect');
+    expect(effect?.effect).toEqual({ type: 'posterize', levels: 5 });
+  });
+
   it('round-trips a full eight-layer texture asset', () => {
     const document = makeDocument();
     document.nodes[0].textureId = 'texasset-heavy';

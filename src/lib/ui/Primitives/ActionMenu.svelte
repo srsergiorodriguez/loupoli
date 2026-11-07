@@ -57,7 +57,12 @@
     }
     const rect = trigger.getBoundingClientRect();
     const width = 240;
-    const height = options.length * 44 + 8;
+    const separators = options.filter((option) => option.separatorBefore).length;
+    const height =
+      options.length * 44 +
+      separators * 13 +
+      (menuTitle ? 30 : 0) +
+      12;
     let x = align === 'end' ? rect.right - width : rect.left;
     x = Math.max(8, Math.min(window.innerWidth - width - 8, x));
     let y = rect.bottom + 4;

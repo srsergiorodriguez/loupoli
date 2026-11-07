@@ -1,4 +1,13 @@
 import {
+  applyTextureEffect,
+  createTextureEffect,
+  normalizeTextureEffect,
+  textureEffectLabel,
+  textureEffectsEqual,
+  type TextureEffect,
+  type TextureEffectType
+} from './effects';
+import {
   CanvasTexture,
   LinearFilter,
   NearestFilter,
@@ -13,7 +22,7 @@ export type TextureLayerPattern = 'checker' | 'solid' | 'transparent';
 export type TextureBlendMode = 'normal' | 'multiply' | 'screen';
 
 /** Authored content kind for one texture layer. */
-export type TextureLayerKind = 'fill' | 'raster';
+export type TextureLayerKind = 'fill' | 'raster' | 'effect';
 
 /** How the asset's composite alpha is interpreted in 3D. */
 export type TextureAlphaMode = 'opaque' | 'cutout' | 'blend';
@@ -32,6 +41,7 @@ export interface TextureLayerSummary {
   readonly blendMode: TextureBlendMode;
   readonly kind: TextureLayerKind;
   readonly role: TextureLayerRole;
+  readonly effect?: TextureEffect | null;
 }
 
 /** Serializable metadata for the complete layer stack. */
@@ -74,6 +84,7 @@ interface TextureLayer {
   blendMode: TextureBlendMode;
   kind: TextureLayerKind;
   role: TextureLayerRole;
+  effect: TextureEffect | null;
   readonly canvas: OffscreenCanvas;
   readonly context: OffscreenCanvasRenderingContext2D;
 }
@@ -130,9 +141,26 @@ function sameState(a: TextureAssetState, b: TextureAssetState): boolean {
       layer.pattern === other.pattern &&
       layer.blendMode === other.blendMode &&
       layer.kind === other.kind &&
-      layer.role === other.role
+      layer.role === other.role &&
+      textureEffectsEqual(layer.effect ?? null, other.effect ?? null)
     );
   });
+}
+
+/** Cached transparent PNG used as the binary payload of effect layers. */
+let blankLayerPngPromise: Promise<Blob> | null = null;
+
+function blankLayerPng(): Promise<Blob> {
+  blankLayerPngPromise ??= (async () => {
+    const canvas = new OffscreenCanvas(1, 1);
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Unable to create the effect layer payload.');
+    }
+    context.clearRect(0, 0, 1, 1);
+    return canvas.convertToBlob({ type: 'image/png' });
+  })();
+  return blankLayerPngPromise;
 }
 
 /**
@@ -284,7 +312,8 @@ export class TextureAsset {
         pattern: layer.pattern,
         blendMode: layer.blendMode,
         kind: layer.kind,
-        role: layer.role
+        role: layer.role,
+        effect: layer.effect
       })),
       activeId: this.activeId
     };
@@ -301,7 +330,8 @@ export class TextureAsset {
       pattern: layer.pattern,
       blendMode: layer.blendMode,
       kind: layer.kind,
-      role: layer.role
+      role: layer.role,
+      effect: layer.effect
     }));
   }
 
@@ -338,6 +368,7 @@ export class TextureAsset {
       layer.blendMode = summary.blendMode;
       layer.kind = summary.kind;
       layer.role = summary.role;
+      layer.effect = normalizeTextureEffect(summary.effect);
       if (layer.kind === 'fill') {
         this.drawLayer(layer);
       }
@@ -361,7 +392,7 @@ export class TextureAsset {
    */
   beginPaint(layerId: string): boolean {
     const layer = this.layers.find((item) => item.id === layerId);
-    if (!layer || this.paintLayerId !== null) {
+    if (!layer || this.paintLayerId !== null || layer.kind === 'effect') {
       return false;
     }
     const preview = new OffscreenCanvas(this.width, this.height);
@@ -588,7 +619,10 @@ export class TextureAsset {
   async exportData(): Promise<TextureAssetData> {
     const layers: TextureLayerRecord[] = [];
     for (const layer of this.layers) {
-      const blob = await layer.canvas.convertToBlob({ type: 'image/png' });
+      const blob =
+        layer.kind === 'effect'
+          ? await blankLayerPng()
+          : await layer.canvas.convertToBlob({ type: 'image/png' });
       layers.push({
         id: layer.id,
         name: layer.name,
@@ -599,6 +633,7 @@ export class TextureAsset {
         blendMode: layer.blendMode,
         kind: layer.kind,
         role: layer.role,
+        effect: layer.effect,
         png: new Uint8Array(await blob.arrayBuffer())
       });
     }
@@ -619,20 +654,30 @@ export class TextureAsset {
     }
     const imported: TextureLayer[] = [];
     for (const record of data.layers) {
-      const canvas = createLayerCanvas(this.width, this.height);
+      const kind = record.kind === 'raster' || record.kind === 'effect'
+        ? record.kind
+        : 'fill';
+      const canvas = createLayerCanvas(
+        kind === 'effect' ? 1 : this.width,
+        kind === 'effect' ? 1 : this.height
+      );
       const context = canvas.getContext('2d');
       if (!context) {
         throw new Error('Unable to create a texture layer context.');
       }
-      const pngBuffer = record.png.buffer.slice(
-        record.png.byteOffset,
-        record.png.byteOffset + record.png.byteLength
-      ) as ArrayBuffer;
-      const bitmap = await createImageBitmap(
-        new Blob([pngBuffer], { type: 'image/png' })
-      );
-      context.drawImage(bitmap, 0, 0);
-      bitmap.close();
+      const effect =
+        kind === 'effect' ? normalizeTextureEffect(record.effect) : null;
+      if (kind !== 'effect') {
+        const pngBuffer = record.png.buffer.slice(
+          record.png.byteOffset,
+          record.png.byteOffset + record.png.byteLength
+        ) as ArrayBuffer;
+        const bitmap = await createImageBitmap(
+          new Blob([pngBuffer], { type: 'image/png' })
+        );
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
+      }
       imported.push({
         id: record.id,
         name: record.name,
@@ -641,8 +686,9 @@ export class TextureAsset {
         color: record.color,
         pattern: record.pattern,
         blendMode: record.blendMode ?? 'normal',
-        kind: record.kind ?? 'fill',
+        kind,
         role: record.role ?? 'color',
+        effect,
         canvas,
         context
       });
@@ -720,6 +766,7 @@ export class TextureAsset {
     const layer = this.layers.find((item) => item.id === id);
     if (
       !layer ||
+      layer.kind === 'effect' ||
       pixels.width !== this.width ||
       pixels.height !== this.height
     ) {
@@ -748,6 +795,45 @@ export class TextureAsset {
     this.layers.push(layer);
     this.activeId = layer.id;
     this.drawLayer(layer);
+    this.compositeLayers();
+    return true;
+  }
+
+  /** Add a non-destructive effect layer at the top. */
+  addEffectLayer(type: TextureEffectType): boolean {
+    if (this.layers.length >= 8) {
+      return false;
+    }
+    const effect = createTextureEffect(type);
+    const layer = this.createLayer(
+      textureEffectLabel(type),
+      'transparent',
+      '#ffffff',
+      1,
+      layerId(),
+      'normal',
+      'effect',
+      'color',
+      effect
+    );
+    layer.context.clearRect(0, 0, this.width, this.height);
+    this.layers.push(layer);
+    this.activeId = layer.id;
+    this.compositeLayers();
+    return true;
+  }
+
+  /** Change a bounded parameter on an effect layer. */
+  setEffect(id: string, effect: TextureEffect): boolean {
+    const layer = this.layers.find((item) => item.id === id);
+    if (!layer || layer.kind !== 'effect') {
+      return false;
+    }
+    const normalized = normalizeTextureEffect(effect);
+    if (!normalized || textureEffectsEqual(layer.effect, normalized)) {
+      return false;
+    }
+    layer.effect = normalized;
     this.compositeLayers();
     return true;
   }
@@ -871,7 +957,11 @@ export class TextureAsset {
   /** Convert a layer to a solid color and redraw it. */
   setColor(id: string, color: string): boolean {
     const layer = this.layers.find((item) => item.id === id);
-    if (!layer || (layer.color === color && layer.pattern === 'solid')) {
+    if (
+      !layer ||
+      layer.kind === 'effect' ||
+      (layer.color === color && layer.pattern === 'solid')
+    ) {
       return false;
     }
     layer.color = color;
@@ -885,7 +975,12 @@ export class TextureAsset {
   /** Change the authored fill pattern of a non-raster layer. */
   setPattern(id: string, pattern: TextureLayerPattern): boolean {
     const layer = this.layers.find((item) => item.id === id);
-    if (!layer || layer.kind === 'raster' || layer.pattern === pattern) {
+    if (
+      !layer ||
+      layer.kind === 'raster' ||
+      layer.kind === 'effect' ||
+      layer.pattern === pattern
+    ) {
       return false;
     }
     layer.pattern = pattern;
@@ -919,9 +1014,13 @@ export class TextureAsset {
     id = layerId(),
     blendMode: TextureBlendMode = 'normal',
     kind: TextureLayerKind = 'fill',
-    role: TextureLayerRole = 'color'
+    role: TextureLayerRole = 'color',
+    effect: TextureEffect | null = null
   ): TextureLayer {
-    const canvas = createLayerCanvas(this.width, this.height);
+    const canvas =
+      kind === 'effect'
+        ? createLayerCanvas(1, 1)
+        : createLayerCanvas(this.width, this.height);
     const context = canvas.getContext('2d');
     if (!context) {
       throw new Error('Unable to create a texture layer context.');
@@ -936,6 +1035,7 @@ export class TextureAsset {
       blendMode,
       kind,
       role,
+      effect,
       canvas,
       context
     };
@@ -943,6 +1043,9 @@ export class TextureAsset {
   }
 
   private drawLayer(layer: TextureLayer): void {
+    if (layer.kind === 'effect') {
+      return;
+    }
     const { context } = layer;
     context.clearRect(0, 0, this.width, this.height);
     if (layer.pattern === 'transparent') {
@@ -1007,10 +1110,48 @@ export class TextureAsset {
     this.compositeContext.putImageData(base, 0, 0);
   }
 
+  /** Apply one adjustment layer to the current sRGB composite. */
+  private compositeEffectLayer(layer: TextureLayer): void {
+    if (!layer.effect) {
+      return;
+    }
+    const before = this.compositeContext.getImageData(
+      0,
+      0,
+      this.width,
+      this.height
+    );
+    const processed = new ImageData(
+      new Uint8ClampedArray(before.data),
+      this.width,
+      this.height
+    );
+    applyTextureEffect(
+      processed.data,
+      this.width,
+      this.height,
+      layer.effect
+    );
+    const pixels = before.data;
+    const next = processed.data;
+    const opacity = layer.opacity;
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      for (let channel = 0; channel < 3; channel += 1) {
+        pixels[offset + channel] +=
+          (next[offset + channel] - pixels[offset + channel]) * opacity;
+      }
+    }
+    this.compositeContext.putImageData(before, 0, 0);
+  }
+
   private compositeLayers(usePreview = false): void {
     this.compositeContext.clearRect(0, 0, this.width, this.height);
     for (const layer of this.layers) {
       if (!layer.visible || layer.opacity <= 0) {
+        continue;
+      }
+      if (layer.kind === 'effect') {
+        this.compositeEffectLayer(layer);
         continue;
       }
       if (layer.role === 'lighting' && layer.blendMode === 'multiply') {

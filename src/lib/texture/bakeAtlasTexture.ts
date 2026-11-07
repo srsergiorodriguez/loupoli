@@ -251,6 +251,10 @@ export async function resampleTextureDataForBakeAtlas(
   }
   const layers: TextureLayerRecord[] = [];
   for (const source of data.layers) {
+    if (source.kind === 'effect') {
+      layers.push({ ...source });
+      continue;
+    }
     const pngBuffer = source.png.buffer.slice(
       source.png.byteOffset,
       source.png.byteOffset + source.png.byteLength
