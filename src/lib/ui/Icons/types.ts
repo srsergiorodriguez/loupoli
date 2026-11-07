@@ -56,6 +56,7 @@ export type IconName =
   | 'transparent'
   | 'image'
   | 'sync'
+  | 'autosave'
   | 'lock'
   | 'play'
   | 'pause'

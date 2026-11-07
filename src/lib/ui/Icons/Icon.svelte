@@ -201,6 +201,10 @@
   {:else if name === 'sync'}
     <path d="M20 7v5h-5M4 17v-5h5" />
     <path d="M6.2 8a7 7 0 0 1 11.5-1.5L20 9M4 15l2.3 2.5A7 7 0 0 0 17.8 16" />
+  {:else if name === 'autosave'}
+    <path d="M20 12a8 8 0 1 1-2.3-5.7" />
+    <path d="M20 3v5h-5" />
+    <path d="M12 8v4l2.5 1.8" />
   {:else if name === 'play'}
     <path d="M8 5l10 7-10 7z" fill="currentColor" stroke="none" />
   {:else if name === 'pause'}

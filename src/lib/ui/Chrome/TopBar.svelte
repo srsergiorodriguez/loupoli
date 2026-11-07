@@ -144,7 +144,7 @@
       label={session.snapshot.autosaveEnabled
         ? 'Pause autosave'
         : 'Resume autosave'}
-      icon={session.snapshot.autosaveEnabled ? 'pause' : 'play'}
+      icon="autosave"
       pressed={!session.snapshot.autosaveEnabled}
       onActivate={() =>
         session.setAutosaveEnabled(!session.snapshot.autosaveEnabled)}
