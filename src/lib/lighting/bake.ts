@@ -492,53 +492,81 @@ function blurLighting(
   data: Uint8ClampedArray,
   width: number,
   height: number,
-  radius: number
+  radius: number,
+  allowed?: Uint8Array
 ): void {
   if (radius <= 0 || width === 0 || height === 0) {
     return;
   }
   const horizontal = new Uint8ClampedArray(data.length);
-  const kernel = radius * 2 + 1;
+  const valid = (pixel: number): boolean =>
+    allowed === undefined || allowed[pixel] !== 0;
   for (let pass = 0; pass < 2; pass += 1) {
-  const source = new Uint8ClampedArray(data);
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      for (let offset = -radius; offset <= radius; offset += 1) {
-        const sx = Math.min(width - 1, Math.max(0, x + offset));
-        const index = (y * width + sx) * 4;
-        r += source[index];
-        g += source[index + 1];
-        b += source[index + 2];
+    const source = new Uint8ClampedArray(data);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x;
+        if (!valid(pixel)) {
+          continue;
+        }
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let count = 0;
+        for (let offset = -radius; offset <= radius; offset += 1) {
+          const sx = Math.min(width - 1, Math.max(0, x + offset));
+          const sample = y * width + sx;
+          if (!valid(sample)) {
+            continue;
+          }
+          const index = sample * 4;
+          r += source[index];
+          g += source[index + 1];
+          b += source[index + 2];
+          count += 1;
+        }
+        if (count === 0) {
+          continue;
+        }
+        const out = pixel * 4;
+        horizontal[out] = r / count;
+        horizontal[out + 1] = g / count;
+        horizontal[out + 2] = b / count;
+        horizontal[out + 3] = 255;
       }
-      const out = (y * width + x) * 4;
-      horizontal[out] = r / kernel;
-      horizontal[out + 1] = g / kernel;
-      horizontal[out + 2] = b / kernel;
-      horizontal[out + 3] = 255;
     }
-  }
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      for (let offset = -radius; offset <= radius; offset += 1) {
-        const sy = Math.min(height - 1, Math.max(0, y + offset));
-        const index = (sy * width + x) * 4;
-        r += horizontal[index];
-        g += horizontal[index + 1];
-        b += horizontal[index + 2];
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const pixel = y * width + x;
+        if (!valid(pixel)) {
+          continue;
+        }
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let count = 0;
+        for (let offset = -radius; offset <= radius; offset += 1) {
+          const sy = Math.min(height - 1, Math.max(0, y + offset));
+          const sample = sy * width + x;
+          if (!valid(sample)) {
+            continue;
+          }
+          const index = sample * 4;
+          r += horizontal[index];
+          g += horizontal[index + 1];
+          b += horizontal[index + 2];
+          count += 1;
+        }
+        if (count === 0) {
+          continue;
+        }
+        const out = pixel * 4;
+        data[out] = r / count;
+        data[out + 1] = g / count;
+        data[out + 2] = b / count;
+        data[out + 3] = 255;
       }
-      const out = (y * width + x) * 4;
-      data[out] = r / kernel;
-      data[out + 1] = g / kernel;
-      data[out + 2] = b / kernel;
-      data[out + 3] = 255;
     }
-  }
   }
 }
 
@@ -719,9 +747,9 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   if (!covered) {
     return null;
   }
-  // Close the one-texel gaps between separately rasterized face triangles.
-  // Constrain the fill to UV coverage so lit texels cannot bleed across a UV
-  // seam into a shadowed island.
+  // Fill only interior raster gaps, then blur inside UV coverage. Padding the
+  // gutter before blur would let the blur pull the lit gutter back into the
+  // island edge and create bright seams under soft shadows.
   const coverageMask = new Uint8Array(width * height);
   if (coverageContext) {
     const coverage = coverageContext.getImageData(0, 0, width, height);
@@ -730,6 +758,8 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
         coverage.data[pixel * 4 + 3] > 0 ? 1 : 0;
     }
   }
+  bleedImageData(data, width, height, 2, coverageMask);
+  fillBrightCracks(data, width, height, 2);
   const softness = Math.max(
     0,
     ...lights
@@ -737,8 +767,9 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       .map((light) => light.shadowSoftness)
   );
   const blurRadius = Math.round(1 + softness * 5);
-  // The blur must never reach the neutral white exterior. Size the gutter
-  // from the actual penumbra radius, not a fixed constant.
+  blurLighting(data, width, height, blurRadius, coverageMask);
+  // Pad from the already-blurred island edge. The gutter scales with the
+  // penumbra radius so the blur never reaches the neutral white exterior.
   const gutter = Math.max(4, blurRadius + 2);
   bleedImageData(
     data,
@@ -750,7 +781,5 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   for (let offset = 3; offset < data.length; offset += 4) {
     data[offset] = 255;
   }
-  fillBrightCracks(data, width, height, 2);
-  blurLighting(data, width, height, blurRadius);
   return new ImageData(data, width, height);
 }
