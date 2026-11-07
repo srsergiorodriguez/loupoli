@@ -27,12 +27,18 @@ interface Rgb {
   readonly b: number;
 }
 
+function srgbToLinear(value: number): number {
+  return value <= 0.04045
+    ? value / 12.92
+    : ((value + 0.055) / 1.055) ** 2.4;
+}
+
 function parseColor(value: string): Rgb {
   const hex = /^#([0-9a-fA-F]{6})$/.exec(value)?.[1] ?? 'ffffff';
   return {
-    r: parseInt(hex.slice(0, 2), 16) / 255,
-    g: parseInt(hex.slice(2, 4), 16) / 255,
-    b: parseInt(hex.slice(4, 6), 16) / 255
+    r: srgbToLinear(parseInt(hex.slice(0, 2), 16) / 255),
+    g: srgbToLinear(parseInt(hex.slice(2, 4), 16) / 255),
+    b: srgbToLinear(parseInt(hex.slice(4, 6), 16) / 255)
   };
 }
 
@@ -488,9 +494,10 @@ function blurLighting(
   if (radius <= 0 || width === 0 || height === 0) {
     return;
   }
-  const source = new Uint8ClampedArray(data);
   const horizontal = new Uint8ClampedArray(data.length);
   const kernel = radius * 2 + 1;
+  for (let pass = 0; pass < 2; pass += 1) {
+  const source = new Uint8ClampedArray(data);
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       let r = 0;
@@ -528,6 +535,7 @@ function blurLighting(
       data[out + 2] = b / kernel;
       data[out + 3] = 255;
     }
+  }
   }
 }
 
