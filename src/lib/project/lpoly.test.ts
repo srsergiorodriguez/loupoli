@@ -325,7 +325,7 @@ describe('.lpoli', () => {
 
     const bytes = encodeLpoly(document, SETTINGS);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    expect(view.getUint16(8, true)).toBe(9);
+    expect(view.getUint16(8, true)).toBe(10);
     const decoded = decodeLpoly(bytes).document.animation;
     expect(decoded.clips.map((clip) => clip.name)).toEqual(['Idle', 'Walk']);
     expect(decoded.activeClipId).toBe(second.id);
@@ -497,6 +497,25 @@ describe('.lpoli', () => {
       '#1a33cc'
     ]);
     expect(decoded.document.nodes[0].mesh.faceMaterial[0]).toBe(1);
+  });
+
+  it('round-trips ambient-occlusion bake settings', () => {
+    const document = makeDocument();
+    document.ambientOcclusion = {
+      enabled: true,
+      strength: 0.65,
+      distance: 2.5,
+      bias: 0.02,
+      samples: 16
+    };
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    expect(decoded.document.ambientOcclusion).toEqual({
+      enabled: true,
+      strength: 0.65,
+      distance: 2.5,
+      bias: 0.02,
+      samples: 16
+    });
   });
 
   it('round-trips document lights and ambient settings', () => {

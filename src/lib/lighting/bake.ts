@@ -4,6 +4,7 @@ import type { LightSummary } from '../scene/SceneLight';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import { bleedImageData } from '../texture/bleed';
+import type { AmbientOcclusionSettings } from './ao';
 
 /** Direct-light bake inputs, including optional world-space shadow occluders. */
 export interface BakeLightingInput {
@@ -19,6 +20,8 @@ export interface BakeLightingInput {
   readonly occluders?: readonly Float32Array[];
   /** Soft-shadow visibility rays per light. Defaults to 8. */
   readonly shadowSamples?: number;
+  /** Optional ambient-occlusion pass multiplied into the direct bake. */
+  readonly ambientOcclusion?: AmbientOcclusionSettings;
 }
 
 interface Rgb {
@@ -290,6 +293,50 @@ function tangentBasis(axis: Vector3): [Vector3, Vector3] {
   const u = new Vector3().crossVectors(axis, helper).normalize();
   const v = new Vector3().crossVectors(axis, u).normalize();
   return [u, v];
+}
+
+/** Deterministic cheap hash for stable AO sample directions. */
+function hashNoise(x: number, y: number, seed: number): number {
+  let value =
+    Math.imul(x + 1, 374761393) ^
+    Math.imul(y + 1, 668265263) ^
+    Math.imul(seed + 1, 69069);
+  value = Math.imul(value ^ (value >>> 13), 1274126177);
+  return ((value ^ (value >>> 16)) >>> 0) / 4294967296;
+}
+
+/** Cosine-weighted hemisphere visibility at one surface texel. */
+function ambientVisibility(
+  origin: Vector3,
+  normal: Vector3,
+  settings: AmbientOcclusionSettings,
+  occluders: readonly Float32Array[],
+  seed: number
+): number {
+  if (occluders.length === 0) {
+    return 1;
+  }
+  const samples = Math.max(4, Math.min(32, Math.round(settings.samples)));
+  const distance = Math.max(0.01, settings.distance);
+  const bias = Math.max(0, settings.bias);
+  const [u, v] = tangentBasis(normal);
+  const biased = origin.clone().addScaledVector(normal, bias);
+  let visible = 0;
+  for (let index = 0; index < samples; index += 1) {
+    const radial = Math.sqrt(hashNoise(seed, index, 17));
+    const angle = hashNoise(seed, index, 41) * Math.PI * 2;
+    const vertical = Math.sqrt(Math.max(0, 1 - radial * radial));
+    const direction = normal
+      .clone()
+      .multiplyScalar(vertical)
+      .addScaledVector(u, Math.cos(angle) * radial)
+      .addScaledVector(v, Math.sin(angle) * radial)
+      .normalize();
+    if (!rayOccluded(biased, direction, distance, occluders)) {
+      visible += 1;
+    }
+  }
+  return visible / samples;
 }
 
 /**
@@ -605,6 +652,12 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   const ambient = parseColor(input.ambientColor);
   const occluders = input.occluders ?? [];
   const shadowSamples = Math.max(1, Math.min(32, Math.floor(input.shadowSamples ?? 8)));
+  const ao =
+    input.ambientOcclusion?.enabled === true &&
+    input.ambientOcclusion.strength > 0 &&
+    occluders.length > 0
+      ? input.ambientOcclusion
+      : null;
   const lights = input.lights
     .filter((light) => light.enabled && light.intensity > 0)
     .map((light) => ({
@@ -733,6 +786,19 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
             r += light.rgb.r * energy;
             g += light.rgb.g * energy;
             bl += light.rgb.b * energy;
+          }
+          if (ao) {
+            const visibility = ambientVisibility(
+              worldPosition,
+              normal,
+              ao,
+              occluders,
+              (face + 1) * 73856093 ^ (x + 1) * 19349663 ^ (y + 1) * 83492791
+            );
+            const factor = 1 - (1 - visibility) * ao.strength;
+            r *= factor;
+            g *= factor;
+            bl *= factor;
           }
           const offset = (y * width + x) * 4;
           data[offset] = Math.round(Math.min(1, Math.max(0, r)) * 255);

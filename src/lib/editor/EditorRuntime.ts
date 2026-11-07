@@ -88,6 +88,10 @@ import {
 } from '../texture/TextureSurface';
 import type { PaintGradient, PaintTool } from '../paint/types';
 import type { ImageFitOptions } from '../texture/imageFit';
+import {
+  normalizeAmbientOcclusion,
+  type AmbientOcclusionSettings
+} from '../lighting/ao';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
   paintBounds,
@@ -198,6 +202,7 @@ import {
   DeleteLightCommand,
   SetAmbientLightCommand,
   UpdateLightCommand,
+  SetAmbientOcclusionCommand,
   type AmbientLightSnapshot
 } from './commands/LightCommands';
 import type { LightKind, LightSnapshot } from '../scene/SceneLight';
@@ -935,6 +940,7 @@ export class EditorRuntime {
       cameras: this.posedCameraSummaries(),
       ambientColor: this.document.ambientColor,
       ambientIntensity: this.document.ambientIntensity,
+      ambientOcclusion: { ...this.document.ambientOcclusion },
       groups: this.document.groupSummaries(),
       selectedNodeIds: [...this.selectedNodeIds],
       additiveNodeSelection: this.additiveNodeSelection,
@@ -1761,6 +1767,7 @@ export class EditorRuntime {
     this.animationLoop = true;
     this.document.ambientColor = fresh.ambientColor;
     this.document.ambientIntensity = fresh.ambientIntensity;
+    this.document.ambientOcclusion = { ...fresh.ambientOcclusion };
     this.projectName = 'Untitled';
     this.activeGroupId = null;
     this.activeLightId = this.document.lights[0]?.id ?? null;
@@ -4344,7 +4351,7 @@ export class EditorRuntime {
   private bakeOccluders(): Float32Array[] {
     const occluders: Float32Array[] = [];
     for (const node of this.document.nodes) {
-      if (!node.visible) {
+      if (!node.visible || node.reference) {
         continue;
       }
       const parent = this.document.getGroup(node.parentId);
@@ -7694,7 +7701,8 @@ export class EditorRuntime {
         width: target.width,
         height: target.height,
         occluders: this.bakeOccluders(),
-        shadowSamples: 16
+        shadowSamples: 16,
+        ambientOcclusion: this.document.ambientOcclusion
       });
       if (!after) {
         throw new Error('The object has no UV-covered surface to bake.');
@@ -7874,6 +7882,21 @@ export class EditorRuntime {
       color: this.document.ambientColor,
       intensity: Math.min(10, intensity)
     });
+  }
+
+  /** Update the document's AO bake settings as one undoable edit. */
+  setAmbientOcclusion(
+    patch: Partial<AmbientOcclusionSettings>
+  ): void {
+    const before = { ...this.document.ambientOcclusion };
+    const after = normalizeAmbientOcclusion({ ...before, ...patch });
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return;
+    }
+    this.history.execute(
+      new SetAmbientOcclusionCommand(this.document, before, after)
+    );
+    this.publish();
   }
 
   private setAmbientLighting(after: AmbientLightSnapshot): void {
@@ -12288,6 +12311,7 @@ export class EditorRuntime {
     this.animationPose.clear();
     this.document.ambientColor = decoded.document.ambientColor;
     this.document.ambientIntensity = decoded.document.ambientIntensity;
+    this.document.ambientOcclusion = { ...decoded.document.ambientOcclusion };
     this.projectName = name;
     this.activeGroupId = null;
     this.activeLightId = this.document.lights[0]?.id ?? null;

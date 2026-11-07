@@ -35,6 +35,11 @@ import type {
 } from '../texture/TextureAsset';
 import type { TextureAssetRecord } from '../texture/TextureLibrary';
 import {
+  DEFAULT_AMBIENT_OCCLUSION,
+  normalizeAmbientOcclusion,
+  type AmbientOcclusionSettings
+} from '../lighting/ao';
+import {
   normalizeTextureEffect,
   type TextureEffect
 } from '../texture/effects';
@@ -44,7 +49,7 @@ import {
 } from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 9;
+const FORMAT_VERSION = 10;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -173,6 +178,7 @@ interface LightManifest extends Omit<LightSnapshot, 'castShadows' | 'shadowSoftn
 interface LightingManifest {
   readonly ambientColor: string;
   readonly ambientIntensity: number;
+  readonly ambientOcclusion?: AmbientOcclusionSettings;
   readonly lights: readonly LightManifest[];
 }
 
@@ -385,9 +391,34 @@ function validateLightingManifest(
       direction
     });
   }
+  const rawAo = lighting.ambientOcclusion;
+  if (
+    rawAo !== undefined &&
+    (typeof rawAo !== 'object' ||
+      rawAo === null ||
+      typeof rawAo.enabled !== 'boolean' ||
+      typeof rawAo.strength !== 'number' ||
+      !Number.isFinite(rawAo.strength) ||
+      rawAo.strength < 0 ||
+      rawAo.strength > 1 ||
+      typeof rawAo.distance !== 'number' ||
+      !Number.isFinite(rawAo.distance) ||
+      rawAo.distance < 0.01 ||
+      rawAo.distance > 20 ||
+      typeof rawAo.bias !== 'number' ||
+      !Number.isFinite(rawAo.bias) ||
+      rawAo.bias < 0 ||
+      rawAo.bias > 0.2 ||
+      !Number.isInteger(rawAo.samples) ||
+      rawAo.samples < 4 ||
+      rawAo.samples > 32)
+  ) {
+    throw new Error('The .lpoli ambient-occlusion settings are invalid.');
+  }
   return {
     ambientColor: lighting.ambientColor,
     ambientIntensity: lighting.ambientIntensity,
+    ambientOcclusion: rawAo ? normalizeAmbientOcclusion(rawAo) : undefined,
     lights
   };
 }
@@ -1414,6 +1445,7 @@ function encodeInternal(
     lighting: {
       ambientColor: document.ambientColor,
       ambientIntensity: document.ambientIntensity,
+      ambientOcclusion: { ...document.ambientOcclusion },
       lights: document.lights.map((light) => light.snapshot())
     },
     ...(textureManifest ? { textures: textureManifest.manifest } : {}),
@@ -1873,6 +1905,9 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   if (lighting) {
     document.ambientColor = lighting.ambientColor;
     document.ambientIntensity = lighting.ambientIntensity;
+    document.ambientOcclusion = lighting.ambientOcclusion
+      ? { ...lighting.ambientOcclusion }
+      : { ...DEFAULT_AMBIENT_OCCLUSION };
     for (const snapshot of lighting.lights) {
       document.insertLight(
         SceneLight.fromSnapshot({

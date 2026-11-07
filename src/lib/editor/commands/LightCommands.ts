@@ -120,3 +120,31 @@ export class SetAmbientLightCommand implements EditorCommand {
     };
   }
 }
+
+/** Replace document ambient-occlusion bake settings. */
+export class SetAmbientOcclusionCommand implements EditorCommand {
+  readonly label = 'Change ambient occlusion';
+  readonly estimatedBytes = 64;
+
+  constructor(
+    private readonly document: SceneDocument,
+    private readonly before: import('../../lighting/ao').AmbientOcclusionSettings,
+    private readonly after: import('../../lighting/ao').AmbientOcclusionSettings
+  ) {}
+
+  execute(): void {
+    this.document.ambientOcclusion = { ...this.after };
+  }
+
+  undo(): void {
+    this.document.ambientOcclusion = { ...this.before };
+  }
+
+  journalPatch(direction: 'forward' | 'backward'): JournalPatch {
+    return {
+      type: 'set-ambient-occlusion',
+      ambientOcclusion:
+        direction === 'forward' ? this.after : this.before
+    };
+  }
+}

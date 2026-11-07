@@ -1,6 +1,6 @@
 # Phase 5A — Lighting and texture bake
 
-**Status:** Implemented. Direct-ambient/directional/point lighting, per-light hard/soft shadows in Lit and the texture bake, Light workspace, Lit preview, and texture-layer bake are implemented. AO is explicitly deferred; the bake is structured to accept a later AO pass.
+**Status:** Implemented. Direct-ambient/directional/point lighting, per-light hard/soft shadows in Lit and the texture bake, Light workspace, Lit preview, and texture-layer bake are implemented. AO is implemented as an optional bake-time pass over the same lighting layer; the realtime Lit preview remains direct-light only.
 
 **Goal:** Light a low-poly scene with a deliberately small model, preview it in `Lit`, then bake direct light into a dedicated texture lighting layer for final textured display.
 
@@ -23,10 +23,10 @@ Supported:
 - enabled/disabled lights
 - flat-shaded Lit preview
 - per-light hard/soft shadows in Lit and direct-light baking into a texture lighting layer
+- optional bake-time ambient occlusion with strength, distance, bias, and ray controls
 
 Not supported:
 
-- AO / contact shadows
 - spot/area lights
 - HDRI/IBL
 - PBR
@@ -119,7 +119,7 @@ Safety rules:
 - Bake undo removes a newly created layer or restores prior layer pixels.
 - Baking marks the texture dirty and forces a v4 checkpoint with PNG chunks.
 
-Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is not evaluated in this pass.
+Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is evaluated only when enabled and multiplies the baked lighting result.
 
 ![Baked shadows](media/light-baked-shadow.png)
 
@@ -155,7 +155,6 @@ v3 files remain readable; they receive the default Sun because they predate the 
 
 ## 7. Deferred
 
-- AO / contact shadows
 - Shadow progress/cancel UI beyond the busy state
 - Physical-iPad performance and memory validation
 - Shape keys, animation, import/export (Phase 5B–5C)

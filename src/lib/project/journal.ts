@@ -139,6 +139,10 @@ export type JournalPatch =
       readonly light: LightSnapshot;
     }
   | {
+      readonly type: 'set-ambient-occlusion';
+      readonly ambientOcclusion: import('../lighting/ao').AmbientOcclusionSettings;
+    }
+  | {
       readonly type: 'set-ambient-light';
       readonly ambient: { readonly color: string; readonly intensity: number };
     }
@@ -334,6 +338,10 @@ export function applyJournalPatch(
       light.apply(patch.light);
       return;
     }
+    case 'set-ambient-occlusion': {
+      document.ambientOcclusion = { ...patch.ambientOcclusion };
+      return;
+    }
     case 'set-ambient-light': {
       document.ambientColor = patch.ambient.color;
       document.ambientIntensity = patch.ambient.intensity;
@@ -409,6 +417,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
   }
   if (patch.type === 'insert-light' || patch.type === 'remove-light' || patch.type === 'update-light') {
     return patch.light.id.length * 2 + patch.light.name.length * 2 + 96;
+  }
+  if (patch.type === 'set-ambient-occlusion') {
+    return 64;
   }
   if (patch.type === 'set-ambient-light') {
     return 48;

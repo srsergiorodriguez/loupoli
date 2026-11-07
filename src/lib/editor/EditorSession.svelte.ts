@@ -112,6 +112,13 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   cameras: [],
   ambientColor: '#ffffff',
   ambientIntensity: 0.22,
+  ambientOcclusion: {
+    enabled: false,
+    strength: 0.5,
+    distance: 1,
+    bias: 0.01,
+    samples: 8
+  },
   bakeBusy: false,
   bakeAtlasPrompt: null,
   renderBusy: false,
@@ -1212,6 +1219,12 @@ export class EditorSession {
 
   setAmbientIntensity(intensity: number): void {
     this.runtime?.setAmbientIntensity(intensity);
+  }
+
+  setAmbientOcclusion(
+    patch: Partial<import('../lighting/ao').AmbientOcclusionSettings>
+  ): void {
+    this.runtime?.setAmbientOcclusion(patch);
   }
 
   ungroupActiveGroup(): void {

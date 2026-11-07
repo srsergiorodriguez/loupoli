@@ -8,6 +8,7 @@ import type {
   AnimationTargetKind
 } from '../scene/SceneAnimation';
 import type { RenderShading, RenderUpscale } from '../render/renderSettings';
+import type { AmbientOcclusionSettings } from '../lighting/ao';
 import type {
   Modifier,
   ModifierAxis
@@ -334,6 +335,7 @@ export interface EditorSnapshot {
   readonly cameras: readonly CameraSummary[];
   readonly ambientColor: string;
   readonly ambientIntensity: number;
+  readonly ambientOcclusion: AmbientOcclusionSettings;
   readonly bakeBusy: boolean;
   readonly bakeAtlasPrompt: BakeAtlasPrompt | null;
   readonly renderBusy: boolean;

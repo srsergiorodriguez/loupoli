@@ -101,4 +101,4 @@ Rendered focus shadows are baked by the renderer's current light state; baked li
 - Native iPad/macOS MP4 encoder
 - Render progress/cancel UI and progress reporting
 
-AO remains deferred. Hard/soft shadows are already bakeable.
+AO is bakeable into the lighting layer; the realtime Lit preview remains direct-light only.

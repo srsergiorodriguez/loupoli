@@ -15,6 +15,10 @@ import {
 import { SceneAnimation } from './SceneAnimation';
 import { SceneAnnotations } from './SceneAnnotations';
 import {
+  DEFAULT_AMBIENT_OCCLUSION,
+  type AmbientOcclusionSettings
+} from '../lighting/ao';
+import {
   createLightId,
   SceneLight,
   type LightKind,
@@ -37,6 +41,9 @@ export class SceneDocument {
   readonly annotations = new SceneAnnotations();
   ambientColor = '#ffffff';
   ambientIntensity = 0.22;
+  ambientOcclusion: AmbientOcclusionSettings = {
+    ...DEFAULT_AMBIENT_OCCLUSION
+  };
 
   /** Construct the default first-run scene from the real primitive path. */
   static createDefault(

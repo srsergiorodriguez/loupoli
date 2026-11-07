@@ -1618,6 +1618,73 @@
           onChange={(value) => session.setAmbientIntensity(value)}
         />
         <div class="light-divider"></div>
+        <div class="light-subhead">
+          <span>Ambient occlusion</span>
+          <span class="texture-note">
+            {session.snapshot.ambientOcclusion.enabled ? 'Baked' : 'Off'}
+          </span>
+        </div>
+        <Switch
+          label="Bake ambient occlusion"
+          description="Darken crevices in the baked lighting layer."
+          checked={session.snapshot.ambientOcclusion.enabled}
+          onChange={(value) => session.setAmbientOcclusion({ enabled: value })}
+        />
+        {#if session.snapshot.ambientOcclusion.enabled}
+          <SliderField
+            label="Strength"
+            value={session.snapshot.ambientOcclusion.strength}
+            min={0}
+            max={1}
+            step={0.01}
+            precision={2}
+            onChange={(value) =>
+              session.setAmbientOcclusion({ strength: value })}
+          />
+          <div class="render-field">
+            <span>Distance</span>
+            <NumberField
+              label="AO distance"
+              value={session.snapshot.ambientOcclusion.distance}
+              step={0.1}
+              precision={2}
+              min={0.01}
+              max={20}
+              onCommit={(value) =>
+                session.setAmbientOcclusion({ distance: value })}
+            />
+          </div>
+          <div class="render-field">
+            <span>Bias</span>
+            <NumberField
+              label="AO bias"
+              value={session.snapshot.ambientOcclusion.bias}
+              step={0.001}
+              precision={3}
+              min={0}
+              max={0.2}
+              onCommit={(value) =>
+                session.setAmbientOcclusion({ bias: value })}
+            />
+          </div>
+          <SelectField
+            label="Samples"
+            value={String(session.snapshot.ambientOcclusion.samples)}
+            options={[
+              { value: '8', label: '8 rays' },
+              { value: '16', label: '16 rays' },
+              { value: '32', label: '32 rays' }
+            ]}
+            onChange={(value) =>
+              session.setAmbientOcclusion({ samples: Number(value) })}
+          />
+          <p class="hint">
+            AO is evaluated during Bake lighting and multiplied into the same
+            lighting layer. The realtime Lit preview shows direct lights and
+            shadows only.
+          </p>
+        {/if}
+        <div class="light-divider"></div>
         <div class="light-bake">
           <span>
             Bake active object lighting into a texture layer
@@ -1627,7 +1694,7 @@
               <strong>select an object first</strong>
             {/if}
           </span>
-          <span class="texture-note">Hard shadows are included when enabled. Overlapping UVs create a unique bake copy and bake in one action.</span>
+          <span class="texture-note">Direct light, shadows, and AO (when enabled) are included. Overlapping UVs create a unique bake copy and bake in one action.</span>
           <ActionButton
             label={session.snapshot.bakeBusy ? 'Baking…' : 'Bake lighting'}
             icon="lit"
