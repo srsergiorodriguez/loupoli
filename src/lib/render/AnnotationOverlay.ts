@@ -34,8 +34,8 @@ export class AnnotationOverlay {
     this.material = new MeshBasicMaterial({
       name: 'loupoli-annotation',
       color: theme.accent.color,
-      transparent: true,
-      opacity: 0.9,
+      transparent: false,
+      opacity: 1,
       depthTest: false,
       depthWrite: false,
       toneMapped: false
