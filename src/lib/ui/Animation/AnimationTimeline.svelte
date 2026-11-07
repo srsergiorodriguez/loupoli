@@ -6,6 +6,7 @@
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import { onMount } from 'svelte';
   import { shortcutBus } from '../../input/ShortcutBus';
+  import { shortcut } from '../../input/shortcuts';
   import type {
     AnimationKeyReference,
     AnimationTrackSummary
@@ -307,9 +308,26 @@
   function handleTimelineShortcut(event: KeyboardEvent): void {
     if (
       snapshot.meshPoseEditing ||
-      !(event.metaKey || event.ctrlKey) ||
-      event.altKey
+      event.repeat ||
+      document.querySelector('dialog[open]') !== null
     ) {
+      return;
+    }
+    if (
+      (event.key === ' ' || event.code === 'Space') &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey
+    ) {
+      event.preventDefault();
+      if (snapshot.animationPlaying) {
+        session.pauseAnimation();
+      } else {
+        session.playAnimation();
+      }
+      return;
+    }
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) {
       return;
     }
     const active = document.activeElement;
@@ -463,9 +481,17 @@
   <div class="timeline-head">
     <div class="timeline-transport">
       <IconButton
+        label="Rewind animation to start"
+        icon="rewind"
+        tooltip="Rewind to start"
+        disabled={snapshot.meshPoseEditing}
+        onActivate={() => session.rewindAnimation()}
+      />
+      <IconButton
         label={snapshot.animationPlaying ? 'Pause animation' : 'Play animation'}
         icon={snapshot.animationPlaying ? 'pause' : 'play'}
         tooltip={snapshot.animationPlaying ? 'Pause' : 'Play'}
+        shortcut={shortcut('playback').display}
         disabled={snapshot.meshPoseEditing}
         onActivate={() =>
           snapshot.animationPlaying

@@ -213,6 +213,9 @@
     <path d="M8 5l10 7-10 7z" fill="currentColor" stroke="none" />
   {:else if name === 'pause'}
     <path d="M8 5v14M16 5v14" />
+  {:else if name === 'rewind'}
+    <path d="M6 5v14" />
+    <path d="M18 5 9 12l9 7V5Z" />
   {:else if name === 'lock'}
     <rect x="5" y="10" width="14" height="10" rx="2" />
     <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />

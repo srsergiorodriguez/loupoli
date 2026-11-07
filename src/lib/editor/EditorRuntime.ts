@@ -5943,6 +5943,12 @@ export class EditorRuntime {
     this.animationRaf = requestAnimationFrame(tick);
   }
 
+  /** Stop playback and return the playhead to the clip start. */
+  rewindAnimation(): void {
+    this.pauseAnimation();
+    this.setAnimationFrame(this.document.animation.startFrame);
+  }
+
   /** Stop animation playback and release its scheduler frame. */
   pauseAnimation(): void {
     const wasPlaying = this.animationPlaying;

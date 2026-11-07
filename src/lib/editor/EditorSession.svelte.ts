@@ -1134,6 +1134,10 @@ export class EditorSession {
     this.runtime?.pauseAnimation();
   }
 
+  rewindAnimation(): void {
+    this.runtime?.rewindAnimation();
+  }
+
   setLightEnabled(id: string, enabled: boolean): void {
     this.runtime?.setLightEnabled(id, enabled);
   }

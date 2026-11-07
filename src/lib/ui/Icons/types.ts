@@ -61,5 +61,6 @@ export type IconName =
   | 'lock'
   | 'play'
   | 'pause'
+  | 'rewind'
   | 'info'
   | 'book';
