@@ -134,6 +134,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationFps: 24,
   animationClipId: 'clip-1',
   animationClips: [],
+  animationClipboardCount: 0,
   animationLoop: true,
   animationPlaying: false,
   animationTracks: [],
@@ -968,6 +969,20 @@ export class EditorSession {
 
   renameAnimationClip(name: string): void {
     this.runtime?.renameAnimationClip(name);
+  }
+
+  copyAnimationKeys(keys: readonly import('./types').AnimationKeyReference[]): number {
+    return this.runtime?.copyAnimationKeys(keys) ?? 0;
+  }
+
+  pasteAnimationKeys(): number {
+    return this.runtime?.pasteAnimationKeys() ?? 0;
+  }
+
+  deleteAnimationKeys(
+    keys: readonly import('./types').AnimationKeyReference[]
+  ): number {
+    return this.runtime?.deleteAnimationKeys(keys) ?? 0;
   }
 
   setAnimationLoop(loop: boolean): void {

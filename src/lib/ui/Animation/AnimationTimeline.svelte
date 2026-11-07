@@ -4,7 +4,12 @@
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import SelectField from '../Primitives/SelectField.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
-  import type { AnimationTrackSummary } from '../../editor/types';
+  import { onMount } from 'svelte';
+  import { shortcutBus } from '../../input/ShortcutBus';
+  import type {
+    AnimationKeyReference,
+    AnimationTrackSummary
+  } from '../../editor/types';
 
   /** Animation transport and scrubbable keyframe lane. */
   interface Props {
@@ -12,9 +17,12 @@
   }
 
   let { session }: Props = $props();
+  let timelineHost = $state<HTMLElement>();
   let scrubbing = $state(false);
   let selectedTrackId = $state<string | null>(null);
-  let selectedKey = $state<{ trackId: string; frame: number } | null>(null);
+  let selectedKeys = $state<AnimationKeyReference[]>([]);
+  let additiveKeys = $state(false);
+  let selectionClipId = $state<string | null>(null);
   let keyDrag = $state<{
     track: AnimationTrackSummary;
     from: number;
@@ -22,6 +30,7 @@
     startX: number;
     pointerId: number;
     moved: boolean;
+    additive: boolean;
   } | null>(null);
   let zoomStart = $state<number | null>(null);
   let zoomEnd = $state<number | null>(null);
@@ -74,10 +83,10 @@
   );
   const readoutTrack = $derived(selectedTrack ?? activeTrack);
   const selectedKeyData = $derived.by(() => {
-    const selection = selectedKey;
-    if (!selection) {
+    if (selectedKeys.length !== 1) {
       return null;
     }
+    const selection = selectedKeys[0];
     const track = snapshot.animationTracks.find(
       (item) => item.id === selection.trackId
     );
@@ -85,6 +94,23 @@
       (item) => item.frame === selection.frame
     );
     return track && key ? { track, key } : null;
+  });
+
+  onMount(() =>
+    shortcutBus.register((event) => handleTimelineShortcut(event))
+  );
+
+  $effect(() => {
+    if (selectionClipId === null) {
+      selectionClipId = snapshot.animationClipId;
+      return;
+    }
+    if (selectionClipId === snapshot.animationClipId) {
+      return;
+    }
+    selectionClipId = snapshot.animationClipId;
+    selectedKeys = [];
+    selectedTrackId = null;
   });
 
   function niceStep(spanFrames: number, targetTicks: number): number {
@@ -212,10 +238,35 @@
     }
   }
 
-  function selectKey(track: AnimationTrackSummary, frame: number): void {
+  function isKeySelected(trackId: string, frame: number): boolean {
+    return selectedKeys.some(
+      (selection) => selection.trackId === trackId && selection.frame === frame
+    );
+  }
+
+  function selectKey(
+    track: AnimationTrackSummary,
+    frame: number,
+    additive = false
+  ): void {
     selectTrack(track);
-    selectedKey = { trackId: track.id, frame };
+    if (additive) {
+      toggleKey(track.id, frame);
+    } else {
+      selectedKeys = [{ trackId: track.id, frame }];
+    }
     session.setAnimationFrame(frame);
+  }
+
+  function toggleKey(trackId: string, frame: number): void {
+    if (isKeySelected(trackId, frame)) {
+      selectedKeys = selectedKeys.filter(
+        (selection) =>
+          selection.trackId !== trackId || selection.frame !== frame
+      );
+    } else {
+      selectedKeys = [...selectedKeys, { trackId, frame }];
+    }
   }
 
   function keyTrack(track: AnimationTrackSummary): void {
@@ -223,13 +274,51 @@
     session.keyAnimationTrack(track);
   }
 
-  function deleteSelectedKey(): void {
-    if (!selectedKeyData) {
+  function deleteSelectedKeys(): void {
+    if (selectedKeys.length === 0) {
       return;
     }
-    const { track, key } = selectedKeyData;
-    session.deleteAnimationKeyAt(track, key.frame);
-    selectedKey = null;
+    session.deleteAnimationKeys(selectedKeys);
+    selectedKeys = [];
+  }
+
+  function copySelectedKeys(): void {
+    if (selectedKeys.length === 0) {
+      return;
+    }
+    session.copyAnimationKeys(selectedKeys);
+  }
+
+  function pasteKeys(): void {
+    if (session.pasteAnimationKeys() > 0) {
+      selectedKeys = [];
+      zoomStart = null;
+      zoomEnd = null;
+    }
+  }
+
+  function handleTimelineShortcut(event: KeyboardEvent): void {
+    if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+      return;
+    }
+    const active = document.activeElement;
+    if (
+      !(active instanceof HTMLElement) ||
+      !timelineHost?.contains(active) ||
+      active.matches('input, textarea, select, [contenteditable="true"]')
+    ) {
+      return;
+    }
+    if (event.key.toLowerCase() === 'c' && selectedKeys.length > 0) {
+      event.preventDefault();
+      copySelectedKeys();
+    } else if (
+      event.key.toLowerCase() === 'v' &&
+      snapshot.animationClipboardCount > 0
+    ) {
+      event.preventDefault();
+      pasteKeys();
+    }
   }
 
   function beginKeyDrag(
@@ -243,8 +332,13 @@
     event.preventDefault();
     event.stopPropagation();
     selectTrack(track);
-    selectedKey = { trackId: track.id, frame };
+    const additive =
+      additiveKeys || event.shiftKey || event.metaKey || event.ctrlKey;
+    if (!additive) {
+      selectedKeys = [{ trackId: track.id, frame }];
+    }
     const element = event.currentTarget as HTMLElement;
+    element.focus({ preventScroll: true });
     try {
       element.setPointerCapture(event.pointerId);
     } catch {
@@ -256,7 +350,8 @@
       to: frame,
       startX: event.clientX,
       pointerId: event.pointerId,
-      moved: false
+      moved: false,
+      additive
     };
   }
 
@@ -292,10 +387,10 @@
     keyDrag = null;
     if (drag.moved && drag.to !== drag.from) {
       session.moveAnimationKey(drag.track, drag.from, drag.to);
-      selectedKey = { trackId: drag.track.id, frame: drag.to };
+      selectedKeys = [{ trackId: drag.track.id, frame: drag.to }];
       selectedTrackId = drag.track.id;
     } else if (!drag.moved) {
-      selectKey(drag.track, drag.from);
+      selectKey(drag.track, drag.from, drag.additive);
     }
   }
 
@@ -304,7 +399,12 @@
   }
 </script>
 
-<section class="animation-timeline loupoli-panel" aria-label="Animation timeline" onwheel={wheelTimeline}>
+<section
+  class="animation-timeline loupoli-panel"
+  aria-label="Animation timeline"
+  bind:this={timelineHost}
+  onwheel={wheelTimeline}
+>
   <div class="timeline-clipbar">
     <SelectField
       label="Clip"
@@ -359,10 +459,28 @@
             : session.playAnimation()}
       />
       <ActionButton
-        label="Delete key"
+        label="Add keys"
+        icon="plus"
+        active={additiveKeys}
+        onActivate={() => (additiveKeys = !additiveKeys)}
+      />
+      <ActionButton
+        label="Copy"
+        icon="copy"
+        disabled={selectedKeys.length === 0}
+        onActivate={copySelectedKeys}
+      />
+      <ActionButton
+        label="Paste"
+        icon="paste"
+        disabled={snapshot.animationClipboardCount === 0}
+        onActivate={pasteKeys}
+      />
+      <ActionButton
+        label={selectedKeys.length > 1 ? 'Delete keys' : 'Delete key'}
         icon="trash"
-        disabled={selectedKeyData === null}
-        onActivate={deleteSelectedKey}
+        disabled={selectedKeys.length === 0}
+        onActivate={deleteSelectedKeys}
       />
     </div>
     <div class="timeline-zoom">
@@ -392,7 +510,9 @@
       <strong>{Math.round(snapshot.animationFrame)}</strong>
       <span>/ {end} f</span>
       <span>{snapshot.animationFps} fps</span>
-      {#if readoutTrack}
+      {#if selectedKeys.length > 1}
+        <span class="timeline-target">{selectedKeys.length} keys</span>
+      {:else if readoutTrack}
         <span class="timeline-target">{readoutTrack.targetName}</span>
       {/if}
     </div>
@@ -487,8 +607,7 @@
               <button
                 type="button"
                 class="track-key"
-                class:selected={selectedKey?.trackId === track.id &&
-                  selectedKey.frame === key.frame}
+                class:selected={isKeySelected(track.id, key.frame)}
                 class:dragging={keyDrag?.track.id === track.id &&
                   keyDrag.from === key.frame}
                 style:left={`${percent(
@@ -506,8 +625,12 @@
                   if (event.key === 'Delete' || event.key === 'Backspace') {
                     event.preventDefault();
                     event.stopPropagation();
-                    session.deleteAnimationKeyAt(track, key.frame);
-                    selectedKey = null;
+                    if (selectedKeys.length > 1) {
+                      deleteSelectedKeys();
+                    } else {
+                      session.deleteAnimationKeyAt(track, key.frame);
+                      selectedKeys = [];
+                    }
                   }
                 }}
               ></button>
@@ -555,16 +678,18 @@
 
   .timeline-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-3);
+    gap: var(--space-2) var(--space-3);
     min-height: var(--hit-min);
   }
 
   .timeline-transport {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-1);
   }
 
   .timeline-zoom {

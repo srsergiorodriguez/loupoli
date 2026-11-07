@@ -20,6 +20,8 @@ export type ShortcutId =
   | 'open'
   | 'newProject'
   | 'selectAll'
+  | 'copyKeys'
+  | 'pasteKeys'
   | 'delete'
   | 'frame'
   | 'home'
@@ -38,6 +40,8 @@ const definitions: Record<ShortcutId, Omit<ShortcutDefinition, 'id'>> = {
   open: { label: 'Open project', display: `${MOD_KEY}O` },
   newProject: { label: 'New project', display: `${MOD_KEY}N` },
   selectAll: { label: 'Select all', display: `${MOD_KEY}A` },
+  copyKeys: { label: 'Copy animation keys', display: `${MOD_KEY}C` },
+  pasteKeys: { label: 'Paste animation keys', display: `${MOD_KEY}V` },
   delete: { label: 'Delete selection', display: 'Delete' },
   frame: { label: 'Frame selection', display: 'F' },
   home: { label: 'Reset view', display: 'Home' },

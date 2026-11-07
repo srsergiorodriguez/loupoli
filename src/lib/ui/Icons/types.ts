@@ -21,6 +21,7 @@ export type IconName =
   | 'new-file'
   | 'save'
   | 'copy'
+  | 'paste'
   | 'move'
   | 'rotate'
   | 'scale'

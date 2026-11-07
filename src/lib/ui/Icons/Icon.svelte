@@ -102,6 +102,10 @@
   {:else if name === 'copy'}
     <rect x="8" y="8" width="11" height="11" rx="1" />
     <path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" />
+  {:else if name === 'paste'}
+    <path d="M9 5H6a1 1 0 0 0-1 1v14h14V6a1 1 0 0 0-1-1h-3" />
+    <rect x="9" y="3" width="6" height="4" rx="1" />
+    <path d="M8 12h8M8 16h5" />
   {:else if name === 'move'}
     <path d="M12 3v18M3 12h18M12 3 9.5 5.5M12 3l2.5 2.5M12 21l-2.5-2.5M12 21l2.5-2.5M3 12l2.5-2.5M3 12l2.5 2.5M21 12l-2.5-2.5M21 12l-2.5 2.5" />
   {:else if name === 'rotate'}

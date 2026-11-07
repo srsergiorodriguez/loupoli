@@ -113,6 +113,12 @@ import {
 } from '../io/obj';
 import { exportGlb, importGlb } from '../io/gltf';
 import { SetAnimationCommand } from './commands/AnimationCommands';
+import {
+  animationPasteBase,
+  animationPasteEndFrame,
+  buildAnimationKeyClipboard,
+  type AnimationKeyClipboardEntry
+} from './animationClipboard';
 import { SetShapeKeysCommand } from './commands/ShapeKeyCommands';
 import { CaptureShapeKeyCommand } from './commands/CaptureShapeKeyCommand';
 import {
@@ -186,6 +192,7 @@ import type { LightKind, LightSnapshot } from '../scene/SceneLight';
 import type { SceneCamera } from '../scene/SceneCamera';
 import type {
   AnimationInterpolation,
+  AnimationTargetKind,
   AnimationTrack
 } from '../scene/SceneAnimation';
 import { fitRect, upscaleRenderImage, canvasToPng } from '../render/renderImage';
@@ -232,7 +239,8 @@ import {
   type AxisLock,
   type ModifierPatch,
   type ToastKind,
-  type ToastMessage
+  type ToastMessage,
+  type AnimationKeyReference
 } from './types';
 
 /** State captured at pointer-down so a preview can be committed or cancelled. */
@@ -607,6 +615,7 @@ export class EditorRuntime {
   private animationLoop = true;
   private animationInterpolation: AnimationInterpolation = 'linear';
   private animationPose = new Map<string, NodeTransform>();
+  private animationKeyClipboard: AnimationKeyClipboardEntry[] = [];
   private animationRaf = 0;
   private animationClockStart = 0;
   private animationClockFrame = 0;
@@ -920,6 +929,7 @@ export class EditorRuntime {
         endFrame: clip.endFrame,
         trackCount: clip.tracks.length + clip.weightTracks.length
       })),
+      animationClipboardCount: this.animationKeyClipboard.length,
       animationLoop: this.animationLoop,
       animationPlaying: this.animationPlaying,
       animationTracks: this.animationTrackSummaries(),
@@ -4545,6 +4555,196 @@ export class EditorRuntime {
       Math.min(clip.endFrame, this.animationFrame)
     );
     this.applyAnimationPose();
+  }
+
+  /** Copy selected keys from the active clip with relative frame offsets. */
+  copyAnimationKeys(keys: readonly AnimationKeyReference[]): number {
+    const entries = buildAnimationKeyClipboard(
+      this.document.animation.activeClip,
+      keys
+    );
+    if (entries.length === 0) {
+      return 0;
+    }
+    this.animationKeyClipboard = entries;
+    this.publish();
+    return entries.length;
+  }
+
+  /** Paste the internal key clipboard at the playhead into the active clip. */
+  pasteAnimationKeys(): number {
+    const entries = this.animationKeyClipboard;
+    if (entries.length === 0) {
+      return 0;
+    }
+    const animation = this.document.animation;
+    const clip = animation.activeClip;
+    const base = animationPasteBase(clip, this.animationFrame);
+    type PlannedPaste =
+      | {
+          kind: 'shape';
+          targetId: string;
+          shapeKeyId: string;
+          frame: number;
+          interpolation: AnimationInterpolation;
+          weight: number;
+        }
+      | {
+          kind: 'transform';
+          targetId: string;
+          targetKind: AnimationTargetKind;
+          frame: number;
+          interpolation: AnimationInterpolation;
+          transform: NodeTransform;
+        };
+    const planned: PlannedPaste[] = [];
+    for (const entry of entries) {
+      const frame = base + entry.offsetFrame;
+      if (entry.kind === 'shape') {
+        const node = this.document.getNode(entry.targetId);
+        const shapeKey = node?.shapeKeys.find(
+          (key) => key.id === entry.shapeKeyId
+        );
+        if (!node || !shapeKey || entry.weight === undefined) {
+          continue;
+        }
+        planned.push({
+          kind: 'shape',
+          targetId: node.id,
+          shapeKeyId: shapeKey.id,
+          frame,
+          interpolation: entry.interpolation,
+          weight: entry.weight
+        });
+        continue;
+      }
+      const target =
+        entry.targetKind === 'group'
+          ? this.document.getGroup(entry.targetId)
+          : this.document.getNode(entry.targetId);
+      if (!target || !entry.transform) {
+        continue;
+      }
+      planned.push({
+        kind: 'transform',
+        targetId: entry.targetId,
+        targetKind: entry.targetKind,
+        frame,
+        interpolation: entry.interpolation,
+        transform: entry.transform
+      });
+    }
+    if (planned.length === 0) {
+      return 0;
+    }
+    const before = animation.snapshot();
+    const lastFrame = animationPasteEndFrame(
+      clip,
+      planned.map((entry) => entry.frame)
+    );
+    if (lastFrame > clip.endFrame) {
+      clip.endFrame = lastFrame;
+    }
+    let pasted = 0;
+    for (const entry of planned) {
+      if (entry.kind === 'shape') {
+        animation
+          .ensureWeightTrack(entry.targetId, entry.shapeKeyId)
+          .setKey(entry.frame, entry.weight, entry.interpolation);
+      } else {
+        animation
+          .ensureTrack(entry.targetId, entry.targetKind)
+          .setKey(entry.frame, entry.transform, entry.interpolation);
+      }
+      pasted += 1;
+    }
+    const after = animation.snapshot();
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return 0;
+    }
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Paste keyframes')
+    );
+    this.animationFrame = base;
+    this.applyAnimationPose();
+    return pasted;
+  }
+
+  /** Remove several selected keys as one undoable edit. */
+  deleteAnimationKeys(keys: readonly AnimationKeyReference[]): number {
+    if (keys.length === 0) {
+      return 0;
+    }
+    const animation = this.document.animation;
+    const clip = animation.activeClip;
+    const before = animation.snapshot();
+    let removed = 0;
+    const transformFrames = new Map<string, Set<number>>();
+    const shapeFrames = new Map<string, Set<number>>();
+    for (const reference of keys) {
+      if (clip.tracks.some((track) => track.id === reference.trackId)) {
+        let frames = transformFrames.get(reference.trackId);
+        if (!frames) {
+          frames = new Set();
+          transformFrames.set(reference.trackId, frames);
+        }
+        frames.add(reference.frame);
+      } else if (
+        clip.weightTracks.some((track) => track.id === reference.trackId)
+      ) {
+        let frames = shapeFrames.get(reference.trackId);
+        if (!frames) {
+          frames = new Set();
+          shapeFrames.set(reference.trackId, frames);
+        }
+        frames.add(reference.frame);
+      }
+    }
+    for (const [trackId, frames] of transformFrames) {
+      const track = clip.tracks.find((item) => item.id === trackId);
+      if (!track) {
+        continue;
+      }
+      for (const frame of frames) {
+        const hadKey = track.keyframes.some((key) => key.frame === frame);
+        track.removeKey(frame);
+        if (hadKey) {
+          removed += 1;
+        }
+      }
+      if (track.keyframes.length === 0) {
+        animation.removeTrack(track.targetId);
+      }
+    }
+    for (const [trackId, frames] of shapeFrames) {
+      const track = clip.weightTracks.find((item) => item.id === trackId);
+      if (!track) {
+        continue;
+      }
+      for (const frame of frames) {
+        const hadKey = track.keyframes.some((key) => key.frame === frame);
+        track.removeKey(frame);
+        if (hadKey) {
+          removed += 1;
+        }
+      }
+      if (track.keyframes.length === 0) {
+        animation.removeWeightTrack(track.targetId, track.shapeKeyId);
+      }
+    }
+    if (removed === 0) {
+      return 0;
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        animation,
+        before,
+        animation.snapshot(),
+        removed === 1 ? 'Delete keyframe' : 'Delete keyframes'
+      )
+    );
+    this.applyAnimationPose();
+    return removed;
   }
 
   /** Set whether playback loops at the end of the range. */

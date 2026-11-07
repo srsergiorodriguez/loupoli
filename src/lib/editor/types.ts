@@ -206,6 +206,12 @@ export interface AnimationTrackSummary {
 /** Transient notification severity. */
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
+/** One selected animation key, identified by track and frame. */
+export interface AnimationKeyReference {
+  readonly trackId: string;
+  readonly frame: number;
+}
+
 /** One transient notification shown above the status bar. */
 export interface ToastMessage {
   readonly id: string;
@@ -339,6 +345,7 @@ export interface EditorSnapshot {
   readonly animationFps: number;
   readonly animationClipId: string;
   readonly animationClips: readonly AnimationClipSummary[];
+  readonly animationClipboardCount: number;
   readonly animationLoop: boolean;
   readonly animationPlaying: boolean;
   readonly animationTracks: readonly AnimationTrackSummary[];
