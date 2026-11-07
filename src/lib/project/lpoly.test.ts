@@ -39,7 +39,7 @@ function makeDocument(): SceneDocument {
   return document;
 }
 
-describe('.lpoli v4', () => {
+describe('.lpoli', () => {
   it('round-trips multiple closed and open meshes byte-for-byte', () => {
     const document = makeDocument();
     const bytes = encodeLpoly(document, SETTINGS);
@@ -252,7 +252,7 @@ describe('.lpoli v4', () => {
 
     const bytes = encodeLpoly(document, SETTINGS);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    expect(view.getUint16(8, true)).toBe(5);
+    expect(view.getUint16(8, true)).toBe(6);
     const decoded = decodeLpoly(bytes).document.animation;
     expect(decoded.clips.map((clip) => clip.name)).toEqual(['Idle', 'Walk']);
     expect(decoded.activeClipId).toBe(second.id);
@@ -263,6 +263,29 @@ describe('.lpoli v4', () => {
     expect(decoded.clips[0].tracks[0].keyframes[0].transform.position).toEqual([
       0, 0, 0
     ]);
+  });
+
+  it('round-trips Mesh Motion tracks and interpolates their deltas', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    const track = document.animation.ensureMeshTrack(node.id);
+    const posed = node.mesh.positions.slice();
+    posed[0] += 0.25;
+    posed[4] += 0.5;
+    track.setPoseKey(0, node.mesh.positions, posed, 'linear');
+    const posedLater = node.mesh.positions.slice();
+    posedLater[0] += 0.75;
+    posedLater[4] += 1;
+    track.setPoseKey(12, node.mesh.positions, posedLater, 'linear');
+
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    const restored = decoded.animation.getMeshTrack(node.id);
+    expect(restored?.keyframes).toHaveLength(2);
+    expect(restored?.vertexIndices).toEqual([0, 1]);
+    const mid = restored?.evaluate(6);
+    expect(mid?.[0]).toBeCloseTo(0.5);
+    expect(mid?.[4]).toBeCloseTo(0.75);
+    expect(restored?.keyframes[1].interpolation).toBe('linear');
   });
 
   it('round-trips shape-weight animation tracks', () => {

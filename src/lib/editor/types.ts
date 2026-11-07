@@ -190,7 +190,7 @@ export interface AnimationClipSummary {
 /** Reactive-safe animation track projection. */
 export interface AnimationTrackSummary {
   readonly id: string;
-  readonly kind: 'transform' | 'shape';
+  readonly kind: 'transform' | 'shape' | 'mesh';
   readonly targetId: string;
   readonly targetKind: AnimationTargetKind;
   readonly targetName: string;
@@ -346,6 +346,8 @@ export interface EditorSnapshot {
   readonly animationClipId: string;
   readonly animationClips: readonly AnimationClipSummary[];
   readonly animationClipboardCount: number;
+  readonly meshPoseEditing: boolean;
+  readonly meshPoseFrame: number;
   readonly animationLoop: boolean;
   readonly animationPlaying: boolean;
   readonly animationTracks: readonly AnimationTrackSummary[];

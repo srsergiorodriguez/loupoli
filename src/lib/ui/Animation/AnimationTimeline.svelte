@@ -199,6 +199,9 @@
   }
 
   function beginScrub(event: PointerEvent): void {
+    if (snapshot.meshPoseEditing) {
+      return;
+    }
     const target = event.currentTarget as HTMLElement;
     if (event.button !== 0) {
       return;
@@ -298,7 +301,11 @@
   }
 
   function handleTimelineShortcut(event: KeyboardEvent): void {
-    if (!(event.metaKey || event.ctrlKey) || event.altKey) {
+    if (
+      snapshot.meshPoseEditing ||
+      !(event.metaKey || event.ctrlKey) ||
+      event.altKey
+    ) {
       return;
     }
     const active = document.activeElement;
@@ -326,7 +333,7 @@
     track: AnimationTrackSummary,
     frame: number
   ): void {
-    if (event.button !== 0) {
+    if (event.button !== 0 || snapshot.meshPoseEditing) {
       return;
     }
     event.preventDefault();
@@ -413,12 +420,14 @@
         value: clip.id,
         label: clip.name
       }))}
+      disabled={snapshot.meshPoseEditing}
       onChange={(value) => session.setActiveAnimationClip(value)}
     />
     <ActionMenu
       label="Clip actions"
       icon="more"
       menuTitle="Animation clips"
+      disabled={snapshot.meshPoseEditing}
       options={[
         {
           label: 'New clip',
@@ -453,6 +462,7 @@
         label={snapshot.animationPlaying ? 'Pause animation' : 'Play animation'}
         icon={snapshot.animationPlaying ? 'pause' : 'play'}
         tooltip={snapshot.animationPlaying ? 'Pause' : 'Play'}
+        disabled={snapshot.meshPoseEditing}
         onActivate={() =>
           snapshot.animationPlaying
             ? session.pauseAnimation()
@@ -462,24 +472,27 @@
         label="Add keys"
         icon="plus"
         active={additiveKeys}
+        disabled={snapshot.meshPoseEditing}
         onActivate={() => (additiveKeys = !additiveKeys)}
       />
       <ActionButton
         label="Copy"
         icon="copy"
-        disabled={selectedKeys.length === 0}
+        disabled={selectedKeys.length === 0 || snapshot.meshPoseEditing}
         onActivate={copySelectedKeys}
       />
       <ActionButton
         label="Paste"
         icon="paste"
-        disabled={snapshot.animationClipboardCount === 0}
+        disabled={
+          snapshot.animationClipboardCount === 0 || snapshot.meshPoseEditing
+        }
         onActivate={pasteKeys}
       />
       <ActionButton
         label={selectedKeys.length > 1 ? 'Delete keys' : 'Delete key'}
         icon="trash"
-        disabled={selectedKeys.length === 0}
+        disabled={selectedKeys.length === 0 || snapshot.meshPoseEditing}
         onActivate={deleteSelectedKeys}
       />
     </div>
@@ -518,7 +531,7 @@
     </div>
   </div>
 
-  {#if selectedKeyData}
+  {#if selectedKeyData && !snapshot.meshPoseEditing}
     <div class="timeline-key-editor">
       <SelectField
         label="Key interpolation"
@@ -578,6 +591,7 @@
           class:active={selectedTrack?.id === track.id ||
             (!selectedTrack && activeTrack?.id === track.id)}
           class:shape-track={track.kind === 'shape'}
+          class:mesh-track={track.kind === 'mesh'}
           role="button"
           tabindex="0"
           onclick={() => selectTrack(track)}
@@ -595,6 +609,7 @@
               class="track-key-action"
               aria-label={`Key ${track.targetName}`}
               title={`Key ${track.targetName}`}
+              disabled={snapshot.meshPoseEditing}
               onpointerdown={(event) => event.stopPropagation()}
               onclick={(event) => {
                 event.stopPropagation();
@@ -622,7 +637,10 @@
                 onpointerup={endKeyDrag}
                 onpointercancel={cancelKeyDrag}
                 onkeydown={(event) => {
-                  if (event.key === 'Delete' || event.key === 'Backspace') {
+                  if (
+                    (event.key === 'Delete' || event.key === 'Backspace') &&
+                    !snapshot.meshPoseEditing
+                  ) {
                     event.preventDefault();
                     event.stopPropagation();
                     if (selectedKeys.length > 1) {
@@ -792,6 +810,10 @@
     color: var(--accent-primary);
   }
 
+  .timeline-track.mesh-track .track-name {
+    color: var(--accent-warning);
+  }
+
   .timeline-lane-overlay {
     position: absolute;
     top: 0;
@@ -873,9 +895,14 @@
     inset: -4px;
   }
 
-  .track-key-action:hover {
+  .track-key-action:hover:not(:disabled) {
     border-color: var(--border-strong);
     color: var(--accent-primary);
+  }
+
+  .track-key-action:disabled {
+    opacity: .45;
+    cursor: default;
   }
 
   .track-key-action:focus-visible {

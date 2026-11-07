@@ -56,6 +56,8 @@ export class MeshNode {
   modifiers: Modifier[] = [];
   shapeKeys: ShapeKey[] = [];
   shapeBasePositions: Float32Array | null = null;
+  /** Set by the editor while any clip animates this node's vertices. */
+  motionTracked = false;
   private shapeWeightOverrides: ReadonlyMap<string, number> | null = null;
   private modifierRevision = 0;
   private shapeKeyRevision = 0;
@@ -63,6 +65,9 @@ export class MeshNode {
   private evaluationBaseRevision = -1;
   private evaluationModifierRevision = -1;
   private evaluationShapeRevision = -1;
+  private evaluationMotionRevision = -1;
+  private motionDeltas: Float32Array | null = null;
+  private motionRevision = 0;
   private evaluation: EvaluatedMesh | null = null;
   transform: NodeTransform = {
     position: [0, 0, 0],
@@ -114,8 +119,55 @@ export class MeshNode {
     if (this.shapeKeys.length > 0) {
       throw new Error('Remove shape keys before changing topology.');
     }
+    if (this.motionTracked) {
+      throw new Error('Remove Mesh Motion tracks before changing topology.');
+    }
     this.mesh = mesh;
+    this.motionDeltas = null;
+    this.motionRevision += 1;
     this.evaluation = null;
+  }
+
+  /**
+   * Install an animation pose offset in rest-vertex order.
+   *
+   * This is presentation/evaluation state only; it never mutates the editable
+   * base mesh. Returning true means the evaluated geometry needs a refresh.
+   */
+  setMotionDeltas(deltas: Float32Array | null): boolean {
+    if (deltas !== null && deltas.length !== this.mesh.positions.length) {
+      throw new Error('Mesh-motion deltas do not match the base mesh.');
+    }
+    let next: Float32Array | null = null;
+    if (deltas !== null) {
+      for (let index = 0; index < deltas.length; index += 1) {
+        if (Math.abs(deltas[index]) > 1e-9) {
+          next = deltas.slice();
+          break;
+        }
+      }
+    }
+    const current = this.motionDeltas;
+    if (next === null && current === null) {
+      return false;
+    }
+    if (
+      next !== null &&
+      current !== null &&
+      next.length === current.length &&
+      next.every((value, index) => Math.abs(value - current[index]) < 1e-9)
+    ) {
+      return false;
+    }
+    this.motionDeltas = next;
+    this.motionRevision += 1;
+    this.evaluation = null;
+    return true;
+  }
+
+  /** Whether a non-zero mesh animation pose is active. */
+  get motionActive(): boolean {
+    return this.motionDeltas !== null;
   }
 
   /** Replace the ordered modifier stack with copied definitions. */
@@ -302,7 +354,14 @@ export class MeshNode {
   getEvaluatedMesh(): EvaluatedMesh {
     const modifiersActive = hasEnabledModifier(this.modifiers);
     const shapeActive = this.shapeKeysActive;
-    const shapeMesh = shapeActive ? this.shapeKeyMesh() : this.mesh;
+    let shapeMesh = shapeActive ? this.shapeKeyMesh() : this.mesh;
+    if (this.motionDeltas !== null) {
+      const positions = shapeMesh.positions.slice();
+      for (let index = 0; index < positions.length; index += 1) {
+        positions[index] += this.motionDeltas[index];
+      }
+      shapeMesh = shapeMesh.withPositions(positions);
+    }
     if (!modifiersActive) {
       return {
         mesh: shapeMesh,
@@ -316,7 +375,8 @@ export class MeshNode {
       this.evaluationBase === this.mesh &&
       this.evaluationBaseRevision === this.mesh.meshRevision &&
       this.evaluationModifierRevision === this.modifierRevision &&
-      this.evaluationShapeRevision === this.shapeKeyRevision
+      this.evaluationShapeRevision === this.shapeKeyRevision &&
+      this.evaluationMotionRevision === this.motionRevision
     ) {
       return this.evaluation;
     }
@@ -345,6 +405,7 @@ export class MeshNode {
     this.evaluationBaseRevision = this.mesh.meshRevision;
     this.evaluationModifierRevision = this.modifierRevision;
     this.evaluationShapeRevision = this.shapeKeyRevision;
+    this.evaluationMotionRevision = this.motionRevision;
     this.evaluation = evaluated;
     return evaluated;
   }

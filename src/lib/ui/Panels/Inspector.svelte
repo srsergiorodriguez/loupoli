@@ -85,6 +85,14 @@
     cameras.find((camera) => camera.id === session.snapshot.activeCameraId) ?? null
   );
   const animationTracks = $derived(session.snapshot.animationTracks);
+  const meshPoseEditing = $derived(session.snapshot.meshPoseEditing);
+  const meshPoseFrame = $derived(session.snapshot.meshPoseFrame);
+  const activeMeshTrack = $derived(
+    animationTracks.find(
+      (track) =>
+        track.kind === 'mesh' && track.targetId === session.snapshot.activeNodeId
+    ) ?? null
+  );
   const renderKindOptions = $derived.by(() => {
     const options: { value: string; label: string }[] = [
       { value: 'still', label: 'Still PNG' },
@@ -815,6 +823,58 @@
       onToggle={(open) => setSection('animation', open)}
     >
       <div class="module-body">
+        <div class="render-look">
+          <div class="render-look-head">
+            <span>Mesh motion</span>
+            <span>
+              {activeMeshTrack
+                ? `${activeMeshTrack.keyframes.length} key${activeMeshTrack.keyframes.length === 1 ? '' : 's'}`
+                : 'No keys'}
+            </span>
+          </div>
+          {#if meshPoseEditing}
+            <div class="shape-edit-banner mesh-pose-banner">
+              <div>
+                <span class="kicker">Editing mesh pose · frame {meshPoseFrame}</span>
+                <span class="sub">Temporary pose · shape keys paused.</span>
+              </div>
+              <div class="shape-edit-actions">
+                <ActionButton
+                  label="Finish pose"
+                  icon="checker"
+                  variant="primary"
+                  onActivate={() => session.finishMeshPoseEdit()}
+                />
+                <ActionButton
+                  label="Cancel"
+                  icon="close"
+                  onActivate={() => session.cancelMeshPoseEdit()}
+                />
+              </div>
+            </div>
+          {:else if activeNode}
+            <ActionButton
+              label="Edit mesh pose"
+              icon="move"
+              variant="primary"
+              disabled={shapeEditingId !== null}
+              onActivate={() => session.beginMeshPoseEdit()}
+            />
+            <p class="hint">
+              Move selected vertices, edges, or faces at the playhead, then
+              Finish pose to store a Mesh Motion key without changing the base
+              mesh.
+            </p>
+            {#if activeMeshTrack && activeMeshTrack.keyframes.length > 0}
+              <p class="hint">
+                Topology editing is locked while this object has Mesh Motion
+                keys.
+              </p>
+            {/if}
+          {:else}
+            <p class="hint">Select a mesh object to animate its shape.</p>
+          {/if}
+        </div>
         <div class="selected-name-row">
           <InlineNameField
             label="Animation clip name"
@@ -836,6 +896,7 @@
             precision={0}
             min={1}
             max={120}
+            disabled={meshPoseEditing}
             onCommit={(value) => session.setAnimationSettings({ fps: value })}
           />
         </div>
@@ -847,6 +908,7 @@
             step={1}
             precision={0}
             min={0}
+            disabled={meshPoseEditing}
             onCommit={(value) => session.setAnimationSettings({ startFrame: value })}
           />
         </div>
@@ -858,6 +920,7 @@
             step={1}
             precision={0}
             min={1}
+            disabled={meshPoseEditing}
             onCommit={(value) => session.setAnimationSettings({ endFrame: value })}
           />
         </div>
@@ -3176,6 +3239,16 @@
     display: flex;
     gap: var(--space-1);
     flex: 0 0 auto;
+  }
+
+  .shape-edit-banner.mesh-pose-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .mesh-pose-banner .shape-edit-actions {
+    justify-content: flex-end;
   }
 
   .module-body {

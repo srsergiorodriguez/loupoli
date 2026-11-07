@@ -1,7 +1,8 @@
 import type { JournalPatch } from '../../project/journal';
-import type {
-  AnimationSnapshot,
-  SceneAnimation
+import {
+  estimateAnimationSnapshotBytes,
+  type AnimationSnapshot,
+  type SceneAnimation
 } from '../../scene/SceneAnimation';
 import type { EditorCommand } from './EditorCommand';
 
@@ -17,7 +18,7 @@ export class SetAnimationCommand implements EditorCommand {
     label = 'Edit animation'
   ) {
     this.label = label;
-    this.estimatedBytes = 512;
+    this.estimatedBytes = estimateAnimationSnapshotBytes(after);
   }
 
   execute(): void {

@@ -13,6 +13,7 @@
     framed?: boolean;
     prefix?: string;
     accent?: string;
+    disabled?: boolean;
     onCommit: (value: number) => void;
   }
 
@@ -27,6 +28,7 @@
     framed = false,
     prefix = '',
     accent,
+    disabled = false,
     onCommit
   }: Props = $props();
 
@@ -62,6 +64,9 @@
   }
 
   function beginDrag(event: PointerEvent): void {
+    if (disabled) {
+      return;
+    }
     if (event.pointerType === 'mouse' && event.button !== 0) {
       return;
     }
@@ -162,6 +167,7 @@
 <div
   class="number-field"
   class:framed
+  class:is-disabled={disabled}
   role="group"
   aria-label={label}
   style:--number-accent={accent}
@@ -176,6 +182,7 @@
     type="text"
     inputmode="decimal"
     value={draft}
+    {disabled}
     aria-label={label}
     oninput={(event) => (draft = event.currentTarget.value)}
     onchange={commitDraft}
@@ -206,6 +213,15 @@
     line-height: 1;
     cursor: ew-resize;
     user-select: none;
+  }
+
+  .number-field.is-disabled {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .number-field.is-disabled input {
+    cursor: default;
   }
 
   .number-field.framed {
@@ -246,7 +262,16 @@
   }
 
   @media (pointer: coarse) {
-    .number-field.framed {
+    .number-field.is-disabled {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .number-field.is-disabled input {
+    cursor: default;
+  }
+
+  .number-field.framed {
       min-height: var(--hit-min);
     }
   }

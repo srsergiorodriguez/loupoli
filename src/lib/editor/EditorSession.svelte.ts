@@ -135,6 +135,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationClipId: 'clip-1',
   animationClips: [],
   animationClipboardCount: 0,
+  meshPoseEditing: false,
+  meshPoseFrame: 0,
   animationLoop: true,
   animationPlaying: false,
   animationTracks: [],
@@ -953,6 +955,18 @@ export class EditorSession {
 
   setActiveAnimationClip(id: string): void {
     this.runtime?.setActiveAnimationClip(id);
+  }
+
+  beginMeshPoseEdit(): void {
+    this.runtime?.beginMeshPoseEdit();
+  }
+
+  finishMeshPoseEdit(): void {
+    this.runtime?.finishMeshPoseEdit();
+  }
+
+  cancelMeshPoseEdit(): void {
+    this.runtime?.cancelMeshPoseEdit();
   }
 
   addAnimationClip(): void {

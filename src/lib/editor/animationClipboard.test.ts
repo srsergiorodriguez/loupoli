@@ -37,6 +37,23 @@ describe('animation clipboard', () => {
     expect(entries[1].weight).toBe(0.5);
   });
 
+  it('copies sparse Mesh Motion keys with their stable vertex sets', () => {
+    const clip = new AnimationClip('Test', 'clip-test');
+    const track = clip.ensureMeshTrack('node-1');
+    const base = new Float32Array(9);
+    const posed = new Float32Array(9);
+    posed[0] = 1;
+    posed[4] = 2;
+    track.setPoseKey(6, base, posed, 'linear');
+    const entries = buildAnimationKeyClipboard(clip, [
+      { trackId: track.id, frame: 6 }
+    ]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].kind).toBe('mesh');
+    expect(entries[0].vertexIndices).toEqual([0, 1]);
+    expect(entries[0].values).toEqual([1, 0, 0, 0, 2, 0]);
+  });
+
   it('deduplicates repeated references and ignores missing keys', () => {
     const clip = new AnimationClip('Test', 'clip-test');
     const track = clip.ensureTrack('node-1', 'node');

@@ -2,7 +2,11 @@ import type { Vec2, Vec3 } from '../geometry/HalfEdgeMesh';
 import type { NodeTransform } from '../scene/MeshNode';
 import type { LightSnapshot } from '../scene/SceneLight';
 import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
-import { SceneAnimation, type AnimationSnapshot } from '../scene/SceneAnimation';
+import {
+  estimateAnimationSnapshotBytes,
+  SceneAnimation,
+  type AnimationSnapshot
+} from '../scene/SceneAnimation';
 import type { ShapeKeySnapshot } from '../editor/commands/ShapeKeyCommands';
 import { validateModifiers, type Modifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
@@ -393,17 +397,7 @@ export function journalPatchBytes(patch: JournalPatch): number {
     return patch.camera.id.length * 2 + patch.camera.name.length * 2 + 96;
   }
   if (patch.type === 'set-animation') {
-    const animation = patch.animation;
-    const clipCount = animation.clips?.length ?? 0;
-    const trackCount = animation.clips
-      ? animation.clips.reduce(
-          (total, clip) =>
-            total + clip.tracks.length + (clip.weightTracks?.length ?? 0),
-          0
-        )
-      : (animation.tracks?.length ?? 0) +
-        (animation.weightTracks?.length ?? 0);
-    return clipCount * 128 + trackCount * 256 + 96;
+    return estimateAnimationSnapshotBytes(patch.animation);
   }
   if (patch.type === 'set-shape-keys') {
     return (

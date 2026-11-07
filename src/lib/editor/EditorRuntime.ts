@@ -192,6 +192,7 @@ import type { LightKind, LightSnapshot } from '../scene/SceneLight';
 import type { SceneCamera } from '../scene/SceneCamera';
 import type {
   AnimationInterpolation,
+  AnimationSnapshot,
   AnimationTargetKind,
   AnimationTrack
 } from '../scene/SceneAnimation';
@@ -242,6 +243,14 @@ import {
   type ToastMessage,
   type AnimationKeyReference
 } from './types';
+
+/** Transactional animation pose edit on a temporary mesh. */
+interface MeshPoseEditSession {
+  readonly node: MeshNode;
+  readonly baseMesh: HalfEdgeMesh;
+  readonly frame: number;
+  readonly beforeAnimation: AnimationSnapshot;
+}
 
 /** State captured at pointer-down so a preview can be committed or cancelled. */
 interface VertexDrag {
@@ -577,6 +586,7 @@ export class EditorRuntime {
   private cameraDrag: CameraDrag | null = null;
   private cameraTargetDrag: CameraTargetDrag | null = null;
   private shapeEdit: ShapeKeyEditSession | null = null;
+  private meshPoseEdit: MeshPoseEditSession | null = null;
   private activeShapeKeyId: string | null = null;
   private lightDirectionDrag: LightDirectionDrag | null = null;
   private gizmoDrag: GizmoDrag | null = null;
@@ -927,9 +937,12 @@ export class EditorRuntime {
         name: clip.name,
         startFrame: clip.startFrame,
         endFrame: clip.endFrame,
-        trackCount: clip.tracks.length + clip.weightTracks.length
+        trackCount:
+          clip.tracks.length + clip.weightTracks.length + clip.meshTracks.length
       })),
       animationClipboardCount: this.animationKeyClipboard.length,
+      meshPoseEditing: this.meshPoseEdit !== null,
+      meshPoseFrame: this.meshPoseEdit?.frame ?? 0,
       animationLoop: this.animationLoop,
       animationPlaying: this.animationPlaying,
       animationTracks: this.animationTrackSummaries(),
@@ -1427,6 +1440,9 @@ export class EditorRuntime {
     if (this.shapeEdit) {
       this.cancelShapeEdit();
     }
+    if (this.meshPoseEdit) {
+      this.cancelMeshPoseEdit();
+    }
     if (this.modalTransform) {
       this.cancelModalTransform();
     }
@@ -1453,6 +1469,7 @@ export class EditorRuntime {
     this.document.replaceLights(fresh.lights);
     this.document.replaceCameras(fresh.cameras);
     this.document.replaceAnimation(fresh.animation);
+    this.refreshMotionLocks();
     this.stopAnimationLoop();
     this.animationFrame = 0;
     this.animationPose.clear();
@@ -1517,6 +1534,9 @@ export class EditorRuntime {
   ): void {
     if (this.shapeEdit) {
       this.cancelShapeEdit();
+    }
+    if (this.meshPoseEdit) {
+      this.cancelMeshPoseEdit();
     }
     if (workspace !== 'paint') {
       this.cancelProjectionPaint();
@@ -4377,7 +4397,22 @@ export class EditorRuntime {
         });
       }
     }
-    return [...transforms, ...weights];
+    const motions = this.document.animation.meshTracks.map((track) => {
+      const node = this.document.getNode(track.targetId);
+      return {
+        id: track.id,
+        kind: 'mesh' as const,
+        targetId: track.targetId,
+        targetKind: 'node' as const,
+        targetName: `${node?.name ?? 'Missing object'} · Mesh`,
+        hasTrack: true,
+        keyframes: track.keyframes.map((item) => ({
+          frame: item.frame,
+          interpolation: item.interpolation
+        }))
+      };
+    });
+    return [...transforms, ...weights, ...motions];
   }
 
   /** Return the animation track for the active node/group, if any. */
@@ -4386,8 +4421,20 @@ export class EditorRuntime {
     return target ? this.document.animation.getTrack(target.id) : null;
   }
 
+  /** Keep topology replacement locked while any clip animates a node. */
+  private refreshMotionLocks(): void {
+    for (const node of this.document.nodes) {
+      node.motionTracked = this.document.animation.clips.some(
+        (clip) => clip.getMeshTrack(node.id) !== null
+      );
+    }
+  }
+
   /** Evaluate and apply the current animation pose to the viewport. */
   private applyAnimationPose(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const pose = new Map<string, NodeTransform>();
     for (const track of this.document.animation.tracks) {
       const transform = track.evaluate(this.animationFrame);
@@ -4403,6 +4450,26 @@ export class EditorRuntime {
       }
     }
     this.animationPose = pose;
+    for (const node of this.document.nodes) {
+      node.setMotionDeltas(null);
+    }
+    for (const track of this.document.animation.meshTracks) {
+      const node = this.document.getNode(track.targetId);
+      const values = track.evaluate(this.animationFrame);
+      if (!node || !values) {
+        continue;
+      }
+      const deltas = new Float32Array(node.mesh.positions.length);
+      track.vertexIndices.forEach((vertex, position) => {
+        if (vertex >= node.mesh.vertexCount) {
+          return;
+        }
+        deltas[vertex * 3] = values[position * 3];
+        deltas[vertex * 3 + 1] = values[position * 3 + 1];
+        deltas[vertex * 3 + 2] = values[position * 3 + 2];
+      });
+      node.setMotionDeltas(deltas);
+    }
     const weightOverrides = new Map<string, Map<string, number>>();
     for (const track of this.document.animation.weightTracks) {
       const node = this.document.getNode(track.targetId);
@@ -4427,8 +4494,129 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Begin editing a temporary mesh pose at the current frame. */
+  beginMeshPoseEdit(): void {
+    if (this.meshPoseEdit || this.shapeEdit) {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    this.stopAnimationLoop();
+    const animation = this.document.animation;
+    const frame = Math.round(this.animationFrame);
+    const beforeAnimation = animation.snapshot();
+    const track = animation.ensureMeshTrack(node.id);
+    const values = track.evaluate(frame);
+    const positions = node.mesh.positions.slice();
+    if (values) {
+      track.vertexIndices.forEach((vertex, position) => {
+        if (vertex >= node.mesh.vertexCount) {
+          return;
+        }
+        positions[vertex * 3] += values[position * 3];
+        positions[vertex * 3 + 1] += values[position * 3 + 1];
+        positions[vertex * 3 + 2] += values[position * 3 + 2];
+      });
+    }
+    const baseMesh = node.mesh;
+    node.motionTracked = true;
+    node.setMotionDeltas(null);
+    if (node.shapeKeys.length > 0) {
+      node.setShapeWeightOverrides(
+        new Map(node.shapeKeys.map((key) => [key.id, 0]))
+      );
+    }
+    node.mesh = baseMesh.withPositions(positions);
+    this.animationFrame = frame;
+    this.meshPoseEdit = {
+      node,
+      baseMesh,
+      frame,
+      beforeAnimation
+    };
+    this.history.suspend();
+    this.autosave.pause();
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Commit the temporary mesh pose as one undoable Mesh Motion key. */
+  finishMeshPoseEdit(): void {
+    const session = this.meshPoseEdit;
+    if (!session) {
+      return;
+    }
+    const node = session.node;
+    if (
+      node.mesh.vertexCount !== session.baseMesh.vertexCount ||
+      node.mesh.faceCount !== session.baseMesh.faceCount
+    ) {
+      this.notify(
+        'error',
+        'Cannot key mesh pose',
+        'Mesh Motion requires unchanged topology.'
+      );
+      return;
+    }
+    const animation = this.document.animation;
+    const track =
+      animation.getMeshTrack(node.id) ?? animation.ensureMeshTrack(node.id);
+    track.setPoseKey(
+      session.frame,
+      session.baseMesh.positions,
+      node.mesh.positions,
+      this.animationInterpolation
+    );
+    if (track.keyframes.length === 0) {
+      animation.removeMeshTrack(node.id);
+    }
+    node.motionTracked = track.keyframes.length > 0;
+    node.mesh = session.baseMesh;
+    node.setMotionDeltas(null);
+    node.setShapeWeightOverrides(null);
+    this.meshPoseEdit = null;
+    const after = animation.snapshot();
+    this.history.resume();
+    if (JSON.stringify(session.beforeAnimation) !== JSON.stringify(after)) {
+      this.history.execute(
+        new SetAnimationCommand(
+          animation,
+          session.beforeAnimation,
+          after,
+          'Key mesh pose'
+        )
+      );
+    }
+    void this.autosave.resume();
+    this.animationFrame = session.frame;
+    this.applyAnimationPose();
+  }
+
+  /** Discard a temporary mesh pose and restore the base mesh. */
+  cancelMeshPoseEdit(): void {
+    const session = this.meshPoseEdit;
+    if (!session) {
+      return;
+    }
+    session.node.mesh = session.baseMesh;
+    session.node.setMotionDeltas(null);
+    session.node.setShapeWeightOverrides(null);
+    this.document.animation.apply(session.beforeAnimation);
+    this.refreshMotionLocks();
+    this.meshPoseEdit = null;
+    this.history.resume();
+    void this.autosave.resume();
+    this.animationFrame = session.frame;
+    this.applyAnimationPose();
+  }
+
   /** Switch the timeline to another clip without an undo step. */
   setActiveAnimationClip(id: string): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     if (!this.document.animation.setActiveClip(id)) {
       return;
     }
@@ -4442,6 +4630,9 @@ export class EditorRuntime {
 
   /** Add an empty animation clip and make it active. */
   addAnimationClip(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const animation = this.document.animation;
     const before = animation.snapshot();
     animation.createClip();
@@ -4455,6 +4646,9 @@ export class EditorRuntime {
 
   /** Duplicate the active clip with fresh key/track ids. */
   duplicateAnimationClip(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const animation = this.document.animation;
     const before = animation.snapshot();
     if (!animation.duplicateClip()) {
@@ -4475,6 +4669,9 @@ export class EditorRuntime {
 
   /** Delete the active clip, keeping at least one. */
   deleteAnimationClip(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const animation = this.document.animation;
     if (animation.clips.length <= 1) {
       return;
@@ -4508,6 +4705,9 @@ export class EditorRuntime {
 
   /** Move the playhead and evaluate the animation pose. */
   setAnimationFrame(frame: number): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     this.stopAnimationLoop();
     const start = this.document.animation.startFrame;
     const end = this.document.animation.endFrame;
@@ -4523,6 +4723,9 @@ export class EditorRuntime {
       endFrame: number;
     }>
   ): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const animation = this.document.animation;
     const before = animation.snapshot();
     const clip = animation.activeClip;
@@ -4596,10 +4799,33 @@ export class EditorRuntime {
           frame: number;
           interpolation: AnimationInterpolation;
           transform: NodeTransform;
+        }
+      | {
+          kind: 'mesh';
+          targetId: string;
+          frame: number;
+          interpolation: AnimationInterpolation;
+          vertexIndices: readonly number[];
+          values: readonly number[];
         };
     const planned: PlannedPaste[] = [];
     for (const entry of entries) {
       const frame = base + entry.offsetFrame;
+      if (entry.kind === 'mesh') {
+        const node = this.document.getNode(entry.targetId);
+        if (!node || !entry.vertexIndices || !entry.values) {
+          continue;
+        }
+        planned.push({
+          kind: 'mesh',
+          targetId: node.id,
+          frame,
+          interpolation: entry.interpolation,
+          vertexIndices: entry.vertexIndices,
+          values: entry.values
+        });
+        continue;
+      }
       if (entry.kind === 'shape') {
         const node = this.document.getNode(entry.targetId);
         const shapeKey = node?.shapeKeys.find(
@@ -4647,7 +4873,26 @@ export class EditorRuntime {
     }
     let pasted = 0;
     for (const entry of planned) {
-      if (entry.kind === 'shape') {
+      if (entry.kind === 'mesh') {
+        const node = this.document.getNode(entry.targetId);
+        if (!node) {
+          continue;
+        }
+        const deltas = new Map<number, [number, number, number]>();
+        entry.vertexIndices.forEach((vertex, position) => {
+          if (vertex >= node.mesh.vertexCount) {
+            return;
+          }
+          deltas.set(vertex, [
+            entry.values[position * 3],
+            entry.values[position * 3 + 1],
+            entry.values[position * 3 + 2]
+          ]);
+        });
+        animation
+          .ensureMeshTrack(node.id)
+          .setDeltasKey(entry.frame, deltas, entry.interpolation);
+      } else if (entry.kind === 'shape') {
         animation
           .ensureWeightTrack(entry.targetId, entry.shapeKeyId)
           .setKey(entry.frame, entry.weight, entry.interpolation);
@@ -4681,6 +4926,7 @@ export class EditorRuntime {
     let removed = 0;
     const transformFrames = new Map<string, Set<number>>();
     const shapeFrames = new Map<string, Set<number>>();
+    const meshFrames = new Map<string, Set<number>>();
     for (const reference of keys) {
       if (clip.tracks.some((track) => track.id === reference.trackId)) {
         let frames = transformFrames.get(reference.trackId);
@@ -4696,6 +4942,15 @@ export class EditorRuntime {
         if (!frames) {
           frames = new Set();
           shapeFrames.set(reference.trackId, frames);
+        }
+        frames.add(reference.frame);
+      } else if (
+        clip.meshTracks.some((track) => track.id === reference.trackId)
+      ) {
+        let frames = meshFrames.get(reference.trackId);
+        if (!frames) {
+          frames = new Set();
+          meshFrames.set(reference.trackId, frames);
         }
         frames.add(reference.frame);
       }
@@ -4732,6 +4987,22 @@ export class EditorRuntime {
         animation.removeWeightTrack(track.targetId, track.shapeKeyId);
       }
     }
+    for (const [trackId, frames] of meshFrames) {
+      const track = clip.meshTracks.find((item) => item.id === trackId);
+      if (!track) {
+        continue;
+      }
+      for (const frame of frames) {
+        const hadKey = track.keyframes.some((key) => key.frame === frame);
+        track.removeKey(frame);
+        if (hadKey) {
+          removed += 1;
+        }
+      }
+      if (track.keyframes.length === 0) {
+        animation.removeMeshTrack(track.targetId);
+      }
+    }
     if (removed === 0) {
       return 0;
     }
@@ -4763,13 +5034,36 @@ export class EditorRuntime {
   keyAnimationTrack(
     targetId: string,
     targetKind: import('../scene/SceneAnimation').AnimationTargetKind,
-    kind: 'transform' | 'shape',
+    kind: 'transform' | 'shape' | 'mesh',
     shapeKeyId?: string
   ): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const keyFrame = Math.round(this.animationFrame);
     this.animationFrame = keyFrame;
     const before = this.document.animation.snapshot();
-    if (kind === 'shape' && shapeKeyId) {
+    if (kind === 'mesh') {
+      const node = this.document.getNode(targetId);
+      if (!node) {
+        return;
+      }
+      const track = this.document.animation.getMeshTrack(node.id);
+      const values = track?.evaluate(keyFrame) ?? null;
+      if (track && values) {
+        const deltas = new Map<number, [number, number, number]>();
+        track.vertexIndices.forEach((vertex, position) => {
+          deltas.set(vertex, [
+            values[position * 3],
+            values[position * 3 + 1],
+            values[position * 3 + 2]
+          ]);
+        });
+        track.setDeltasKey(keyFrame, deltas, this.animationInterpolation);
+      } else {
+        return;
+      }
+    } else if (kind === 'shape' && shapeKeyId) {
       const node = this.document.getNode(targetId);
       const key = node?.shapeKeys.find((item) => item.id === shapeKeyId);
       if (!node || !key) {
@@ -4804,7 +5098,11 @@ export class EditorRuntime {
         this.document.animation,
         before,
         this.document.animation.snapshot(),
-        kind === 'shape' ? 'Key shape weight' : 'Key transform'
+        kind === 'shape'
+          ? 'Key shape weight'
+          : kind === 'mesh'
+            ? 'Key mesh pose'
+            : 'Key transform'
       )
     );
     this.applyAnimationPose();
@@ -4813,13 +5111,18 @@ export class EditorRuntime {
   /** Change the interpolation of one selected key without moving it. */
   setAnimationKeyInterpolation(
     targetId: string,
-    kind: 'transform' | 'shape',
+    kind: 'transform' | 'shape' | 'mesh',
     shapeKeyId: string | null,
     frame: number,
     interpolation: import('../scene/SceneAnimation').AnimationInterpolation
   ): void {
     const before = this.document.animation.snapshot();
-    if (kind === 'shape' && shapeKeyId) {
+    if (kind === 'mesh') {
+      const track = this.document.animation.getMeshTrack(targetId);
+      if (!track || !track.setInterpolation(frame, interpolation)) {
+        return;
+      }
+    } else if (kind === 'shape' && shapeKeyId) {
       const track = this.document.animation.getWeightTrack(targetId, shapeKeyId);
       const key = track?.keyframes.find((item) => item.frame === frame);
       if (!track || !key || key.interpolation === interpolation) {
@@ -4848,12 +5151,21 @@ export class EditorRuntime {
   /** Remove one key from a transform or shape-weight track. */
   deleteAnimationKeyAt(
     targetId: string,
-    kind: 'transform' | 'shape',
+    kind: 'transform' | 'shape' | 'mesh',
     shapeKeyId: string | null,
     frame: number
   ): void {
     const before = this.document.animation.snapshot();
-    if (kind === 'shape' && shapeKeyId) {
+    if (kind === 'mesh') {
+      const track = this.document.animation.getMeshTrack(targetId);
+      if (!track) {
+        return;
+      }
+      track.removeKey(frame);
+      if (track.keyframes.length === 0) {
+        this.document.animation.removeMeshTrack(targetId);
+      }
+    } else if (kind === 'shape' && shapeKeyId) {
       const track = this.document.animation.getWeightTrack(
         targetId,
         shapeKeyId
@@ -4889,7 +5201,7 @@ export class EditorRuntime {
   /** Move one key to another integer frame as one undoable edit. */
   moveAnimationKey(
     targetId: string,
-    kind: 'transform' | 'shape',
+    kind: 'transform' | 'shape' | 'mesh',
     shapeKeyId: string | null,
     fromFrame: number,
     toFrame: number
@@ -4907,7 +5219,23 @@ export class EditorRuntime {
       return;
     }
     const before = this.document.animation.snapshot();
-    if (kind === 'shape' && shapeKeyId) {
+    if (kind === 'mesh') {
+      const track = this.document.animation.getMeshTrack(targetId);
+      const key = track?.keyframes.find((item) => item.frame === fromFrame);
+      if (!track || !key) {
+        return;
+      }
+      const deltas = new Map<number, [number, number, number]>();
+      track.vertexIndices.forEach((vertex, position) => {
+        deltas.set(vertex, [
+          key.values[position * 3],
+          key.values[position * 3 + 1],
+          key.values[position * 3 + 2]
+        ]);
+      });
+      track.removeKey(fromFrame);
+      track.setDeltasKey(targetFrame, deltas, key.interpolation);
+    } else if (kind === 'shape' && shapeKeyId) {
       const track = this.document.animation.getWeightTrack(
         targetId,
         shapeKeyId
@@ -5080,8 +5408,10 @@ export class EditorRuntime {
   playAnimation(): void {
     if (
       this.animationPlaying ||
+      this.meshPoseEdit ||
       (this.document.animation.tracks.length === 0 &&
-        this.document.animation.weightTracks.length === 0)
+        this.document.animation.weightTracks.length === 0 &&
+        this.document.animation.meshTracks.length === 0)
     ) {
       return;
     }
@@ -5145,6 +5475,7 @@ export class EditorRuntime {
     this.animationPose.clear();
     for (const node of this.document.nodes) {
       node.setShapeWeightOverrides(null);
+      node.setMotionDeltas(null);
     }
     this.syncScene();
   }
@@ -6382,6 +6713,9 @@ export class EditorRuntime {
 
   /** Select a group as the active transform target. */
   selectGroup(groupId: string): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const group = this.document.getGroup(groupId);
     if (!group) {
       return;
@@ -6402,6 +6736,9 @@ export class EditorRuntime {
 
   /** Group all object-selected ungrouped mesh nodes under one transform. */
   groupSelectedNodes(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const selected = this.document.nodes.filter((node) =>
       this.selectedNodeIds.has(node.id)
     );
@@ -6556,6 +6893,9 @@ export class EditorRuntime {
   }
 
   selectNode(nodeId: string, additive = false): void {
+    if (this.meshPoseEdit && nodeId !== this.activeNodeId) {
+      return;
+    }
     if (!this.document.getNode(nodeId)) {
       return;
     }
@@ -6590,6 +6930,9 @@ export class EditorRuntime {
 
   /** Create a new primitive, place it beside the scene, and select it. */
   createPrimitive(kind: PrimitiveKind): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const node = this.document.createNode(kind, this.textureLibrary.activeAssetId);
     // New primitives always begin at the world origin; overlapping an existing
     // object is expected and leaves placement entirely under user control.
@@ -6633,6 +6976,9 @@ export class EditorRuntime {
 
   /** Delete the active node while keeping its restoration state in history. */
   deleteActiveNode(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const node = this.getActiveNode();
     if (!node) {
       return;
@@ -6655,6 +7001,9 @@ export class EditorRuntime {
 
   /** Delete the selected faces, or all faces incident to selected edges/vertices. */
   deleteSelection(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     if (this.drag || this.gizmoDrag) {
       this.cancelToolPointer();
     }
@@ -6682,6 +7031,9 @@ export class EditorRuntime {
 
   /** Join all object-selected mesh nodes into the active target object. */
   joinSelectedNodes(): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     const selected = this.document.nodes.filter((node) =>
       this.selectedNodeIds.has(node.id)
     );
@@ -6871,6 +7223,9 @@ export class EditorRuntime {
 
   /** Arm a one-shot ActionDock operation; the next viewport drag applies it. */
   armAction(kind: MeshActionKind): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
     if (this.uvOpen) {
       return;
     }
@@ -7281,7 +7636,7 @@ export class EditorRuntime {
   }
 
   undo(): void {
-    if (this.shapeEdit) {
+    if (this.shapeEdit || this.meshPoseEdit) {
       return;
     }
     if (this.drag || this.gizmoDrag) {
@@ -7292,7 +7647,7 @@ export class EditorRuntime {
   }
 
   redo(): void {
-    if (this.shapeEdit) {
+    if (this.shapeEdit || this.meshPoseEdit) {
       return;
     }
     if (this.drag || this.gizmoDrag) {
@@ -7379,6 +7734,14 @@ export class EditorRuntime {
   }
 
   async saveProject(): Promise<void> {
+    if (this.meshPoseEdit) {
+      this.notify(
+        'warning',
+        'Finish or cancel the mesh pose',
+        'The temporary pose cannot be saved as the base mesh.'
+      );
+      return;
+    }
     if (this.fileBusy) {
       return;
     }
@@ -7421,6 +7784,14 @@ export class EditorRuntime {
 
   /** Open a project through the platform adapter, replacing the scene on success. */
   async openProject(): Promise<void> {
+    if (this.meshPoseEdit) {
+      this.notify(
+        'warning',
+        'Finish or cancel the mesh pose',
+        'Close the temporary pose before opening another project.'
+      );
+      return;
+    }
     if (this.fileBusy) {
       return;
     }
@@ -8594,6 +8965,9 @@ export class EditorRuntime {
     clientX: number,
     clientY: number
   ): boolean {
+    if (this.meshPoseEdit) {
+      return false;
+    }
     if (this.modalTransform) {
       return true;
     }
@@ -9724,6 +10098,9 @@ export class EditorRuntime {
     sample: PointerSample,
     target: MeshNode | SceneGroup
   ): boolean {
+    if (this.meshPoseEdit) {
+      return false;
+    }
     const frame = this.renderer.getGizmoFrame();
     const ray = this.renderer.getPointerRay(sample.clientX, sample.clientY);
     if (!frame || !ray || hit.axis === 'view') {
@@ -9989,6 +10366,7 @@ export class EditorRuntime {
   }
 
   private afterDocumentChanged(event: HistoryEvent): void {
+    this.refreshMotionLocks();
     this.pruneUvSelection();
     this.renderer.refreshTexture();
     if (
@@ -10268,6 +10646,7 @@ export class EditorRuntime {
     this.document.replaceLights(decoded.document.lights);
     this.document.replaceCameras(decoded.document.cameras);
     this.document.replaceAnimation(decoded.document.animation);
+    this.refreshMotionLocks();
     this.stopAnimationLoop();
     this.animationFrame = decoded.document.animation.startFrame;
     this.animationPose.clear();

@@ -36,6 +36,9 @@
   );
 
   const dynamicHint = $derived.by(() => {
+    if (session.snapshot.meshPoseEditing) {
+      return `Mesh pose · frame ${session.snapshot.meshPoseFrame} · move elements · Finish or Cancel in Animation`;
+    }
     if (pointer?.type === 'pen') {
       const pressure = Math.round(pointer.pressure * 100);
       return `Pen · ${pressure}% pressure · tilt ${Math.round(pointer.tiltX)}° / ${Math.round(pointer.tiltY)}°`;

@@ -21,6 +21,7 @@ import {
   type AnimationInterpolation,
   type AnimationClipSnapshot,
   type AnimationSnapshot,
+  type MeshMotionTrackSnapshot,
   type ShapeWeightTrackSnapshot,
   type AnimationTargetKind
 } from '../scene/SceneAnimation';
@@ -40,7 +41,7 @@ import {
 } from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 5;
+const FORMAT_VERSION = 6;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -50,6 +51,7 @@ const MAX_LIGHTS = 64;
 const MAX_CAMERAS = 32;
 const MAX_ANIMATION_TRACKS = 256;
 const MAX_ANIMATION_CLIPS = 32;
+const MAX_MESH_MOTION_VERTICES = 8192;
 const MAX_ANIMATION_KEYS = 4096;
 const MAX_SHAPE_KEYS = 16;
 const MAX_VERTICES = 1_000_000;
@@ -685,7 +687,92 @@ function validateCamerasManifest(value: unknown): CameraSnapshot[] {
   return cameras;
 }
 
-/** Validate v5 clip animation or migrate a legacy flat animation manifest. */
+/** Validate optional Mesh Motion tracks and their stable vertex sets. */
+function validateMeshMotionTracks(
+  value: unknown,
+  trackIds: Set<string>
+): { tracks: MeshMotionTrackSnapshot[]; keyCount: number; trackCount: number } {
+  if (value === undefined) {
+    return { tracks: [], keyCount: 0, trackCount: 0 };
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('The .lpoli mesh-motion tracks are invalid.');
+  }
+  let keyCount = 0;
+  const tracks = value.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli mesh-motion track is invalid.');
+    }
+    const track = raw as Partial<MeshMotionTrackSnapshot>;
+    if (
+      typeof track.id !== 'string' ||
+      track.id.length === 0 ||
+      trackIds.has(track.id) ||
+      typeof track.targetId !== 'string' ||
+      track.targetId.length === 0 ||
+      !Array.isArray(track.vertexIndices) ||
+      track.vertexIndices.length > MAX_MESH_MOTION_VERTICES ||
+      !Array.isArray(track.keyframes)
+    ) {
+      throw new Error('The .lpoli mesh-motion track metadata is invalid.');
+    }
+    const seenVertices = new Set<number>();
+    for (const vertex of track.vertexIndices) {
+      if (
+        !Number.isInteger(vertex) ||
+        vertex < 0 ||
+        seenVertices.has(vertex)
+      ) {
+        throw new Error('The .lpoli mesh-motion vertex set is invalid.');
+      }
+      seenVertices.add(vertex);
+    }
+    const vertexIndices = [...track.vertexIndices].sort((a, b) => a - b);
+    const expectedValues = vertexIndices.length * 3;
+    const seenFrames = new Set<number>();
+    const keyframes = track.keyframes
+      .map((key) => {
+        if (typeof key !== 'object' || key === null) {
+          throw new Error('The .lpoli mesh-motion keyframe is invalid.');
+        }
+        const item = key as {
+          frame?: unknown;
+          values?: unknown;
+          interpolation?: unknown;
+        };
+        if (
+          !Number.isInteger(item.frame) ||
+          seenFrames.has(item.frame as number) ||
+          !Array.isArray(item.values) ||
+          item.values.length !== expectedValues ||
+          !item.values.every(
+            (entry) => typeof entry === 'number' && Number.isFinite(entry)
+          ) ||
+          (item.interpolation !== 'step' && item.interpolation !== 'linear')
+        ) {
+          throw new Error('The .lpoli mesh-motion keyframes are invalid.');
+        }
+        seenFrames.add(item.frame as number);
+        keyCount += 1;
+        return {
+          frame: item.frame as number,
+          values: item.values as number[],
+          interpolation: item.interpolation as AnimationInterpolation
+        };
+      })
+      .sort((a, b) => a.frame - b.frame);
+    trackIds.add(track.id);
+    return {
+      id: track.id,
+      targetId: track.targetId,
+      vertexIndices,
+      keyframes
+    };
+  });
+  return { tracks, keyCount, trackCount: tracks.length };
+}
+
+/** Validate v6 clip animation or migrate a legacy flat animation manifest. */
 function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
   if (value === undefined) {
     return null;
@@ -767,13 +854,17 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       }
       weightTrackIds.add(track.id);
     }
+    const motion = validateMeshMotionTracks(clip.meshTracks, trackIds);
+    totalTracks += motion.trackCount;
+    totalKeys += motion.keyCount;
     return {
       id: clip.id,
       name: clip.name,
       startFrame: validated.startFrame as number,
       endFrame: validated.endFrame as number,
       tracks: clipTracks,
-      weightTracks: validated.weightTracks ?? []
+      weightTracks: validated.weightTracks ?? [],
+      meshTracks: motion.tracks
     };
   });
   if (

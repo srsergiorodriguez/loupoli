@@ -7,7 +7,7 @@ import type { NodeTransform } from '../scene/MeshNode';
 
 /** One detached keyframe held by the animation clipboard. */
 export interface AnimationKeyClipboardEntry {
-  readonly kind: 'transform' | 'shape';
+  readonly kind: 'transform' | 'shape' | 'mesh';
   readonly targetId: string;
   readonly targetKind: AnimationTargetKind;
   readonly shapeKeyId: string | null;
@@ -15,6 +15,8 @@ export interface AnimationKeyClipboardEntry {
   readonly interpolation: AnimationInterpolation;
   readonly transform?: NodeTransform;
   readonly weight?: number;
+  readonly vertexIndices?: readonly number[];
+  readonly values?: readonly number[];
 }
 
 /** Minimal key reference accepted by the clipboard builder. */
@@ -53,6 +55,27 @@ export function buildAnimationKeyClipboard(
         interpolation: key.interpolation,
         transform: key.transform
       });
+      continue;
+    }
+    const meshTrack = clip.meshTracks.find(
+      (item) => item.id === reference.trackId
+    );
+    if (meshTrack) {
+      const key = meshTrack.keyframes.find(
+        (item) => item.frame === reference.frame
+      );
+      if (key) {
+        selected.set(`${meshTrack.id}:${key.frame}`, {
+          kind: 'mesh',
+          targetId: meshTrack.targetId,
+          targetKind: 'node',
+          shapeKeyId: null,
+          frame: key.frame,
+          interpolation: key.interpolation,
+          vertexIndices: [...meshTrack.vertexIndices],
+          values: Array.from(key.values)
+        });
+      }
       continue;
     }
     const weightTrack = clip.weightTracks.find(
