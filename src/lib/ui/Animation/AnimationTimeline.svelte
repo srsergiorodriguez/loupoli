@@ -314,6 +314,17 @@
       return;
     }
     if (
+      event.shiftKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      event.key === 'ArrowLeft'
+    ) {
+      event.preventDefault();
+      session.rewindAnimation();
+      return;
+    }
+    if (
       (event.key === ' ' || event.code === 'Space') &&
       !event.metaKey &&
       !event.ctrlKey &&
@@ -484,6 +495,7 @@
         label="Rewind animation to start"
         icon="rewind"
         tooltip="Rewind to start"
+        shortcut={shortcut('rewind').display}
         disabled={snapshot.meshPoseEditing}
         onActivate={() => session.rewindAnimation()}
       />

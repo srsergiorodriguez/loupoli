@@ -23,6 +23,7 @@ export type ShortcutId =
   | 'copyKeys'
   | 'pasteKeys'
   | 'playback'
+  | 'rewind'
   | 'delete'
   | 'frame'
   | 'home'
@@ -44,6 +45,7 @@ const definitions: Record<ShortcutId, Omit<ShortcutDefinition, 'id'>> = {
   copyKeys: { label: 'Copy animation keys', display: `${MOD_KEY}C` },
   pasteKeys: { label: 'Paste animation keys', display: `${MOD_KEY}V` },
   playback: { label: 'Play/pause animation', display: 'Space' },
+  rewind: { label: 'Rewind animation', display: '⇧←' },
   delete: { label: 'Delete selection', display: 'Delete' },
   frame: { label: 'Frame selection', display: 'F' },
   home: { label: 'Reset view', display: 'Home' },
