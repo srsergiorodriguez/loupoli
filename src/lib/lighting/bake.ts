@@ -730,17 +730,6 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
         coverage.data[pixel * 4 + 3] > 0 ? 1 : 0;
     }
   }
-  bleedImageData(
-    data,
-    width,
-    height,
-    4,
-    dilateMask(coverageMask, width, height, 4)
-  );
-  for (let offset = 3; offset < data.length; offset += 4) {
-    data[offset] = 255;
-  }
-  fillBrightCracks(data, width, height, 2);
   const softness = Math.max(
     0,
     ...lights
@@ -748,6 +737,20 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       .map((light) => light.shadowSoftness)
   );
   const blurRadius = Math.round(1 + softness * 5);
+  // The blur must never reach the neutral white exterior. Size the gutter
+  // from the actual penumbra radius, not a fixed constant.
+  const gutter = Math.max(4, blurRadius + 2);
+  bleedImageData(
+    data,
+    width,
+    height,
+    gutter,
+    dilateMask(coverageMask, width, height, gutter)
+  );
+  for (let offset = 3; offset < data.length; offset += 4) {
+    data[offset] = 255;
+  }
+  fillBrightCracks(data, width, height, 2);
   blurLighting(data, width, height, blurRadius);
   return new ImageData(data, width, height);
 }

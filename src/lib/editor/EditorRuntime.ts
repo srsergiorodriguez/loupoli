@@ -5885,7 +5885,7 @@ export class EditorRuntime {
         width: target.width,
         height: target.height,
         occluders: this.bakeOccluders(),
-        shadowSamples: 32
+        shadowSamples: 16
       });
       if (!after) {
         throw new Error('The object has no UV-covered surface to bake.');
