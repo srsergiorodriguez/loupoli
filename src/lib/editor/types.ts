@@ -363,6 +363,8 @@ export interface EditorSnapshot {
   readonly animationLoop: boolean;
   readonly animationPlaying: boolean;
   readonly animationTracks: readonly AnimationTrackSummary[];
+  readonly annotationMode: boolean;
+  readonly annotationCount: number;
   readonly animationInterpolation: AnimationInterpolation;
   readonly shapeEditingId: string | null;
   readonly activeShapeKeyId: string | null;

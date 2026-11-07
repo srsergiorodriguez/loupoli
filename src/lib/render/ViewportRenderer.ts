@@ -42,6 +42,7 @@ import { ViewportGrid } from './Grid';
 import { MeshNodeView } from './MeshNodeView';
 import { LightGizmos } from './LightGizmos';
 import { CameraGizmos } from './CameraGizmos';
+import { AnnotationOverlay } from './AnnotationOverlay';
 import {
   createViewportMaterials,
   disposeViewportMaterials,
@@ -82,6 +83,15 @@ export class ViewportRenderer {
     string,
     { texture: Texture | null; alphaMode: 'opaque' | 'cutout' | 'blend'; materials: ViewportMaterials }
   >();
+  private readonly referenceMaterials = new Map<
+    string,
+    {
+      material: MeshBasicMaterial;
+      texture: Texture | null;
+      opacity: number;
+      inFront: boolean;
+    }
+  >();
   private readonly resolveNodeTexture: (node: MeshNode) => Texture | null;
   private readonly resolveNodeTextureId: (node: MeshNode) => string | null;
   private readonly resolveNodeAlphaMode: (node: MeshNode) => 'opaque' | 'cutout' | 'blend';
@@ -89,6 +99,7 @@ export class ViewportRenderer {
   private readonly objectGizmo: ObjectGizmo;
   private readonly lightGizmos = new LightGizmos();
   private readonly cameraGizmos = new CameraGizmos();
+  private readonly annotations: AnnotationOverlay;
 
   private readonly vertexMaterial: PointsMaterial;
   private readonly selectedVertexMaterial: PointsMaterial;
@@ -182,6 +193,8 @@ export class ViewportRenderer {
     this.scene.add(this.grid.group);
     this.objectGizmo = new ObjectGizmo(theme);
     this.scene.add(this.objectGizmo.group);
+    this.annotations = new AnnotationOverlay(theme);
+    this.scene.add(this.annotations.group);
 
     this.vertexMaterial = new PointsMaterial({
       name: 'loupoli-vertex-handles',
@@ -360,7 +373,18 @@ export class ViewportRenderer {
         view.setShadingMode(this.currentMode);
         view.setSeamVisible(this.seamOverlayVisible);
       }
-      view.setSurfaceMaterials(this.materialsForNode(node));
+      if (node.reference) {
+        view.setSurfaceMaterials(this.materials);
+        view.setReferenceMaterial(this.referenceMaterialFor(node));
+      } else {
+        view.setReferenceMaterial(null);
+        view.setSurfaceMaterials(this.materialsForNode(node));
+        const stale = this.referenceMaterials.get(node.id);
+        if (stale) {
+          stale.material.dispose();
+          this.referenceMaterials.delete(node.id);
+        }
+      }
 
       const parent =
         node.parentId !== null
@@ -379,7 +403,7 @@ export class ViewportRenderer {
         isActive,
         selectionMode,
         isActive ? selectedElements : [],
-        showEditHandles && !evaluated.modifiersActive
+        showEditHandles && !evaluated.modifiersActive && !node.reference
       );
     }
 
@@ -391,6 +415,13 @@ export class ViewportRenderer {
     for (const id of [...this.textureMaterials.keys()]) {
       if (!referencedTextures.has(id)) {
         this.clearTextureMaterials(id);
+      }
+    }
+    const incomingIds = new Set(nodes.map((node) => node.id));
+    for (const [id, entry] of this.referenceMaterials) {
+      if (!incomingIds.has(id)) {
+        entry.material.dispose();
+        this.referenceMaterials.delete(id);
       }
     }
 
@@ -416,6 +447,12 @@ export class ViewportRenderer {
     }
 
     this.applyActionPreviewLine();
+    this.schedule();
+  }
+
+  /** Replace editor-only world-space annotation segments. */
+  setAnnotationSegments(positions: Float32Array | null): void {
+    this.annotations.setSegments(positions);
     this.schedule();
   }
 
@@ -593,9 +630,16 @@ export class ViewportRenderer {
     const previousGizmo = this.objectGizmo.group.visible;
     const previousLights = this.lightGizmos.group.visible;
     const previousCameras = this.cameraGizmos.group.visible;
+    const previousAnnotations = this.annotations.group.visible;
     const previousClear = this.renderer.getClearColor(new Color());
     const previousClearAlpha = this.renderer.getClearAlpha();
     const views = [...this.nodeViews.values()];
+    const hiddenReferences = views
+      .filter((view) => view.isReference && view.group.visible)
+      .map((view) => view);
+    for (const view of hiddenReferences) {
+      view.group.visible = false;
+    }
     for (const view of views) {
       view.setCleanRender(true);
     }
@@ -603,6 +647,7 @@ export class ViewportRenderer {
     this.objectGizmo.group.visible = false;
     this.lightGizmos.group.visible = false;
     this.cameraGizmos.group.visible = false;
+    this.annotations.group.visible = false;
 
     const target = new WebGLRenderTarget(width, height, {
       depthBuffer: true,
@@ -654,8 +699,12 @@ export class ViewportRenderer {
       this.objectGizmo.group.visible = previousGizmo;
       this.lightGizmos.group.visible = previousLights;
       this.cameraGizmos.group.visible = previousCameras;
+      this.annotations.group.visible = previousAnnotations;
       for (const view of views) {
         view.setCleanRender(false);
+      }
+      for (const view of hiddenReferences) {
+        view.group.visible = true;
       }
       target.dispose();
       this.schedule();
@@ -1053,6 +1102,42 @@ export class ViewportRenderer {
     return this.scratchPlaneHit.clone();
   }
 
+  /** Build or update the unlit transparent material for a reference plane. */
+  private referenceMaterialFor(node: MeshNode): MeshBasicMaterial {
+    const settings = node.reference;
+    const opacity = settings?.opacity ?? 0.4;
+    const inFront = settings?.inFront ?? true;
+    const texture = this.resolveNodeTexture(node);
+    const existing = this.referenceMaterials.get(node.id);
+    if (
+      existing &&
+      existing.texture === texture &&
+      existing.opacity === opacity &&
+      existing.inFront === inFront
+    ) {
+      return existing.material;
+    }
+    existing?.material.dispose();
+    const material = new MeshBasicMaterial({
+      name: `loupoli-reference-${node.id}`,
+      map: texture,
+      color: 0xffffff,
+      transparent: true,
+      opacity,
+      side: DoubleSide,
+      depthTest: !inFront,
+      depthWrite: false,
+      toneMapped: false
+    });
+    this.referenceMaterials.set(node.id, {
+      material,
+      texture,
+      opacity,
+      inFront
+    });
+    return material;
+  }
+
   /** Materials for a node's effective texture, cached per asset. */
   private materialsForNode(node: MeshNode): ViewportMaterials {
     const id = this.resolveNodeTextureId(node);
@@ -1175,6 +1260,7 @@ export class ViewportRenderer {
     this.objectGizmo.dispose();
     this.lightGizmos.dispose();
     this.cameraGizmos.dispose();
+    this.annotations.dispose();
 
     this.vertexMaterial.dispose();
     this.selectedVertexMaterial.dispose();

@@ -29,7 +29,10 @@ import {
   loopCutFromEdge,
   mergeSelectedVertices
 } from '../geometry/topology';
-import type { PrimitiveKind } from '../geometry/primitives';
+import {
+  createReferencePlaneMesh,
+  type PrimitiveKind
+} from '../geometry/primitives';
 import { InputRouter, type InputRouterHost, type PointerSample } from '../input/InputRouter';
 import type { AxisName } from '../render/CameraRig';
 import { ViewportRenderer } from '../render/ViewportRenderer';
@@ -84,6 +87,7 @@ import {
   prepareTextureSurface
 } from '../texture/TextureSurface';
 import type { PaintGradient, PaintTool } from '../paint/types';
+import type { ImageFitOptions } from '../texture/imageFit';
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
   paintBounds,
@@ -179,6 +183,9 @@ import {
 import { MoveVertexCommand } from './commands/MoveVertexCommand';
 import { TransformVerticesCommand } from './commands/TransformVerticesCommand';
 import { TransformNodeCommand } from './commands/TransformNodeCommand';
+import { SetReferenceSettingsCommand } from './commands/ReferenceCommands';
+import { SetAnnotationsCommand } from './commands/AnnotationCommands';
+import type { AnnotationStrokeSnapshot } from '../scene/SceneAnnotations';
 import {
   AutosaveService,
   type AutosaveState,
@@ -637,6 +644,12 @@ export class EditorRuntime {
   private animationLoop = true;
   private animationInterpolation: AnimationInterpolation = 'linear';
   private animationPose = new Map<string, NodeTransform>();
+  private annotationMode = false;
+  private annotationStroke: {
+    pointerId: number;
+    points: Vec3[];
+    referenceNodeId: string | null;
+  } | null = null;
   private animationTexturePose = new Map<string, string | null>();
   private animationCameraPose = new Map<string, CameraPose>();
   private animationLightPose = new Map<string, LightPose>();
@@ -864,7 +877,9 @@ export class EditorRuntime {
       projectionPreview: this.projectionPreview,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
-      textureAssets: this.textureLibrary.summaries(),
+      textureAssets: this.textureLibrary
+        .summaries()
+        .filter((asset) => (asset.role ?? 'model') === 'model'),
       textureAssetId: this.textureLibrary.activeAssetId,
       activeNodeTextureId: active ? this.effectiveNodeTextureId(active) : null,
       textureLayers: this.textureStack.summaries(),
@@ -974,6 +989,8 @@ export class EditorRuntime {
       animationLoop: this.animationLoop,
       animationPlaying: this.animationPlaying,
       animationTracks: this.animationTrackSummaries(),
+      annotationMode: this.annotationMode,
+      annotationCount: this.document.annotations.all.length,
       animationInterpolation: this.animationInterpolation,
       shapeEditingId: this.shapeEdit?.keyId ?? null,
       activeShapeKeyId:
@@ -1011,13 +1028,17 @@ export class EditorRuntime {
   }
 
   /** Import an image as a new raster layer on the active texture asset. */
-  async importTextureImage(blob: Blob, name: string): Promise<void> {
+  async importTextureImage(
+    blob: Blob,
+    name: string,
+    fit: ImageFitOptions = { mode: 'contain' }
+  ): Promise<void> {
     const asset = this.textureLibrary.active;
     if (!asset) {
       return;
     }
     const before = asset.snapshot();
-    if (!(await asset.importImageLayer(blob, name))) {
+    if (!(await asset.importImageLayer(blob, name, fit))) {
       return;
     }
     const after = asset.snapshot();
@@ -1040,6 +1061,230 @@ export class EditorRuntime {
     }
     this.history.execute(new AssignTextureCommand(targets, textureId));
     this.syncScene();
+    this.publish();
+  }
+
+  /** Build a reference-only texture asset from an imported image. */
+  private async buildReferenceTexture(
+    file: File,
+    name: string
+  ): Promise<import('../texture/TextureAsset').TextureAsset | null> {
+    const bitmap = await createImageBitmap(file);
+    const width = bitmap.width;
+    const height = bitmap.height;
+    bitmap.close();
+    if (width < 1 || height < 1) {
+      throw new Error('The selected image has no pixels.');
+    }
+    const limit = 2048;
+    const scale = Math.min(1, limit / width, limit / height);
+    const textureWidth = Math.max(1, Math.round(width * scale));
+    const textureHeight = Math.max(1, Math.round(height * scale));
+    const asset = this.textureLibrary.build(
+      textureWidth,
+      textureHeight,
+      `Reference · ${name}`.slice(0, 64),
+      'linear',
+      'reference'
+    );
+    if (!(await asset.importImageLayer(file, name))) {
+      return null;
+    }
+    const base = asset
+      .summaries()
+      .find((layer) => layer.kind === 'fill');
+    if (base) {
+      asset.removeLayer(base.id);
+    }
+    asset.setAlphaMode('blend');
+    return asset;
+  }
+
+  /** Create one reference image plane and its hidden texture asset. */
+  async addReferenceImage(file: File): Promise<void> {
+    if (this.fileBusy) {
+      return;
+    }
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const asset = await this.buildReferenceTexture(
+        file,
+        file.name.replace(/\.[^.]+$/, '')
+      );
+      if (!asset) {
+        return;
+      }
+      const node = new MeshNode(
+        createReferencePlaneMesh(),
+        'reference',
+        `Reference · ${file.name.replace(/\.[^.]+$/, '')}`.slice(0, 64),
+        undefined,
+        asset.id
+      );
+      const view = this.renderer.captureCameraView();
+      const direction = new Vector3(...view.position)
+        .sub(new Vector3(...view.target))
+        .normalize();
+      const rotation = new Quaternion().setFromUnitVectors(
+        new Vector3(0, 0, 1),
+        direction
+      );
+      const euler = new Euler().setFromQuaternion(rotation, 'XYZ');
+      const aspect = asset.width / Math.max(1, asset.height);
+      const longest = 4;
+      node.transform.position = [...view.target] as [number, number, number];
+      node.transform.rotation = [euler.x, euler.y, euler.z];
+      node.transform.scale =
+        aspect >= 1
+          ? [longest, longest / aspect, 1]
+          : [longest * aspect, longest, 1];
+      node.setReference({ opacity: 0.4, inFront: true });
+      const previousActive = this.textureLibrary.activeAssetId;
+      this.activeGroupId = null;
+      this.activeNodeId = node.id;
+      this.selectedNodeIds.clear();
+      this.selectedNodeIds.add(node.id);
+      this.selection.setContext(node.id, 'vertex');
+      this.history.execute(
+        new CompositeCommand('Add reference image', [
+          new CreateTextureAssetCommand(this.textureLibrary, asset),
+          new CreateMeshNodeCommand(this.document, node, this.document.nodes.length)
+        ])
+      );
+      if (previousActive) {
+        this.textureLibrary.setActive(previousActive);
+      }
+      this.autosave.markTextureDirty();
+      this.renderer.frameActiveNode();
+      this.notify('success', 'Reference image added', file.name);
+      this.publish();
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Reference image failed', message);
+    } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Replace the active reference image while preserving its transform. */
+  async replaceActiveReferenceImage(file: File): Promise<void> {
+    const node = this.getActiveNode();
+    const oldAsset = this.textureLibrary.get(node?.textureId ?? null);
+    if (!node?.reference || !oldAsset || oldAsset.role !== 'reference' || this.fileBusy) {
+      return;
+    }
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const asset = await this.buildReferenceTexture(
+        file,
+        file.name.replace(/\.[^.]+$/, '')
+      );
+      if (!asset) {
+        return;
+      }
+      const beforeTransform = this.cloneTransform(node.transform);
+      const aspect = asset.width / Math.max(1, asset.height);
+      const afterTransform = this.cloneTransform(node.transform);
+      afterTransform.scale = [
+        Math.max(0.001, afterTransform.scale[1] * aspect),
+        afterTransform.scale[1],
+        afterTransform.scale[2]
+      ];
+      const commands: import('./commands/EditorCommand').EditorCommand[] = [
+        new CreateTextureAssetCommand(this.textureLibrary, asset),
+        new AssignTextureCommand([node], asset.id),
+        new TransformNodeCommand(node, beforeTransform, afterTransform)
+      ];
+      if (oldAsset.role === 'reference') {
+        commands.push(new DeleteTextureAssetCommand(this.textureLibrary, oldAsset));
+      }
+      this.history.execute(
+        new CompositeCommand('Replace reference image', commands)
+      );
+      const modelAsset =
+        this.textureLibrary
+          .summaries()
+          .find((item) => (item.role ?? 'model') === 'model')?.id ?? null;
+      if (modelAsset) {
+        this.textureLibrary.setActive(modelAsset);
+      }
+      this.autosave.markTextureDirty();
+      this.notify('success', 'Reference image replaced', file.name);
+      this.publish();
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'Reference image failed', message);
+    } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Refit the active reference plane to the image's natural aspect. */
+  matchReferenceAspect(): void {
+    const node = this.getActiveNode();
+    const asset = this.textureLibrary.get(node?.textureId ?? null);
+    if (!node?.reference || !asset) {
+      return;
+    }
+    const aspect = asset.width / Math.max(1, asset.height);
+    const before = this.cloneTransform(node.transform);
+    const after = this.cloneTransform(node.transform);
+    after.scale = [
+      Math.max(0.001, after.scale[1] * aspect),
+      after.scale[1],
+      after.scale[2]
+    ];
+    if (
+      Math.abs(before.scale[0] - after.scale[0]) < 1e-7 &&
+      Math.abs(before.scale[1] - after.scale[1]) < 1e-7
+    ) {
+      return;
+    }
+    this.history.execute(new TransformNodeCommand(node, before, after));
+    this.publish();
+  }
+
+  /** Change the active reference plane opacity as one undoable edit. */
+  setReferenceOpacity(opacity: number): void {
+    const node = this.getActiveNode();
+    if (!node?.reference) {
+      return;
+    }
+    const before = node.reference;
+    const after = {
+      opacity: Math.max(0, Math.min(1, opacity)),
+      inFront: before.inFront
+    };
+    if (Math.abs(before.opacity - after.opacity) < 1e-7) {
+      return;
+    }
+    this.history.execute(
+      new SetReferenceSettingsCommand(node, before, after)
+    );
+    this.publish();
+  }
+
+  /** Toggle whether the active reference plane draws over the model. */
+  setReferenceInFront(inFront: boolean): void {
+    const node = this.getActiveNode();
+    if (!node?.reference || node.reference.inFront === inFront) {
+      return;
+    }
+    const before = node.reference;
+    this.history.execute(
+      new SetReferenceSettingsCommand(node, before, {
+        opacity: before.opacity,
+        inFront
+      })
+    );
     this.publish();
   }
 
@@ -1329,7 +1574,8 @@ export class EditorRuntime {
   }
 
   private beginLasso(x: number, y: number): boolean {
-    if (!this.lassoMode || !this.getActiveNode()) {
+    const node = this.getActiveNode();
+    if (!this.lassoMode || !node || node.reference) {
       return false;
     }
     this.lassoSelectionBefore = this.captureSelection();
@@ -1507,6 +1753,7 @@ export class EditorRuntime {
     this.document.replaceLights(fresh.lights);
     this.document.replaceCameras(fresh.cameras);
     this.document.replaceAnimation(fresh.animation);
+    this.document.annotations.clear();
     this.refreshMotionLocks();
     this.stopAnimationLoop();
     this.animationFrame = 0;
@@ -1585,6 +1832,24 @@ export class EditorRuntime {
       this.projectionPreview = null;
     }
     this.renderer.setGridVisible(true);
+    if (workspace !== 'model' && workspace !== 'animation') {
+      const active = this.getActiveNode();
+      if (active?.reference) {
+        const fallback = this.document.nodes.find((node) => !node.reference);
+        this.activeNodeId = fallback?.id ?? null;
+        this.selectedNodeIds.clear();
+        if (fallback) {
+          this.selectedNodeIds.add(fallback.id);
+        }
+        this.selection.setContext(this.activeNodeId, this.selection.mode);
+      }
+    }
+    if (workspace !== 'model') {
+      this.annotationMode = false;
+      if (this.annotationStroke) {
+        this.annotationStroke = null;
+      }
+    }
     this.workspace = workspace;
     if (workspace !== 'animation') {
       this.pauseAnimation();
@@ -2618,6 +2883,13 @@ export class EditorRuntime {
       return;
     }
     const node = this.getActiveNode();
+    if (!node || node.reference) {
+      if (this.surfaceCursor !== null) {
+        this.surfaceCursor = null;
+        this.publish();
+      }
+      return;
+    }
     const supported =
       this.paintTool === 'brush' ||
       this.paintTool === 'eraser' ||
@@ -2957,7 +3229,7 @@ export class EditorRuntime {
       return false;
     }
     const node = this.getActiveNode();
-    if (!node) {
+    if (!node || node.reference) {
       return false;
     }
     const asset = this.textureLibrary.get(node.textureId);
@@ -3793,7 +4065,7 @@ export class EditorRuntime {
 
   /** Select all elements in the current mode in the active editor. */
   selectAllActive(): void {
-    if (this.activeEditor === 'paint') {
+    if (this.activeEditor === 'paint' || this.getActiveNode()?.reference) {
       return;
     }
     if (this.activeEditor === 'uv' && this.uvOpen) {
@@ -4498,7 +4770,14 @@ export class EditorRuntime {
 
   /** Reactive-safe animation track summaries with resolved target names. */
   private animationTrackSummaries() {
-    const transforms = this.document.animation.tracks.map((track) => ({
+    const transforms = this.document.animation.tracks
+      .filter((track) => {
+        if (track.targetKind === 'group') {
+          return true;
+        }
+        return !this.document.getNode(track.targetId)?.reference;
+      })
+      .map((track) => ({
       id: track.id,
       kind: 'transform' as const,
       targetId: track.targetId,
@@ -4516,7 +4795,7 @@ export class EditorRuntime {
     const activeGroup = this.getActiveGroup();
     const activeNode = activeGroup ? null : this.getActiveNode();
     if (
-      (activeGroup || activeNode) &&
+      (activeGroup || (activeNode && !activeNode.reference)) &&
       !this.document.animation.getTrack(activeGroup?.id ?? activeNode?.id ?? '')
     ) {
       transforms.push({
@@ -4529,7 +4808,9 @@ export class EditorRuntime {
         keyframes: []
       });
     }
-    const weights = this.document.animation.weightTracks.map((track) => {
+    const weights = this.document.animation.weightTracks
+      .filter((track) => !this.document.getNode(track.targetId)?.reference)
+      .map((track) => {
       const node = this.document.getNode(track.targetId);
       const key = node?.shapeKeys.find((item) => item.id === track.shapeKeyId);
       return {
@@ -4563,7 +4844,9 @@ export class EditorRuntime {
         });
       }
     }
-    const motions = this.document.animation.meshTracks.map((track) => {
+    const motions = this.document.animation.meshTracks
+      .filter((track) => !this.document.getNode(track.targetId)?.reference)
+      .map((track) => {
       const node = this.document.getNode(track.targetId);
       return {
         id: track.id,
@@ -4578,7 +4861,9 @@ export class EditorRuntime {
         }))
       };
     });
-    const textures = this.document.animation.textureTracks.map((track) => {
+    const textures = this.document.animation.textureTracks
+      .filter((track) => !this.document.getNode(track.targetId)?.reference)
+      .map((track) => {
       const node = this.document.getNode(track.targetId);
       return {
         id: track.id,
@@ -4595,6 +4880,7 @@ export class EditorRuntime {
     });
     if (
       activeNode &&
+      !activeNode.reference &&
       this.workspace === 'animation' &&
       !this.document.animation.getTextureTrack(activeNode.id)
     ) {
@@ -5593,7 +5879,7 @@ export class EditorRuntime {
         .setKey(keyFrame, pose, this.animationInterpolation);
     } else if (kind === 'texture') {
       const node = this.document.getNode(targetId);
-      if (!node) {
+      if (!node || node.reference) {
         return;
       }
       this.document.animation
@@ -5601,7 +5887,7 @@ export class EditorRuntime {
         .setKey(keyFrame, this.effectiveNodeTextureId(node), 'step');
     } else if (kind === 'mesh') {
       const node = this.document.getNode(targetId);
-      if (!node) {
+      if (!node || node.reference) {
         return;
       }
       const track = this.document.animation.getMeshTrack(node.id);
@@ -5622,7 +5908,7 @@ export class EditorRuntime {
     } else if (kind === 'shape' && shapeKeyId) {
       const node = this.document.getNode(targetId);
       const key = node?.shapeKeys.find((item) => item.id === shapeKeyId);
-      if (!node || !key) {
+      if (!node || node.reference || !key) {
         return;
       }
       const track = this.document.animation.ensureWeightTrack(
@@ -5642,7 +5928,7 @@ export class EditorRuntime {
         targetKind === 'group'
           ? this.document.getGroup(targetId)
           : this.document.getNode(targetId);
-      if (!target) {
+      if (!target || (target instanceof MeshNode && target.reference)) {
         return;
       }
       const track = this.document.animation.ensureTrack(targetId, targetKind);
@@ -5979,7 +6265,7 @@ export class EditorRuntime {
     const group = this.getActiveGroup();
     const node = group ? null : this.getActiveNode();
     const target = group ?? node;
-    if (!target) {
+    if (!target || node?.reference) {
       return;
     }
     const keyFrame = Math.round(this.animationFrame);
@@ -6620,10 +6906,8 @@ export class EditorRuntime {
     this.publish();
     try {
       const base = this.exportBaseName(this.projectName);
-      const textures = await this.exportTextureFiles(
-        this.document.nodes,
-        base
-      );
+      const exportNodes = this.document.nodes.filter((node) => !node.reference);
+      const textures = await this.exportTextureFiles(exportNodes, base);
       const exportableClips = this.document.animation.clips.filter(
         (clip) =>
           clip.tracks.length > 0 ||
@@ -6631,7 +6915,7 @@ export class EditorRuntime {
           clip.meshTracks.length > 0
       ).length;
       const bytes = await exportGlb(
-        this.document.nodes,
+        exportNodes,
         this.document.groups,
         textures,
         {
@@ -6673,10 +6957,10 @@ export class EditorRuntime {
     const active = this.getActiveNode();
     const requested =
       scope === 'active'
-        ? active
+        ? active && !active.reference
           ? [active]
           : []
-        : this.document.nodes;
+        : this.document.nodes.filter((node) => !node.reference);
     if (requested.length === 0 || requested.every((node) => !node.visible)) {
       this.projectError =
         scope === 'active'
@@ -6741,10 +7025,10 @@ export class EditorRuntime {
     const active = this.getActiveNode();
     const requested =
       scope === 'active'
-        ? active
+        ? active && !active.reference
           ? [active]
           : []
-        : this.document.nodes;
+        : this.document.nodes.filter((node) => !node.reference);
     if (requested.length === 0 || requested.every((node) => !node.visible)) {
       this.notify(
         'warning',
@@ -6869,7 +7153,7 @@ export class EditorRuntime {
     const files = new Map<string, ObjTextureFile>();
     const usedNames = new Set<string>();
     for (const node of nodes) {
-      if (!node.textureId || files.has(node.textureId)) {
+      if (node.reference || !node.textureId || files.has(node.textureId)) {
         continue;
       }
       const asset = this.textureLibrary.get(node.textureId);
@@ -7181,8 +7465,8 @@ export class EditorRuntime {
     const node = prompt
       ? this.document.getNode(prompt.nodeId)
       : this.getActiveNode();
-    if (!node) {
-      this.projectError = 'Select an object before preparing a bake atlas.';
+    if (!node || node.reference) {
+      this.projectError = 'Select a model object before preparing a bake atlas.';
       this.bakeAtlasPrompt = null;
       this.publish();
       return;
@@ -7313,8 +7597,8 @@ export class EditorRuntime {
       return;
     }
     const node = this.getActiveNode();
-    if (!node) {
-      this.projectError = 'Select an object before baking lighting.';
+    if (!node || node.reference) {
+      this.projectError = 'Select a model object before baking lighting.';
       this.publish();
       return;
     }
@@ -7887,7 +8171,42 @@ export class EditorRuntime {
       this.selectedNodeIds.add(fallback.id);
     }
     this.selection.setContext(fallback?.id ?? null, this.selection.mode);
-    this.history.execute(new DeleteMeshNodeCommand(this.document, node, index));
+    const referenceAsset = node.reference
+      ? this.textureLibrary.get(node.textureId)
+      : null;
+    if (referenceAsset?.role === 'reference') {
+      const beforeAnnotations = this.document.annotations.snapshot();
+      const afterAnnotations = beforeAnnotations.filter(
+        (stroke) => stroke.referenceNodeId !== node.id
+      );
+      const commands: import('./commands/EditorCommand').EditorCommand[] = [
+        new DeleteMeshNodeCommand(this.document, node, index),
+        new DeleteTextureAssetCommand(this.textureLibrary, referenceAsset)
+      ];
+      if (afterAnnotations.length !== beforeAnnotations.length) {
+        commands.push(
+          new SetAnnotationsCommand(
+            this.document.annotations,
+            beforeAnnotations,
+            afterAnnotations,
+            'Delete reference annotations'
+          )
+        );
+      }
+      this.history.execute(
+        new CompositeCommand('Delete reference image', commands)
+      );
+      const modelAsset =
+        this.textureLibrary
+          .summaries()
+          .find((item) => (item.role ?? 'model') === 'model')?.id ?? null;
+      if (modelAsset) {
+        this.textureLibrary.setActive(modelAsset);
+      }
+      this.autosave.markTextureDirty();
+    } else {
+      this.history.execute(new DeleteMeshNodeCommand(this.document, node, index));
+    }
     this.renderer.frameActiveNode();
     this.publish();
   }
@@ -7901,7 +8220,7 @@ export class EditorRuntime {
       this.cancelToolPointer();
     }
     const node = this.getActiveNode();
-    if (!node || this.selection.count === 0) {
+    if (!node || node.reference || this.selection.count === 0) {
       return;
     }
     const mode = this.selection.mode;
@@ -8812,7 +9131,7 @@ export class EditorRuntime {
     }
     const before = this.captureSelection();
     const node = this.getActiveNode();
-    if (!node) {
+    if (!node || node.reference) {
       return;
     }
     this.selectEvaluatedElementAt(
@@ -9348,6 +9667,10 @@ export class EditorRuntime {
       this.cancelToolPointer();
     }
 
+    if (this.annotationMode) {
+      return this.beginAnnotationStroke(sample);
+    }
+
     if (this.workspace === 'render') {
       return this.beginCameraDrag(sample);
     }
@@ -9380,6 +9703,12 @@ export class EditorRuntime {
     if (!target) {
       return false;
     }
+    if (node?.reference && this.armedAction) {
+      this.armedAction = null;
+      this.renderer.setActionPreviewLine(null);
+      this.publish();
+      return false;
+    }
 
     if (allowEdit && this.transformMode !== 'select') {
       const gizmoHit = this.renderer.pickGizmo(
@@ -9401,7 +9730,7 @@ export class EditorRuntime {
       }
     }
 
-    if (!node) {
+    if (!node || node.reference) {
       return false;
     }
 
@@ -9539,6 +9868,10 @@ export class EditorRuntime {
   }
 
   private moveToolPointer(sample: PointerSample): void {
+    if (this.annotationStroke && this.annotationStroke.pointerId === sample.pointerId) {
+      this.moveAnnotationStroke(sample);
+      return;
+    }
     if (this.cameraTargetDrag && this.cameraTargetDrag.pointerId === sample.pointerId) {
       this.moveCameraTargetDrag(sample);
       return;
@@ -9697,6 +10030,10 @@ export class EditorRuntime {
   }
 
   private endToolPointer(sample: PointerSample): void {
+    if (this.annotationStroke && this.annotationStroke.pointerId === sample.pointerId) {
+      this.finishAnnotationStroke();
+      return;
+    }
     if (this.cameraTargetDrag && this.cameraTargetDrag.pointerId === sample.pointerId) {
       this.finishCameraTargetDrag();
       return;
@@ -9766,6 +10103,10 @@ export class EditorRuntime {
   }
 
   private cancelToolPointer(): void {
+    if (this.annotationStroke) {
+      this.cancelAnnotationStroke();
+      return;
+    }
     if (this.cameraTargetDrag) {
       const drag = this.cameraTargetDrag;
       this.cameraTargetDrag = null;
@@ -11552,6 +11893,279 @@ export class EditorRuntime {
     );
   }
 
+  /** Build world-space annotation segments, including the live stroke. */
+  private syncAnnotationOverlay(): void {
+    const show =
+      (this.workspace === 'model' || this.workspace === 'animation') &&
+      (this.document.annotations.all.length > 0 || this.annotationStroke !== null);
+    if (!show) {
+      this.renderer.setAnnotationSegments(null);
+      return;
+    }
+    const positions: number[] = [];
+    const appendStroke = (stroke: AnnotationStrokeSnapshot): void => {
+      if (stroke.points.length < 2) {
+        return;
+      }
+      let matrix: Matrix4 | null = null;
+      if (stroke.referenceNodeId) {
+        const node = this.document.getNode(stroke.referenceNodeId);
+        if (!node) {
+          return;
+        }
+        const parent = node.parentId
+          ? this.document.getGroup(node.parentId)
+          : null;
+        matrix = transformMatrix(
+          worldTransformForNode(node.transform, parent?.transform ?? null)
+        );
+      }
+      for (let index = 0; index < stroke.points.length - 1; index += 1) {
+        const a = new Vector3(...stroke.points[index]);
+        const b = new Vector3(...stroke.points[index + 1]);
+        if (matrix) {
+          a.applyMatrix4(matrix);
+          b.applyMatrix4(matrix);
+        }
+        positions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    };
+    for (const stroke of this.document.annotations.all) {
+      appendStroke(stroke);
+    }
+    if (this.annotationStroke) {
+      appendStroke({
+        id: 'live-annotation',
+        referenceNodeId: this.annotationStroke.referenceNodeId,
+        points: this.annotationStroke.points
+      });
+    }
+    this.renderer.setAnnotationSegments(
+      positions.length > 0 ? new Float32Array(positions) : null
+    );
+  }
+
+  /** Enable or disable the pen/mouse annotation overlay tool. */
+  setAnnotationMode(enabled: boolean): void {
+    if (enabled && this.workspace !== 'model') {
+      return;
+    }
+    if (this.annotationMode === enabled) {
+      return;
+    }
+    if (this.annotationStroke) {
+      this.annotationStroke = null;
+    }
+    if (this.modalTransform) {
+      this.cancelModalTransform();
+    }
+    if (this.armedAction) {
+      this.armedAction = null;
+      this.renderer.setActionPreviewLine(null);
+    }
+    this.annotationMode = enabled;
+    this.lassoMode = false;
+    if (enabled) {
+      this.transformMode = 'select';
+    }
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Remove the most recent annotation stroke. */
+  undoLastAnnotation(): void {
+    const before = this.document.annotations.snapshot();
+    const last = before[before.length - 1];
+    if (!last) {
+      return;
+    }
+    const after = before.slice(0, -1);
+    this.document.annotations.apply(after);
+    this.history.execute(
+      new SetAnnotationsCommand(
+        this.document.annotations,
+        before,
+        after,
+        'Undo annotation'
+      )
+    );
+    this.syncAnnotationOverlay();
+    this.publish();
+  }
+
+  /** Remove all annotation strokes as one undoable edit. */
+  clearAnnotations(): void {
+    const before = this.document.annotations.snapshot();
+    if (before.length === 0) {
+      return;
+    }
+    this.document.annotations.clear();
+    this.history.execute(
+      new SetAnnotationsCommand(
+        this.document.annotations,
+        before,
+        [],
+        'Clear annotations'
+      )
+    );
+    this.syncAnnotationOverlay();
+    this.publish();
+  }
+
+  /** Drawing plane and optional reference-space attachment for annotations. */
+  private annotationPlane(): {
+    plane: Plane;
+    referenceNodeId: string | null;
+    inverse: Matrix4 | null;
+  } | null {
+    const node = this.getActiveNode();
+    if (node?.reference) {
+      const parent = node.parentId
+        ? this.document.getGroup(node.parentId)
+        : null;
+      const matrix = transformMatrix(
+        worldTransformForNode(node.transform, parent?.transform ?? null)
+      );
+      const origin = new Vector3().setFromMatrixPosition(matrix);
+      const normal = new Vector3(0, 0, 1).transformDirection(matrix);
+      return {
+        plane: new Plane().setFromNormalAndCoplanarPoint(normal, origin),
+        referenceNodeId: node.id,
+        inverse: matrix.clone().invert()
+      };
+    }
+    const group = this.getActiveGroup();
+    const target = group ?? node;
+    let point = new Vector3();
+    if (target) {
+      const parent =
+        target instanceof MeshNode
+          ? this.document.getGroup(target.parentId)
+          : null;
+      point = new Vector3().setFromMatrixPosition(
+        transformMatrix(
+          worldTransformForNode(
+            target.transform,
+            parent?.transform ?? null
+          )
+        )
+      );
+    } else {
+      const view = this.renderer.captureCameraView();
+      point = new Vector3(...view.target);
+    }
+    return {
+      plane: this.renderer.createCameraFacingPlane(point),
+      referenceNodeId: null,
+      inverse: null
+    };
+  }
+
+  private beginAnnotationStroke(sample: PointerSample): boolean {
+    if (
+      this.annotationStroke ||
+      (sample.pointerType !== 'pen' && sample.pointerType !== 'mouse')
+    ) {
+      return false;
+    }
+    const target = this.annotationPlane();
+    if (!target) {
+      return false;
+    }
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      target.plane
+    );
+    if (!hit) {
+      return false;
+    }
+    const point = target.inverse
+      ? hit.applyMatrix4(target.inverse)
+      : hit;
+    this.annotationStroke = {
+      pointerId: sample.pointerId,
+      points: [[point.x, point.y, point.z]],
+      referenceNodeId: target.referenceNodeId
+    };
+    this.syncAnnotationOverlay();
+    this.publish();
+    return true;
+  }
+
+  private moveAnnotationStroke(sample: PointerSample): void {
+    const stroke = this.annotationStroke;
+    if (!stroke || stroke.pointerId !== sample.pointerId) {
+      return;
+    }
+    const target = this.annotationPlane();
+    if (!target) {
+      return;
+    }
+    const hit = this.renderer.intersectPointerPlane(
+      sample.clientX,
+      sample.clientY,
+      target.plane
+    );
+    if (!hit) {
+      return;
+    }
+    const point = target.inverse
+      ? hit.applyMatrix4(target.inverse)
+      : hit;
+    const last = stroke.points[stroke.points.length - 1];
+    if (
+      Math.hypot(
+        point.x - last[0],
+        point.y - last[1],
+        point.z - last[2]
+      ) < 0.003
+    ) {
+      return;
+    }
+    if (stroke.points.length >= 4096) {
+      return;
+    }
+    stroke.points.push([point.x, point.y, point.z]);
+    this.syncAnnotationOverlay();
+    this.publish();
+  }
+
+  private finishAnnotationStroke(): void {
+    const stroke = this.annotationStroke;
+    if (!stroke) {
+      return;
+    }
+    this.annotationStroke = null;
+    if (stroke.points.length < 2) {
+      this.syncAnnotationOverlay();
+      this.publish();
+      return;
+    }
+    const before = this.document.annotations.snapshot();
+    this.document.annotations.add(stroke.points, stroke.referenceNodeId);
+    const after = this.document.annotations.snapshot();
+    this.history.execute(
+      new SetAnnotationsCommand(
+        this.document.annotations,
+        before,
+        after,
+        'Add annotation'
+      )
+    );
+    this.syncAnnotationOverlay();
+    this.publish();
+  }
+
+  private cancelAnnotationStroke(): void {
+    if (!this.annotationStroke) {
+      return;
+    }
+    this.annotationStroke = null;
+    this.syncAnnotationOverlay();
+    this.publish();
+  }
+
   private syncScene(): void {
     this.updateSelectionGizmoFrame();
     this.renderer.setLighting(
@@ -11581,6 +12195,7 @@ export class EditorRuntime {
       this.workspace === 'render' && !this.renderCameraView,
       this.renderVirtualWidth / Math.max(1, this.renderVirtualHeight)
     );
+    this.syncAnnotationOverlay();
   }
 
   private cloneTransform(transform: NodeTransform): NodeTransform {
@@ -11641,8 +12256,17 @@ export class EditorRuntime {
       await this.textureLibrary.importRecords(decoded.textures);
     }
     const active = this.getActiveNode();
-    if (active?.textureId && this.textureLibrary.get(active.textureId)) {
-      this.textureLibrary.setActive(active.textureId);
+    const activeAsset = this.textureLibrary.get(active?.textureId ?? null);
+    if (activeAsset && (activeAsset.role ?? 'model') === 'model') {
+      this.textureLibrary.setActive(activeAsset.id);
+    } else {
+      const modelAsset =
+        this.textureLibrary
+          .summaries()
+          .find((asset) => (asset.role ?? 'model') === 'model')?.id ?? null;
+      if (modelAsset) {
+        this.textureLibrary.setActive(modelAsset);
+      }
     }
     this.syncScene();
     this.renderer.refreshTexture();
@@ -11657,6 +12281,7 @@ export class EditorRuntime {
     this.document.replaceLights(decoded.document.lights);
     this.document.replaceCameras(decoded.document.cameras);
     this.document.replaceAnimation(decoded.document.animation);
+    this.document.annotations.apply(decoded.document.annotations.snapshot());
     this.refreshMotionLocks();
     this.stopAnimationLoop();
     this.animationFrame = decoded.document.animation.startFrame;

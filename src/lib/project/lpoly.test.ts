@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { MeshNode } from '../scene/MeshNode';
 import { createModifier, type MirrorModifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
-import { createCylinderMesh, createGridMesh } from '../geometry/primitives';
+import {
+  createCylinderMesh,
+  createGridMesh,
+  createReferencePlaneMesh
+} from '../geometry/primitives';
 import {
   decodeLpoly,
   encodeLpoly,
@@ -65,6 +69,75 @@ describe('.lpoli', () => {
     expect(Array.from(second)).toEqual(Array.from(bytes));
   });
 
+
+  it('round-trips reference image planes and their texture role', () => {
+    const document = makeDocument();
+    const node = new MeshNode(
+      createReferencePlaneMesh(),
+      'reference',
+      'Reference',
+      'reference-node',
+      'texasset-ref'
+    );
+    node.setReference({ opacity: 0.35, inFront: true });
+    node.transform.position = [1, 2, 3];
+    node.transform.scale = [4, 3, 1];
+    document.insertNode(node);
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 9, 9]);
+    const bytes = encodeLpoly(document, SETTINGS, [
+      {
+        id: 'texasset-ref',
+        name: 'Reference image',
+        width: 64,
+        height: 48,
+        filter: 'linear',
+        alphaMode: 'blend',
+        role: 'reference',
+        activeId: 'texlayer-ref',
+        layers: [
+          {
+            id: 'texlayer-ref',
+            name: 'Image',
+            visible: true,
+            opacity: 1,
+            color: '#ffffff',
+            pattern: 'transparent',
+            blendMode: 'normal',
+            kind: 'raster',
+            role: 'color',
+            png
+          }
+        ]
+      }
+    ]);
+    const decoded = decodeLpoly(bytes);
+    const restored = decoded.document.getNode('reference-node');
+    expect(restored?.primitive).toBe('reference');
+    expect(restored?.reference).toEqual({ opacity: 0.35, inFront: true });
+    expect(restored?.transform.scale).toEqual([4, 3, 1]);
+    expect(decoded.textures?.[0].role).toBe('reference');
+  });
+
+  it('round-trips world-space annotation strokes', () => {
+    const document = makeDocument();
+    document.annotations.add(
+      [[0, 0, 0], [1, 0.5, 0], [2, 1, 0]],
+      null
+    );
+    document.annotations.add(
+      [[-1, 0, 0], [1, 0, 0]],
+      document.nodes[0].id
+    );
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS));
+    const strokes = decoded.document.annotations.all;
+    expect(strokes).toHaveLength(2);
+    expect(strokes[0].points).toEqual([
+      [0, 0, 0],
+      [1, 0.5, 0],
+      [2, 1, 0]
+    ]);
+    expect(strokes[1].referenceNodeId).toBe(document.nodes[0].id);
+  });
 
   it('round-trips texture assets and node bindings', () => {
     const document = makeDocument();
@@ -252,7 +325,7 @@ describe('.lpoli', () => {
 
     const bytes = encodeLpoly(document, SETTINGS);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    expect(view.getUint16(8, true)).toBe(8);
+    expect(view.getUint16(8, true)).toBe(9);
     const decoded = decodeLpoly(bytes).document.animation;
     expect(decoded.clips.map((clip) => clip.name)).toEqual(['Idle', 'Walk']);
     expect(decoded.activeClipId).toBe(second.id);

@@ -26,6 +26,12 @@ export interface EvaluatedMesh {
   readonly modifiersActive: boolean;
 }
 
+/** Editor-only presentation settings for a reference image plane. */
+export interface ReferenceSettings {
+  readonly opacity: number;
+  readonly inFront: boolean;
+}
+
 /** One morph target with absolute vertex positions and a 0–1 weight. */
 export interface ShapeKey {
   id: string;
@@ -56,6 +62,8 @@ export class MeshNode {
   modifiers: Modifier[] = [];
   shapeKeys: ShapeKey[] = [];
   shapeBasePositions: Float32Array | null = null;
+  /** Non-null only for editor-only reference image planes. */
+  reference: ReferenceSettings | null = null;
   /** Set by the editor while any clip animates this node's vertices. */
   motionTracked = false;
   private shapeWeightOverrides: ReadonlyMap<string, number> | null = null;
@@ -89,6 +97,16 @@ export class MeshNode {
     this.id = id;
     this.textureId = textureId;
     this.setMaterialPalette(materialPalette);
+  }
+
+  /** Set the editor-only reference presentation, or clear it. */
+  setReference(reference: ReferenceSettings | null): void {
+    this.reference = reference
+      ? {
+          opacity: Math.max(0, Math.min(1, reference.opacity)),
+          inFront: reference.inFront
+        }
+      : null;
   }
 
   /** Replace the simple per-face color palette. */
@@ -447,4 +465,5 @@ export interface NodeSummary {
   readonly visible: boolean;
   readonly parentId: string | null;
   readonly textureId: string | null;
+  readonly reference: ReferenceSettings | null;
 }

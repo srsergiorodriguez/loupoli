@@ -13,6 +13,7 @@ import {
   type CameraSummary
 } from './SceneCamera';
 import { SceneAnimation } from './SceneAnimation';
+import { SceneAnnotations } from './SceneAnnotations';
 import {
   createLightId,
   SceneLight,
@@ -33,6 +34,7 @@ export class SceneDocument {
   readonly lights: SceneLight[] = [];
   readonly cameras: SceneCamera[] = [];
   readonly animation = new SceneAnimation();
+  readonly annotations = new SceneAnnotations();
   ambientColor = '#ffffff';
   ambientIntensity = 0.22;
 
@@ -332,7 +334,10 @@ export class SceneDocument {
       primitive: node.primitive,
       visible: node.visible,
       parentId: node.parentId,
-      textureId: node.textureId
+      textureId: node.textureId,
+      reference: node.reference
+        ? { opacity: node.reference.opacity, inFront: node.reference.inFront }
+        : null
     }));
   }
 

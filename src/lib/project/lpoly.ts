@@ -44,7 +44,7 @@ import {
 } from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 8;
+const FORMAT_VERSION = 9;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -109,6 +109,7 @@ export interface NodeSnapshot {
   readonly transform: NodeTransform;
   readonly parentId: string | null;
   readonly textureId: string | null;
+  readonly reference?: import('../scene/MeshNode').ReferenceSettings | null;
   readonly materialPalette?: readonly string[];
   readonly shapeKeys?: readonly {
     readonly id: string;
@@ -144,6 +145,7 @@ interface NodeManifest {
   readonly transform: NodeTransform;
   readonly parentId?: string | null;
   readonly textureId?: string | null;
+  readonly reference?: import('../scene/MeshNode').ReferenceSettings | null;
   readonly materialPalette?: readonly string[];
   readonly shapeKeys?: readonly {
     readonly id: string;
@@ -195,6 +197,7 @@ interface TextureAssetManifest {
   readonly height: number;
   readonly filter: 'nearest' | 'linear';
   readonly alphaMode?: 'opaque' | 'cutout' | 'blend';
+  readonly role?: 'model' | 'reference';
   readonly activeId: string | null;
   readonly layers: readonly TextureLayerManifest[];
 }
@@ -213,6 +216,7 @@ interface Manifest {
   readonly lighting?: LightingManifest;
   readonly cameras?: readonly CameraSnapshot[];
   readonly animation?: AnimationSnapshot;
+  readonly annotations?: readonly import('../scene/SceneAnnotations').AnnotationStrokeSnapshot[];
 }
 
 const TYPED_COLUMNS = [
@@ -257,7 +261,12 @@ function align4(value: number): number {
 }
 
 function isPrimitiveKind(value: unknown): value is PrimitiveKind {
-  return typeof value === 'string' && (value === 'imported' || (PRIMITIVE_KINDS as readonly string[]).includes(value));
+  return (
+    typeof value === 'string' &&
+    (value === 'imported' ||
+      value === 'reference' ||
+      (PRIMITIVE_KINDS as readonly string[]).includes(value))
+  );
 }
 
 function isShadingMode(value: unknown): value is ShadingMode {
@@ -457,6 +466,7 @@ export function snapshotNode(node: MeshNode): NodeSnapshot {
     },
     parentId: node.parentId,
     textureId: node.textureId,
+    reference: node.reference,
     materialPalette: node.materialPalette,
     shapeKeys: node.shapeKeys.map((key) => ({
       id: key.id,
@@ -530,6 +540,7 @@ export function restoreNode(snapshot: NodeSnapshot): MeshNode {
   );
   node.transform = validateTransform(snapshot.transform);
   node.parentId = snapshot.parentId ?? null;
+  node.setReference(snapshot.reference ?? null);
   node.setModifiers(validateModifiers(snapshot.modifiers));
   return node;
 }
@@ -571,6 +582,7 @@ function buildTextureManifest(
       asset.height > MAX_TEXTURE_DIMENSION ||
       asset.width * asset.height > MAX_TEXTURE_PIXELS ||
       (asset.filter !== 'nearest' && asset.filter !== 'linear') ||
+      (asset.role !== undefined && asset.role !== 'model' && asset.role !== 'reference') ||
       !Array.isArray(asset.layers) ||
       asset.layers.length < 1 ||
       asset.layers.length > MAX_TEXTURE_LAYERS
@@ -640,6 +652,7 @@ function buildTextureManifest(
       height: asset.height,
       filter: asset.filter,
       alphaMode: asset.alphaMode,
+      role: asset.role ?? 'model',
       activeId: asset.activeId,
       layers
     };
@@ -988,6 +1001,57 @@ function validateMeshMotionTracks(
   return { tracks, keyCount, trackCount: tracks.length };
 }
 
+/** Validate optional world-space annotation stroke records. */
+function validateAnnotations(
+  value: unknown
+): import('../scene/SceneAnnotations').AnnotationStrokeSnapshot[] {
+  if (!Array.isArray(value)) {
+    throw new Error('The .lpoli annotations are invalid.');
+  }
+  const ids = new Set<string>();
+  return value.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli annotation stroke is invalid.');
+    }
+    const stroke = raw as {
+      id?: unknown;
+      referenceNodeId?: unknown;
+      points?: unknown;
+    };
+    if (
+      typeof stroke.id !== 'string' ||
+      stroke.id.length === 0 ||
+      ids.has(stroke.id) ||
+      (stroke.referenceNodeId !== null &&
+        (typeof stroke.referenceNodeId !== 'string' ||
+          stroke.referenceNodeId.length === 0)) ||
+      !Array.isArray(stroke.points) ||
+      stroke.points.length < 2 ||
+      stroke.points.length > 10000 ||
+      !stroke.points.every(
+        (point) =>
+          Array.isArray(point) &&
+          point.length === 3 &&
+          point.every(
+            (value) => typeof value === 'number' && Number.isFinite(value)
+          )
+      )
+    ) {
+      throw new Error('The .lpoli annotation strokes are invalid.');
+    }
+    ids.add(stroke.id);
+    return {
+      id: stroke.id,
+      referenceNodeId: stroke.referenceNodeId as string | null,
+      points: stroke.points.map((point) => [
+        point[0],
+        point[1],
+        point[2]
+      ] as Vec3)
+    };
+  });
+}
+
 /** Validate v6 clip animation or migrate a legacy flat animation manifest. */
 function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
   if (value === undefined) {
@@ -1307,6 +1371,7 @@ function encodeInternal(
     },
     parentId: node.parentId,
     textureId: node.textureId,
+    reference: node.reference,
     materialPalette: node.materialPalette,
     shapeKeys: node.shapeKeys.map((key) => ({
       id: key.id,
@@ -1351,7 +1416,10 @@ function encodeInternal(
       ambientIntensity: document.ambientIntensity,
       lights: document.lights.map((light) => light.snapshot())
     },
-    ...(textureManifest ? { textures: textureManifest.manifest } : {})
+    ...(textureManifest ? { textures: textureManifest.manifest } : {}),
+    ...(document.annotations.all.length > 0
+      ? { annotations: document.annotations.snapshot() }
+      : {})
   };
   const manifestBytes = new TextEncoder().encode(JSON.stringify(manifest));
   if (manifestBytes.length > 16 * 1024 * 1024) {
@@ -1466,6 +1534,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
       (asset.height as number) > MAX_TEXTURE_DIMENSION ||
       (asset.width as number) * (asset.height as number) > MAX_TEXTURE_PIXELS ||
       (asset.filter !== 'nearest' && asset.filter !== 'linear') ||
+      (asset.role !== undefined && asset.role !== 'model' && asset.role !== 'reference') ||
       !Array.isArray(asset.layers) ||
       asset.layers.length < 1 ||
       asset.layers.length > MAX_TEXTURE_LAYERS
@@ -1549,6 +1618,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
       height: asset.height as number,
       filter: asset.filter,
       alphaMode: asset.alphaMode === 'cutout' || asset.alphaMode === 'blend' ? asset.alphaMode : 'opaque',
+      role: asset.role === 'reference' ? 'reference' : 'model',
       activeId: asset.activeId,
       layers
     };
@@ -1683,6 +1753,14 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
         node.textureId !== null &&
         (typeof node.textureId !== 'string' ||
           !textureAssetIds.has(node.textureId))) ||
+      (node.reference !== undefined &&
+        node.reference !== null &&
+        (typeof node.reference !== 'object' ||
+          typeof node.reference.opacity !== 'number' ||
+          !Number.isFinite(node.reference.opacity) ||
+          node.reference.opacity < 0 ||
+          node.reference.opacity > 1 ||
+          typeof node.reference.inFront !== 'boolean')) ||
       (node.materialPalette !== undefined &&
         (!Array.isArray(node.materialPalette) ||
           node.materialPalette.length > 64 ||
@@ -1737,6 +1815,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     restored.transform = transform;
     restored.parentId = node.parentId ?? null;
     restored.textureId = node.textureId ?? null;
+    restored.setReference(node.reference ?? null);
     restored.setMaterialPalette(node.materialPalette ?? []);
     if (node.shapeKeys && node.shapeKeys.length > 0) {
       const keys = [];
@@ -1785,6 +1864,9 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   const animation = validateAnimationManifest(manifest.animation);
   if (animation) {
     document.animation.apply(animation);
+  }
+  if (manifest.annotations !== undefined) {
+    document.annotations.apply(validateAnnotations(manifest.annotations));
   }
 
   const lighting = validateLightingManifest(manifest.lighting, version);
@@ -1844,6 +1926,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
         height: asset.height,
         filter: asset.filter,
         alphaMode: asset.alphaMode ?? 'opaque',
+        role: asset.role ?? 'model',
         activeId: asset.activeId,
         layers
       });

@@ -3,6 +3,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   CylinderGeometry,
+  DoubleSide,
   DynamicDrawUsage,
   Group,
   InstancedMesh,
@@ -177,6 +178,7 @@ export class MeshNodeView {
   private readonly scratchDirection = new Vector3();
 
   private lastMeshRevision = -1;
+  private referenceMaterial: MeshBasicMaterial | null = null;
   private readonly edgeMatrix = new Matrix4();
   private readonly edgePosition = new Vector3();
   private readonly edgeDirection = new Vector3();
@@ -380,6 +382,25 @@ export class MeshNodeView {
   }
 
   /** Update the active node and the full set of selected element indices. */
+  /** Swap in a reference-image material and suppress editor overlays. */
+  setReferenceMaterial(material: MeshBasicMaterial | null): void {
+    this.referenceMaterial = material;
+    if (material) {
+      material.side = DoubleSide;
+      this.triangleMesh.castShadow = false;
+      this.triangleMesh.receiveShadow = false;
+    } else {
+      this.triangleMesh.castShadow = true;
+      this.triangleMesh.receiveShadow = true;
+    }
+    this.setShadingMode(this.shadingMode);
+  }
+
+  /** Whether this view is currently displaying a reference image plane. */
+  get isReference(): boolean {
+    return this.referenceMaterial !== null;
+  }
+
   setInteraction(
     active: boolean,
     mode: SelectionMode,
@@ -391,6 +412,21 @@ export class MeshNodeView {
     this.selectedElements = [...selectedElements];
     this.showHandles = showHandles;
     if (this.cleanRender) {
+      return;
+    }
+    if (this.referenceMaterial) {
+      this.vertexPoints.visible = false;
+      this.selectedVertexPoint.visible = false;
+      this.selectedEdgeMesh.visible = false;
+      this.selectedFaceMesh.visible = false;
+      this.selectedFaceOutline.visible = false;
+      this.wireSegments.visible = false;
+      this.wireTubeMesh.visible = false;
+      this.frontWireSegments.visible = false;
+      this.frontWireTubeMesh.visible = false;
+      this.seamSegments.visible = false;
+      this.seamEdgeMesh.visible = false;
+      this.previewLine.visible = false;
       return;
     }
 
@@ -417,6 +453,23 @@ export class MeshNodeView {
     if (this.frontWireSegments.visible) {
       this.frontWireGeometry.setDrawRange(0, 0);
     }
+    if (this.referenceMaterial) {
+      this.triangleMesh.visible = true;
+      this.triangleMesh.material = this.referenceMaterial;
+      this.wireSegments.visible = false;
+      this.wireTubeMesh.visible = false;
+      this.frontWireSegments.visible = false;
+      this.frontWireTubeMesh.visible = false;
+      this.seamSegments.visible = false;
+      this.seamEdgeMesh.visible = false;
+      this.vertexPoints.visible = false;
+      this.selectedVertexPoint.visible = false;
+      this.selectedEdgeMesh.visible = false;
+      this.selectedFaceMesh.visible = false;
+      this.selectedFaceOutline.visible = false;
+      this.previewLine.visible = false;
+      return;
+    }
 
     if (mode === 'solid') {
       this.triangleMesh.material = this.surfaceMaterials.solid;
@@ -436,7 +489,7 @@ export class MeshNodeView {
   /** Show or hide the seam overlay without changing seam data. */
   setSeamVisible(visible: boolean): void {
     this.seamVisible = visible;
-    if (this.cleanRender) {
+    if (this.cleanRender || this.referenceMaterial) {
       return;
     }
     this.seamSegments.visible = visible;

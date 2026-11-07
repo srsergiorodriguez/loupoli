@@ -16,6 +16,7 @@
   import PaintShapePreview from './lib/ui/Paint/PaintShapePreview.svelte';
   import PaneHost from './lib/ui/Panels/PaneHost.svelte';
   import IconButton from './lib/ui/Primitives/IconButton.svelte';
+  import ActionButton from './lib/ui/Primitives/ActionButton.svelte';
   import TooltipLayer from './lib/ui/Primitives/TooltipLayer.svelte';
   import AnimationTimeline from './lib/ui/Animation/AnimationTimeline.svelte';
   import RenderPreviewPanel from './lib/ui/Render/RenderPreviewPanel.svelte';
@@ -35,6 +36,12 @@
       session.snapshot.workspace !== 'light' &&
       session.snapshot.workspace !== 'render'
   );
+  const activeReference = $derived(
+    session.snapshot.nodes.find(
+      (node) => node.id === session.snapshot.activeNodeId
+    )?.reference ?? null
+  );
+  const annotationsActive = $derived(session.snapshot.annotationMode);
 
   function focusViewport(): void {
     canvas?.focus({ preventScroll: true });
@@ -178,7 +185,11 @@
         <span class="context-separator" aria-hidden="true">/</span>
         <span class="context-object">{session.snapshot.objectName}</span>
         <span class="selection-badge">
-          {#if session.snapshot.workspace === 'paint'}
+          {#if annotationsActive}
+            Annotate
+          {:else if activeReference}
+            Reference
+          {:else if session.snapshot.workspace === 'paint'}
             Paint
           {:else if session.snapshot.workspace === 'light'}
             Light
@@ -200,9 +211,9 @@
 
       <div
         class="selection-mode-wrap"
-        class:no-selection-mode={!toolRailVisible}
+        class:no-selection-mode={!toolRailVisible || activeReference !== null}
       >
-        {#if toolRailVisible}
+        {#if toolRailVisible && activeReference === null && !annotationsActive}
           <SelectionModeControl {session} />
         {/if}
         <ShadingControl {session} />
@@ -227,8 +238,45 @@
             tooltipPlacement="bottom"
             onActivate={() => session.resetView()}
           />
+          {#if session.snapshot.workspace === 'model'}
+            <IconButton
+              label="Annotate"
+              icon="line"
+              tooltip="Annotate"
+              active={annotationsActive}
+              pressed={annotationsActive}
+              tooltipPlacement="bottom"
+              onActivate={() =>
+                session.setAnnotationMode(!session.snapshot.annotationMode)}
+            />
+          {/if}
         </div>
           <OrientationGizmo {session} />
+        </div>
+      {/if}
+
+      {#if annotationsActive}
+        <div class="annotation-hud loupoli-panel">
+          <span class="annotation-title">Annotate</span>
+          <span class="annotation-hint">Draw with pen or mouse</span>
+          <ActionButton
+            label="Undo"
+            icon="undo"
+            disabled={session.snapshot.annotationCount === 0}
+            onActivate={() => session.undoLastAnnotation()}
+          />
+          <ActionButton
+            label="Clear"
+            icon="trash"
+            variant="danger"
+            disabled={session.snapshot.annotationCount === 0}
+            onActivate={() => session.clearAnnotations()}
+          />
+          <ActionButton
+            label="Done"
+            icon="checker"
+            onActivate={() => session.setAnnotationMode(false)}
+          />
         </div>
       {/if}
 
@@ -243,7 +291,10 @@
       {/if}
 
       <TransformHud modal={session.snapshot.modalTransform} />
-      {#if !session.snapshot.uvOpen && session.snapshot.workspace === 'model'}
+      {#if !session.snapshot.uvOpen &&
+        session.snapshot.workspace === 'model' &&
+        activeReference === null &&
+        !annotationsActive}
         <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />
@@ -518,6 +569,33 @@
 
   .viewport-hud > :global(*) {
     pointer-events: auto;
+  }
+
+  .annotation-hud {
+    position: absolute;
+    z-index: var(--z-hud);
+    bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
+    left: calc(var(--safe-left) + var(--space-3));
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-lg);
+    pointer-events: auto;
+  }
+
+  .annotation-title {
+    color: var(--accent-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+
+  .annotation-hint {
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
   }
 
   .startup-error {

@@ -110,6 +110,11 @@ export type JournalPatch =
       readonly textureId: string | null;
     }
   | {
+      readonly type: 'set-node-reference';
+      readonly nodeId: string;
+      readonly reference: import('../scene/MeshNode').ReferenceSettings | null;
+    }
+  | {
       readonly type: 'set-group-visible';
       readonly groupId: string;
       readonly visible: boolean;
@@ -150,6 +155,10 @@ export type JournalPatch =
   | {
       readonly type: 'update-camera';
       readonly camera: CameraSnapshot;
+    }
+  | {
+      readonly type: 'set-annotations';
+      readonly annotations: readonly import('../scene/SceneAnnotations').AnnotationStrokeSnapshot[];
     }
   | {
       readonly type: 'set-animation';
@@ -284,6 +293,14 @@ export function applyJournalPatch(
       node.textureId = patch.textureId;
       return;
     }
+    case 'set-node-reference': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.setReference(patch.reference);
+      return;
+    }
     case 'set-group-visible': {
       const group = document.getGroup(patch.groupId);
       if (!group) {
@@ -338,6 +355,10 @@ export function applyJournalPatch(
       camera.apply(patch.camera);
       return;
     }
+    case 'set-annotations': {
+      document.annotations.apply(patch.annotations);
+      return;
+    }
     case 'set-animation': {
       document.replaceAnimation(SceneAnimation.fromSnapshot(patch.animation));
       return;
@@ -377,6 +398,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
   if (patch.type === 'set-node-texture') {
     return patch.nodeId.length * 2 + (patch.textureId?.length ?? 0) * 2 + 24;
   }
+  if (patch.type === 'set-node-reference') {
+    return patch.nodeId.length * 2 + 64;
+  }
   if (patch.type === 'set-group-visible') {
     return patch.groupId.length * 2 + 24;
   }
@@ -395,6 +419,15 @@ export function journalPatchBytes(patch: JournalPatch): number {
     patch.type === 'update-camera'
   ) {
     return patch.camera.id.length * 2 + patch.camera.name.length * 2 + 96;
+  }
+  if (patch.type === 'set-annotations') {
+    return (
+      64 +
+      patch.annotations.reduce(
+        (sum, stroke) => sum + 32 + stroke.points.length * 28,
+        0
+      )
+    );
   }
   if (patch.type === 'set-animation') {
     return estimateAnimationSnapshotBytes(patch.animation);

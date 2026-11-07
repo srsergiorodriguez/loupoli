@@ -2,7 +2,8 @@ import {
   TextureAsset,
   type TextureAssetData,
   type TextureAlphaMode,
-  type TextureFilter
+  type TextureFilter,
+  type TextureAssetRole
 } from './TextureAsset';
 import { MAX_TEXTURE_DIMENSION, MAX_TEXTURE_PIXELS } from './size';
 
@@ -14,6 +15,7 @@ export interface TextureAssetSummary {
   readonly height: number;
   readonly filter: TextureFilter;
   readonly alphaMode: TextureAlphaMode;
+  readonly role?: TextureAssetRole;
 }
 
 /** One serializable texture asset record. */
@@ -83,7 +85,8 @@ export class TextureLibrary {
       width: asset.width,
       height: asset.height,
       filter: asset.textureFilter,
-      alphaMode: asset.textureAlphaMode
+      alphaMode: asset.textureAlphaMode,
+      role: asset.role
     }));
   }
 
@@ -101,7 +104,8 @@ export class TextureLibrary {
     width: number,
     height: number,
     name?: string,
-    filter: TextureFilter = 'nearest'
+    filter: TextureFilter = 'nearest',
+    role: TextureAssetRole = 'model'
   ): TextureAsset {
     if (
       !Number.isInteger(width) ||
@@ -124,6 +128,7 @@ export class TextureLibrary {
       width,
       height,
       filter,
+      role,
       checkerA: this.checkerA,
       checkerB: this.checkerB
     });
@@ -134,9 +139,10 @@ export class TextureLibrary {
     width: number,
     height: number,
     name?: string,
-    filter: TextureFilter = 'nearest'
+    filter: TextureFilter = 'nearest',
+    role: TextureAssetRole = 'model'
   ): TextureAsset {
-    const asset = this.build(width, height, name, filter);
+    const asset = this.build(width, height, name, filter, role);
     this.insert(asset);
     return asset;
   }
@@ -200,6 +206,7 @@ export class TextureLibrary {
         height: asset.height,
         filter: asset.textureFilter,
         alphaMode: asset.textureAlphaMode,
+        role: asset.role,
         activeId: data.activeId,
         layers: data.layers
       });
@@ -233,6 +240,7 @@ export class TextureLibrary {
         height: record.height,
         filter: record.filter,
         alphaMode: record.alphaMode,
+        role: record.role ?? 'model',
         checkerA: this.checkerA,
         checkerB: this.checkerB
       });

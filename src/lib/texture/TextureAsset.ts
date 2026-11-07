@@ -1,4 +1,8 @@
 import {
+  imageFitRect,
+  type ImageFitOptions
+} from './imageFit';
+import {
   applyTextureEffect,
   createTextureEffect,
   normalizeTextureEffect,
@@ -23,6 +27,9 @@ export type TextureBlendMode = 'normal' | 'multiply' | 'screen';
 
 /** Authored content kind for one texture layer. */
 export type TextureLayerKind = 'fill' | 'raster' | 'effect';
+
+/** Whether an asset is a model texture or an editor-only reference image. */
+export type TextureAssetRole = 'model' | 'reference';
 
 /** How the asset's composite alpha is interpreted in 3D. */
 export type TextureAlphaMode = 'opaque' | 'cutout' | 'blend';
@@ -178,6 +185,7 @@ export interface TextureAssetOptions {
   readonly height: number;
   readonly filter?: TextureFilter;
   readonly alphaMode?: TextureAlphaMode;
+  readonly role?: TextureAssetRole;
   readonly checkerA?: string;
   readonly checkerB?: string;
 }
@@ -191,6 +199,7 @@ export class TextureAsset {
   name: string;
   readonly width: number;
   readonly height: number;
+  readonly role: TextureAssetRole;
   readonly texture: CanvasTexture;
   private filter: TextureFilter;
   private alphaMode: TextureAlphaMode;
@@ -214,6 +223,7 @@ export class TextureAsset {
     this.name = options.name;
     this.width = width;
     this.height = height;
+    this.role = options.role ?? 'model';
     this.filter = options.filter ?? 'nearest';
     this.alphaMode = options.alphaMode ?? 'opaque';
     this.checkerA = options.checkerA ?? '#263129';
@@ -581,7 +591,11 @@ export class TextureAsset {
   }
 
   /** Add a raster layer from an imported image, fitted into the texture. */
-  async importImageLayer(blob: Blob, name: string): Promise<boolean> {
+  async importImageLayer(
+    blob: Blob,
+    name: string,
+    fit: ImageFitOptions = { mode: 'contain' }
+  ): Promise<boolean> {
     const bitmap = await createImageBitmap(blob);
     const layer = this.createLayer(
       name.trim() || 'Imported image',
@@ -595,18 +609,19 @@ export class TextureAsset {
     const context = layer.context;
     context.clearRect(0, 0, this.width, this.height);
     context.imageSmoothingEnabled = this.filter === 'linear';
-    const scale = Math.min(
-      this.width / bitmap.width,
-      this.height / bitmap.height
+    const rect = imageFitRect(
+      bitmap.width,
+      bitmap.height,
+      this.width,
+      this.height,
+      fit
     );
-    const drawWidth = bitmap.width * scale;
-    const drawHeight = bitmap.height * scale;
     context.drawImage(
       bitmap,
-      (this.width - drawWidth) / 2,
-      (this.height - drawHeight) / 2,
-      drawWidth,
-      drawHeight
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height
     );
     bitmap.close();
     this.layers.push(layer);

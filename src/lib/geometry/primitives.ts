@@ -19,7 +19,8 @@ export type PrimitiveKind =
   | 'cylinder'
   | 'grid'
   | 'cube'
-  | 'imported';
+  | 'imported'
+  | 'reference';
 
 /** Human-readable labels for the primitive palette. */
 export const PRIMITIVE_KINDS: readonly PrimitiveKind[] = [
@@ -35,7 +36,8 @@ export const PRIMITIVE_LABELS: Readonly<Record<PrimitiveKind, string>> = {
   cylinder: 'Cylinder',
   grid: 'Grid',
   cube: 'Cube',
-  imported: 'Imported'
+  imported: 'Imported',
+  reference: 'Reference'
 };
 
 function validatePositive(value: number, label: string): void {
@@ -298,5 +300,23 @@ export function createPrimitiveMesh(kind: PrimitiveKind): HalfEdgeMesh {
       return createCubeMesh();
     case 'imported':
       throw new Error('Imported meshes come from exchange parsers.');
+    case 'reference':
+      return createReferencePlaneMesh();
   }
+}
+
+
+/** Unit image plane for a reference object. Node scale carries its aspect. */
+export function createReferencePlaneMesh(): HalfEdgeMesh {
+  return HalfEdgeMesh.fromPolygons([
+    {
+      corners: [
+        { position: [-0.5, -0.5, 0], uv: [0, 0] },
+        { position: [0.5, -0.5, 0], uv: [1, 0] },
+        { position: [0.5, 0.5, 0], uv: [1, 1] },
+        { position: [-0.5, 0.5, 0], uv: [0, 1] }
+      ],
+      material: 0
+    }
+  ]);
 }

@@ -141,6 +141,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationLoop: true,
   animationPlaying: false,
   animationTracks: [],
+  annotationMode: false,
+  annotationCount: 0,
   animationInterpolation: 'linear',
   shapeEditingId: null,
   activeShapeKeyId: null,
@@ -665,8 +667,34 @@ export class EditorSession {
     this.runtime?.assignTextureToSelection(textureId);
   }
 
-  importTextureImage(blob: Blob, name: string): Promise<void> {
-    return this.runtime?.importTextureImage(blob, name) ?? Promise.resolve();
+  importTextureImage(
+    blob: Blob,
+    name: string,
+    fit?: import('../texture/imageFit').ImageFitOptions
+  ): Promise<void> {
+    return (
+      this.runtime?.importTextureImage(blob, name, fit) ?? Promise.resolve()
+    );
+  }
+
+  addReferenceImage(file: File): Promise<void> {
+    return this.runtime?.addReferenceImage(file) ?? Promise.resolve();
+  }
+
+  replaceActiveReferenceImage(file: File): Promise<void> {
+    return this.runtime?.replaceActiveReferenceImage(file) ?? Promise.resolve();
+  }
+
+  matchReferenceAspect(): void {
+    this.runtime?.matchReferenceAspect();
+  }
+
+  setReferenceOpacity(opacity: number): void {
+    this.runtime?.setReferenceOpacity(opacity);
+  }
+
+  setReferenceInFront(inFront: boolean): void {
+    this.runtime?.setReferenceInFront(inFront);
   }
 
   setTextureAssetFilter(filter: 'nearest' | 'linear'): void {
@@ -1069,6 +1097,18 @@ export class EditorSession {
       track.kind,
       track.shapeKeyId
     );
+  }
+
+  setAnnotationMode(enabled: boolean): void {
+    this.runtime?.setAnnotationMode(enabled);
+  }
+
+  undoLastAnnotation(): void {
+    this.runtime?.undoLastAnnotation();
+  }
+
+  clearAnnotations(): void {
+    this.runtime?.clearAnnotations();
   }
 
   keyActiveTexture(): void {

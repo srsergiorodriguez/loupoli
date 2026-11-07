@@ -14,6 +14,7 @@
   import ExportObjDialog from './ExportObjDialog.svelte';
   import ExportObjFramesDialog from './ExportObjFramesDialog.svelte';
   import NewTextureDialog from './NewTextureDialog.svelte';
+  import ImageImportDialog from './ImageImportDialog.svelte';
   import type { ObjExportScope } from '../../io/obj';
   import InlineNameField from '../Primitives/InlineNameField.svelte';
   import OutlinerRow from '../Primitives/OutlinerRow.svelte';
@@ -74,6 +75,12 @@
     useGlobalOrientation ? (globalTransform ?? activeTransform) : activeTransform
   );
   const nodes = $derived(session.snapshot.nodes);
+  const sceneNodes = $derived(
+    session.snapshot.workspace === 'model' ||
+      session.snapshot.workspace === 'animation'
+      ? nodes
+      : nodes.filter((node) => !node.reference)
+  );
   const selectedNodeIds = $derived(session.snapshot.selectedNodeIds);
   const activeNodeId = $derived(session.snapshot.activeNodeId);
   const activeGroupId = $derived(session.snapshot.activeGroupId);
@@ -95,6 +102,7 @@
         track.kind === 'mesh' && track.targetId === session.snapshot.activeNodeId
     ) ?? null
   );
+  const activeReference = $derived(activeNode?.reference ?? null);
   const activeTextureTrack = $derived(
     animationTracks.find(
       (track) =>
@@ -133,13 +141,15 @@
     activeGroup
       ? objectCount(nodes.filter((node) => node.parentId === activeGroup.id).length)
       : activeNode
-        ? activeNode.primitive === 'quadsphere'
-          ? 'Sphere'
-          : activeNode.primitive === 'cube'
-            ? 'Cube'
-            : activeNode.primitive === 'cylinder'
-              ? 'Cylinder'
-              : 'Grid'
+        ? activeNode.primitive === 'reference'
+          ? 'Reference'
+          : activeNode.primitive === 'quadsphere'
+            ? 'Sphere'
+            : activeNode.primitive === 'cube'
+              ? 'Cube'
+              : activeNode.primitive === 'cylinder'
+                ? 'Cylinder'
+                : 'Grid'
         : ''
   );
   const modifiers = $derived(session.snapshot.modifiers);
@@ -161,6 +171,9 @@
     nodes.filter((node) => node.textureId === session.snapshot.textureAssetId).length
   );
   let textureImportInput: HTMLInputElement;
+  let pendingTextureFile = $state<File | null>(null);
+  let referenceImportInput: HTMLInputElement;
+  let referenceReplaceInput: HTMLInputElement;
   const textureLayers = $derived(session.snapshot.textureLayers);
   const activeTextureLayer = $derived(
     textureLayers.find((layer) => layer.id === session.snapshot.textureActiveId) ??
@@ -168,14 +181,13 @@
       null
   );
 
-  async function importTextureImage(event: Event): Promise<void> {
+  function importTextureImage(event: Event): void {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file) {
-      return;
-    }
-    await session.importTextureImage(file, file.name.replace(/\.[^.]+$/, ''));
     input.value = '';
+    if (file) {
+      pendingTextureFile = file;
+    }
   }
   const activeTextureEffect = $derived(
     activeTextureLayer?.kind === 'effect' ? activeTextureLayer.effect ?? null : null
@@ -212,7 +224,7 @@
   );
 
   const sceneMeta = $derived(
-    `${nodes.length} ${nodes.length === 1 ? 'object' : 'objects'}${
+    `${sceneNodes.length} ${sceneNodes.length === 1 ? 'object' : 'objects'}${
       selectedNodeIds.length > 1 ? ` · ${selectedNodeIds.length} selected` : ''
     }`
   );
@@ -250,7 +262,13 @@
     `${activeTextureAsset?.width ?? session.snapshot.textureSize} × ${activeTextureAsset?.height ?? session.snapshot.textureHeight} · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
   );
   const visibleSections = $derived(
-    inspectorSectionsFor(session.snapshot.workspace)
+    inspectorSectionsFor(session.snapshot.workspace).filter(
+      (section) =>
+        activeReference === null ||
+        !['selection', 'mesh', 'shapes', 'modifiers', 'animation', 'brush', 'texture'].includes(
+          section
+        )
+    )
   );
   const canEdit3d = $derived(session.can('edit3d'));
   const canSeam = $derived(session.can('seamAuthoring'));
@@ -595,6 +613,24 @@
     session.deleteActiveNode();
   }
 
+  function addReferenceImage(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) {
+      void session.addReferenceImage(file);
+    }
+  }
+
+  function replaceReferenceImage(event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) {
+      void session.replaceActiveReferenceImage(file);
+    }
+  }
+
   function rotationDegrees(): [number, number, number] {
     if (!displayTransform) {
       return [0, 0, 0];
@@ -712,18 +748,22 @@
               event.shiftKey || event.metaKey || event.ctrlKey
             )}
         >
-          <span class="object-glyph"><Icon name="solid" size={14} /></span>
+          <span class="object-glyph">
+            <Icon name={node.primitive === 'reference' ? 'image' : 'solid'} size={14} />
+          </span>
           <span class="object-name">{node.name}</span>
           <span class="object-kind">
-            {node.primitive === 'quadsphere'
-              ? 'Sphere'
-              : node.primitive === 'cube'
-                ? 'Cube'
-                : node.primitive === 'cylinder'
-                  ? 'Cylinder'
-                  : node.primitive === 'imported'
-                    ? 'Mesh'
-                    : 'Grid'}
+            {node.primitive === 'reference'
+              ? 'Reference'
+              : node.primitive === 'quadsphere'
+                ? 'Sphere'
+                : node.primitive === 'cube'
+                  ? 'Cube'
+                  : node.primitive === 'cylinder'
+                    ? 'Cylinder'
+                    : node.primitive === 'imported'
+                      ? 'Mesh'
+                      : 'Grid'}
           </span>
         </OutlinerRow>
       {/snippet}
@@ -750,7 +790,22 @@
       open={sections.scene}
       onToggle={(open) => setSection('scene', open)}
     >
-
+      <input
+        bind:this={referenceImportInput}
+        class="visually-hidden"
+        type="file"
+        accept="image/*"
+        aria-label="Add reference image"
+        onchange={addReferenceImage}
+      />
+      <input
+        bind:this={referenceReplaceInput}
+        class="visually-hidden"
+        type="file"
+        accept="image/*"
+        aria-label="Replace reference image"
+        onchange={replaceReferenceImage}
+      />
       <div class="object-list">
         {#each groups as group (group.id)}
           <OutlinerRow
@@ -767,14 +822,14 @@
             <span class="object-glyph"><Icon name="folder" size={14} /></span>
             <span class="object-name">{group.name}</span>
             <span class="object-kind">
-              {objectCount(nodes.filter((node) => node.parentId === group.id).length)}
+              {objectCount(sceneNodes.filter((node) => node.parentId === group.id).length)}
             </span>
           </OutlinerRow>
-          {#each nodes.filter((node) => node.parentId === group.id) as node (node.id)}
+          {#each sceneNodes.filter((node) => node.parentId === group.id) as node (node.id)}
             {@render objectRow(node, true)}
           {/each}
         {/each}
-        {#each nodes.filter((node) => node.parentId === null) as node (node.id)}
+        {#each sceneNodes.filter((node) => node.parentId === null) as node (node.id)}
           {@render objectRow(node, false)}
         {/each}
       </div>
@@ -787,6 +842,45 @@
             onCommit={(value) => session.renameActiveObject(value)}
           />
           <span class="texture-kind">{activeItemKind}</span>
+        </div>
+      {/if}
+
+      {#if activeReference}
+        <div class="texture-block">
+          <div class="render-look-head">
+            <span>Reference image</span>
+            <span>{activeReference.inFront ? 'In front' : 'Behind model'}</span>
+          </div>
+          <SliderField
+            label="Opacity"
+            value={activeReference.opacity}
+            min={0.05}
+            max={1}
+            step={0.01}
+            precision={2}
+            onChange={(value) => session.setReferenceOpacity(value)}
+          />
+          <Switch
+            label="Draw in front"
+            checked={activeReference.inFront}
+            onChange={(value) => session.setReferenceInFront(value)}
+          />
+          <ActionRow>
+            <ActionButton
+              label="Match aspect"
+              icon="frame"
+              onActivate={() => session.matchReferenceAspect()}
+            />
+            <ActionButton
+              label="Replace image…"
+              icon="image"
+              onActivate={() => referenceReplaceInput.click()}
+            />
+          </ActionRow>
+          <p class="hint">
+            Reference planes are editor-only: they are not rendered or
+            exported. Move, rotate, and scale them with the Transform section.
+          </p>
         </div>
       {/if}
 
@@ -848,6 +942,12 @@
               onSelect: () => void session.exportGlb()
             }
           ]}
+        />
+        <ActionButton
+          label="Reference"
+          icon="image"
+          disabled={session.snapshot.fileBusy}
+          onActivate={() => referenceImportInput.click()}
         />
       </ActionRow>
       <p class="hint">
@@ -2676,6 +2776,25 @@
       onCreate={(width, height) => {
         newTextureOpen = false;
         session.createTextureAsset(width, height);
+      }}
+    />
+  {/if}
+  {#if pendingTextureFile}
+    <ImageImportDialog
+      file={pendingTextureFile}
+      textureWidth={activeTextureAsset?.width ?? session.snapshot.textureSize}
+      textureHeight={activeTextureAsset?.height ?? session.snapshot.textureHeight}
+      onCancel={() => (pendingTextureFile = null)}
+      onImport={(fit) => {
+        const file = pendingTextureFile;
+        pendingTextureFile = null;
+        if (file) {
+          void session.importTextureImage(
+            file,
+            file.name.replace(/\.[^.]+$/, ''),
+            fit
+          );
+        }
       }}
     />
   {/if}
