@@ -6357,13 +6357,36 @@ export class EditorRuntime {
         file.bytes.byteOffset,
         file.bytes.byteOffset + file.bytes.byteLength
       ) as ArrayBuffer;
-      const nodes = await importGlb(buffer);
+      const imported = await importGlb(buffer, this.document.animation.fps);
+      const nodes = imported.nodes;
       const start = this.document.nodes.length;
-      const commands = nodes.map(
-        (node, index) =>
-          new CreateMeshNodeCommand(this.document, node, start + index)
-      );
+      const commands: import('./commands/EditorCommand').EditorCommand[] =
+        nodes.map(
+          (node, index) =>
+            new CreateMeshNodeCommand(this.document, node, start + index)
+        );
+      if (imported.clips.length > 0) {
+        const animation = this.document.animation;
+        const beforeAnimation = animation.snapshot();
+        const afterAnimation = {
+          ...beforeAnimation,
+          clips: [...(beforeAnimation.clips ?? []), ...imported.clips],
+          activeClipId: imported.clips[0].id
+        };
+        commands.push(
+          new SetAnimationCommand(
+            animation,
+            beforeAnimation,
+            afterAnimation,
+            'Import GLB animation'
+          )
+        );
+      }
       this.history.execute(new CompositeCommand('Import GLB', commands));
+      if (imported.clips.length > 0) {
+        this.animationFrame = this.document.animation.startFrame;
+        this.applyAnimationPose();
+      }
       this.activeGroupId = null;
       this.activeNodeId = nodes[0]?.id ?? this.activeNodeId;
       this.selectedNodeIds.clear();
@@ -6375,7 +6398,7 @@ export class EditorRuntime {
       this.notify(
         'success',
         'GLB imported',
-        `${nodes.length} object${nodes.length === 1 ? '' : 's'}`
+        `${nodes.length} object${nodes.length === 1 ? '' : 's'}${imported.clips.length > 0 ? ` · ${imported.clips.length} animation clip${imported.clips.length === 1 ? '' : 's'}` : ''}`
       );
       this.publish();
     } catch (error) {
@@ -6402,10 +6425,20 @@ export class EditorRuntime {
         this.document.nodes,
         base
       );
+      const exportableClips = this.document.animation.clips.filter(
+        (clip) =>
+          clip.tracks.length > 0 ||
+          clip.weightTracks.length > 0 ||
+          clip.meshTracks.length > 0
+      ).length;
       const bytes = await exportGlb(
         this.document.nodes,
         this.document.groups,
-        textures
+        textures,
+        {
+          clips: this.document.animation.clips,
+          fps: this.document.animation.fps
+        }
       );
       const saved = await saveBinaryFile(
         bytes,
@@ -6417,7 +6450,7 @@ export class EditorRuntime {
         this.notify(
           'success',
           'GLB exported',
-          `${base}.glb${textures.size > 0 ? ` · ${textures.size} embedded texture${textures.size === 1 ? '' : 's'}` : ''}`
+          `${base}.glb${exportableClips > 0 ? ` · ${exportableClips} clip${exportableClips === 1 ? '' : 's'}` : ''}${textures.size > 0 ? ` · ${textures.size} embedded texture${textures.size === 1 ? '' : 's'}` : ''}`
         );
       }
     } catch (error) {

@@ -842,7 +842,11 @@
           ]}
         />
       </ActionRow>
-      <p class="hint">OBJ and GLB use Y-up at the file boundary; geometry and UVs are preserved.</p>
+      <p class="hint">
+        OBJ and GLB use Y-up at the file boundary; geometry and UVs are
+        preserved. GLB includes object, shape-key, and Mesh Motion clips;
+        camera/light animation stays in the project timeline.
+      </p>
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
         <div class="scene-action-row">

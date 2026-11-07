@@ -1,16 +1,24 @@
 import {
   BufferAttribute,
   type BufferAttribute as BufferAttributeType,
+  AnimationMixer,
   BufferGeometry,
+  Euler,
+  LoopOnce,
   Matrix3,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  NumberKeyframeTrack,
   Object3D,
+  Quaternion,
+  QuaternionKeyframeTrack,
   Scene,
   SRGBColorSpace,
   Texture,
-  Vector3
+  Vector3,
+  VectorKeyframeTrack,
+  AnimationClip as ThreeAnimationClip
 } from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -19,7 +27,17 @@ import {
   type MeshCornerSpec,
   type MeshFaceSpec
 } from '../geometry/HalfEdgeMesh';
-import { MeshNode } from '../scene/MeshNode';
+import { MeshNode, type NodeTransform } from '../scene/MeshNode';
+import {
+  createAnimationClipId,
+  createAnimationTrackId,
+  createShapeWeightTrackId,
+  type AnimationClip as SceneAnimationClip,
+  type AnimationClipSnapshot,
+  type AnimationTrackSnapshot,
+  type MeshMotionTrack,
+  type ShapeWeightTrackSnapshot
+} from '../scene/SceneAnimation';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { transformMatrix, worldTransformForNode } from '../editor/groupTransforms';
 
@@ -36,18 +54,118 @@ function normalizeName(value: string, index: number): string {
   return trimmed.length > 0 ? trimmed : `Imported ${index + 1}`;
 }
 
+/** App animation data included in a GLB export. */
+export interface GlbAnimationExportOptions {
+  readonly clips: readonly SceneAnimationClip[];
+  readonly fps: number;
+}
+
+interface MotionMorphSample {
+  readonly frame: number;
+  readonly targetIndex: number;
+  readonly interpolation: 'step' | 'linear';
+}
+
+interface MotionMorphBinding {
+  readonly clipId: string;
+  readonly samples: readonly MotionMorphSample[];
+}
+
+interface NodeGlbAnimationContext {
+  readonly node: MeshNode;
+  readonly parent: SceneGroup | null;
+  readonly root: Object3D;
+  readonly meshes: Mesh[];
+  readonly morphNames: string[];
+  readonly shapeKeyIds: string[];
+  readonly motionBindings: MotionMorphBinding[];
+  readonly motionTargetCount: number;
+}
+
+/** Sample one app clip's node/group transforms into world OBB transforms. */
+function sampleClipTransformPose(
+  clip: SceneAnimationClip,
+  frame: number
+): Map<string, NodeTransform> {
+  const pose = new Map<string, NodeTransform>();
+  for (const track of clip.tracks) {
+    const transform = track.evaluate(frame);
+    if (transform) {
+      pose.set(track.targetId, transform);
+    }
+  }
+  return pose;
+}
+
+/** Resolve one mesh-motion clip's active morph weights at a frame. */
+function sampleMotionWeights(
+  binding: MotionMorphBinding,
+  frame: number
+): Map<number, number> {
+  const samples = binding.samples;
+  const weights = new Map<number, number>();
+  if (samples.length === 0) {
+    return weights;
+  }
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  if (frame <= first.frame) {
+    weights.set(first.targetIndex, 1);
+    return weights;
+  }
+  if (frame >= last.frame) {
+    weights.set(last.targetIndex, 1);
+    return weights;
+  }
+  for (let index = 0; index < samples.length - 1; index += 1) {
+    const a = samples[index];
+    const b = samples[index + 1];
+    if (frame >= a.frame && frame <= b.frame) {
+      if (a.interpolation === 'step' || b.frame === a.frame) {
+        weights.set(a.targetIndex, 1);
+      } else {
+        const t = (frame - a.frame) / (b.frame - a.frame);
+        weights.set(a.targetIndex, 1 - t);
+        weights.set(b.targetIndex, t);
+      }
+      return weights;
+    }
+  }
+  weights.set(last.targetIndex, 1);
+  return weights;
+}
+
+/** Imported meshes plus glTF animation clips converted to app frames. */
+export interface GlbImportResult {
+  readonly nodes: MeshNode[];
+  readonly clips: AnimationClipSnapshot[];
+}
+
+interface GlbMeshBinding {
+  readonly object: Mesh;
+  readonly node: MeshNode;
+  readonly restWorld: Matrix4;
+  readonly restWeights: readonly number[];
+  readonly shapeKeyIds: readonly string[];
+}
+
 /**
- * Import a binary glTF into world-baked DCEL nodes.
+ * Import a binary glTF into world-baked DCEL nodes and animation clips.
  *
  * glTF is triangulated by definition. Per-corner UVs survive because each
  * triangle corner keeps its own attribute values. Material base colors become
- * the node's simple material palette.
+ * the node's simple material palette. Transform channels are baked into
+ * node-relative tracks; morph weights become shape-weight tracks.
  */
-export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
+export async function importGlb(
+  data: ArrayBuffer,
+  fps = 24
+): Promise<GlbImportResult> {
   const loader = new GLTFLoader();
   const gltf = await loader.parseAsync(data, '');
   gltf.scene.updateMatrixWorld(true);
   const nodes: MeshNode[] = [];
+  const bindings: GlbMeshBinding[] = [];
   gltf.scene.traverse((object) => {
     if (!(object instanceof Mesh)) {
       return;
@@ -180,6 +298,13 @@ export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
         });
       }
       nodes.push(node);
+      bindings.push({
+        object,
+        node,
+        restWorld: object.matrixWorld.clone(),
+        restWeights: object.morphTargetInfluences?.slice() ?? [],
+        shapeKeyIds: node.shapeKeys.map((key) => key.id)
+      });
     } catch (error) {
       throw new Error(
         `GLB mesh "${object.name}" is not importable as manifold DCEL topology: ${
@@ -191,7 +316,154 @@ export async function importGlb(data: ArrayBuffer): Promise<MeshNode[]> {
   if (nodes.length === 0) {
     throw new Error('The GLB contains no triangle meshes.');
   }
-  return nodes;
+  const clips = importGlbAnimation(gltf.animations, bindings, fps, gltf.scene);
+  return { nodes, clips };
+}
+
+/** Convert glTF animation clips into app integer-frame clips. */
+function importGlbAnimation(
+  animations: readonly import('three').AnimationClip[],
+  bindings: readonly GlbMeshBinding[],
+  fps: number,
+  scene: Object3D
+): AnimationClipSnapshot[] {
+  if (animations.length === 0 || bindings.length === 0) {
+    return [];
+  }
+  const rate = Math.max(1, Math.min(120, Math.round(fps)));
+  const mixer = new AnimationMixer(scene);
+  const clips: AnimationClipSnapshot[] = [];
+  for (const gltfClip of animations) {
+    const duration = Math.max(
+      gltfClip.duration,
+      ...gltfClip.tracks.map((track) =>
+        track.times.length > 0 ? track.times[track.times.length - 1] : 0
+      )
+    );
+    const endFrame = Math.max(0, Math.min(2400, Math.ceil(duration * rate)));
+    const action = mixer.clipAction(gltfClip);
+    action.setLoop(LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.reset().play();
+    const transforms = new Map<
+      string,
+      {
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: [number, number, number];
+      }[]
+    >();
+    const sampledWeights = bindings.map(() => [] as number[][]);
+    for (let frame = 0; frame <= endFrame; frame += 1) {
+      mixer.setTime(frame / rate);
+      scene.updateMatrixWorld(true);
+      for (let bindingIndex = 0; bindingIndex < bindings.length; bindingIndex += 1) {
+        const binding = bindings[bindingIndex];
+        const delta = new Matrix4()
+          .multiplyMatrices(
+            binding.object.matrixWorld,
+            binding.restWorld.clone().invert()
+          )
+          .premultiply(Y_UP_TO_Z_UP)
+          .multiply(Z_UP_TO_Y_UP);
+        const position = new Vector3();
+        const rotation = new Quaternion();
+        const scale = new Vector3();
+        delta.decompose(position, rotation, scale);
+        const euler = new Euler().setFromQuaternion(rotation, 'XYZ');
+        const samples = transforms.get(binding.node.id) ?? [];
+        samples.push({
+          position: [position.x, position.y, position.z],
+          rotation: [
+            (euler.x * 180) / Math.PI,
+            (euler.y * 180) / Math.PI,
+            (euler.z * 180) / Math.PI
+          ],
+          scale: [scale.x, scale.y, scale.z]
+        });
+        transforms.set(binding.node.id, samples);
+        sampledWeights[bindingIndex].push(
+          binding.shapeKeyIds.map(
+            (_id, index) => binding.object.morphTargetInfluences?.[index] ?? 0
+          )
+        );
+      }
+    }
+    action.stop();
+    mixer.uncacheAction(gltfClip);
+    const tracks: AnimationTrackSnapshot[] = [];
+    for (const [nodeId, samples] of transforms) {
+      const changed = samples.some(
+        (sample) =>
+          Math.abs(sample.position[0]) > 1e-6 ||
+          Math.abs(sample.position[1]) > 1e-6 ||
+          Math.abs(sample.position[2]) > 1e-6 ||
+          Math.abs(sample.rotation[0]) > 1e-4 ||
+          Math.abs(sample.rotation[1]) > 1e-4 ||
+          Math.abs(sample.rotation[2]) > 1e-4 ||
+          Math.abs(sample.scale[0] - 1) > 1e-6 ||
+          Math.abs(sample.scale[1] - 1) > 1e-6 ||
+          Math.abs(sample.scale[2] - 1) > 1e-6
+      );
+      if (!changed) {
+        continue;
+      }
+      const keyframes = samples.map((sample, frame) => ({
+        frame,
+        transform: {
+          position: sample.position,
+          rotation: sample.rotation,
+          scale: sample.scale
+        },
+        interpolation: 'linear' as const
+      }));
+      tracks.push({
+        id: createAnimationTrackId(),
+        targetId: nodeId,
+        targetKind: 'node',
+        keyframes
+      });
+    }
+    const weightTracks: ShapeWeightTrackSnapshot[] = [];
+    for (let bindingIndex = 0; bindingIndex < bindings.length; bindingIndex += 1) {
+      const binding = bindings[bindingIndex];
+      for (let shapeIndex = 0; shapeIndex < binding.shapeKeyIds.length; shapeIndex += 1) {
+        const values = sampledWeights[bindingIndex].map(
+          (sample) => sample[shapeIndex] ?? 0
+        );
+        const rest = binding.restWeights[shapeIndex] ?? 0;
+        const changed = values.some((value) => Math.abs(value - rest) > 1e-6);
+        if (!changed) {
+          continue;
+        }
+        weightTracks.push({
+          id: createShapeWeightTrackId(),
+          targetId: binding.node.id,
+          shapeKeyId: binding.shapeKeyIds[shapeIndex],
+          keyframes: values.map((weight, frame) => ({
+            frame,
+            weight: Math.max(0, Math.min(1, weight)),
+            interpolation: 'linear'
+          }))
+        });
+      }
+    }
+    const end = Math.max(0, endFrame);
+    if (tracks.length === 0 && weightTracks.length === 0) {
+      continue;
+    }
+    clips.push({
+      id: createAnimationClipId(),
+      name: gltfClip.name || `Animation ${clips.length + 1}`,
+      startFrame: 0,
+      endFrame: end <= 0 ? 1 : end,
+      tracks,
+      weightTracks
+    });
+  }
+  mixer.stopAllAction();
+  mixer.uncacheRoot(mixer.getRoot());
+  return clips;
 }
 
 /** One embedded PNG texture for a GLB export. */
@@ -209,11 +481,12 @@ function makeMaterial(color: string, textured: boolean): MeshBasicMaterial {
   });
 }
 
-/** Export visible evaluated nodes as a binary GLB with embedded textures. */
+/** Export visible nodes as a binary GLB with textures and animation clips. */
 export async function exportGlb(
   nodes: readonly MeshNode[],
   groups: readonly SceneGroup[],
-  textures: ReadonlyMap<string, GlbTextureFile> = new Map()
+  textures: ReadonlyMap<string, GlbTextureFile> = new Map(),
+  animation?: GlbAnimationExportOptions
 ): Promise<Uint8Array> {
   const textureCache = new Map<string, Texture>();
   const textureImages: ImageBitmap[] = [];
@@ -234,6 +507,21 @@ export async function exportGlb(
   const scene = new Scene();
   scene.name = 'loupoli';
   const groupById = new Map(groups.map((group) => [group.id, group]));
+  const nodeContexts = new Map<string, NodeGlbAnimationContext>();
+  const usedRootNames = new Set<string>();
+  const motionTracksByNode = new Map<
+    string,
+    { clipId: string; track: MeshMotionTrack }[]
+  >();
+  if (animation) {
+    for (const clip of animation.clips) {
+      for (const track of clip.meshTracks) {
+        const entries = motionTracksByNode.get(track.targetId) ?? [];
+        entries.push({ clipId: clip.id, track });
+        motionTracksByNode.set(track.targetId, entries);
+      }
+    }
+  }
   let objectIndex = 0;
   for (const node of nodes) {
     if (!node.visible) {
@@ -243,7 +531,8 @@ export async function exportGlb(
     if (evaluated.error) {
       throw new Error(`${node.name}: ${evaluated.error}`);
     }
-    const mesh = evaluated.mesh;
+    const animationBase = animation !== undefined && !evaluated.modifiersActive;
+    const mesh = animationBase ? node.mesh : evaluated.mesh;
     const morphKeys = mesh === node.mesh ? node.shapeKeys : [];
     if (mesh.triangleVertexCount === 0) {
       continue;
@@ -260,7 +549,16 @@ export async function exportGlb(
       worldTransformForNode(node.transform, parent?.transform ?? null)
     );
     const root = new Object3D();
-    root.name = node.name;
+    const rootBase =
+      node.name.replace(/[^a-zA-Z0-9_-]+/g, '_') || 'Object';
+    let rootName = rootBase;
+    let rootSuffix = 2;
+    while (usedRootNames.has(rootName)) {
+      rootName = `${rootBase}_${rootSuffix}`;
+      rootSuffix += 1;
+    }
+    usedRootNames.add(rootName);
+    root.name = rootName;
     root.matrix.copy(world).premultiply(Z_UP_TO_Y_UP);
     root.matrix.decompose(root.position, root.quaternion, root.scale);
     root.matrixAutoUpdate = true;
@@ -308,7 +606,8 @@ export async function exportGlb(
       const data = new Float32Array(vertexCount * 3);
       for (let vertex = 0; vertex < vertexCount; vertex += 1) {
         const base = baseVertexByRender[vertex];
-        data[vertex * 3] = key.targetPositions[base * 3] - mesh.positions[base * 3];
+        data[vertex * 3] =
+          key.targetPositions[base * 3] - mesh.positions[base * 3];
         data[vertex * 3 + 1] =
           key.targetPositions[base * 3 + 1] - mesh.positions[base * 3 + 1];
         data[vertex * 3 + 2] =
@@ -316,6 +615,69 @@ export async function exportGlb(
       }
       return data;
     });
+    const morphNames: string[] = [];
+    const usedMorphNames = new Set<string>();
+    const uniqueMorphName = (base: string): string => {
+      const clean = base.replace(/[^a-zA-Z0-9_-]+/g, '_') || 'Morph';
+      let name = clean;
+      let suffix = 2;
+      while (usedMorphNames.has(name)) {
+        name = `${clean}_${suffix}`;
+        suffix += 1;
+      }
+      usedMorphNames.add(name);
+      return name;
+    };
+    for (const key of morphKeys) {
+      morphNames.push(uniqueMorphName(key.name));
+    }
+    const motionTracks = animationBase
+      ? (motionTracksByNode.get(node.id) ?? [])
+      : [];
+    const motionTargetData: Float32Array[] = [];
+    const motionBindings: MotionMorphBinding[] = [];
+    let motionTargetCursor = morphKeys.length;
+    for (const { clipId, track } of motionTracks) {
+      const samples: MotionMorphSample[] = [];
+      const vertexPositions = new Map<number, number>();
+      track.vertexIndices.forEach((vertex, position) => {
+        vertexPositions.set(vertex, position);
+      });
+      for (const key of track.keyframes) {
+        const target = new Float32Array(vertexCount * 3);
+        for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+          const base = baseVertexByRender[vertex];
+          const position = vertexPositions.get(base);
+          if (position === undefined) {
+            continue;
+          }
+          target[vertex * 3] = key.values[position * 3];
+          target[vertex * 3 + 1] = key.values[position * 3 + 1];
+          target[vertex * 3 + 2] = key.values[position * 3 + 2];
+        }
+        motionTargetData.push(target);
+        morphNames.push(
+          uniqueMorphName(`Motion_${clipId.slice(-4)}_${key.frame}`)
+        );
+        samples.push({
+          frame: key.frame,
+          targetIndex: motionTargetCursor,
+          interpolation: key.interpolation
+        });
+        motionTargetCursor += 1;
+      }
+      if (samples.length > 0) {
+        motionBindings.push({ clipId, samples });
+      }
+    }
+    const allMorphTargets = [...fullMorphTargets, ...motionTargetData];
+    if (allMorphTargets.length > 16) {
+      throw new Error(
+        `${node.name}: GLB animation supports at most 16 morph targets (shape keys plus Mesh Motion keys).`
+      );
+    }
+    const nodeMeshes: Mesh[] = [];
+
     const materialFaces = new Map<number, number[]>();
     for (let face = 0; face < mesh.faceCount; face += 1) {
       const material = mesh.faceMaterial[face];
@@ -361,10 +723,10 @@ export async function exportGlb(
         indices[index] = index;
       }
       geometry.setIndex(new BufferAttribute(indices, 1));
-      if (fullMorphTargets.length > 0) {
+      if (allMorphTargets.length > 0) {
         const morphAttributes: BufferAttribute[] = [];
         let source = 0;
-        for (const morph of fullMorphTargets) {
+        for (const morph of allMorphTargets) {
           const subset = new Float32Array(triangleCount * 3 * 3);
           let target = 0;
           for (let face = 0; face < mesh.faceCount; face += 1) {
@@ -396,24 +758,162 @@ export async function exportGlb(
       material.name = `${node.name}_mat${materialIndex}`;
       material.map = texture;
       const meshObject = new Mesh(geometry, material);
-      meshObject.name = `${node.name}_${objectIndex}`;
-      if (morphKeys.length > 0) {
-        meshObject.morphTargetInfluences = morphKeys.map((key) => key.weight);
+      meshObject.name = `${rootName}_${objectIndex}`;
+      nodeMeshes.push(meshObject);
+      if (allMorphTargets.length > 0) {
+        meshObject.morphTargetInfluences = [
+          ...morphKeys.map((key) => key.weight),
+          ...motionTargetData.map(() => 0)
+        ];
         meshObject.morphTargetDictionary = Object.fromEntries(
-          morphKeys.map((key, index) => [key.name, index])
+          morphNames.map((name, index) => [name, index] as const)
         );
       }
       objectIndex += 1;
       root.add(meshObject);
+    }
+    if (animation) {
+      nodeContexts.set(node.id, {
+        node,
+        parent: parent ?? null,
+        root,
+        meshes: nodeMeshes,
+        morphNames,
+        shapeKeyIds: morphKeys.map((key) => key.id),
+        motionBindings,
+        motionTargetCount: motionTargetData.length
+      });
     }
     scene.add(root);
   }
   if (scene.children.length === 0) {
     throw new Error('There are no visible objects to export.');
   }
+  const threeClips: ThreeAnimationClip[] = [];
+  if (animation) {
+    for (const clip of animation.clips) {
+      const frames: number[] = [];
+      for (let frame = clip.startFrame; frame <= clip.endFrame; frame += 1) {
+        frames.push(frame);
+      }
+      if (frames.length === 0) {
+        continue;
+      }
+      const times = frames.map(
+        (frame) => (frame - clip.startFrame) / Math.max(1, animation.fps)
+      );
+      const tracks: (VectorKeyframeTrack | QuaternionKeyframeTrack | NumberKeyframeTrack)[] = [];
+      if (clip.tracks.length > 0) {
+        for (const context of nodeContexts.values()) {
+          const positions: number[] = [];
+          const rotations: number[] = [];
+          const scales: number[] = [];
+          for (const frame of frames) {
+            const pose = sampleClipTransformPose(clip, frame);
+            const nodeTransform = pose.get(context.node.id) ?? context.node.transform;
+            const parentTransform = context.parent
+              ? (pose.get(context.parent.id) ?? context.parent.transform)
+              : null;
+            const matrix = transformMatrix(
+              worldTransformForNode(nodeTransform, parentTransform)
+            ).premultiply(Z_UP_TO_Y_UP);
+            const position = new Vector3();
+            const rotation = new Quaternion();
+            const scale = new Vector3();
+            matrix.decompose(position, rotation, scale);
+            positions.push(position.x, position.y, position.z);
+            rotations.push(rotation.x, rotation.y, rotation.z, rotation.w);
+            scales.push(scale.x, scale.y, scale.z);
+          }
+          tracks.push(
+            new VectorKeyframeTrack(
+              `${context.root.name}.position`,
+              times,
+              positions
+            ),
+            new QuaternionKeyframeTrack(
+              `${context.root.name}.quaternion`,
+              times,
+              rotations
+            ),
+            new VectorKeyframeTrack(
+              `${context.root.name}.scale`,
+              times,
+              scales
+            )
+          );
+        }
+      }
+      for (const context of nodeContexts.values()) {
+        const shapeCount = context.shapeKeyIds.length;
+        for (const weightTrack of clip.weightTracks) {
+          if (weightTrack.targetId !== context.node.id) {
+            continue;
+          }
+          const shapeIndex = context.shapeKeyIds.indexOf(weightTrack.shapeKeyId);
+          if (shapeIndex < 0) {
+            continue;
+          }
+          const fallback =
+            context.node.shapeKeys.find((key) => key.id === weightTrack.shapeKeyId)
+              ?.weight ?? 0;
+          const values = frames.map(
+            (frame) => weightTrack.evaluate(frame) ?? fallback
+          );
+          for (const mesh of context.meshes) {
+            tracks.push(
+              new NumberKeyframeTrack(
+                `${mesh.name}.morphTargetInfluences[${context.morphNames[shapeIndex]}]`,
+                times,
+                values
+              )
+            );
+          }
+        }
+        const binding = context.motionBindings.find(
+          (item) => item.clipId === clip.id
+        );
+        if (binding) {
+          for (
+            let offset = 0;
+            offset < context.motionTargetCount;
+            offset += 1
+          ) {
+            const targetIndex = shapeCount + offset;
+            const values = frames.map(
+              (frame) =>
+                sampleMotionWeights(binding, frame).get(targetIndex) ?? 0
+            );
+            for (const mesh of context.meshes) {
+              tracks.push(
+                new NumberKeyframeTrack(
+                  `${mesh.name}.morphTargetInfluences[${context.morphNames[targetIndex]}]`,
+                  times,
+                  values
+                )
+              );
+            }
+          }
+        }
+      }
+      if (tracks.length > 0) {
+        threeClips.push(
+          new ThreeAnimationClip(
+            clip.name,
+            (clip.endFrame - clip.startFrame) / Math.max(1, animation.fps),
+            tracks
+          )
+        );
+      }
+    }
+  }
   try {
     const exporter = new GLTFExporter();
-    const buffer = await exporter.parseAsync(scene, { binary: true, trs: true });
+    const buffer = await exporter.parseAsync(scene, {
+      binary: true,
+      trs: true,
+      animations: threeClips
+    });
     return new Uint8Array(buffer);
   } finally {
     for (const texture of textureCache.values()) {
