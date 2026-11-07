@@ -5,6 +5,7 @@ import {
   Matrix4,
   MeshBasicMaterial,
   Quaternion,
+  SphereGeometry,
   Vector3
 } from 'three';
 import type { Theme } from '../../design/theme';
@@ -16,9 +17,12 @@ const Y_AXIS = new Vector3(0, 1, 0);
 export class AnnotationOverlay {
   readonly group = new Group();
   private readonly geometry = new CylinderGeometry(1, 1, 1, 6);
+  private readonly jointGeometry = new SphereGeometry(1, 8, 6);
   private readonly material: MeshBasicMaterial;
   private mesh: InstancedMesh;
+  private joints: InstancedMesh;
   private capacity = 1;
+  private jointCapacity = 1;
   private readonly matrix = new Matrix4();
   private readonly direction = new Vector3();
   private readonly midpoint = new Vector3();
@@ -41,7 +45,16 @@ export class AnnotationOverlay {
     this.mesh.renderOrder = 900;
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
-    this.group.add(this.mesh);
+    this.joints = new InstancedMesh(
+      this.jointGeometry,
+      this.material,
+      this.jointCapacity
+    );
+    this.joints.name = 'loupoli-annotation-joints';
+    this.joints.renderOrder = 901;
+    this.joints.frustumCulled = false;
+    this.joints.count = 0;
+    this.group.add(this.mesh, this.joints);
     this.group.visible = false;
   }
 
@@ -50,7 +63,9 @@ export class AnnotationOverlay {
     const count = positions ? Math.floor(positions.length / 6) : 0;
     if (count === 0 || !positions) {
       this.mesh.count = 0;
+      this.joints.count = 0;
       this.mesh.visible = false;
+      this.joints.visible = false;
       this.group.visible = false;
       return;
     }
@@ -67,6 +82,21 @@ export class AnnotationOverlay {
       this.mesh.renderOrder = 900;
       this.mesh.frustumCulled = false;
       this.group.add(this.mesh);
+    }
+    const jointCount = count * 2;
+    if (jointCount > this.jointCapacity) {
+      this.group.remove(this.joints);
+      this.joints.dispose();
+      this.jointCapacity = jointCount;
+      this.joints = new InstancedMesh(
+        this.jointGeometry,
+        this.material,
+        this.jointCapacity
+      );
+      this.joints.name = 'loupoli-annotation-joints';
+      this.joints.renderOrder = 901;
+      this.joints.frustumCulled = false;
+      this.group.add(this.joints);
     }
     for (let index = 0; index < count; index += 1) {
       const offset = index * 6;
@@ -99,6 +129,24 @@ export class AnnotationOverlay {
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.computeBoundingSphere();
     this.mesh.visible = true;
+    for (let index = 0; index < jointCount; index += 1) {
+      const offset = index * 3;
+      this.matrix.makeScale(
+        ANNOTATION_RADIUS,
+        ANNOTATION_RADIUS,
+        ANNOTATION_RADIUS
+      );
+      this.matrix.setPosition(
+        positions[offset],
+        positions[offset + 1],
+        positions[offset + 2]
+      );
+      this.joints.setMatrixAt(index, this.matrix);
+    }
+    this.joints.count = jointCount;
+    this.joints.instanceMatrix.needsUpdate = true;
+    this.joints.computeBoundingSphere();
+    this.joints.visible = true;
     this.group.visible = true;
   }
 
@@ -112,7 +160,9 @@ export class AnnotationOverlay {
     this.group.removeFromParent();
     this.group.clear();
     this.mesh.dispose();
+    this.joints.dispose();
     this.geometry.dispose();
+    this.jointGeometry.dispose();
     this.material.dispose();
   }
 }
