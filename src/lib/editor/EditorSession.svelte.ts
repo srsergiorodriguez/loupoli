@@ -143,6 +143,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   nodes: [],
   projectName: 'Untitled',
   autosaveStatus: 'idle',
+  autosaveEnabled: true,
   lastAutosavedAt: null,
   autosaveError: null,
   recoveryAvailable: false,
@@ -1174,6 +1175,10 @@ export class EditorSession {
 
   async saveProject(): Promise<void> {
     await this.runtime?.saveProject();
+  }
+
+  setAutosaveEnabled(enabled: boolean): void {
+    this.runtime?.setAutosaveEnabled(enabled);
   }
 
   async openProject(): Promise<void> {

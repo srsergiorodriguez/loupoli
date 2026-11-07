@@ -120,6 +120,7 @@ function deleteRecord(db: IDBDatabase): Promise<void> {
 export class AutosaveService {
   private db: IDBDatabase | null = null;
   private enabled = false;
+  private userEnabled = true;
   private checkpoint: Uint8Array | null = null;
   private settings: ProjectSettings | null = null;
   private deltas: JournalPatch[] = [];
@@ -159,6 +160,42 @@ export class AutosaveService {
     return this.state;
   }
 
+  /** Whether the user has autosave enabled. */
+  get userAutosaveEnabled(): boolean {
+    return this.userEnabled;
+  }
+
+  /**
+   * Pause or resume autosave for the user.
+   *
+   * Resuming rebuilds a fresh checkpoint from the current document so edits
+   * made while paused are not lost.
+   */
+  setUserEnabled(enabled: boolean): void {
+    if (this.userEnabled === enabled) {
+      return;
+    }
+    this.userEnabled = enabled;
+    if (!enabled) {
+      this.enabled = false;
+      if (this.timer !== null) {
+        clearInterval(this.timer);
+        this.timer = null;
+      }
+      this.setState('unavailable', null);
+      return;
+    }
+    this.enabled = true;
+    void (async () => {
+      try {
+        const checkpoint = await this.makeCheckpoint();
+        await this.start(checkpoint.bytes, checkpoint.settings, true);
+      } catch (error) {
+        this.setState('error', error);
+      }
+    })();
+  }
+
   /** Read a previous recovery record without enabling writes. */
   async findRecovery(): Promise<RecoveryRecord | null> {
     try {
@@ -174,7 +211,10 @@ export class AutosaveService {
         updatedAt: record.updatedAt
       };
     } catch (error) {
-      this.setState('error', error);
+      this.setState(
+        this.userEnabled ? 'error' : 'unavailable',
+        this.userEnabled ? error : null
+      );
       return null;
     }
   }
@@ -188,6 +228,11 @@ export class AutosaveService {
     settings: ProjectSettings,
     persistInitial = false
   ): Promise<void> {
+    if (!this.userEnabled) {
+      this.enabled = false;
+      this.setState('unavailable', null);
+      return;
+    }
     this.checkpoint = checkpoint;
     this.settings = settings;
     this.deltas = [];
@@ -290,7 +335,7 @@ export class AutosaveService {
     try {
       this.db ??= await openDatabase();
       await deleteRecord(this.db);
-      this.setState('idle', null);
+      this.setState(this.userEnabled ? 'idle' : 'unavailable', null);
     } catch (error) {
       this.setState('error', error);
     }
@@ -312,21 +357,47 @@ export class AutosaveService {
     if (!this.checkpoint || !this.settings) {
       return;
     }
+    this.db ??= await openDatabase();
+    const record: StoredRecord = {
+      version: RECORD_VERSION,
+      checkpoint: this.checkpoint.slice(),
+      settings: this.settings,
+      deltas: this.deltas.slice(),
+      updatedAt: Date.now()
+    };
     try {
-      this.db ??= await openDatabase();
-      const record: StoredRecord = {
-        version: RECORD_VERSION,
-        checkpoint: this.checkpoint.slice(),
-        settings: this.settings,
-        deltas: this.deltas.slice(),
-        updatedAt: Date.now()
-      };
       await writeRecord(this.db, record);
-      this.dirty = false;
-      this.setState('saved', null);
     } catch (error) {
-      this.setState('error', error);
+      if (!this.isQuotaError(error)) {
+        this.setState('error', error);
+        return;
+      }
+      try {
+        // A stale checkpoint can consume enough quota that replacing it fails.
+        // Release the old record and retry once.
+        await deleteRecord(this.db);
+        await writeRecord(this.db, record);
+      } catch (retryError) {
+        this.setState('error', retryError);
+        return;
+      }
     }
+    this.dirty = false;
+    this.setState('saved', null);
+  }
+
+  /** True when an IndexedDB write was rejected for quota. */
+  private isQuotaError(error: unknown): boolean {
+    const candidate = error as {
+      readonly name?: string;
+      readonly code?: number;
+      readonly message?: string;
+    };
+    return (
+      candidate?.name === 'QuotaExceededError' ||
+      candidate?.code === 22 ||
+      /quota/i.test(candidate?.message ?? '')
+    );
   }
 
   private setState(status: AutosaveStatus, error: unknown): void {

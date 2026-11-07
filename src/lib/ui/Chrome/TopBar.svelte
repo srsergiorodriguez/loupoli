@@ -140,6 +140,18 @@
       tooltip="Save project"
       shortcut={shortcut('save').display}
     />
+    <IconButton
+      label={session.snapshot.autosaveEnabled
+        ? 'Pause autosave'
+        : 'Resume autosave'}
+      icon={session.snapshot.autosaveEnabled ? 'pause' : 'play'}
+      pressed={!session.snapshot.autosaveEnabled}
+      onActivate={() =>
+        session.setAutosaveEnabled(!session.snapshot.autosaveEnabled)}
+      tooltip={session.snapshot.autosaveEnabled
+        ? 'Pause background autosave'
+        : 'Resume background autosave'}
+    />
     <span class="divider divider--actions" aria-hidden="true"></span>
     <IconButton
       label={undoLabel}

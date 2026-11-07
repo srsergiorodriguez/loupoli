@@ -430,6 +430,9 @@ interface EditorRuntimeOptions {
   readonly onSnapshot: (snapshot: EditorSnapshot) => void;
 }
 
+/** Persisted user preference for background autosave. */
+const AUTOSAVE_ENABLED_KEY = 'loupoli-autosave-enabled';
+
 const EMPTY_COUNTS: MeshCounts = {
   vertices: 0,
   edges: 0,
@@ -567,6 +570,7 @@ export class EditorRuntime {
   private disposed = false;
   private projectName = 'Untitled';
   private autosaveStatus: AutosaveStatus = 'idle';
+  private autosaveEnabled = true;
   private lastAutosavedAt: number | null = null;
   private autosaveError: string | null = null;
   private pendingRecovery: RecoveryRecord | null = null;
@@ -700,6 +704,15 @@ export class EditorRuntime {
       () => this.makeCheckpoint(),
       (state) => this.receiveAutosaveState(state)
     );
+    try {
+      this.autosaveEnabled =
+        window.localStorage.getItem(AUTOSAVE_ENABLED_KEY) !== 'false';
+    } catch {
+      this.autosaveEnabled = true;
+    }
+    if (!this.autosaveEnabled) {
+      this.autosave.setUserEnabled(false);
+    }
 
     this.renderer.setShadingMode(this.shading);
     this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
@@ -863,6 +876,7 @@ export class EditorRuntime {
       nodes: this.document.summaries(),
       projectName: this.projectName,
       autosaveStatus: this.autosaveStatus,
+      autosaveEnabled: this.autosaveEnabled,
       lastAutosavedAt: this.lastAutosavedAt,
       autosaveError: this.autosaveError,
       recoveryAvailable: this.recoveryAvailable,
@@ -7014,6 +7028,25 @@ export class EditorRuntime {
   }
 
   /** Encode and save the current project through the platform adapter. */
+  /** Enable or pause background autosave without affecting manual saves. */
+  setAutosaveEnabled(enabled: boolean): void {
+    if (this.autosaveEnabled === enabled) {
+      return;
+    }
+    this.autosaveEnabled = enabled;
+    this.autosaveError = null;
+    try {
+      window.localStorage.setItem(AUTOSAVE_ENABLED_KEY, String(enabled));
+    } catch {
+      // UI preference only; autosave still works for this session.
+    }
+    this.autosave.setUserEnabled(enabled);
+    if (!enabled) {
+      this.autosaveStatus = 'unavailable';
+    }
+    this.publish();
+  }
+
   async saveProject(): Promise<void> {
     if (this.fileBusy) {
       return;

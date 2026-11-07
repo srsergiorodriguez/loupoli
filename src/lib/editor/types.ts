@@ -326,6 +326,7 @@ export interface EditorSnapshot {
   readonly nodes: readonly NodeSummary[];
   readonly projectName: string;
   readonly autosaveStatus: AutosaveStatus;
+  readonly autosaveEnabled: boolean;
   readonly lastAutosavedAt: number | null;
   readonly autosaveError: string | null;
   readonly recoveryAvailable: boolean;

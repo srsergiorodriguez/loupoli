@@ -33,7 +33,7 @@ Autosave is never presented as a manual save, and a manual save is never implied
 | Manual `.lpoli` | User-chosen path | User/Cmd+S | Complete Phase 2 project | Durable, user-owned |
 | In-memory history | Bounded RAM | Immediate | Recent edits | Not durable |
 
-UI states are distinct: `Unsaved`, `Saving…`, `Autosaved`, `Recovery available`, `Recovered`, `Autosave error`. The top bar labels recovered work until a manual save or explicit discard.
+UI states are distinct: `Unsaved`, `Saving…`, `Autosaved`, `Recovery available`, `Recovered`, `Autosave error`, and `Autosave off`. The top bar labels recovered work until a manual save or explicit discard. Its pause/resume control stops background autosave without affecting manual save; the preference is stored locally, not in the project file.
 
 ---
 
@@ -69,7 +69,7 @@ Texture edits and paint/bake strokes are not represented as autosave pixel delta
 - On the first dirty transition, the current in-memory checkpoint is retained; the first flush persists checkpoint + pending deltas.
 - A flush serializes the checkpoint and delta snapshots before async I/O; it never holds live mutable arrays while the transaction is in flight.
 - `visibilitychange → hidden` and `pagehide` trigger a best-effort flush.
-- A failed write leaves the dirty flag set and surfaces `Autosave error`; the next tick retries.
+- A failed write leaves the dirty flag set and surfaces `Autosave error`; the next tick retries. Quota failures delete the stale record and retry the write once. The top-bar pause control stops retries and clears the error state until autosave is resumed.
 
 ### 2.3 Checkpoints and compaction
 
