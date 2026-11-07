@@ -1,6 +1,7 @@
 <script lang="ts">
   import IconButton from '../Primitives/IconButton.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
+  import ActionMenu from '../Primitives/ActionMenu.svelte';
   import SelectField from '../Primitives/SelectField.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import type { AnimationTrackSummary } from '../../editor/types';
@@ -26,6 +27,12 @@
   let zoomEnd = $state<number | null>(null);
 
   const snapshot = $derived(session.snapshot);
+  const animationClips = $derived(snapshot.animationClips);
+  const activeClip = $derived(
+    animationClips.find((clip) => clip.id === snapshot.animationClipId) ??
+      animationClips[0] ??
+      null
+  );
   const start = $derived(snapshot.animationStartFrame);
   const end = $derived(Math.max(start + 1, snapshot.animationEndFrame));
   const span = $derived(Math.max(1, end - start));
@@ -298,6 +305,48 @@
 </script>
 
 <section class="animation-timeline loupoli-panel" aria-label="Animation timeline" onwheel={wheelTimeline}>
+  <div class="timeline-clipbar">
+    <SelectField
+      label="Clip"
+      value={snapshot.animationClipId}
+      options={animationClips.map((clip) => ({
+        value: clip.id,
+        label: clip.name
+      }))}
+      onChange={(value) => session.setActiveAnimationClip(value)}
+    />
+    <ActionMenu
+      label="Clip actions"
+      icon="more"
+      menuTitle="Animation clips"
+      options={[
+        {
+          label: 'New clip',
+          icon: 'plus',
+          onSelect: () => session.addAnimationClip()
+        },
+        {
+          label: 'Duplicate clip',
+          icon: 'copy',
+          onSelect: () => session.duplicateAnimationClip()
+        },
+        {
+          label: 'Delete clip',
+          icon: 'trash',
+          destructive: true,
+          separatorBefore: true,
+          disabled: animationClips.length <= 1,
+          onSelect: () => session.deleteAnimationClip()
+        }
+      ]}
+    />
+    {#if activeClip}
+      <span class="timeline-clip-meta">
+        {activeClip.trackCount} track{activeClip.trackCount === 1 ? '' : 's'}
+      </span>
+    {/if}
+  </div>
+
   <div class="timeline-head">
     <div class="timeline-transport">
       <IconButton
@@ -482,6 +531,26 @@
     min-width: 0;
     padding: 8px 10px 10px;
     pointer-events: auto;
+  }
+
+  .timeline-clipbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 4px var(--space-1) 132px;
+  }
+
+  .timeline-clipbar :global(.select-field) {
+    grid-template-columns: auto minmax(120px, 220px);
+    justify-content: start;
+    min-width: 0;
+  }
+
+  .timeline-clip-meta {
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
   }
 
   .timeline-head {

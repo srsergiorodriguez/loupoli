@@ -231,6 +231,40 @@ describe('.lpoli v4', () => {
     expect(restored?.keyframes[1].transform.position).toEqual([3, 0, 1]);
   });
 
+  it('round-trips multiple animation clips and the active clip', () => {
+    const document = makeDocument();
+    const first = document.animation.activeClip;
+    first.name = 'Idle';
+    document.animation
+      .ensureTrack(document.nodes[0].id, 'node')
+      .setKey(0, document.nodes[0].transform);
+    const second = document.animation.createClip('Walk');
+    second.startFrame = 10;
+    second.endFrame = 30;
+    document.animation
+      .ensureTrack(document.nodes[0].id, 'node')
+      .setKey(10, {
+        position: [4, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1]
+      });
+    document.animation.setActiveClip(second.id);
+
+    const bytes = encodeLpoly(document, SETTINGS);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect(view.getUint16(8, true)).toBe(5);
+    const decoded = decodeLpoly(bytes).document.animation;
+    expect(decoded.clips.map((clip) => clip.name)).toEqual(['Idle', 'Walk']);
+    expect(decoded.activeClipId).toBe(second.id);
+    expect(decoded.activeClip.startFrame).toBe(10);
+    expect(decoded.activeClip.endFrame).toBe(30);
+    expect(decoded.getTrack(document.nodes[0].id)?.keyframes[0].transform.position)
+      .toEqual([4, 0, 0]);
+    expect(decoded.clips[0].tracks[0].keyframes[0].transform.position).toEqual([
+      0, 0, 0
+    ]);
+  });
+
   it('round-trips shape-weight animation tracks', () => {
     const document = makeDocument();
     const node = document.nodes[0];

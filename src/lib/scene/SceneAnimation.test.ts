@@ -52,3 +52,66 @@ describe('SceneAnimation', () => {
     expect(restored.weightTracks).toHaveLength(1);
   });
 });
+
+  it('manages independent clips with active state and fresh duplicate ids', () => {
+    const animation = new SceneAnimation();
+    const first = animation.activeClip;
+    const firstTrack = animation.ensureTrack('node-1', 'node');
+    firstTrack.setKey(0, transform(1));
+
+    const second = animation.createClip('Walk');
+    animation.ensureTrack('node-1', 'node').setKey(12, transform(8));
+    expect(animation.activeClipId).toBe(second.id);
+    expect(animation.tracks).toHaveLength(1);
+
+    const duplicate = animation.duplicateClip();
+    expect(duplicate?.name).toBe('Walk Copy');
+    expect(duplicate?.tracks[0].id).not.toBe(second.tracks[0].id);
+    expect(duplicate?.tracks[0].keyframes[0].transform.position[0]).toBe(8);
+
+    animation.setActiveClip(first.id);
+    expect(animation.startFrame).toBe(first.startFrame);
+    const snapshot = animation.snapshot();
+    const restored = SceneAnimation.fromSnapshot(snapshot);
+    expect(restored.clips.map((clip) => clip.name)).toEqual([
+      'Animation 1',
+      'Walk',
+      'Walk Copy'
+    ]);
+    expect(restored.activeClipId).toBe(first.id);
+    expect(restored.getTrack('node-1')?.keyframes[0].transform.position[0]).toBe(1);
+
+    expect(restored.removeClip(second.id)).toBe(true);
+    expect(restored.clips).toHaveLength(2);
+  });
+
+  it('migrates a legacy flat animation into a single clip', () => {
+    const legacy = SceneAnimation.fromSnapshot({
+      fps: 30,
+      startFrame: 4,
+      endFrame: 20,
+      tracks: [
+        {
+          id: 'track-1',
+          targetId: 'group-1',
+          targetKind: 'group',
+          keyframes: [
+            {
+              frame: 4,
+              transform: transform(3),
+              interpolation: 'linear'
+            }
+          ]
+        }
+      ],
+      weightTracks: []
+    });
+    expect(legacy.clips).toHaveLength(1);
+    expect(legacy.clips[0].id).toBe('clip-1');
+    expect(legacy.clips[0].name).toBe('Animation 1');
+    expect(legacy.startFrame).toBe(4);
+    expect(legacy.endFrame).toBe(20);
+    expect(legacy.fps).toBe(30);
+    expect(legacy.getTrack('group-1')?.keyframes).toHaveLength(1);
+    expect(SceneAnimation.fromSnapshot(legacy.snapshot()).clips).toHaveLength(1);
+  });

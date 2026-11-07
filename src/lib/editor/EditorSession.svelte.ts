@@ -132,6 +132,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationStartFrame: 0,
   animationEndFrame: 48,
   animationFps: 24,
+  animationClipId: 'clip-1',
+  animationClips: [],
   animationLoop: true,
   animationPlaying: false,
   animationTracks: [],
@@ -946,6 +948,26 @@ export class EditorSession {
     patch: Partial<{ fps: number; startFrame: number; endFrame: number }>
   ): void {
     this.runtime?.setAnimationSettings(patch);
+  }
+
+  setActiveAnimationClip(id: string): void {
+    this.runtime?.setActiveAnimationClip(id);
+  }
+
+  addAnimationClip(): void {
+    this.runtime?.addAnimationClip();
+  }
+
+  duplicateAnimationClip(): void {
+    this.runtime?.duplicateAnimationClip();
+  }
+
+  deleteAnimationClip(): void {
+    this.runtime?.deleteAnimationClip();
+  }
+
+  renameAnimationClip(name: string): void {
+    this.runtime?.renameAnimationClip(name);
   }
 
   setAnimationLoop(loop: boolean): void {

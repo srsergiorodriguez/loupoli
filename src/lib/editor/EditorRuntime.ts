@@ -912,6 +912,14 @@ export class EditorRuntime {
       animationStartFrame: this.document.animation.startFrame,
       animationEndFrame: this.document.animation.endFrame,
       animationFps: this.document.animation.fps,
+      animationClipId: this.document.animation.activeClipId,
+      animationClips: this.document.animation.clips.map((clip) => ({
+        id: clip.id,
+        name: clip.name,
+        startFrame: clip.startFrame,
+        endFrame: clip.endFrame,
+        trackCount: clip.tracks.length + clip.weightTracks.length
+      })),
       animationLoop: this.animationLoop,
       animationPlaying: this.animationPlaying,
       animationTracks: this.animationTrackSummaries(),
@@ -4409,6 +4417,85 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Switch the timeline to another clip without an undo step. */
+  setActiveAnimationClip(id: string): void {
+    if (!this.document.animation.setActiveClip(id)) {
+      return;
+    }
+    this.stopAnimationLoop();
+    this.animationFrame = Math.max(
+      this.document.animation.startFrame,
+      Math.min(this.document.animation.endFrame, this.animationFrame)
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Add an empty animation clip and make it active. */
+  addAnimationClip(): void {
+    const animation = this.document.animation;
+    const before = animation.snapshot();
+    animation.createClip();
+    const after = animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Add animation clip')
+    );
+    this.animationFrame = animation.startFrame;
+    this.applyAnimationPose();
+  }
+
+  /** Duplicate the active clip with fresh key/track ids. */
+  duplicateAnimationClip(): void {
+    const animation = this.document.animation;
+    const before = animation.snapshot();
+    if (!animation.duplicateClip()) {
+      return;
+    }
+    const after = animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(
+        animation,
+        before,
+        after,
+        'Duplicate animation clip'
+      )
+    );
+    this.animationFrame = animation.startFrame;
+    this.applyAnimationPose();
+  }
+
+  /** Delete the active clip, keeping at least one. */
+  deleteAnimationClip(): void {
+    const animation = this.document.animation;
+    if (animation.clips.length <= 1) {
+      return;
+    }
+    const before = animation.snapshot();
+    animation.removeClip(animation.activeClipId);
+    const after = animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Delete animation clip')
+    );
+    this.animationFrame = animation.startFrame;
+    this.applyAnimationPose();
+  }
+
+  /** Rename the active clip. */
+  renameAnimationClip(name: string): void {
+    const animation = this.document.animation;
+    const before = animation.snapshot();
+    if (!animation.renameClip(animation.activeClipId, name)) {
+      return;
+    }
+    const after = animation.snapshot();
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return;
+    }
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Rename animation clip')
+    );
+    this.publish();
+  }
+
   /** Move the playhead and evaluate the animation pose. */
   setAnimationFrame(frame: number): void {
     this.stopAnimationLoop();
@@ -4426,36 +4513,36 @@ export class EditorRuntime {
       endFrame: number;
     }>
   ): void {
-    const before = this.document.animation.snapshot();
-    const next = {
-      ...before,
-      ...(patch.fps !== undefined
-        ? { fps: Math.max(1, Math.min(120, Math.round(patch.fps))) }
-        : {}),
-      ...(patch.startFrame !== undefined
-        ? { startFrame: Math.max(0, Math.round(patch.startFrame)) }
-        : {}),
-      ...(patch.endFrame !== undefined
-        ? { endFrame: Math.max(1, Math.round(patch.endFrame)) }
-        : {})
-    };
-    if (next.endFrame <= next.startFrame) {
-      next.endFrame = next.startFrame + 1;
+    const animation = this.document.animation;
+    const before = animation.snapshot();
+    const clip = animation.activeClip;
+    if (patch.fps !== undefined) {
+      animation.fps = Math.max(1, Math.min(120, Math.round(patch.fps)));
     }
-    if (JSON.stringify(before) === JSON.stringify(next)) {
+    if (patch.startFrame !== undefined) {
+      clip.startFrame = Math.max(0, Math.round(patch.startFrame));
+    }
+    if (patch.endFrame !== undefined) {
+      clip.endFrame = Math.max(1, Math.round(patch.endFrame));
+    }
+    if (clip.endFrame <= clip.startFrame) {
+      clip.endFrame = clip.startFrame + 1;
+    }
+    const after = animation.snapshot();
+    if (JSON.stringify(before) === JSON.stringify(after)) {
       return;
     }
     this.history.execute(
       new SetAnimationCommand(
-        this.document.animation,
+        animation,
         before,
-        next,
+        after,
         'Change animation settings'
       )
     );
     this.animationFrame = Math.max(
-      next.startFrame,
-      Math.min(next.endFrame, this.animationFrame)
+      clip.startFrame,
+      Math.min(clip.endFrame, this.animationFrame)
     );
     this.applyAnimationPose();
   }

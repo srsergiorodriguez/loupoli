@@ -19,6 +19,7 @@ import { SceneLight, type LightKind, type LightSnapshot } from '../scene/SceneLi
 import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import {
   type AnimationInterpolation,
+  type AnimationClipSnapshot,
   type AnimationSnapshot,
   type ShapeWeightTrackSnapshot,
   type AnimationTargetKind
@@ -39,7 +40,7 @@ import {
 } from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 4;
+const FORMAT_VERSION = 5;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -48,6 +49,7 @@ const MAX_GROUPS = 512;
 const MAX_LIGHTS = 64;
 const MAX_CAMERAS = 32;
 const MAX_ANIMATION_TRACKS = 256;
+const MAX_ANIMATION_CLIPS = 32;
 const MAX_ANIMATION_KEYS = 4096;
 const MAX_SHAPE_KEYS = 16;
 const MAX_VERTICES = 1_000_000;
@@ -683,7 +685,114 @@ function validateCamerasManifest(value: unknown): CameraSnapshot[] {
   return cameras;
 }
 
+/** Validate v5 clip animation or migrate a legacy flat animation manifest. */
 function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
+  if (value === undefined) {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('The .lpoli animation manifest is invalid.');
+  }
+  const animation = value as Partial<AnimationSnapshot> & {
+    clips?: unknown;
+    activeClipId?: unknown;
+  };
+  if (!Array.isArray(animation.clips)) {
+    return validateLegacyAnimationManifest(value);
+  }
+  if (
+    animation.clips.length < 1 ||
+    animation.clips.length > MAX_ANIMATION_CLIPS ||
+    typeof animation.fps !== 'number' ||
+    !Number.isFinite(animation.fps) ||
+    animation.fps < 1 ||
+    animation.fps > 120
+  ) {
+    throw new Error('The .lpoli animation clips are invalid.');
+  }
+  const clipIds = new Set<string>();
+  const trackIds = new Set<string>();
+  const weightTrackIds = new Set<string>();
+  let totalTracks = 0;
+  let totalKeys = 0;
+  const clips = animation.clips.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli animation contains an invalid clip.');
+    }
+    const clip = raw as Partial<AnimationClipSnapshot>;
+    if (
+      typeof clip.id !== 'string' ||
+      clip.id.length === 0 ||
+      clipIds.has(clip.id) ||
+      typeof clip.name !== 'string' ||
+      clip.name.length === 0 ||
+      clip.name.length > MAX_NAME_LENGTH ||
+      !Number.isInteger(clip.startFrame) ||
+      !Number.isInteger(clip.endFrame) ||
+      (clip.startFrame as number) < 0 ||
+      (clip.endFrame as number) < (clip.startFrame as number) ||
+      !Array.isArray(clip.tracks)
+    ) {
+      throw new Error('The .lpoli animation clip metadata is invalid.');
+    }
+    clipIds.add(clip.id);
+    const validated = validateLegacyAnimationManifest({
+      fps: animation.fps,
+      startFrame: clip.startFrame,
+      endFrame: clip.endFrame,
+      tracks: clip.tracks,
+      weightTracks: clip.weightTracks
+    });
+    if (!validated) {
+      throw new Error('The .lpoli animation clip could not be validated.');
+    }
+    const clipTracks = validated.tracks ?? [];
+    totalTracks +=
+      clipTracks.length + (validated.weightTracks?.length ?? 0);
+    totalKeys +=
+      clipTracks.reduce((sum, track) => sum + track.keyframes.length, 0) +
+      (validated.weightTracks ?? []).reduce(
+        (sum, track) => sum + track.keyframes.length,
+        0
+      );
+    for (const track of clipTracks) {
+      if (trackIds.has(track.id)) {
+        throw new Error('The .lpoli animation track ids must be unique.');
+      }
+      trackIds.add(track.id);
+    }
+    for (const track of validated.weightTracks ?? []) {
+      if (weightTrackIds.has(track.id)) {
+        throw new Error('The .lpoli shape-weight track ids must be unique.');
+      }
+      weightTrackIds.add(track.id);
+    }
+    return {
+      id: clip.id,
+      name: clip.name,
+      startFrame: validated.startFrame as number,
+      endFrame: validated.endFrame as number,
+      tracks: clipTracks,
+      weightTracks: validated.weightTracks ?? []
+    };
+  });
+  if (
+    totalTracks > MAX_ANIMATION_TRACKS ||
+    totalKeys > MAX_ANIMATION_KEYS
+  ) {
+    throw new Error('The .lpoli animation exceeds its clip limits.');
+  }
+  const activeClipId =
+    typeof animation.activeClipId === 'string' &&
+    clipIds.has(animation.activeClipId)
+      ? animation.activeClipId
+      : clips[0].id;
+  return { fps: animation.fps, activeClipId, clips };
+}
+
+function validateLegacyAnimationManifest(
+  value: unknown
+): AnimationSnapshot | null {
   if (value === undefined) {
     return null;
   }

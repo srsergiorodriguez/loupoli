@@ -178,6 +178,15 @@ export interface ShapeKeySummary {
   readonly visible: boolean;
 }
 
+/** Reactive-safe animation clip projection. */
+export interface AnimationClipSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly startFrame: number;
+  readonly endFrame: number;
+  readonly trackCount: number;
+}
+
 /** Reactive-safe animation track projection. */
 export interface AnimationTrackSummary {
   readonly id: string;
@@ -328,6 +337,8 @@ export interface EditorSnapshot {
   readonly animationStartFrame: number;
   readonly animationEndFrame: number;
   readonly animationFps: number;
+  readonly animationClipId: string;
+  readonly animationClips: readonly AnimationClipSummary[];
   readonly animationLoop: boolean;
   readonly animationPlaying: boolean;
   readonly animationTracks: readonly AnimationTrackSummary[];

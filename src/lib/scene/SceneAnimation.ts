@@ -36,17 +36,35 @@ export interface ShapeWeightTrackSnapshot {
   readonly keyframes: readonly ShapeWeightKeyframe[];
 }
 
-/** Complete serializable animation state. */
-export interface AnimationSnapshot {
-  readonly fps: number;
+/** One independently named animation clip. */
+export interface AnimationClipSnapshot {
+  readonly id: string;
+  readonly name: string;
   readonly startFrame: number;
   readonly endFrame: number;
   readonly tracks: readonly AnimationTrackSnapshot[];
   readonly weightTracks?: readonly ShapeWeightTrackSnapshot[];
 }
 
+/**
+ * Complete serializable animation state.
+ *
+ * Legacy v4 files store a flat start/end/tracks set; v5 stores clips. Decode
+ * normalizes both forms, and the encoder always writes clips.
+ */
+export interface AnimationSnapshot {
+  readonly fps: number;
+  readonly clips?: readonly AnimationClipSnapshot[];
+  readonly activeClipId?: string;
+  readonly startFrame?: number;
+  readonly endFrame?: number;
+  readonly tracks?: readonly AnimationTrackSnapshot[];
+  readonly weightTracks?: readonly ShapeWeightTrackSnapshot[];
+}
+
 let nextTrackNumber = 1;
 let nextWeightTrackNumber = 1;
+let nextClipNumber = 1;
 
 /** Create a stable animation track id. */
 export function createAnimationTrackId(): string {
@@ -59,6 +77,13 @@ export function createAnimationTrackId(): string {
 export function createShapeWeightTrackId(): string {
   const id = `weight-track-${nextWeightTrackNumber}`;
   nextWeightTrackNumber += 1;
+  return id;
+}
+
+/** Create a stable animation clip id. */
+export function createAnimationClipId(): string {
+  const id = `clip-${nextClipNumber}`;
+  nextClipNumber += 1;
   return id;
 }
 
@@ -309,33 +334,48 @@ export class ShapeWeightTrack {
   }
 }
 
-/** Document-level animation settings, transform tracks, and shape weight tracks. */
-export class SceneAnimation {
-  fps = 24;
+/** One named animation clip containing transform and shape-weight tracks. */
+export class AnimationClip {
+  readonly id: string;
+  name: string;
   startFrame = 0;
   endFrame = 48;
   readonly tracks: AnimationTrack[] = [];
   readonly weightTracks: ShapeWeightTrack[] = [];
 
-  /** Restore the complete animation from serialized data. */
-  static fromSnapshot(snapshot: AnimationSnapshot): SceneAnimation {
-    const animation = new SceneAnimation();
-    animation.fps = snapshot.fps;
-    animation.startFrame = snapshot.startFrame;
-    animation.endFrame = snapshot.endFrame;
-    animation.replaceTracks(snapshot.tracks.map(AnimationTrack.fromSnapshot));
-    animation.replaceWeightTracks(
-      (snapshot.weightTracks ?? []).map(ShapeWeightTrack.fromSnapshot)
-    );
-    return animation;
+  constructor(
+    name = 'Animation 1',
+    id = createAnimationClipId(),
+    startFrame = 0,
+    endFrame = 48
+  ) {
+    this.name = name;
+    this.id = id;
+    this.startFrame = Math.max(0, Math.round(startFrame));
+    this.endFrame = Math.max(this.startFrame + 1, Math.round(endFrame));
   }
 
-  /** Find one track by target. */
+  /** Restore one clip from serialized data. */
+  static fromSnapshot(snapshot: AnimationClipSnapshot): AnimationClip {
+    const clip = new AnimationClip(
+      snapshot.name,
+      snapshot.id,
+      snapshot.startFrame,
+      snapshot.endFrame
+    );
+    clip.tracks.push(...snapshot.tracks.map(AnimationTrack.fromSnapshot));
+    clip.weightTracks.push(
+      ...(snapshot.weightTracks ?? []).map(ShapeWeightTrack.fromSnapshot)
+    );
+    return clip;
+  }
+
+  /** Find one transform track by target. */
   getTrack(targetId: string): AnimationTrack | null {
     return this.tracks.find((track) => track.targetId === targetId) ?? null;
   }
 
-  /** Find or create one track for a target. */
+  /** Find or create one transform track for a target. */
   ensureTrack(
     targetId: string,
     targetKind: AnimationTargetKind
@@ -384,7 +424,7 @@ export class SceneAnimation {
     }
   }
 
-  /** Remove a track by target id. */
+  /** Remove a transform track by target id. */
   removeTrack(targetId: string): void {
     const index = this.tracks.findIndex((track) => track.targetId === targetId);
     if (index >= 0) {
@@ -392,37 +432,244 @@ export class SceneAnimation {
     }
   }
 
-  /** Replace the full track collection. */
-  replaceTracks(tracks: readonly AnimationTrack[]): void {
-    this.tracks.length = 0;
-    this.tracks.push(...tracks);
-  }
-
-  /** Replace the full shape-weight track collection. */
-  replaceWeightTracks(tracks: readonly ShapeWeightTrack[]): void {
-    this.weightTracks.length = 0;
-    this.weightTracks.push(...tracks);
-  }
-
   /** Detached snapshot for commands and persistence. */
-  snapshot(): AnimationSnapshot {
+  snapshot(): AnimationClipSnapshot {
     return {
-      fps: this.fps,
+      id: this.id,
+      name: this.name,
       startFrame: this.startFrame,
       endFrame: this.endFrame,
       tracks: this.tracks.map((track) => track.snapshot()),
       weightTracks: this.weightTracks.map((track) => track.snapshot())
     };
   }
+}
 
-  /** Apply a complete animation snapshot. */
-  apply(snapshot: AnimationSnapshot): void {
-    this.fps = snapshot.fps;
-    this.startFrame = snapshot.startFrame;
-    this.endFrame = snapshot.endFrame;
-    this.replaceTracks(snapshot.tracks.map(AnimationTrack.fromSnapshot));
-    this.replaceWeightTracks(
-      (snapshot.weightTracks ?? []).map(ShapeWeightTrack.fromSnapshot)
+/** Document-level animation clips and shared frame rate. */
+export class SceneAnimation {
+  fps = 24;
+  readonly clips: AnimationClip[] = [];
+  activeClipId: string;
+
+  constructor(createDefault = true) {
+    if (createDefault) {
+      const clip = new AnimationClip();
+      this.clips.push(clip);
+      this.activeClipId = clip.id;
+    } else {
+      this.activeClipId = '';
+    }
+  }
+
+  /** Restore v5 clips or migrate a flat v4 animation. */
+  static fromSnapshot(snapshot: AnimationSnapshot): SceneAnimation {
+    const animation = new SceneAnimation(false);
+    animation.clips.length = 0;
+    animation.fps =
+      Number.isFinite(snapshot.fps) && snapshot.fps >= 1
+        ? snapshot.fps
+        : 24;
+    if (Array.isArray(snapshot.clips) && snapshot.clips.length > 0) {
+      animation.clips.push(
+        ...snapshot.clips.map(AnimationClip.fromSnapshot)
+      );
+    } else {
+      const legacy = new AnimationClip(
+        'Animation 1',
+        'clip-1',
+        snapshot.startFrame ?? 0,
+        snapshot.endFrame ?? 48
+      );
+      legacy.tracks.push(
+        ...(snapshot.tracks ?? []).map(AnimationTrack.fromSnapshot)
+      );
+      legacy.weightTracks.push(
+        ...(snapshot.weightTracks ?? []).map(ShapeWeightTrack.fromSnapshot)
+      );
+      animation.clips.push(legacy);
+    }
+    animation.activeClipId =
+      animation.clips.find((clip) => clip.id === snapshot.activeClipId)?.id ??
+      animation.clips[0].id;
+    return animation;
+  }
+
+  /** The currently edited clip. */
+  get activeClip(): AnimationClip {
+    return (
+      this.clips.find((clip) => clip.id === this.activeClipId) ??
+      this.clips[0]
     );
+  }
+
+  /** Switch the active clip. Callers must publish and re-evaluate the pose. */
+  setActiveClip(id: string): boolean {
+    if (!this.clips.some((clip) => clip.id === id) || id === this.activeClipId) {
+      return false;
+    }
+    this.activeClipId = id;
+    return true;
+  }
+
+  /** Add an empty clip and make it active. */
+  createClip(name = `Animation ${this.clips.length + 1}`): AnimationClip {
+    const clip = new AnimationClip(name);
+    this.clips.push(clip);
+    this.activeClipId = clip.id;
+    return clip;
+  }
+
+  /** Duplicate a clip with fresh track ids and make it active. */
+  duplicateClip(id = this.activeClipId): AnimationClip | null {
+    const source = this.clips.find((clip) => clip.id === id);
+    if (!source) {
+      return null;
+    }
+    const copy = AnimationClip.fromSnapshot({
+      ...source.snapshot(),
+      id: createAnimationClipId(),
+      name: `${source.name} Copy`.slice(0, 64)
+    });
+    const tracks = copy.tracks.splice(0);
+    copy.tracks.push(
+      ...tracks.map((track) =>
+        AnimationTrack.fromSnapshot({
+          ...track.snapshot(),
+          id: createAnimationTrackId()
+        })
+      )
+    );
+    const weightTracks = copy.weightTracks.splice(0);
+    copy.weightTracks.push(
+      ...weightTracks.map((track) =>
+        ShapeWeightTrack.fromSnapshot({
+          ...track.snapshot(),
+          id: createShapeWeightTrackId()
+        })
+      )
+    );
+    this.clips.push(copy);
+    this.activeClipId = copy.id;
+    return copy;
+  }
+
+  /** Rename a clip. */
+  renameClip(id: string, name: string): boolean {
+    const clip = this.clips.find((item) => item.id === id);
+    const trimmed = name.trim();
+    if (!clip || trimmed.length === 0 || trimmed.length > 64) {
+      return false;
+    }
+    clip.name = trimmed;
+    return true;
+  }
+
+  /** Delete a clip, keeping at least one. */
+  removeClip(id: string): boolean {
+    if (this.clips.length <= 1) {
+      return false;
+    }
+    const index = this.clips.findIndex((clip) => clip.id === id);
+    if (index < 0) {
+      return false;
+    }
+    this.clips.splice(index, 1);
+    if (this.activeClipId === id) {
+      this.activeClipId =
+        this.clips[Math.min(index, this.clips.length - 1)].id;
+    }
+    return true;
+  }
+
+  /** Total number of keyframes across all clips. */
+  totalKeyframes(): number {
+    return this.clips.reduce(
+      (total, clip) =>
+        total +
+        clip.tracks.reduce(
+          (count, track) => count + track.keyframes.length,
+          0
+        ) +
+        clip.weightTracks.reduce(
+          (count, track) => count + track.keyframes.length,
+          0
+        ),
+      0
+    );
+  }
+
+  /** Proxy: active clip start. */
+  get startFrame(): number {
+    return this.activeClip.startFrame;
+  }
+
+  /** Proxy: active clip end. */
+  get endFrame(): number {
+    return this.activeClip.endFrame;
+  }
+
+  /** Proxy: active clip transform tracks. */
+  get tracks(): readonly AnimationTrack[] {
+    return this.activeClip.tracks;
+  }
+
+  /** Proxy: active clip shape-weight tracks. */
+  get weightTracks(): readonly ShapeWeightTrack[] {
+    return this.activeClip.weightTracks;
+  }
+
+  getTrack(targetId: string): AnimationTrack | null {
+    return this.activeClip.getTrack(targetId);
+  }
+
+  ensureTrack(
+    targetId: string,
+    targetKind: AnimationTargetKind
+  ): AnimationTrack {
+    return this.activeClip.ensureTrack(targetId, targetKind);
+  }
+
+  getWeightTrack(targetId: string, shapeKeyId: string): ShapeWeightTrack | null {
+    return this.activeClip.getWeightTrack(targetId, shapeKeyId);
+  }
+
+  ensureWeightTrack(targetId: string, shapeKeyId: string): ShapeWeightTrack {
+    return this.activeClip.ensureWeightTrack(targetId, shapeKeyId);
+  }
+
+  removeWeightTrack(targetId: string, shapeKeyId: string): void {
+    this.activeClip.removeWeightTrack(targetId, shapeKeyId);
+  }
+
+  removeTrack(targetId: string): void {
+    this.activeClip.removeTrack(targetId);
+  }
+
+  replaceTracks(tracks: readonly AnimationTrack[]): void {
+    this.activeClip.tracks.length = 0;
+    this.activeClip.tracks.push(...tracks);
+  }
+
+  replaceWeightTracks(tracks: readonly ShapeWeightTrack[]): void {
+    this.activeClip.weightTracks.length = 0;
+    this.activeClip.weightTracks.push(...tracks);
+  }
+
+  /** Detached snapshot for commands and persistence. */
+  snapshot(): AnimationSnapshot {
+    return {
+      fps: this.fps,
+      activeClipId: this.activeClipId,
+      clips: this.clips.map((clip) => clip.snapshot())
+    };
+  }
+
+  /** Apply a complete animation snapshot, including clips. */
+  apply(snapshot: AnimationSnapshot): void {
+    const next = SceneAnimation.fromSnapshot(snapshot);
+    this.fps = next.fps;
+    this.clips.length = 0;
+    this.clips.push(...next.clips);
+    this.activeClipId = next.activeClipId;
   }
 }

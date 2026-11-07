@@ -815,6 +815,18 @@
       onToggle={(open) => setSection('animation', open)}
     >
       <div class="module-body">
+        <div class="selected-name-row">
+          <InlineNameField
+            label="Animation clip name"
+            value={session.snapshot.animationClips.find(
+              (clip) => clip.id === session.snapshot.animationClipId
+            )?.name ?? 'Animation 1'}
+            onCommit={(value) => session.renameAnimationClip(value)}
+          />
+          <span class="texture-kind">
+            {session.snapshot.animationClips.length} clip{session.snapshot.animationClips.length === 1 ? '' : 's'}
+          </span>
+        </div>
         <div class="render-field">
           <span>Frames per second</span>
           <NumberField

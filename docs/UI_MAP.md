@@ -52,7 +52,7 @@ This is the authoritative map of the application shell. New controls must be ass
 - **Light:** Scene → Lighting. Mesh editing and selection chrome are hidden; Scene remains for choosing the bake target.
 - **Render:** Scene → Camera → Render. Mesh editing and selection chrome are hidden; the active camera and output settings drive the clean render. Scene lists only mesh objects/groups; cameras and lights live in their own lists. **View through** hides camera handles; orbit/pan/zoom returns to free editing.
 - **Animate:** Scene → Animation → Shape keys → Transform → Selection. Animate has no Mesh, Modifiers, PS1 look, or ActionDock.
-- **Timeline:** per-track **+ Key**, selected-key **Delete key/interpolation**, integer-frame diamond dragging, adaptive ruler ticks, minus/Fit/plus zoom, wheel pan, and Ctrl/Cmd+wheel zoom. Transform and shape-weight tracks share the same interaction. The timeline dock owns transport, track keying, key deletion, interpolation, and diamond movement.
+- **Timeline:** per-track **+ Key**, selected-key **Delete key/interpolation**, integer-frame diamond dragging, adaptive ruler ticks, minus/Fit/plus zoom, wheel pan, and Ctrl/Cmd+wheel zoom. Transform and shape-weight tracks share the same interaction. The timeline dock owns clip selection and New/Duplicate/Delete actions, transport, track keying, key deletion, interpolation, and diamond movement.
 - **Scene import/export:** one labeled **Import / Export** menu; import options precede a separator and export options. The primitive selector remains below the object list because new objects append there.
 - **Tooltip** — command label plus shortcut, from the command registry.
 

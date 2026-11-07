@@ -393,7 +393,17 @@ export function journalPatchBytes(patch: JournalPatch): number {
     return patch.camera.id.length * 2 + patch.camera.name.length * 2 + 96;
   }
   if (patch.type === 'set-animation') {
-    return patch.animation.tracks.length * 256 + 96;
+    const animation = patch.animation;
+    const clipCount = animation.clips?.length ?? 0;
+    const trackCount = animation.clips
+      ? animation.clips.reduce(
+          (total, clip) =>
+            total + clip.tracks.length + (clip.weightTracks?.length ?? 0),
+          0
+        )
+      : (animation.tracks?.length ?? 0) +
+        (animation.weightTracks?.length ?? 0);
+    return clipCount * 128 + trackCount * 256 + 96;
   }
   if (patch.type === 'set-shape-keys') {
     return (
