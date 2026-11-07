@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { EditorSession } from '../../editor/EditorSession.svelte';
+  import SnapPopover from './SnapPopover.svelte';
 
   /** Session projection used by the status strip. */
   interface Props {
@@ -7,6 +8,8 @@
   }
 
   let { session }: Props = $props();
+  let snapOpen = $state(false);
+  let snapButton = $state<HTMLButtonElement>();
 
   const counts = $derived(
     session.snapshot.modifiersActive
@@ -103,13 +106,29 @@
     <span>{counts.triangles} T</span>
   </div>
 
-  <div class="status-cell status-state text-mono" aria-label="Snapping">
-    <span class="snap-status">
+  <div class="status-cell status-state" aria-label="Snapping">
+    <button
+      bind:this={snapButton}
+      type="button"
+      class="snap-status"
+      class:is-active={session.snapshot.snapEnabled}
+      aria-expanded={snapOpen}
+      aria-haspopup="dialog"
+      onclick={() => (snapOpen = !snapOpen)}
+    >
+      <span class="snap-dot" aria-hidden="true"></span>
       {session.snapshot.snapEnabled
         ? `Snap ${session.snapshot.snapStep}`
         : 'Snap off'}
-    </span>
+    </button>
   </div>
+  {#if snapOpen}
+    <SnapPopover
+      {session}
+      anchor={snapButton}
+      onClose={() => (snapOpen = false)}
+    />
+  {/if}
 </footer>
 
 <style>
@@ -168,6 +187,50 @@
     align-items: center;
     justify-content: flex-end;
     color: var(--text-tertiary);
+  }
+
+  .snap-status {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: var(--status-h);
+    padding: 0 var(--space-1);
+    gap: 5px;
+    border: var(--hairline) solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .snap-status::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--hit-min) - var(--status-h)) / -2) 0;
+  }
+
+  .snap-status:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: -1px;
+  }
+
+  .snap-status:hover {
+    border-color: var(--border-subtle);
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .snap-status.is-active {
+    color: var(--accent-primary);
+  }
+
+  .snap-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: .65;
   }
 
   @media (pointer: coarse) {

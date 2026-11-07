@@ -678,7 +678,7 @@
         · {keyboardNumeric ? `${keyboardKind === 'move' ? (session.snapshot.uvAxisLock === 'v' ? 'ΔV' : 'ΔU') : keyboardKind === 'rotate' ? 'Angle' : 'Factor'} ${keyboardNumeric}` : 'move pointer or type a number'}
         · U/V axis · Enter {keyboardNumeric ? 'apply' : 'commit'} · Esc cancel
       {:else}
-        16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap ${session.snapshot.snapStep}` : 'snap off'}
+        16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap UV ${session.snapshot.uvSnapStep}` : 'snap off'}
       {/if}
     </span>
   </div>

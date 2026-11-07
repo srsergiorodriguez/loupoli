@@ -52,8 +52,7 @@ describe('inspector layout', () => {
       'transform',
       'selection',
       'mesh',
-      'modifiers',
-      'ps1'
+      'modifiers'
     ]);
   });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MeshNode } from '../scene/MeshNode';
+import { createModifier, type MirrorModifier } from '../geometry/modifiers';
 import { SceneDocument } from '../scene/SceneDocument';
 import { createCylinderMesh, createGridMesh } from '../geometry/primitives';
 import {
@@ -333,7 +334,11 @@ describe('.lpoli v4', () => {
     const document = makeDocument();
     const node = document.nodes[0];
     node.setModifiers([
-      { id: 'm1', type: 'mirror', enabled: true, axis: 'y' },
+      {
+        ...(createModifier('mirror') as MirrorModifier),
+        id: 'm1',
+        axis: 'y'
+      },
       {
         id: 'm2',
         type: 'grid-array',

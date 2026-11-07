@@ -39,7 +39,7 @@ A simple and friendly 3D modeler for iPad and desktop. Z-up, quad-centric, on-de
 ![Collapsed Transform section with a viewport-centered sidebar](docs/media/sidebar-collapse.png)
 
 - **ActionDock.** Model-only bottom-left one-shot actions for Extrude, Inset, Loop Cut, and Loop Slide, available on touch and desktop. Tap/click to arm, then drag for a live amount or type an exact amount; Enter/release commits one undoable mesh replacement. Keyboard shortcuts: E extrude, I inset, L loop cut, Shift+L loop slide. Loop Slide is separate from Loop Cut.
-- **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the collapsed **PS1 look** render-effect module at the bottom of the Inspector:
+- **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the **PS1 look** block in the Render workspace:
   - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster.
   - **PS1 affine** — enable affine UV swim.
   Both start off, apply only to Unlit shading, and the module starts collapsed. It is a render effect, not a geometry modifier.
@@ -77,7 +77,7 @@ A simple and friendly 3D modeler for iPad and desktop. Z-up, quad-centric, on-de
 
 ![Side-by-side UV and 3D workspace](docs/media/uv-side-workspace.png)
 
-- **UV editing split.** Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius; in Island mode clicking anywhere inside a chart selects and drags the whole island. Mouse wheel zooms around the pointer, right/middle-drag pans, dragging empty UV space pans, and the View group provides 44 px zoom/Fit controls. Direct transforms clamp to the 0–1 texture square while Clamp is enabled; Clamp is off by default because the clamped edge can change during rotation and cause jumps. Rotate follows the pointer angle around the UV median; Scale follows pointer distance from that pivot, so moving around it keeps scale unchanged. **Mirror stack** stacks a reflected island with an explicit mirrored correspondence for symmetric albedo and painting. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to 15° when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, a texture-space Paint workspace, and Brush/Eraser and projected line/rectangle/ellipse/gradient/fill painting are implemented.
+- **UV editing split.** Selecting 3D faces feeds their corners into the UV view; the **Sync 3D** action refreshes that link. Click corners with the 16 px pick radius; in Island mode clicking anywhere inside a chart selects and drags the whole island. Mouse wheel zooms around the pointer, right/middle-drag pans, dragging empty UV space pans, and the View group provides 44 px zoom/Fit controls. Direct transforms clamp to the 0–1 texture square while Clamp is enabled; Clamp is off by default because the clamped edge can change during rotation and cause jumps. Rotate follows the pointer angle around the UV median; Scale follows pointer distance from that pivot, so moving around it keeps scale unchanged. **Mirror stack** stacks a reflected island with an explicit mirrored correspondence for symmetric albedo and painting. **U** and **V** lock Move/Scale to one axis; grid snap applies to UV increments and rotation snaps to the configured angle when enabled. Exact **ΔU/ΔV**, **angle°**, and **scale factor** fields apply without snapping. Each transform is one undoable command with per-corner autosave patches, and the split is resizable with the grip above the panel. Selecting UV corners also highlights the owning 3D faces without expanding the precise UV corner set. Texture layers, LSCM unwrap, a texture-space Paint workspace, and Brush/Eraser and projected line/rectangle/ellipse/gradient/fill painting are implemented.
 
 ![UV editing split with selected corners and seams](docs/media/uv-split.png)
 
@@ -129,9 +129,9 @@ The Move tool's object-space gizmo. Rotate and Scale swap the handles for the sa
 
 ![Object translate gizmo with X/Y/Z axis handles](docs/media/phase3-gizmo.png)
 
-Deleting two faces creates real boundary loops; the PS1 render-effect module is collapsed by default:
+Deleting two faces creates real boundary loops. The PS1 look block now lives in Render:
 
-![QuadSphere with two faces deleted and collapsed PS1 module](docs/media/phase3-delete.png)
+![QuadSphere with two faces deleted](docs/media/phase3-delete.png)
 
 ![Legacy four-mode shading comparison](docs/media/phase2-shading-modes.png)
 
@@ -177,7 +177,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Object row click | Make that object active. Shift/Cmd/Ctrl-click toggles multi-selection; the sticky **Multi-select objects** toggle does the same for pen/touch. |
 | Group row click | Select the group for numeric or gizmo transforms. Group children stay editable from the indented outliner rows. |
 | X/Y/Z while a vertex is selected | Toggle a world-axis lock for the next vertex drag. 44 px X/Y/Z chips provide the same control for pen/touch. |
-| Grid snap toggle/step | Snap object translation and vertex drags to the selected 0.1–1.0 step. |
+| Grid snap toggle/step | Snap object/vertex movement and action amounts from the status-bar control; world steps 0.01–1.0, with independent UV and rotation steps. |
 | Move/Rotate/Scale handle | With an element selection, the gizmo sits at the selection median and drags the selected elements; otherwise it transforms the active object/group on that axis. Pen/mouse; one-finger touch remains camera navigation. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | ActionDock | Tap/click Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. |
@@ -231,7 +231,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Journal patch replay from a checkpoint, and a randomized 80-step add/delete/move/undo/redo sequence that validates every remaining mesh.
   - Scalar grid-snap rounding and axis-projection math.
   - Group creation/transform/ungroup undo and journal replay, plus group/parent round-trip through `.lpoli`.
-  - Mirror clipping/winding/seam closure, grid repetition, radial repetition, modifier-stack persistence, stack edit journal replay, and evaluated-element provenance.
+  - Mirror clipping/winding/seam closure, stable side and flip, merge threshold and UV mirroring, grid repetition, radial repetition, modifier-stack persistence, stack edit journal replay, and evaluated-element provenance.
   - Single-face extrusion, multi-face region extrusion with boundary walls, single-face inset closure/topology, multi-segment closed-loop bridging, and quad-loop cuts on closed/open meshes.
   - Face/vertex/edge deletion, boundary regeneration, UV/material preservation, delete-every-face rejection, and deletion command/journal replay.
   - Vertex merge to centroid, collapsed-face cleanup, two-boundary-edge bridging, and invalid-selection rejection.
@@ -251,7 +251,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Numeric position/rotation/scale commits, undo/redo, and orientation-gizmo drag orbit verified with a stable idle render count.
   - Move/Rotate/Scale gizmo handle picking and axis-constrained drags committed, undone, and verified on desktop and emulated iPad; all tool buttons remain 44 px+ targets.
   - Face, vertex, and edge deletion through the Selection panel and Delete/Backspace, with undo and live boundary-count update; no console errors.
-  - PS1 effect module collapsed by default, expansion tested, and both toggles still function.
+  - PS1 look controls live in Render; both toggles are tested.
   - Merge selected vertices and bridge two boundary edges through the Selection panel, with undo and updated boundary counts.
   - Multi-object selection by modifier-click and the sticky toggle; joining sphere, grid, and cylinder objects into the active target, with validated topology and undo/redo.
   - Grid snap at 0.5 verified for object translation and vertex movement; Y/Z coordinates stayed untouched under X-axis lock; keyboard axis locking and 44 px iPad axis chips verified.

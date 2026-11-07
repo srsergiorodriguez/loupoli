@@ -25,7 +25,6 @@
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import type { TextureEffect } from '../../texture/effects';
   import {
-    GRID_SNAP_STEPS,
     type AxisLock,
     type ModifierPatch
   } from '../../editor/types';
@@ -572,7 +571,13 @@
 
   function updateModifierNumber(
     modifierId: string,
-    key: 'countX' | 'countY' | 'spacingX' | 'spacingY' | 'count',
+    key:
+      | 'countX'
+      | 'countY'
+      | 'spacingX'
+      | 'spacingY'
+      | 'count'
+      | 'mergeThreshold',
     value: number
   ): void {
     if (!Number.isFinite(value)) {
@@ -583,9 +588,12 @@
     } as ModifierPatch);
   }
 
-  function setSnapStep(event: Event): void {
-    const value = Number((event.currentTarget as HTMLSelectElement).value);
-    session.setSnapStep(value);
+  function updateModifierFlag(
+    modifierId: string,
+    key: 'flip' | 'clip' | 'merge' | 'mirrorUv',
+    value: boolean
+  ): void {
+    session.updateModifier(modifierId, { [key]: value } as ModifierPatch);
   }
 
   function toggleAxis(axis: Exclude<AxisLock, null>): void {
@@ -1102,6 +1110,28 @@
         {:else}
           <p class="texture-note">Add a camera from the Camera section before rendering.</p>
         {/if}
+        <div class="render-look">
+          <div class="render-look-head">
+            <span>PS1 look</span>
+            <span>Render effect · Opt-in</span>
+          </div>
+          <Switch
+            label="Vertex snapping"
+            description="Snap vertices to a 320 × 240 grid for PS1 wobble."
+            checked={session.snapshot.ps1Snap}
+            onChange={(value) => session.setPs1Snap(value)}
+          />
+          <Switch
+            label="PS1 affine"
+            description="On: PS1 UV swim. Off: perspective-correct mapping."
+            checked={session.snapshot.ps1Affine}
+            onChange={(value) => session.setPs1Affine(value)}
+          />
+          <p class="hint">
+            Unlit only. Both effects are off by default, so correct perspective
+            mapping is the default view.
+          </p>
+        </div>
         <ActionRow align="end">
           <ActionButton
             label={session.snapshot.renderBusy
@@ -1625,29 +1655,9 @@
               Position and rotation are world-space. Scale remains object-local.
             </p>
           {/if}
-          <div class="snap-line">
-            <button
-              type="button"
-              class="snap-toggle"
-              class:is-active={session.snapshot.snapEnabled}
-              aria-pressed={session.snapshot.snapEnabled}
-              onclick={() =>
-                session.setSnapEnabled(!session.snapshot.snapEnabled)}
-            >
-              <span class="snap-dot" aria-hidden="true"></span>
-              <span>Grid snap</span>
-            </button>
-            <select
-              class="snap-step"
-              aria-label="Grid snap step"
-              value={String(session.snapshot.snapStep)}
-              onchange={setSnapStep}
-            >
-              {#each GRID_SNAP_STEPS as step (step)}
-                <option value={String(step)}>{step}</option>
-              {/each}
-            </select>
-          </div>
+          <p class="hint">
+            World, UV, and rotation snapping are controlled from the status bar.
+          </p>
         {:else}
           <p class="empty-state">No active object to transform.</p>
         {/if}
@@ -1893,6 +1903,60 @@
                           <option value="z">Z</option>
                         </select>
                       </label>
+                      <div class="modifier-switch">
+                        <Switch
+                          label="Flip side"
+                          description="Keep the negative local side."
+                          checked={modifier.flip}
+                          onChange={(value) =>
+                            updateModifierFlag(modifier.id, 'flip', value)}
+                        />
+                      </div>
+                      <div class="modifier-switch">
+                        <Switch
+                          label="Clip"
+                          description="Remove geometry beyond the plane before reflecting."
+                          checked={modifier.clip}
+                          onChange={(value) =>
+                            updateModifierFlag(modifier.id, 'clip', value)}
+                        />
+                      </div>
+                      <div class="modifier-switch">
+                        <Switch
+                          label="Merge seam"
+                          description="Snap near-plane vertices into one seam."
+                          checked={modifier.merge}
+                          onChange={(value) =>
+                            updateModifierFlag(modifier.id, 'merge', value)}
+                        />
+                      </div>
+                      <label class="modifier-field">
+                        <span>Merge threshold</span>
+                        <NumberField
+                          value={modifier.mergeThreshold}
+                          label="Mirror merge threshold"
+                          step={0.001}
+                          precision={4}
+                          min={0.000001}
+                          max={10}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(
+                              modifier.id,
+                              'mergeThreshold',
+                              value
+                            )}
+                        />
+                      </label>
+                      <div class="modifier-switch">
+                        <Switch
+                          label="Mirror U"
+                          description="Mirror the reflected texture coordinate."
+                          checked={modifier.mirrorUv}
+                          onChange={(value) =>
+                            updateModifierFlag(modifier.id, 'mirrorUv', value)}
+                        />
+                      </div>
                     {:else if modifier.type === 'grid-array'}
                       <label class="modifier-field">
                         <span>X count</span>
@@ -2365,34 +2429,6 @@
     </InspectorSection>
 {/snippet}
 
-    {#snippet ps1Section()}
-<InspectorSection
-      title="PS1 look"
-      meta="Render effect · Opt-in"
-      open={sections.ps1}
-      onToggle={(open) => setSection('ps1', open)}
-    >
-      <div class="module-body">
-        <Switch
-          label="Vertex snapping"
-          description="Snap vertices to a 320 × 240 grid for PS1 wobble."
-          checked={session.snapshot.ps1Snap}
-          onChange={(value) => session.setPs1Snap(value)}
-        />
-        <Switch
-          label="PS1 affine"
-          description="On: PS1 UV swim. Off: perspective-correct mapping."
-          checked={session.snapshot.ps1Affine}
-          onChange={(value) => session.setPs1Affine(value)}
-        />
-        <p class="hint">
-          Unlit only. Both effects are off by default, so correct perspective
-          mapping is the default view.
-        </p>
-      </div>
-    </InspectorSection>
-{/snippet}
-
       {#key session.snapshot.workspace}
         {#each visibleSections as section (section)}
           {#if section === 'scene'}{@render sceneSection()}
@@ -2405,7 +2441,6 @@
           {:else if section === 'mesh'}{@render meshSection()}
           {:else if section === 'shapes'}{@render shapesSection()}
           {:else if section === 'modifiers'}{@render modifiersSection()}
-          {:else if section === 'ps1'}{@render ps1Section()}
           {:else if section === 'brush'}{@render brushSection()}
           {:else if section === 'texture'}{@render textureSection()}
           {/if}
@@ -2638,54 +2673,6 @@
     justify-content: flex-end;
   }
 
-  .snap-line {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 82px;
-    gap: var(--space-1);
-  }
-
-  .snap-toggle,
-  .snap-step {
-    min-height: var(--control-h);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    color: var(--text-tertiary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-  }
-
-  .snap-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-start;
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
-    cursor: pointer;
-  }
-
-  .snap-toggle.is-active {
-    border-color: var(--border-strong);
-    color: var(--accent-primary);
-    background: var(--bg-selected);
-  }
-
-  .snap-dot {
-    width: 7px;
-    height: 7px;
-    border: 1px solid currentColor;
-    border-radius: 2px;
-    background: transparent;
-  }
-
-  .snap-toggle.is-active .snap-dot {
-    background: currentColor;
-  }
-
-  .snap-step {
-    padding: 0 var(--space-1);
-  }
-
   .axis-lock {
     display: flex;
     align-items: center;
@@ -2872,6 +2859,10 @@
   .modifier-field select {
     width: 100%;
     padding: 0 var(--space-2);
+  }
+
+  .modifier-switch {
+    grid-column: 1 / -1;
   }
 
   .selection-actions {
@@ -3072,6 +3063,31 @@
 
   .render-field > span {
     min-width: 0;
+  }
+
+  .render-look {
+    display: flex;
+    flex-direction: column;
+    gap: var(--inspector-row-gap);
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: var(--hairline) solid var(--border-subtle);
+  }
+
+  .render-look-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+  }
+
+  .render-look-head span:last-child {
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
   }
 
   .render-field :global(.number-field) {

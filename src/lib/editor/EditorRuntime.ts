@@ -471,7 +471,9 @@ export class EditorRuntime {
   private actionDrag: ActionDrag | null = null;
   private lastLoopCut: LastLoopCut | null = null;
   private snapEnabled = false;
-  private snapStep = 0.25;
+  private snapStep = 0.1;
+  private uvSnapStep = 0.01;
+  private rotationSnapStep = 15;
   private axisLock: AxisLock = null;
   private ps1Snap = DEFAULT_PS1_SNAP;
   private ps1Affine = DEFAULT_PS1_AFFINE;
@@ -774,6 +776,8 @@ export class EditorRuntime {
       lassoPath: this.lassoPath.map((point) => [point[0], point[1]] as const),
       snapEnabled: this.snapEnabled,
       snapStep: this.snapStep,
+      uvSnapStep: this.uvSnapStep,
+      rotationSnapStep: this.rotationSnapStep,
       axisLock: this.axisLock,
       ps1Snap: this.ps1Snap,
       ps1Affine: this.ps1Affine,
@@ -1205,6 +1209,24 @@ export class EditorRuntime {
       return;
     }
     this.snapStep = step;
+    this.publish();
+  }
+
+  /** Change normalized UV translation/scale snapping. */
+  setUvSnapStep(step: number): void {
+    if (!Number.isFinite(step) || step <= 0 || step === this.uvSnapStep) {
+      return;
+    }
+    this.uvSnapStep = step;
+    this.publish();
+  }
+
+  /** Change the rotation snap angle in degrees. */
+  setRotationSnapStep(step: number): void {
+    if (!Number.isFinite(step) || step <= 0 || step === this.rotationSnapStep) {
+      return;
+    }
+    this.rotationSnapStep = step;
     this.publish();
   }
 
@@ -3388,8 +3410,8 @@ export class EditorRuntime {
         du = 0;
       }
       if (this.snapEnabled) {
-        du = snapScalar(du, this.snapStep);
-        dv = snapScalar(dv, this.snapStep);
+        du = snapScalar(du, this.uvSnapStep);
+        dv = snapScalar(dv, this.uvSnapStep);
       }
       for (let index = 0; index < next.length; index += 1) {
         next[index][0] += du;
@@ -3403,7 +3425,10 @@ export class EditorRuntime {
       let radians = shortestAngleDelta(drag.startAngle, angle);
       radians *= precision * pivotSensitivity;
       if (this.snapEnabled) {
-        radians = snapScalar(radians, Math.PI / 12);
+        radians = snapScalar(
+          radians,
+          (this.rotationSnapStep * Math.PI) / 180
+        );
       }
       for (let index = 0; index < next.length; index += 1) {
         next[index] = rotateUv(drag.before[index], drag.pivot, radians);
@@ -3421,7 +3446,7 @@ export class EditorRuntime {
       if (this.snapEnabled) {
         factor = Math.max(
           1e-3,
-          snapScalar(factor, Math.max(this.snapStep, 1e-3))
+          snapScalar(factor, Math.max(this.uvSnapStep, 1e-3))
         );
       }
       for (let index = 0; index < next.length; index += 1) {

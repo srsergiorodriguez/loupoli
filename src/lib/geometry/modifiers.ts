@@ -13,6 +13,16 @@ export interface MirrorModifier {
   readonly type: 'mirror';
   readonly enabled: boolean;
   readonly axis: ModifierAxis;
+  /** Keep the negative local side instead of the positive side. */
+  readonly flip: boolean;
+  /** Clip geometry to the kept side before reflecting. */
+  readonly clip: boolean;
+  /** Snap near-plane vertices onto the mirror plane. */
+  readonly merge: boolean;
+  /** World-unit distance used by the merge snap. */
+  readonly mergeThreshold: number;
+  /** Mirror the U texture coordinate on the reflected copy. */
+  readonly mirrorUv: boolean;
 }
 
 /** Repetition of local geometry on an X/Y grid. */
@@ -69,7 +79,17 @@ export function createModifier(kind: ModifierKind): Modifier {
   const id = createModifierId();
   switch (kind) {
     case 'mirror':
-      return { id, type: 'mirror', enabled: true, axis: 'x' };
+      return {
+        id,
+        type: 'mirror',
+        enabled: true,
+        axis: 'x',
+        flip: false,
+        clip: true,
+        merge: true,
+        mergeThreshold: 0.001,
+        mirrorUv: false
+      };
     case 'grid-array':
       return {
         id,
@@ -433,7 +453,8 @@ function faceOnPlane(face: ProvenanceFace, axis: ModifierAxis): boolean {
 
 function reflectProvenanceFace(
   face: ProvenanceFace,
-  axis: ModifierAxis
+  axis: ModifierAxis,
+  mirrorUv: boolean
 ): ProvenanceFace {
   const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
   const source = face.corners;
@@ -445,7 +466,9 @@ function reflectProvenanceFace(
     const sourceEdge = source[(n - 2 - j + n * 2) % n];
     return {
       position,
-      uv: corner.uv,
+      uv: mirrorUv
+        ? ([1 - corner.uv[0], corner.uv[1]] as [number, number])
+        : corner.uv,
       baseVertex: corner.baseVertex,
       baseEdge: sourceEdge.baseEdge,
       baseLinear: multiplyLinear(reflection, corner.baseLinear)
@@ -454,29 +477,57 @@ function reflectProvenanceFace(
   return { corners, material: face.material, baseFace: face.baseFace };
 }
 
+/** Snap vertices near the mirror plane onto it before DCEL construction. */
+function mergeMirrorPlane(
+  faces: readonly ProvenanceFace[],
+  axis: ModifierAxis,
+  threshold: number
+): void {
+  const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
+  for (const face of faces) {
+    for (const corner of face.corners) {
+      if (Math.abs(corner.position[index]) <= threshold) {
+        corner.position[index] = 0;
+      }
+    }
+  }
+}
+
 function mirrorEvaluated(
   mesh: HalfEdgeMesh,
   provenance: ModifierProvenance,
-  axis: ModifierAxis
+  modifier: MirrorModifier
 ): EvaluatedModifierMesh {
-  const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
-  let sum = 0;
-  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
-    sum += mesh.positions[vertex * 3 + index];
-  }
-  const centroid = sum / Math.max(1, mesh.vertexCount);
-  const sign: 1 | -1 = centroid < 0 ? -1 : 1;
+  const axis = modifier.axis;
+  const sign: 1 | -1 = modifier.flip ? -1 : 1;
+  const threshold = modifier.merge ? modifier.mergeThreshold : 1e-6;
 
   const faces: ProvenanceFace[] = [];
   for (const face of collectProvenanceFaces(mesh, provenance)) {
-    const clipped = clipProvenanceFace(face, axis, sign);
-    if (!clipped) {
+    let kept: ProvenanceFace | null = face;
+    if (modifier.clip) {
+      kept = clipProvenanceFace(face, axis, sign);
+    }
+    if (!kept) {
       continue;
     }
-    faces.push(clipped);
-    if (!faceOnPlane(clipped, axis)) {
-      faces.push(reflectProvenanceFace(clipped, axis));
+    if (modifier.merge) {
+      const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
+      for (const corner of kept.corners) {
+        if (Math.abs(corner.position[index]) <= threshold) {
+          corner.position[index] = 0;
+        }
+      }
     }
+    faces.push(kept);
+    if (!faceOnPlane(kept, axis)) {
+      faces.push(
+        reflectProvenanceFace(kept, axis, modifier.mirrorUv)
+      );
+    }
+  }
+  if (modifier.merge) {
+    mergeMirrorPlane(faces, axis, threshold);
   }
   if (faces.length === 0) {
     throw new Error('Mirror clipping removed every face.');
@@ -581,10 +632,11 @@ function radialEvaluated(
  * Evaluate the enabled modifier stack and return provenance maps back to the
  * unchanged base mesh.
  *
- * Mirror is clipped to one side of the local plane, then reflected with
- * reversed winding; the shared seam is welded by the DCEL builder. Arrays
- * preserve per-corner UVs and materials. Cut vertices/edges introduced by
- * mirror clipping have no single base element and map to -1.
+ * Mirror keeps a stable local side by default (or the flipped negative side),
+ * optionally clips to that side, snaps near-plane vertices for a welded seam,
+ * and reflects with reversed winding. Arrays preserve per-corner UVs and
+ * materials. Cut vertices/edges introduced by mirror clipping have no single
+ * base element and map to -1.
  */
 export function evaluateModifiersWithProvenance(
   base: HalfEdgeMesh,
@@ -604,7 +656,7 @@ export function evaluateModifiersWithProvenance(
       current = mirrorEvaluated(
         current.mesh,
         current.provenance,
-        modifier.axis
+        modifier
       );
     } else if (modifier.type === 'grid-array') {
       if (modifier.countX < 1 || modifier.countY < 1) {
@@ -675,11 +727,29 @@ export function validateModifier(value: unknown): Modifier {
     if (!isAxis(modifier.axis)) {
       throw new Error('Mirror axis is invalid.');
     }
+    const flip =
+      typeof modifier.flip === 'boolean' ? modifier.flip : false;
+    const clip =
+      typeof modifier.clip === 'boolean' ? modifier.clip : true;
+    const merge =
+      typeof modifier.merge === 'boolean' ? modifier.merge : true;
+    const mergeThreshold =
+      typeof modifier.mergeThreshold === 'number' &&
+      Number.isFinite(modifier.mergeThreshold)
+        ? Math.min(10, Math.max(1e-6, modifier.mergeThreshold))
+        : 0.001;
+    const mirrorUv =
+      typeof modifier.mirrorUv === 'boolean' ? modifier.mirrorUv : false;
     return {
       id: modifier.id,
       type: 'mirror',
       enabled: modifier.enabled,
-      axis: modifier.axis
+      axis: modifier.axis,
+      flip,
+      clip,
+      merge,
+      mergeThreshold,
+      mirrorUv
     };
   }
   if (modifier.type === 'grid-array') {

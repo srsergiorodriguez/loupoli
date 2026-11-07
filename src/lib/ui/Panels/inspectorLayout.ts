@@ -16,7 +16,6 @@ export type InspectorSectionId =
   | 'mesh'
   | 'shapes'
   | 'modifiers'
-  | 'ps1'
   | 'brush'
   | 'texture';
 
@@ -39,7 +38,6 @@ export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'mesh', requires: 'editTopology', order: 30, defaultOpen: false },
   { id: 'shapes', requires: 'editShapes', order: 24, defaultOpen: false },
   { id: 'modifiers', requires: 'editTopology', order: 40, defaultOpen: false },
-  { id: 'ps1', requires: 'editLook', order: 50, defaultOpen: false },
   { id: 'brush', requires: 'paintTexture', order: 70, defaultOpen: true },
   { id: 'texture', requires: 'paintTexture', order: 80, defaultOpen: true }
 ];

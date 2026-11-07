@@ -44,6 +44,70 @@ describe('modifier evaluation', () => {
     expect(() => result.validate()).not.toThrow();
   });
 
+  it('keeps the positive side by default and can flip to the negative side', () => {
+    const sphere = createQuadSphereMesh(1.25, 2);
+    const mirror = createModifier('mirror') as MirrorModifier;
+    const positive = evaluateModifiers(sphere, [mirror]);
+    expect(positive.faceCount).toBeGreaterThan(0);
+    let positiveMax = -Infinity;
+    for (let vertex = 0; vertex < positive.vertexCount; vertex += 1) {
+      positiveMax = Math.max(positiveMax, positive.getVertexPosition(vertex)[0]);
+    }
+    expect(positiveMax).toBeGreaterThan(0);
+
+    const negative = evaluateModifiers(sphere, [
+      { ...mirror, flip: true }
+    ]);
+    let negativeMin = Infinity;
+    for (let vertex = 0; vertex < negative.vertexCount; vertex += 1) {
+      negativeMin = Math.min(negativeMin, negative.getVertexPosition(vertex)[0]);
+    }
+    expect(negativeMin).toBeLessThan(0);
+  });
+
+  it('can mirror without clipping and closes a merged seam', () => {
+    const sphere = createQuadSphereMesh(1.25, 2);
+    for (let vertex = 0; vertex < sphere.vertexCount; vertex += 1) {
+      const position = sphere.getVertexPosition(vertex);
+      sphere.setVertexPosition(vertex, [position[0] + 3, position[1], position[2]]);
+    }
+    const mirror = createModifier('mirror') as MirrorModifier;
+    const unclipped = evaluateModifiers(sphere, [
+      { ...mirror, clip: false, merge: false }
+    ]);
+    expect(unclipped.faceCount).toBe(sphere.faceCount * 2);
+    expect(unclipped.boundaryEdgeCount).toBe(0);
+    expect(() => unclipped.validate()).not.toThrow();
+
+    const centered = createQuadSphereMesh(1.25, 2);
+    const merged = evaluateModifiers(centered, [
+      { ...mirror, mergeThreshold: 0.02 }
+    ]);
+    expect(merged.boundaryEdgeCount).toBe(0);
+    expect(() => merged.validate()).not.toThrow();
+  });
+
+  it('preserves mirrored UVs only when requested', () => {
+    const sphere = createQuadSphereMesh(1.25, 2);
+    const mirror = createModifier('mirror') as MirrorModifier;
+    const sameU = evaluateModifiers(sphere, [mirror]);
+    const mirroredU = evaluateModifiers(sphere, [
+      { ...mirror, mirrorUv: true }
+    ]);
+    expect(sameU.faceCount).toBe(mirroredU.faceCount);
+    let differs = false;
+    for (let halfEdge = 0; halfEdge < sameU.halfEdgeCount; halfEdge += 1) {
+      if (
+        Math.abs(sameU.heUv[halfEdge * 2] - mirroredU.heUv[halfEdge * 2]) >
+        1e-6
+      ) {
+        differs = true;
+        break;
+      }
+    }
+    expect(differs).toBe(true);
+  });
+
   it('repeats geometry with a grid array', () => {
     const cube = createCubeMesh(1);
     const grid: GridArrayModifier = {

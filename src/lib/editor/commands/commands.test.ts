@@ -239,7 +239,12 @@ describe('scene commands and journal', () => {
         id: 'mirror-a',
         type: 'mirror' as const,
         enabled: true,
-        axis: 'x' as const
+        axis: 'x' as const,
+        flip: false,
+        clip: true,
+        merge: true,
+        mergeThreshold: 0.001,
+        mirrorUv: false
       }
     ];
     const checkpoint = encodeLpoly(document, SETTINGS);

@@ -24,7 +24,9 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   lassoMode: false,
   lassoPath: [],
   snapEnabled: false,
-  snapStep: 0.25,
+  snapStep: 0.1,
+  uvSnapStep: 0.01,
+  rotationSnapStep: 15,
   axisLock: null,
   ps1Snap: DEFAULT_PS1_SNAP,
   ps1Affine: DEFAULT_PS1_AFFINE,
@@ -256,6 +258,14 @@ export class EditorSession {
 
   setSnapStep(step: number): void {
     this.runtime?.setSnapStep(step);
+  }
+
+  setUvSnapStep(step: number): void {
+    this.runtime?.setUvSnapStep(step);
+  }
+
+  setRotationSnapStep(step: number): void {
+    this.runtime?.setRotationSnapStep(step);
   }
 
   setAxisLock(axis: AxisLock): void {

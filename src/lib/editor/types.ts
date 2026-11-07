@@ -61,7 +61,15 @@ export interface MeshActionSnapshot {
 }
 
 /** Supported incremental grid-snap steps. */
-export const GRID_SNAP_STEPS = [0.1, 0.25, 0.5, 1] as const;
+export const GRID_SNAP_STEPS = [
+  0.01, 0.05, 0.1, 0.25, 0.5, 1
+] as const;
+
+/** Fine steps for normalized UV-space snapping. */
+export const UV_SNAP_STEPS = [0.01, 0.05, 0.1, 0.25] as const;
+
+/** Rotation snap angles in degrees. */
+export const ROTATION_SNAP_STEPS = [1, 5, 15, 45] as const;
 
 /** The optional world-axis lock for vertex drags. */
 export type AxisLock = 'x' | 'y' | 'z' | null;
@@ -138,6 +146,11 @@ export interface ModifierPatch {
   readonly spacingX?: number;
   readonly spacingY?: number;
   readonly count?: number;
+  readonly flip?: boolean;
+  readonly clip?: boolean;
+  readonly merge?: boolean;
+  readonly mergeThreshold?: number;
+  readonly mirrorUv?: boolean;
 }
 
 /** Screen-space preview for a projected line, shape, or gradient. */
@@ -213,6 +226,8 @@ export interface EditorSnapshot {
   readonly lassoPath: readonly (readonly [number, number])[];
   readonly snapEnabled: boolean;
   readonly snapStep: number;
+  readonly uvSnapStep: number;
+  readonly rotationSnapStep: number;
   readonly axisLock: AxisLock;
   readonly ps1Snap: boolean;
   readonly ps1Affine: boolean;

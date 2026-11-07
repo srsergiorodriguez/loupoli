@@ -92,6 +92,8 @@ All tooltips come from the command registry. Format: `Label — Shortcut` when a
 
 Texture asset actions use visible commands: New and Duplicate sit together; Delete texture is a separate end-aligned danger action, disabled while assigned or last. Layer-local actions (including Import image and effect creation) live under Add layer. Do not use a three-dot asset menu for these actions.
 
+Snapping is global session state. Its compact status-bar control opens a single popover for world, UV, and rotation steps; the Transform section must not duplicate those controls. PS1 look controls belong under Render, not a standalone Inspector section.
+
 ## 9. Shared UI contracts
 
 These are mandatory reuse rules. A new surface that duplicates one of these patterns is incomplete.
