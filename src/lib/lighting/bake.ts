@@ -281,6 +281,9 @@ function rayOccluded(
 
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
+/** Lambert BRDF scale used by the viewport's MeshLambertMaterial. */
+const LAMBERT_BRDF = 1 / Math.PI;
+
 function tangentBasis(axis: Vector3): [Vector3, Vector3] {
   const helper =
     Math.abs(axis.z) < 0.9 ? new Vector3(0, 0, 1) : new Vector3(1, 0, 0);
@@ -660,9 +663,9 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
             .addScaledVector(world[ia], a)
             .addScaledVector(world[ib], b)
             .addScaledVector(world[ic], c);
-          let r = ambient.r * input.ambientIntensity;
-          let g = ambient.g * input.ambientIntensity;
-          let bl = ambient.b * input.ambientIntensity;
+          let r = ambient.r * input.ambientIntensity * LAMBERT_BRDF;
+          let g = ambient.g * input.ambientIntensity * LAMBERT_BRDF;
+          let bl = ambient.b * input.ambientIntensity * LAMBERT_BRDF;
           for (const light of lights) {
             let ndotl: number;
             let attenuation = 1;
@@ -676,7 +679,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
               }
               toLight.multiplyScalar(1 / distance);
               ndotl = normal.dot(toLight);
-              attenuation = 1 / (1 + distance * distance);
+              attenuation = 1 / Math.max(0.01, distance * distance);
             }
             if (ndotl <= 0) {
               continue;
@@ -694,7 +697,11 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
               }
             }
             const energy =
-              maxZero(ndotl) * light.intensity * attenuation * visibility;
+              maxZero(ndotl) *
+              light.intensity *
+              attenuation *
+              visibility *
+              LAMBERT_BRDF;
             r += light.rgb.r * energy;
             g += light.rgb.g * energy;
             bl += light.rgb.b * energy;
