@@ -54,6 +54,25 @@ describe('OBJ interchange', () => {
     expect(roundTrip[0].materialPalette).toEqual(['#cc331a', '#1a33cc']);
   });
 
+  it('uses an optional animated pose without mutating node transforms', () => {
+    const nodes = importObjNodes(CUBE_OBJ, CUBE_MTL);
+    const node = nodes[0];
+    const restX = node.transform.position[0];
+    const exported = exportObj(nodes, [], {
+      upAxis: 'y',
+      mtlName: 'Cube.mtl',
+      pose: new Map([
+        [
+          node.id,
+          { position: [5, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }
+        ]
+      ])
+    });
+    const roundTrip = importObjNodes(exported.obj, exported.mtl);
+    expect(roundTrip[0].mesh.getVertexPosition(0)[0]).toBeCloseTo(5);
+    expect(node.transform.position[0]).toBe(restX);
+  });
+
   it('exports assigned textures as MTL map_Kd files', () => {
     const nodes = importObjNodes(CUBE_OBJ, CUBE_MTL);
     nodes[0].textureId = 'texture-1';

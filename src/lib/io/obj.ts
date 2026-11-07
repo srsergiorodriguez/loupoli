@@ -5,7 +5,7 @@ import {
   type MeshFaceSpec,
   type Vec3
 } from '../geometry/HalfEdgeMesh';
-import { MeshNode } from '../scene/MeshNode';
+import { MeshNode, type NodeTransform } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { transformMatrix, worldTransformForNode } from '../editor/groupTransforms';
 
@@ -40,6 +40,8 @@ export interface ObjExportOptions {
   readonly mtlName: string;
   readonly includeTextures?: boolean;
   readonly textures?: ReadonlyMap<string, ObjTextureFile>;
+  /** Optional animated transform pose keyed by node or group id. */
+  readonly pose?: ReadonlyMap<string, NodeTransform>;
 }
 
 /** Generated OBJ/MTL text and any referenced texture files. */
@@ -239,7 +241,12 @@ export function exportObj(
     }
     const parent = node.parentId ? groupById.get(node.parentId) : null;
     const matrix = transformMatrix(
-      worldTransformForNode(node.transform, parent?.transform ?? null)
+      worldTransformForNode(
+        options.pose?.get(node.id) ?? node.transform,
+        parent
+          ? (options.pose?.get(parent.id) ?? parent.transform)
+          : null
+      )
     );
     const nameBase = node.name.replace(/[^a-zA-Z0-9_-]+/g, '_') || 'Object';
     let objectName = nameBase;

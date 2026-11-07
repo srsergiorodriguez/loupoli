@@ -109,10 +109,15 @@ import { CreateMeshNodeCommand } from './commands/CreateMeshNodeCommand';
 import {
   exportObj,
   importObjNodes,
+  type ObjExportScope,
   type ObjTextureFile
 } from '../io/obj';
 import { exportGlb, importGlb } from '../io/gltf';
 import { SetAnimationCommand } from './commands/AnimationCommands';
+import {
+  animationExportFrames,
+  MAX_OBJ_FRAME_EXPORT
+} from './animationFrameExport';
 import {
   animationPasteBase,
   animationPasteEndFrame,
@@ -241,7 +246,8 @@ import {
   type ModifierPatch,
   type ToastKind,
   type ToastMessage,
-  type AnimationKeyReference
+  type AnimationKeyReference,
+  type ObjFrameExportOptions
 } from './types';
 
 /** Transactional animation pose edit on a temporary mesh. */
@@ -5998,6 +6004,128 @@ export class EditorRuntime {
       this.projectError = message;
       this.notify('error', 'OBJ export failed', message);
     } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Export selected animation frames as a shared-MTL OBJ sequence. */
+  async exportObjFrames(options: ObjFrameExportOptions): Promise<void> {
+    if (this.fileBusy || this.meshPoseEdit || this.shapeEdit) {
+      return;
+    }
+    const animation = this.document.animation;
+    const clip = animation.getClip(options.clipId) ?? animation.activeClip;
+    const scope: ObjExportScope = options.scope;
+    const active = this.getActiveNode();
+    const requested =
+      scope === 'active'
+        ? active
+          ? [active]
+          : []
+        : this.document.nodes;
+    if (requested.length === 0 || requested.every((node) => !node.visible)) {
+      this.notify(
+        'warning',
+        'Nothing to export',
+        scope === 'active'
+          ? 'Select a visible object before exporting.'
+          : 'There are no visible objects to export.'
+      );
+      return;
+    }
+    const frames = animationExportFrames(clip, {
+      startFrame: options.startFrame,
+      endFrame: options.endFrame,
+      step: options.step,
+      keyedOnly: options.keyedOnly
+    });
+    if (frames.length === 0) {
+      this.notify(
+        'warning',
+        'No frames to export',
+        options.keyedOnly
+          ? 'The selected range has no keyed frames.'
+          : 'Choose a valid frame range.'
+      );
+      return;
+    }
+    if (frames.length > MAX_OBJ_FRAME_EXPORT) {
+      this.notify(
+        'warning',
+        'Too many frames',
+        `OBJ frame export is limited to ${MAX_OBJ_FRAME_EXPORT} frames.`
+      );
+      return;
+    }
+
+    const previousClipId = animation.activeClipId;
+    const previousFrame = this.animationFrame;
+    const restorePose =
+      this.workspace === 'animation' || this.workspace === 'render';
+    this.fileBusy = true;
+    this.projectError = null;
+    this.pauseAnimation();
+    this.publish();
+    try {
+      const base = this.exportBaseName(
+        scope === 'active' ? active?.name : this.projectName
+      );
+      const mtlName = `${base}.mtl`;
+      const textures = options.includeTextures
+        ? await this.exportTextureFiles(requested, base)
+        : new Map<string, ObjTextureFile>();
+      const includeTextures = textures.size > 0;
+      const files: { name: string; bytes: Uint8Array }[] = [];
+      let mtlWritten = false;
+      animation.setActiveClip(clip.id);
+      for (const frame of frames) {
+        this.setAnimationFrame(frame);
+        const result = exportObj(requested, this.document.groups, {
+          upAxis: 'y',
+          mtlName,
+          includeTextures,
+          textures,
+          pose: this.animationPose
+        });
+        if (!mtlWritten) {
+          files.push({
+            name: mtlName,
+            bytes: new TextEncoder().encode(result.mtl)
+          });
+          for (const texture of result.textures) {
+            files.push({ name: texture.name, bytes: texture.bytes });
+          }
+          mtlWritten = true;
+        }
+        files.push({
+          name: `${base}_${String(frame).padStart(4, '0')}.obj`,
+          bytes: new TextEncoder().encode(result.obj)
+        });
+      }
+      const saved = await saveFrameSequence(
+        files,
+        `${base}-obj-frames.zip`
+      );
+      if (saved) {
+        this.notify(
+          'success',
+          'OBJ frames exported',
+          `${frames.length} frame${frames.length === 1 ? '' : 's'} · shared MTL${includeTextures ? ' + PNG' : ''}`
+        );
+      }
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'OBJ frame export failed', message);
+    } finally {
+      animation.setActiveClip(previousClipId);
+      this.animationFrame = previousFrame;
+      if (restorePose) {
+        this.applyAnimationPose();
+      } else {
+        this.clearAnimationPose();
+      }
       this.fileBusy = false;
       this.publish();
     }

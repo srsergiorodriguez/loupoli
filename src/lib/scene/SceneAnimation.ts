@@ -820,6 +820,11 @@ export class SceneAnimation {
     return animation;
   }
 
+  /** Find one clip by id. */
+  getClip(id: string): AnimationClip | null {
+    return this.clips.find((clip) => clip.id === id) ?? null;
+  }
+
   /** The currently edited clip. */
   get activeClip(): AnimationClip {
     return (

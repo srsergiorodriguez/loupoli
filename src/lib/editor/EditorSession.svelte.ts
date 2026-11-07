@@ -935,6 +935,12 @@ export class EditorSession {
     return this.runtime?.exportObj(scope, includeTextures) ?? Promise.resolve();
   }
 
+  exportObjFrames(
+    options: import('./types').ObjFrameExportOptions
+  ): Promise<void> {
+    return this.runtime?.exportObjFrames(options) ?? Promise.resolve();
+  }
+
   importGlb(): Promise<void> {
     return this.runtime?.importGlb() ?? Promise.resolve();
   }

@@ -206,6 +206,17 @@ export interface AnimationTrackSummary {
 /** Transient notification severity. */
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
+/** Options for exporting an animated OBJ sequence. */
+export interface ObjFrameExportOptions {
+  readonly clipId: string;
+  readonly scope: 'active' | 'scene';
+  readonly startFrame: number;
+  readonly endFrame: number;
+  readonly step: number;
+  readonly keyedOnly: boolean;
+  readonly includeTextures: boolean;
+}
+
 /** One selected animation key, identified by track and frame. */
 export interface AnimationKeyReference {
   readonly trackId: string;

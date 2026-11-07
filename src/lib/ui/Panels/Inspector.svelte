@@ -12,6 +12,7 @@
   import ActionRow from '../Primitives/ActionRow.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import ExportObjDialog from './ExportObjDialog.svelte';
+  import ExportObjFramesDialog from './ExportObjFramesDialog.svelte';
   import NewTextureDialog from './NewTextureDialog.svelte';
   import type { ObjExportScope } from '../../io/obj';
   import InlineNameField from '../Primitives/InlineNameField.svelte';
@@ -85,6 +86,7 @@
     cameras.find((camera) => camera.id === session.snapshot.activeCameraId) ?? null
   );
   const animationTracks = $derived(session.snapshot.animationTracks);
+  const animationClips = $derived(session.snapshot.animationClips);
   const meshPoseEditing = $derived(session.snapshot.meshPoseEditing);
   const meshPoseFrame = $derived(session.snapshot.meshPoseFrame);
   const activeMeshTrack = $derived(
@@ -265,14 +267,80 @@
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
   let objExportOpen = $state(false);
+  let objFramesOpen = $state(false);
   let newTextureOpen = $state(false);
   let objExportScope = $state<ObjExportScope>('scene');
   let objExportIncludeTexture = $state(true);
+  let objFramesScope = $state<ObjExportScope>('scene');
+  let objFramesClipId = $state('');
+  let objFramesMode = $state<'step' | 'keyed'>('step');
+  let objFramesStart = $state(0);
+  let objFramesEnd = $state(48);
+  let objFramesStep = $state(1);
+  let objFramesIncludeTexture = $state(true);
   const exportHasTexture = $derived(
     objExportScope === 'active'
       ? activeNode?.textureId != null
       : nodes.some((node) => node.textureId != null)
   );
+  const objFramesHasTexture = $derived(
+    objFramesScope === 'active'
+      ? activeNode?.textureId != null
+      : nodes.some((node) => node.textureId != null)
+  );
+  const objFramesCount = $derived.by(() => {
+    if (objFramesMode === 'keyed') {
+      return -1;
+    }
+    if (objFramesEnd < objFramesStart) {
+      return 0;
+    }
+    return (
+      Math.floor(
+        (objFramesEnd - objFramesStart) / Math.max(1, objFramesStep)
+      ) + 1
+    );
+  });
+
+  function openObjFramesExport(): void {
+    const clip =
+      animationClips.find(
+        (item) => item.id === session.snapshot.animationClipId
+      ) ?? animationClips[0];
+    if (!clip) {
+      return;
+    }
+    objFramesScope = activeNode ? 'active' : 'scene';
+    objFramesClipId = clip.id;
+    objFramesStart = clip.startFrame;
+    objFramesEnd = clip.endFrame;
+    objFramesMode = 'step';
+    objFramesStep = 1;
+    objFramesIncludeTexture = true;
+    objFramesOpen = true;
+  }
+
+  function changeObjFramesClip(clipId: string): void {
+    objFramesClipId = clipId;
+    const clip = animationClips.find((item) => item.id === clipId);
+    if (clip) {
+      objFramesStart = clip.startFrame;
+      objFramesEnd = clip.endFrame;
+    }
+  }
+
+  async function submitObjFramesExport(): Promise<void> {
+    await session.exportObjFrames({
+      clipId: objFramesClipId,
+      scope: objFramesScope,
+      startFrame: objFramesStart,
+      endFrame: objFramesEnd,
+      step: objFramesStep,
+      keyedOnly: objFramesMode === 'keyed',
+      includeTextures: objFramesIncludeTexture
+    });
+    objFramesOpen = false;
+  }
 
   const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v4';
   let sections = $state<Record<SectionKey, boolean>>({ ...SECTION_DEFAULTS });
@@ -758,6 +826,12 @@
                 if (!activeNode) objExportScope = 'scene';
                 objExportOpen = true;
               }
+            },
+            {
+              label: 'Export OBJ frames…',
+              icon: 'save',
+              disabled: session.snapshot.fileBusy || nodes.length === 0,
+              onSelect: openObjFramesExport
             },
             {
               label: 'Export GLB',
@@ -2546,6 +2620,31 @@
         objExportOpen = false;
         void session.exportObj(objExportScope, objExportIncludeTexture);
       }}
+    />
+  {/if}
+  {#if objFramesOpen}
+    <ExportObjFramesDialog
+      scope={objFramesScope}
+      clipId={objFramesClipId}
+      clips={animationClips}
+      mode={objFramesMode}
+      startFrame={objFramesStart}
+      endFrame={objFramesEnd}
+      step={objFramesStep}
+      frameCount={objFramesCount}
+      includeTexture={objFramesIncludeTexture}
+      hasTexture={objFramesHasTexture}
+      hasActive={activeNode !== null}
+      busy={session.snapshot.fileBusy}
+      onScopeChange={(scope) => (objFramesScope = scope)}
+      onClipChange={changeObjFramesClip}
+      onModeChange={(mode) => (objFramesMode = mode)}
+      onStartFrameChange={(frame) => (objFramesStart = frame)}
+      onEndFrameChange={(frame) => (objFramesEnd = frame)}
+      onStepChange={(step) => (objFramesStep = step)}
+      onIncludeTextureChange={(value) => (objFramesIncludeTexture = value)}
+      onCancel={() => (objFramesOpen = false)}
+      onExport={() => void submitObjFramesExport()}
     />
   {/if}
 </aside>
