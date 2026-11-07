@@ -1,6 +1,6 @@
 # loupoli — Persistence and iOS Memory Safety
 
-**Status:** Phase 4 persistence plus Phase 5A lighting. New projects use the `.lpoli` extension; existing `.lpoly` files remain readable and migrate to `.lpoli` on the next save. The binary magic and internal format identifier remain `lpoly` for compatibility. Autosave, `.lpoli` v6, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, ambient settings, and render cameras round-trip. The manifest may contain up to 32 cameras; older files without cameras receive a default camera. v6 stores the texture asset library, lighting metadata, named animation clips, and Mesh Motion pose tracks. v5 and v4 files remain readable; legacy v1/v2 compatibility is deferred. Minimal shape keys, visibility/order metadata, and shape-weight animation tracks round-trip as binary payload. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
+**Status:** Phase 4 persistence plus Phase 5A lighting. New projects use the `.lpoli` extension; existing `.lpoly` files remain readable and migrate to `.lpoli` on the next save. The binary magic and internal format identifier remain `lpoly` for compatibility. Autosave, `.lpoli` v7, browser fallbacks, and Tauri byte I/O are implemented; groups, transforms, modifier stacks, seam flags, texture assets, node texture bindings, lights, ambient settings, and render cameras round-trip. The manifest may contain up to 32 cameras; older files without cameras receive a default camera. v7 stores the texture asset library, lighting metadata, named animation clips, Mesh Motion pose tracks, and camera/light tracks. v6, v5, and v4 files remain readable; legacy v1/v2 compatibility is deferred. Minimal shape keys, visibility/order metadata, and shape-weight animation tracks round-trip as binary payload. See [PHASE5_LIGHTING.md](./PHASE5_LIGHTING.md).
 **Related:** [Docs index](./README.md) · [Plan](./PLAN.md) · [Architecture](./ARCHITECTURE.md) · [Design System](./DESIGN_SYSTEM.md) · [README](../README.md)
 
 ## Extension compatibility
@@ -18,7 +18,7 @@ Autosave is never presented as a manual save, and a manual save is never implied
 
 1. [Durability model](#1-durability-model)
 2. [Autosave engine](#2-autosave-engine)
-3. [`.lpoli` project format v6](#3-lpoly-project-format-v6)
+3. [`.lpoli` project format v7](#3-lpoly-project-format-v7)
 4. [Tauri / Rust filesystem boundary](#4-tauri-rust-filesystem-boundary)
 5. [iOS lifecycle and memory](#5-ios-lifecycle-and-memory)
 6. [Testing](#6-testing)
@@ -60,7 +60,7 @@ Undo and redo append the inverse/forward transitions, so replay reconstructs the
 
 `NodeSnapshot` copies typed arrays before they can mutate; IndexedDB's structured clone stores the arrays directly. No base64 is used.
 
-Texture edits and paint/bake strokes are not represented as autosave pixel deltas; they mark the autosave dirty and force a fresh v6 checkpoint with PNG chunks on the next flush. Paint history stores only the localized before/after dirty rectangle. Non-destructive texture effect layers persist only their bounded parameters in the layer manifest; their effect is recomputed by the composite. Topology, material, and light commands use localized journal patches.
+Texture edits and paint/bake strokes are not represented as autosave pixel deltas; they mark the autosave dirty and force a fresh v7 checkpoint with PNG chunks on the next flush. Paint history stores only the localized before/after dirty rectangle. Non-destructive texture effect layers persist only their bounded parameters in the layer manifest; their effect is recomputed by the composite. Topology, material, and light commands use localized journal patches.
 
 ### 2.2 Schedule
 
@@ -103,7 +103,7 @@ Record key: **`current`**
 ```ts
 {
   version: 1,
-  checkpoint: Uint8Array,      // complete .lpoli v6 bytes (texture asset and bake PNG chunks included)
+  checkpoint: Uint8Array,      // complete .lpoli v7 bytes (texture asset and bake PNG chunks included)
   settings: ProjectSettings,   // shading + PS1 flags
   deltas: JournalPatch[],      // transitions since checkpoint
   updatedAt: number
@@ -117,7 +117,7 @@ Only one recovery lineage is current in Phase 2. There is no per-project ID or s
 1. Runtime initialization reads the one autosave record.
 2. If present, it sets `recoveryAvailable` and does not start a new autosave or overwrite the record.
 3. The recovery banner offers **Recover** or **Discard**.
-4. **Recover** decodes the `.lpoli` v6 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
+4. **Recover** decodes the `.lpoli` v7 checkpoint, applies deltas in order, then validates/replaces the scene and imports texture PNGs. It resets history, applies saved viewport settings, and starts a new autosave baseline immediately.
 5. **Discard** deletes the record and starts a new baseline from the current scene.
 6. Save/Open are disabled until recovery is resolved.
 7. Any decode/replay error is reported; the invalid record is not partly applied.
@@ -132,7 +132,7 @@ This is explicit recovery, never a silent replacement of the user's current scen
 
 ---
 
-## 3. `.lpoli` project format v6
+## 3. `.lpoli` project format v7
 
 Implementation: `src/lib/project/lpoly.ts`. Rust validates the envelope and checksum but never parses document semantics.
 
@@ -145,7 +145,7 @@ The header is **28 bytes**:
 | Offset | Size | Type | Field |
 |---:|---:|---|---|
 | 0 | 8 | bytes | Magic `4C 50 4F 4C 59 00 00 00` (`LPOLY\0\0\0`) |
-| 8 | 2 | u16 | Container version (`3`–`6`) |
+| 8 | 2 | u16 | Container version (`3`–`7`) |
 | 10 | 2 | u16 | Flags (reserved, `0`) |
 | 12 | 4 | u32 | Manifest JSON byte length |
 | 16 | 4 | u32 | Payload byte length |
@@ -155,7 +155,7 @@ The header is **28 bytes**:
 | pad | … | bytes | Zero padding to a 4-byte payload start |
 | … | … | bytes | Fixed-order typed-array columns |
 
-`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`. v6 appends aligned texture asset PNG chunks after the mesh columns; the file is aligned to four bytes.
+`payloadStart = align4(28 + manifestLength)`, and the file must end exactly at `payloadStart + payloadLength`. v7 appends aligned texture asset PNG chunks after the mesh columns; the file is aligned to four bytes.
 
 Validation occurs before geometry allocation:
 
@@ -278,17 +278,17 @@ For each node, in order:
 11. `faceHalfEdge` — `u32`, `faceCount`
 12. `faceMaterial` — `i32`, `faceCount`
 
-UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, simple material palettes, shape-key payloads, lights, ambient settings, render cameras, and animation are part of `.lpoli` v6 and the v6 autosave checkpoint. The animation manifest stores named clips with independent ranges, transform/shape-weight tracks, and sparse Mesh Motion tracks; v4 flat animation is migrated into an “Animation 1” clip on read.
+UV moves use a localized `move-uv` autosave patch per corner; unwrap uses one `replace-uv` patch containing the full per-corner UV column. UV coordinates remain in the existing `heUv` column. Texture assets, node bindings, simple material palettes, shape-key payloads, lights, ambient settings, render cameras, and animation are part of `.lpoli` v7 and the v7 autosave checkpoint. The animation manifest stores named clips with independent ranges, transform/shape-weight tracks, sparse Mesh Motion tracks, and camera/light tracks; v4 flat animation is migrated into an “Animation 1” clip on read.
 
 Every array starts on a 4-byte boundary. `heFace = -1` marks a boundary half-edge. Boundary loops are serialized as ordinary half-edge cycles. UVs are per-corner (per half-edge). Seam flags round-trip and are authorable through the Edge-mode Seam action; face materials also round-trip.
 
-### 3.4 v6 texture asset chunks
+### 3.4 v7 texture asset chunks
 
-After all mesh columns, v6 writes each asset layer's binary PNG in manifest order. Raster layers are authoritative; fill layers retain their deterministic color/pattern metadata. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
+After all mesh columns, v7 writes each asset layer's binary PNG in manifest order. Raster layers are authoritative; fill layers retain their deterministic color/pattern metadata. Each chunk is 4-byte aligned; `pngLength` comes from the manifest and is bounded before allocation. The container CRC covers the manifest and every PNG chunk.
 
-- v3 files read with default lighting; v4, v5, and v6 files restore lights and ambient. v5/v6 also restore animation clips.
-- v6 files restore texture assets, node bindings, lights, ambient settings, animation clips, and Mesh Motion tracks on open; v4 and v5 remain readable; a project without textures resets to one default asset.
-- Texture/bake edits mark autosave dirty and force a fresh v6 checkpoint; recovery restores texture PNGs.
+- v3 files read with default lighting; v4, v5, v6, and v7 files restore lights and ambient. v5/v6/v7 also restore animation clips.
+- v7 files restore texture assets, node bindings, lights, ambient settings, animation clips, Mesh Motion, and camera/light tracks on open; v4, v5, and v6 remain readable; a project without textures resets to one default asset.
+- Texture/bake edits mark autosave dirty and force a fresh v7 checkpoint; recovery restores texture PNGs.
 - Layer PNGs are never base64 or JSON strings.
 
 ### 3.5 Not yet serialized
@@ -298,11 +298,11 @@ After all mesh columns, v6 writes each asset layer's binary PNG in manifest orde
 - Camera position/target
 - Active object and selection
 
-v3, v4, v5, and v6 are accepted during development. Unknown/newer container versions are rejected with a clear message. Texture and lighting fields are validated before allocation.
+v3–v7 are accepted during development. Unknown/newer container versions are rejected with a clear message. Texture and lighting fields are validated before allocation.
 
 ### 3.6 Save protocol
 
-1. TypeScript encodes and validates the current scene, texture assets, node bindings, lights, and ambient settings into a v6 `.lpoli` byte array.
+1. TypeScript encodes and validates the current scene, texture assets, node bindings, lights, and ambient settings into a v7 `.lpoli` byte array.
 2. Tauri save dialog chooses a path; browser mode triggers a download.
 3. For Tauri, Rust re-checks size, magic, header lengths, and CRC.
 4. Rust writes a same-directory temporary file with `create_new`, `write_all`, and `sync_all`.
@@ -315,7 +315,7 @@ v3, v4, v5, and v6 are accepted during development. Unknown/newer container vers
 1. Native dialog selects a path; browser uses a file input.
 2. Rust enforces 128 MB and validates the envelope/CRC before returning bytes.
 3. TypeScript decodes manifest and columns and rebuilds/validates every DCEL.
-4. Only after success does the runtime replace the document, import v6 texture PNGs, and reset history/autosave.
+4. Only after success does the runtime replace the document, import v7 texture PNGs, and reset history/autosave.
 5. Errors are shown as project errors without mutating the current scene.
 
 ---

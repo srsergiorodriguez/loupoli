@@ -21,6 +21,8 @@ import {
   type AnimationInterpolation,
   type AnimationClipSnapshot,
   type AnimationSnapshot,
+  type CameraAnimationTrackSnapshot,
+  type LightAnimationTrackSnapshot,
   type MeshMotionTrackSnapshot,
   type ShapeWeightTrackSnapshot,
   type AnimationTargetKind
@@ -41,7 +43,7 @@ import {
 } from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 6;
+const FORMAT_VERSION = 7;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -687,6 +689,155 @@ function validateCamerasManifest(value: unknown): CameraSnapshot[] {
   return cameras;
 }
 
+/** Check a finite three-component vector without allocating. */
+function isVec3(value: unknown): value is [number, number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every((component) => typeof component === 'number' && Number.isFinite(component))
+  );
+}
+
+/** Validate optional camera animation tracks. */
+function validateCameraAnimationTracks(
+  value: unknown,
+  trackIds: Set<string>
+): { tracks: CameraAnimationTrackSnapshot[]; keyCount: number; trackCount: number } {
+  if (value === undefined) {
+    return { tracks: [], keyCount: 0, trackCount: 0 };
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('The .lpoli camera animation is invalid.');
+  }
+  let keyCount = 0;
+  const tracks = value.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli camera animation track is invalid.');
+    }
+    const track = raw as Partial<CameraAnimationTrackSnapshot>;
+    if (
+      typeof track.id !== 'string' ||
+      track.id.length === 0 ||
+      trackIds.has(track.id) ||
+      typeof track.targetId !== 'string' ||
+      track.targetId.length === 0 ||
+      !Array.isArray(track.keyframes)
+    ) {
+      throw new Error('The .lpoli camera track metadata is invalid.');
+    }
+    const seenFrames = new Set<number>();
+    const keyframes = track.keyframes
+      .map((key) => {
+        if (typeof key !== 'object' || key === null) {
+          throw new Error('The .lpoli camera keyframe is invalid.');
+        }
+        const item = key as {
+          frame?: unknown;
+          position?: unknown;
+          target?: unknown;
+          fov?: unknown;
+          interpolation?: unknown;
+        };
+        if (
+          !Number.isInteger(item.frame) ||
+          seenFrames.has(item.frame as number) ||
+          !isVec3(item.position) ||
+          !isVec3(item.target) ||
+          typeof item.fov !== 'number' ||
+          !Number.isFinite(item.fov) ||
+          item.fov < 5 ||
+          item.fov > 160 ||
+          (item.interpolation !== 'step' && item.interpolation !== 'linear')
+        ) {
+          throw new Error('The .lpoli camera keyframes are invalid.');
+        }
+        seenFrames.add(item.frame as number);
+        keyCount += 1;
+        return {
+          frame: item.frame as number,
+          position: [...item.position] as [number, number, number],
+          target: [...item.target] as [number, number, number],
+          fov: item.fov,
+          interpolation: item.interpolation as AnimationInterpolation
+        };
+      })
+      .sort((a, b) => a.frame - b.frame);
+    trackIds.add(track.id);
+    return { id: track.id, targetId: track.targetId, keyframes };
+  });
+  return { tracks, keyCount, trackCount: tracks.length };
+}
+
+/** Validate optional light animation tracks. */
+function validateLightAnimationTracks(
+  value: unknown,
+  trackIds: Set<string>
+): { tracks: LightAnimationTrackSnapshot[]; keyCount: number; trackCount: number } {
+  if (value === undefined) {
+    return { tracks: [], keyCount: 0, trackCount: 0 };
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('The .lpoli light animation is invalid.');
+  }
+  let keyCount = 0;
+  const tracks = value.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli light animation track is invalid.');
+    }
+    const track = raw as Partial<LightAnimationTrackSnapshot>;
+    if (
+      typeof track.id !== 'string' ||
+      track.id.length === 0 ||
+      trackIds.has(track.id) ||
+      typeof track.targetId !== 'string' ||
+      track.targetId.length === 0 ||
+      !Array.isArray(track.keyframes)
+    ) {
+      throw new Error('The .lpoli light track metadata is invalid.');
+    }
+    const seenFrames = new Set<number>();
+    const keyframes = track.keyframes
+      .map((key) => {
+        if (typeof key !== 'object' || key === null) {
+          throw new Error('The .lpoli light keyframe is invalid.');
+        }
+        const item = key as {
+          frame?: unknown;
+          position?: unknown;
+          direction?: unknown;
+          intensity?: unknown;
+          interpolation?: unknown;
+        };
+        if (
+          !Number.isInteger(item.frame) ||
+          seenFrames.has(item.frame as number) ||
+          !isVec3(item.position) ||
+          !isVec3(item.direction) ||
+          typeof item.intensity !== 'number' ||
+          !Number.isFinite(item.intensity) ||
+          item.intensity < 0 ||
+          item.intensity > 20 ||
+          (item.interpolation !== 'step' && item.interpolation !== 'linear')
+        ) {
+          throw new Error('The .lpoli light keyframes are invalid.');
+        }
+        seenFrames.add(item.frame as number);
+        keyCount += 1;
+        return {
+          frame: item.frame as number,
+          position: [...item.position] as [number, number, number],
+          direction: [...item.direction] as [number, number, number],
+          intensity: item.intensity,
+          interpolation: item.interpolation as AnimationInterpolation
+        };
+      })
+      .sort((a, b) => a.frame - b.frame);
+    trackIds.add(track.id);
+    return { id: track.id, targetId: track.targetId, keyframes };
+  });
+  return { tracks, keyCount, trackCount: tracks.length };
+}
+
 /** Validate optional Mesh Motion tracks and their stable vertex sets. */
 function validateMeshMotionTracks(
   value: unknown,
@@ -855,8 +1006,10 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       weightTrackIds.add(track.id);
     }
     const motion = validateMeshMotionTracks(clip.meshTracks, trackIds);
-    totalTracks += motion.trackCount;
-    totalKeys += motion.keyCount;
+    const cameras = validateCameraAnimationTracks(clip.cameraTracks, trackIds);
+    const lights = validateLightAnimationTracks(clip.lightTracks, trackIds);
+    totalTracks += motion.trackCount + cameras.trackCount + lights.trackCount;
+    totalKeys += motion.keyCount + cameras.keyCount + lights.keyCount;
     return {
       id: clip.id,
       name: clip.name,
@@ -864,7 +1017,9 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       endFrame: validated.endFrame as number,
       tracks: clipTracks,
       weightTracks: validated.weightTracks ?? [],
-      meshTracks: motion.tracks
+      meshTracks: motion.tracks,
+      cameraTracks: cameras.tracks,
+      lightTracks: lights.tracks
     };
   });
   if (

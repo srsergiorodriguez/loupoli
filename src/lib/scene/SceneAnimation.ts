@@ -1,3 +1,4 @@
+import type { Vec3 } from '../geometry/HalfEdgeMesh';
 import type { NodeTransform } from './MeshNode';
 
 /** Documents that can carry transform animation. */
@@ -52,6 +53,52 @@ export interface MeshMotionTrackSnapshot {
   readonly keyframes: readonly MeshMotionKeyframeSnapshot[];
 }
 
+/** One camera pose used by animation. */
+export interface CameraPose {
+  readonly position: Vec3;
+  readonly target: Vec3;
+  readonly fov: number;
+}
+
+/** One keyed camera pose. */
+export interface CameraAnimationKeyframeSnapshot {
+  readonly frame: number;
+  readonly position: Vec3;
+  readonly target: Vec3;
+  readonly fov: number;
+  readonly interpolation: AnimationInterpolation;
+}
+
+/** One camera animation track. */
+export interface CameraAnimationTrackSnapshot {
+  readonly id: string;
+  readonly targetId: string;
+  readonly keyframes: readonly CameraAnimationKeyframeSnapshot[];
+}
+
+/** One light pose used by animation. */
+export interface LightPose {
+  readonly position: Vec3;
+  readonly direction: Vec3;
+  readonly intensity: number;
+}
+
+/** One keyed light pose. */
+export interface LightAnimationKeyframeSnapshot {
+  readonly frame: number;
+  readonly position: Vec3;
+  readonly direction: Vec3;
+  readonly intensity: number;
+  readonly interpolation: AnimationInterpolation;
+}
+
+/** One light animation track. */
+export interface LightAnimationTrackSnapshot {
+  readonly id: string;
+  readonly targetId: string;
+  readonly keyframes: readonly LightAnimationKeyframeSnapshot[];
+}
+
 /** One independently named animation clip. */
 export interface AnimationClipSnapshot {
   readonly id: string;
@@ -61,6 +108,8 @@ export interface AnimationClipSnapshot {
   readonly tracks: readonly AnimationTrackSnapshot[];
   readonly weightTracks?: readonly ShapeWeightTrackSnapshot[];
   readonly meshTracks?: readonly MeshMotionTrackSnapshot[];
+  readonly cameraTracks?: readonly CameraAnimationTrackSnapshot[];
+  readonly lightTracks?: readonly LightAnimationTrackSnapshot[];
 }
 
 /**
@@ -83,6 +132,8 @@ let nextTrackNumber = 1;
 let nextWeightTrackNumber = 1;
 let nextClipNumber = 1;
 let nextMeshTrackNumber = 1;
+let nextCameraTrackNumber = 1;
+let nextLightTrackNumber = 1;
 
 /** Create a stable animation track id. */
 export function createAnimationTrackId(): string {
@@ -102,6 +153,20 @@ export function createShapeWeightTrackId(): string {
 export function createAnimationClipId(): string {
   const id = `clip-${nextClipNumber}`;
   nextClipNumber += 1;
+  return id;
+}
+
+/** Create a stable camera animation track id. */
+export function createCameraAnimationTrackId(): string {
+  const id = `camera-track-${nextCameraTrackNumber}`;
+  nextCameraTrackNumber += 1;
+  return id;
+}
+
+/** Create a stable light animation track id. */
+export function createLightAnimationTrackId(): string {
+  const id = `light-track-${nextLightTrackNumber}`;
+  nextLightTrackNumber += 1;
   return id;
 }
 
@@ -593,6 +658,265 @@ export class MeshMotionTrack {
   }
 }
 
+function lerpNumber(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function lerpVec3(a: Vec3, b: Vec3, t: number): Vec3 {
+  return [
+    lerpNumber(a[0], b[0], t),
+    lerpNumber(a[1], b[1], t),
+    lerpNumber(a[2], b[2], t)
+  ];
+}
+
+function normalizeDirection(value: Vec3): Vec3 {
+  const length = Math.hypot(value[0], value[1], value[2]);
+  return length > 1e-8
+    ? [value[0] / length, value[1] / length, value[2] / length]
+    : [0, 0, -1];
+}
+
+/** One camera's keyed position, target, and field of view. */
+export class CameraAnimationTrack {
+  readonly id: string;
+  readonly targetId: string;
+  private frames: CameraAnimationKeyframeSnapshot[] = [];
+
+  constructor(targetId: string, id = createCameraAnimationTrackId()) {
+    this.targetId = targetId;
+    this.id = id;
+  }
+
+  /** Restore a camera track from serialized data. */
+  static fromSnapshot(
+    snapshot: CameraAnimationTrackSnapshot
+  ): CameraAnimationTrack {
+    const track = new CameraAnimationTrack(snapshot.targetId, snapshot.id);
+    track.frames = snapshot.keyframes
+      .map((key) => ({
+        frame: key.frame,
+        position: [...key.position] as Vec3,
+        target: [...key.target] as Vec3,
+        fov: key.fov,
+        interpolation: key.interpolation
+      }))
+      .sort((a, b) => a.frame - b.frame);
+    return track;
+  }
+
+  /** Ordered read-only keys. */
+  get keyframes(): readonly CameraAnimationKeyframeSnapshot[] {
+    return this.frames;
+  }
+
+  /** Add or replace a camera key. */
+  setKey(
+    frame: number,
+    pose: CameraPose,
+    interpolation: AnimationInterpolation = 'linear'
+  ): void {
+    const key: CameraAnimationKeyframeSnapshot = {
+      frame: Math.round(frame),
+      position: [...pose.position] as Vec3,
+      target: [...pose.target] as Vec3,
+      fov: pose.fov,
+      interpolation
+    };
+    const existing = this.frames.findIndex((item) => item.frame === key.frame);
+    if (existing >= 0) {
+      this.frames[existing] = key;
+    } else {
+      this.frames.push(key);
+      this.frames.sort((a, b) => a.frame - b.frame);
+    }
+  }
+
+  removeKey(frame: number): void {
+    this.frames = this.frames.filter((key) => key.frame !== frame);
+  }
+
+  setInterpolation(
+    frame: number,
+    interpolation: AnimationInterpolation
+  ): boolean {
+    const key = this.frames.find((item) => item.frame === frame);
+    if (!key) {
+      return false;
+    }
+    const mutable = key as { interpolation: AnimationInterpolation };
+    mutable.interpolation = interpolation;
+    return true;
+  }
+
+  /** Evaluate the camera pose at a frame. */
+  evaluate(frame: number): CameraPose | null {
+    if (this.frames.length === 0) {
+      return null;
+    }
+    const clone = (key: CameraAnimationKeyframeSnapshot): CameraPose => ({
+      position: [...key.position] as Vec3,
+      target: [...key.target] as Vec3,
+      fov: key.fov
+    });
+    if (frame <= this.frames[0].frame) {
+      return clone(this.frames[0]);
+    }
+    const last = this.frames[this.frames.length - 1];
+    if (frame >= last.frame) {
+      return clone(last);
+    }
+    for (let index = 0; index < this.frames.length - 1; index += 1) {
+      const a = this.frames[index];
+      const b = this.frames[index + 1];
+      if (frame >= a.frame && frame <= b.frame) {
+        if (a.interpolation === 'step' || b.frame === a.frame) {
+          return clone(a);
+        }
+        const t = (frame - a.frame) / (b.frame - a.frame);
+        return {
+          position: lerpVec3(a.position, b.position, t),
+          target: lerpVec3(a.target, b.target, t),
+          fov: lerpNumber(a.fov, b.fov, t)
+        };
+      }
+    }
+    return clone(last);
+  }
+
+  snapshot(): CameraAnimationTrackSnapshot {
+    return {
+      id: this.id,
+      targetId: this.targetId,
+      keyframes: this.frames.map((key) => ({
+        frame: key.frame,
+        position: [...key.position] as Vec3,
+        target: [...key.target] as Vec3,
+        fov: key.fov,
+        interpolation: key.interpolation
+      }))
+    };
+  }
+}
+
+/** One light's keyed position, direction, and intensity. */
+export class LightAnimationTrack {
+  readonly id: string;
+  readonly targetId: string;
+  private frames: LightAnimationKeyframeSnapshot[] = [];
+
+  constructor(targetId: string, id = createLightAnimationTrackId()) {
+    this.targetId = targetId;
+    this.id = id;
+  }
+
+  static fromSnapshot(
+    snapshot: LightAnimationTrackSnapshot
+  ): LightAnimationTrack {
+    const track = new LightAnimationTrack(snapshot.targetId, snapshot.id);
+    track.frames = snapshot.keyframes
+      .map((key) => ({
+        frame: key.frame,
+        position: [...key.position] as Vec3,
+        direction: normalizeDirection(key.direction),
+        intensity: Math.max(0, key.intensity),
+        interpolation: key.interpolation
+      }))
+      .sort((a, b) => a.frame - b.frame);
+    return track;
+  }
+
+  get keyframes(): readonly LightAnimationKeyframeSnapshot[] {
+    return this.frames;
+  }
+
+  setKey(
+    frame: number,
+    pose: LightPose,
+    interpolation: AnimationInterpolation = 'linear'
+  ): void {
+    const key: LightAnimationKeyframeSnapshot = {
+      frame: Math.round(frame),
+      position: [...pose.position] as Vec3,
+      direction: normalizeDirection(pose.direction),
+      intensity: Math.max(0, pose.intensity),
+      interpolation
+    };
+    const existing = this.frames.findIndex((item) => item.frame === key.frame);
+    if (existing >= 0) {
+      this.frames[existing] = key;
+    } else {
+      this.frames.push(key);
+      this.frames.sort((a, b) => a.frame - b.frame);
+    }
+  }
+
+  removeKey(frame: number): void {
+    this.frames = this.frames.filter((key) => key.frame !== frame);
+  }
+
+  setInterpolation(
+    frame: number,
+    interpolation: AnimationInterpolation
+  ): boolean {
+    const key = this.frames.find((item) => item.frame === frame);
+    if (!key) {
+      return false;
+    }
+    (key as { interpolation: AnimationInterpolation }).interpolation =
+      interpolation;
+    return true;
+  }
+
+  evaluate(frame: number): LightPose | null {
+    if (this.frames.length === 0) {
+      return null;
+    }
+    const clone = (key: LightAnimationKeyframeSnapshot): LightPose => ({
+      position: [...key.position] as Vec3,
+      direction: [...key.direction] as Vec3,
+      intensity: key.intensity
+    });
+    if (frame <= this.frames[0].frame) {
+      return clone(this.frames[0]);
+    }
+    const last = this.frames[this.frames.length - 1];
+    if (frame >= last.frame) {
+      return clone(last);
+    }
+    for (let index = 0; index < this.frames.length - 1; index += 1) {
+      const a = this.frames[index];
+      const b = this.frames[index + 1];
+      if (frame >= a.frame && frame <= b.frame) {
+        if (a.interpolation === 'step' || b.frame === a.frame) {
+          return clone(a);
+        }
+        const t = (frame - a.frame) / (b.frame - a.frame);
+        return {
+          position: lerpVec3(a.position, b.position, t),
+          direction: normalizeDirection(lerpVec3(a.direction, b.direction, t)),
+          intensity: lerpNumber(a.intensity, b.intensity, t)
+        };
+      }
+    }
+    return clone(last);
+  }
+
+  snapshot(): LightAnimationTrackSnapshot {
+    return {
+      id: this.id,
+      targetId: this.targetId,
+      keyframes: this.frames.map((key) => ({
+        frame: key.frame,
+        position: [...key.position] as Vec3,
+        direction: [...key.direction] as Vec3,
+        intensity: key.intensity,
+        interpolation: key.interpolation
+      }))
+    };
+  }
+}
+
 /** One named animation clip containing transform and shape-weight tracks. */
 export class AnimationClip {
   readonly id: string;
@@ -602,6 +926,8 @@ export class AnimationClip {
   readonly tracks: AnimationTrack[] = [];
   readonly weightTracks: ShapeWeightTrack[] = [];
   readonly meshTracks: MeshMotionTrack[] = [];
+  readonly cameraTracks: CameraAnimationTrack[] = [];
+  readonly lightTracks: LightAnimationTrack[] = [];
 
   constructor(
     name = 'Animation 1',
@@ -629,6 +955,12 @@ export class AnimationClip {
     );
     clip.meshTracks.push(
       ...(snapshot.meshTracks ?? []).map(MeshMotionTrack.fromSnapshot)
+    );
+    clip.cameraTracks.push(
+      ...(snapshot.cameraTracks ?? []).map(CameraAnimationTrack.fromSnapshot)
+    );
+    clip.lightTracks.push(
+      ...(snapshot.lightTracks ?? []).map(LightAnimationTrack.fromSnapshot)
     );
     return clip;
   }
@@ -715,6 +1047,58 @@ export class AnimationClip {
     }
   }
 
+  /** Find one camera track. */
+  getCameraTrack(targetId: string): CameraAnimationTrack | null {
+    return (
+      this.cameraTracks.find((track) => track.targetId === targetId) ?? null
+    );
+  }
+
+  /** Find or create one camera track. */
+  ensureCameraTrack(targetId: string): CameraAnimationTrack {
+    const existing = this.getCameraTrack(targetId);
+    if (existing) {
+      return existing;
+    }
+    const track = new CameraAnimationTrack(targetId);
+    this.cameraTracks.push(track);
+    return track;
+  }
+
+  removeCameraTrack(targetId: string): void {
+    const index = this.cameraTracks.findIndex(
+      (track) => track.targetId === targetId
+    );
+    if (index >= 0) {
+      this.cameraTracks.splice(index, 1);
+    }
+  }
+
+  /** Find one light track. */
+  getLightTrack(targetId: string): LightAnimationTrack | null {
+    return this.lightTracks.find((track) => track.targetId === targetId) ?? null;
+  }
+
+  /** Find or create one light track. */
+  ensureLightTrack(targetId: string): LightAnimationTrack {
+    const existing = this.getLightTrack(targetId);
+    if (existing) {
+      return existing;
+    }
+    const track = new LightAnimationTrack(targetId);
+    this.lightTracks.push(track);
+    return track;
+  }
+
+  removeLightTrack(targetId: string): void {
+    const index = this.lightTracks.findIndex(
+      (track) => track.targetId === targetId
+    );
+    if (index >= 0) {
+      this.lightTracks.splice(index, 1);
+    }
+  }
+
   /** Remove a transform track by target id. */
   removeTrack(targetId: string): void {
     const index = this.tracks.findIndex((track) => track.targetId === targetId);
@@ -732,7 +1116,9 @@ export class AnimationClip {
       endFrame: this.endFrame,
       tracks: this.tracks.map((track) => track.snapshot()),
       weightTracks: this.weightTracks.map((track) => track.snapshot()),
-      meshTracks: this.meshTracks.map((track) => track.snapshot())
+      meshTracks: this.meshTracks.map((track) => track.snapshot()),
+      cameraTracks: this.cameraTracks.map((track) => track.snapshot()),
+      lightTracks: this.lightTracks.map((track) => track.snapshot())
     };
   }
 }
@@ -763,6 +1149,14 @@ export function estimateAnimationSnapshotBytes(
               (keyBytes, key) => keyBytes + 64 + key.values.length * 8,
               0
             ),
+          0
+        ) +
+        (clip.cameraTracks ?? []).reduce(
+          (sum, track) => sum + 96 + track.keyframes.length * 96,
+          0
+        ) +
+        (clip.lightTracks ?? []).reduce(
+          (sum, track) => sum + 96 + track.keyframes.length * 96,
           0
         ),
       64
@@ -888,6 +1282,24 @@ export class SceneAnimation {
         })
       )
     );
+    const cameraTracks = copy.cameraTracks.splice(0);
+    copy.cameraTracks.push(
+      ...cameraTracks.map((track) =>
+        CameraAnimationTrack.fromSnapshot({
+          ...track.snapshot(),
+          id: createCameraAnimationTrackId()
+        })
+      )
+    );
+    const lightTracks = copy.lightTracks.splice(0);
+    copy.lightTracks.push(
+      ...lightTracks.map((track) =>
+        LightAnimationTrack.fromSnapshot({
+          ...track.snapshot(),
+          id: createLightAnimationTrackId()
+        })
+      )
+    );
     this.clips.push(copy);
     this.activeClipId = copy.id;
     return copy;
@@ -937,6 +1349,14 @@ export class SceneAnimation {
         clip.meshTracks.reduce(
           (count, track) => count + track.keyframes.length,
           0
+        ) +
+        clip.cameraTracks.reduce(
+          (count, track) => count + track.keyframes.length,
+          0
+        ) +
+        clip.lightTracks.reduce(
+          (count, track) => count + track.keyframes.length,
+          0
         ),
       0
     );
@@ -965,6 +1385,16 @@ export class SceneAnimation {
   /** Proxy: active clip mesh-motion tracks. */
   get meshTracks(): readonly MeshMotionTrack[] {
     return this.activeClip.meshTracks;
+  }
+
+  /** Proxy: active clip camera tracks. */
+  get cameraTracks(): readonly CameraAnimationTrack[] {
+    return this.activeClip.cameraTracks;
+  }
+
+  /** Proxy: active clip light tracks. */
+  get lightTracks(): readonly LightAnimationTrack[] {
+    return this.activeClip.lightTracks;
   }
 
   getTrack(targetId: string): AnimationTrack | null {
@@ -1004,6 +1434,30 @@ export class SceneAnimation {
 
   removeMeshTrack(targetId: string): void {
     this.activeClip.removeMeshTrack(targetId);
+  }
+
+  getCameraTrack(targetId: string): CameraAnimationTrack | null {
+    return this.activeClip.getCameraTrack(targetId);
+  }
+
+  ensureCameraTrack(targetId: string): CameraAnimationTrack {
+    return this.activeClip.ensureCameraTrack(targetId);
+  }
+
+  removeCameraTrack(targetId: string): void {
+    this.activeClip.removeCameraTrack(targetId);
+  }
+
+  getLightTrack(targetId: string): LightAnimationTrack | null {
+    return this.activeClip.getLightTrack(targetId);
+  }
+
+  ensureLightTrack(targetId: string): LightAnimationTrack {
+    return this.activeClip.ensureLightTrack(targetId);
+  }
+
+  removeLightTrack(targetId: string): void {
+    this.activeClip.removeLightTrack(targetId);
   }
 
   replaceTracks(tracks: readonly AnimationTrack[]): void {

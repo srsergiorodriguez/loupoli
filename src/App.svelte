@@ -247,7 +247,9 @@
         <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />
-      {#if session.snapshot.workspace === 'animation'}
+      {#if session.snapshot.workspace === 'animation' ||
+        session.snapshot.workspace === 'render' ||
+        session.snapshot.workspace === 'light'}
         <AnimationTimeline {session} />
       {/if}
     {:else}

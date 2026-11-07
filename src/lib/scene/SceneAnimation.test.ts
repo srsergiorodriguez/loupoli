@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SceneAnimation } from './SceneAnimation';
+import { AnimationClip, SceneAnimation } from './SceneAnimation';
 import type { NodeTransform } from './MeshNode';
 
 function transform(x: number): NodeTransform {
@@ -114,4 +114,35 @@ describe('SceneAnimation', () => {
     expect(legacy.fps).toBe(30);
     expect(legacy.getTrack('group-1')?.keyframes).toHaveLength(1);
     expect(SceneAnimation.fromSnapshot(legacy.snapshot()).clips).toHaveLength(1);
+  });
+
+  it('evaluates and snapshots camera and light animation tracks', () => {
+    const clip = new AnimationClip('Shot', 'clip-shot');
+    const camera = clip.ensureCameraTrack('camera-1');
+    camera.setKey(0, { position: [0, 0, 4], target: [0, 0, 0], fov: 40 });
+    camera.setKey(10, { position: [10, 0, 4], target: [10, 0, 0], fov: 60 });
+    expect(camera.evaluate(5)?.position).toEqual([5, 0, 4]);
+    expect(camera.evaluate(5)?.fov).toBe(50);
+    camera.setInterpolation(0, 'step');
+    expect(camera.evaluate(5)?.position).toEqual([0, 0, 4]);
+
+    const light = clip.ensureLightTrack('light-1');
+    light.setKey(0, {
+      position: [0, 0, 4],
+      direction: [0, 0, -1],
+      intensity: 1
+    });
+    light.setKey(10, {
+      position: [10, 0, 4],
+      direction: [0, 0, -1],
+      intensity: 5
+    });
+    expect(light.evaluate(5)?.position).toEqual([5, 0, 4]);
+    expect(light.evaluate(5)?.intensity).toBe(3);
+
+    const restored = AnimationClip.fromSnapshot(clip.snapshot());
+    expect(restored.cameraTracks).toHaveLength(1);
+    expect(restored.lightTracks).toHaveLength(1);
+    expect(restored.getCameraTrack('camera-1')?.evaluate(5)?.fov).toBe(40);
+    expect(restored.getLightTrack('light-1')?.evaluate(5)?.intensity).toBe(3);
   });

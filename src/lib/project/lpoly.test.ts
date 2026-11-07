@@ -252,7 +252,7 @@ describe('.lpoli', () => {
 
     const bytes = encodeLpoly(document, SETTINGS);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    expect(view.getUint16(8, true)).toBe(6);
+    expect(view.getUint16(8, true)).toBe(7);
     const decoded = decodeLpoly(bytes).document.animation;
     expect(decoded.clips.map((clip) => clip.name)).toEqual(['Idle', 'Walk']);
     expect(decoded.activeClipId).toBe(second.id);
@@ -286,6 +286,52 @@ describe('.lpoli', () => {
     expect(mid?.[0]).toBeCloseTo(0.5);
     expect(mid?.[4]).toBeCloseTo(0.75);
     expect(restored?.keyframes[1].interpolation).toBe('linear');
+  });
+
+  it('round-trips camera and light animation tracks', () => {
+    const document = makeDocument();
+    const camera = document.cameras[0];
+    const light = document.lights[0];
+    const cameraTrack = document.animation.ensureCameraTrack(camera.id);
+    cameraTrack.setKey(0, {
+      position: camera.position,
+      target: camera.target,
+      fov: camera.fov
+    });
+    cameraTrack.setKey(12, {
+      position: [8, -8, 6],
+      target: [0, 0, 0],
+      fov: 60
+    });
+    const lightTrack = document.animation.ensureLightTrack(light.id);
+    lightTrack.setKey(0, {
+      position: light.position,
+      direction: light.direction,
+      intensity: light.intensity
+    });
+    lightTrack.setKey(12, {
+      position: [4, 4, 8],
+      direction: [0, 0, -1],
+      intensity: 5
+    });
+
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS)).document.animation;
+    const restoredCamera = decoded.getCameraTrack(camera.id);
+    const cameraMid = restoredCamera?.evaluate(6);
+    expect(cameraMid?.position).toEqual([
+      (camera.position[0] + 8) / 2,
+      (camera.position[1] - 8) / 2,
+      (camera.position[2] + 6) / 2
+    ]);
+    expect(cameraMid?.fov).toBeCloseTo((camera.fov + 60) / 2);
+    const restoredLight = decoded.getLightTrack(light.id);
+    const lightMid = restoredLight?.evaluate(6);
+    expect(lightMid?.intensity).toBeCloseTo((light.intensity + 5) / 2);
+    expect(lightMid?.position).toEqual([
+      (light.position[0] + 4) / 2,
+      (light.position[1] + 4) / 2,
+      (light.position[2] + 8) / 2
+    ]);
   });
 
   it('round-trips shape-weight animation tracks', () => {

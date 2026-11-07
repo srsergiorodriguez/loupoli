@@ -190,9 +190,9 @@ export interface AnimationClipSummary {
 /** Reactive-safe animation track projection. */
 export interface AnimationTrackSummary {
   readonly id: string;
-  readonly kind: 'transform' | 'shape' | 'mesh';
+  readonly kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light';
   readonly targetId: string;
-  readonly targetKind: AnimationTargetKind;
+  readonly targetKind: AnimationTargetKind | 'camera' | 'light';
   readonly targetName: string;
   readonly shapeKeyId?: string;
   readonly hasTrack: boolean;

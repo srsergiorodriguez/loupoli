@@ -194,12 +194,14 @@ import {
   type AmbientLightSnapshot
 } from './commands/LightCommands';
 import type { LightKind, LightSnapshot } from '../scene/SceneLight';
-import type { SceneCamera } from '../scene/SceneCamera';
+import type { CameraSnapshot, SceneCamera } from '../scene/SceneCamera';
 import type {
   AnimationInterpolation,
   AnimationSnapshot,
   AnimationTargetKind,
-  AnimationTrack
+  AnimationTrack,
+  CameraPose,
+  LightPose
 } from '../scene/SceneAnimation';
 import { fitRect, upscaleRenderImage, canvasToPng } from '../render/renderImage';
 import {
@@ -279,6 +281,7 @@ interface CameraDrag {
   readonly pointerId: number;
   readonly camera: SceneCamera;
   readonly before: import('../scene/SceneCamera').CameraSnapshot;
+  readonly baseBefore: import('../scene/SceneCamera').CameraSnapshot;
   readonly plane: import('three').Plane;
   readonly offset: Vector3;
 }
@@ -288,6 +291,7 @@ interface CameraTargetDrag {
   readonly pointerId: number;
   readonly camera: SceneCamera;
   readonly before: import('../scene/SceneCamera').CameraSnapshot;
+  readonly baseBefore: import('../scene/SceneCamera').CameraSnapshot;
   readonly plane: import('three').Plane;
 }
 
@@ -304,6 +308,7 @@ interface LightDrag {
   readonly pointerId: number;
   readonly light: SceneLight;
   readonly before: LightSnapshot;
+  readonly baseBefore: LightSnapshot;
   readonly plane: import('three').Plane;
   readonly offset: Vector3;
 }
@@ -313,6 +318,7 @@ interface LightDirectionDrag {
   readonly pointerId: number;
   readonly light: SceneLight;
   readonly before: LightSnapshot;
+  readonly baseBefore: LightSnapshot;
   readonly plane: import('three').Plane;
 }
 
@@ -631,6 +637,8 @@ export class EditorRuntime {
   private animationLoop = true;
   private animationInterpolation: AnimationInterpolation = 'linear';
   private animationPose = new Map<string, NodeTransform>();
+  private animationCameraPose = new Map<string, CameraPose>();
+  private animationLightPose = new Map<string, LightPose>();
   private animationKeyClipboard: AnimationKeyClipboardEntry[] = [];
   private animationRaf = 0;
   private animationClockStart = 0;
@@ -898,9 +906,9 @@ export class EditorRuntime {
       activeNodeId: this.activeNodeId,
       activeGroupId: this.activeGroupId,
       activeLightId: this.activeLightId,
-      lights: this.document.lightSummaries(),
+      lights: this.posedLightSummaries(),
       activeCameraId: this.activeCameraId,
-      cameras: this.document.cameraSummaries(),
+      cameras: this.posedCameraSummaries(),
       ambientColor: this.document.ambientColor,
       ambientIntensity: this.document.ambientIntensity,
       groups: this.document.groupSummaries(),
@@ -944,7 +952,11 @@ export class EditorRuntime {
         startFrame: clip.startFrame,
         endFrame: clip.endFrame,
         trackCount:
-          clip.tracks.length + clip.weightTracks.length + clip.meshTracks.length
+          clip.tracks.length +
+          clip.weightTracks.length +
+          clip.meshTracks.length +
+          clip.cameraTracks.length +
+          clip.lightTracks.length
       })),
       animationClipboardCount: this.animationKeyClipboard.length,
       meshPoseEditing: this.meshPoseEdit !== null,
@@ -1544,6 +1556,9 @@ export class EditorRuntime {
     if (this.meshPoseEdit) {
       this.cancelMeshPoseEdit();
     }
+    if (workspace === 'uv' || workspace === 'paint') {
+      this.clearAnimationPose();
+    }
     if (workspace !== 'paint') {
       this.cancelProjectionPaint();
       this.surfaceCursor = null;
@@ -1597,9 +1612,13 @@ export class EditorRuntime {
           this.renderer.frameCameraView(camera.position, camera.target);
         }
       }
-      if (workspace === 'animation') {
+      if (
+        workspace === 'animation' ||
+        workspace === 'render' ||
+        workspace === 'light'
+      ) {
         this.applyAnimationPose();
-      } else if (workspace !== 'render') {
+      } else {
         this.clearAnimationPose();
       }
       this.publish();
@@ -4084,9 +4103,9 @@ export class EditorRuntime {
     }
     this.activeCameraId = id;
     if (this.workspace === 'render' && this.renderCameraView) {
-      const camera = this.getActiveCamera();
-      if (camera) {
-        this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+      const view = this.activeCameraRenderPose();
+      if (view) {
+        this.renderer.setCameraView(view.position, view.target, view.fov);
       }
     }
     this.publish();
@@ -4118,7 +4137,10 @@ export class EditorRuntime {
       return;
     }
     this.renderCameraView = true;
-    this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+    const view = this.activeCameraRenderPose();
+    if (view) {
+      this.renderer.setCameraView(view.position, view.target, view.fov);
+    }
     this.syncScene();
     this.publish();
   }
@@ -4129,7 +4151,10 @@ export class EditorRuntime {
       return;
     }
     this.renderCameraView = false;
-    this.renderer.frameCameraView(camera.position, camera.target);
+    const view = this.activeCameraRenderPose();
+    if (view) {
+      this.renderer.frameCameraView(view.position, view.target);
+    }
     this.syncScene();
     this.publish();
   }
@@ -4158,6 +4183,84 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Auto-key camera pose fields while a camera track exists in Render. */
+  private autoKeyCameraPose(
+    camera: SceneCamera,
+    pose: CameraPose,
+    base: CameraSnapshot
+  ): boolean {
+    if (this.workspace !== 'render') {
+      return false;
+    }
+    const track = this.document.animation.getCameraTrack(camera.id);
+    if (!track) {
+      return false;
+    }
+    const animation = this.document.animation;
+    const beforeAnimation = animation.snapshot();
+    track.setKey(
+      Math.round(this.animationFrame),
+      pose,
+      this.animationInterpolation
+    );
+    camera.apply(base);
+    const afterAnimation = animation.snapshot();
+    if (JSON.stringify(beforeAnimation) !== JSON.stringify(afterAnimation)) {
+      this.history.execute(
+        new SetAnimationCommand(
+          animation,
+          beforeAnimation,
+          afterAnimation,
+          'Key camera'
+        )
+      );
+      this.applyAnimationPose();
+    } else {
+      this.syncScene();
+      this.publish();
+    }
+    return true;
+  }
+
+  /** Auto-key light pose fields while a light track exists in Light. */
+  private autoKeyLightPose(
+    light: SceneLight,
+    pose: LightPose,
+    base: LightSnapshot
+  ): boolean {
+    if (this.workspace !== 'light') {
+      return false;
+    }
+    const track = this.document.animation.getLightTrack(light.id);
+    if (!track) {
+      return false;
+    }
+    const animation = this.document.animation;
+    const beforeAnimation = animation.snapshot();
+    track.setKey(
+      Math.round(this.animationFrame),
+      pose,
+      this.animationInterpolation
+    );
+    light.apply(base);
+    const afterAnimation = animation.snapshot();
+    if (JSON.stringify(beforeAnimation) !== JSON.stringify(afterAnimation)) {
+      this.history.execute(
+        new SetAnimationCommand(
+          animation,
+          beforeAnimation,
+          afterAnimation,
+          'Key light'
+        )
+      );
+      this.applyAnimationPose();
+    } else {
+      this.syncScene();
+      this.publish();
+    }
+    return true;
+  }
+
   /** Edit one camera as a single undoable command. */
   updateCamera(
     id: string,
@@ -4168,23 +4271,63 @@ export class EditorRuntime {
       return;
     }
     const before = camera.snapshot();
-    const after = {
-      ...before,
-      ...(patch.name !== undefined ? { name: patch.name.trim().slice(0, 64) } : {}),
+    let baseBefore = before;
+    const posed =
+      this.animationCameraPose.get(camera.id) ?? {
+        position: [...before.position] as [number, number, number],
+        target: [...before.target] as [number, number, number],
+        fov: before.fov
+      };
+    if (patch.name !== undefined && patch.name.trim().slice(0, 64) !== before.name) {
+      const named = { ...before, name: patch.name.trim().slice(0, 64) };
+      this.history.execute(new UpdateCameraCommand(camera, before, named));
+      baseBefore = camera.snapshot();
+    }
+    if (
+      patch.position !== undefined ||
+      patch.target !== undefined ||
+      patch.fov !== undefined
+    ) {
+      const nextPose: CameraPose = {
+        position:
+          patch.position !== undefined
+            ? ([...patch.position] as [number, number, number])
+            : posed.position,
+        target:
+          patch.target !== undefined
+            ? ([...patch.target] as [number, number, number])
+            : posed.target,
+        fov:
+          patch.fov !== undefined
+            ? Math.max(5, Math.min(160, patch.fov))
+            : posed.fov
+      };
+      if (
+        this.autoKeyCameraPose(camera, nextPose, baseBefore)
+      ) {
+        return;
+      }
+    }
+    const baseAfter = {
+      ...baseBefore,
       ...(patch.position !== undefined ? { position: [...patch.position] as [number, number, number] } : {}),
       ...(patch.target !== undefined ? { target: [...patch.target] as [number, number, number] } : {}),
       ...(patch.fov !== undefined ? { fov: Math.max(5, Math.min(160, patch.fov)) } : {})
     };
-    if (JSON.stringify(before) === JSON.stringify(after)) {
+    if (JSON.stringify(baseBefore) === JSON.stringify(baseAfter)) {
+      this.publish();
       return;
     }
-    this.history.execute(new UpdateCameraCommand(camera, before, after));
+    this.history.execute(new UpdateCameraCommand(camera, baseBefore, baseAfter));
     if (
       this.workspace === 'render' &&
       this.renderCameraView &&
       this.activeCameraId === id
     ) {
-      this.renderer.setCameraView(camera.position, camera.target, camera.fov);
+      const view = this.activeCameraRenderPose();
+      if (view) {
+        this.renderer.setCameraView(view.position, view.target, view.fov);
+      }
     }
     this.publish();
   }
@@ -4266,7 +4409,7 @@ export class EditorRuntime {
       this.renderEndFrame = Math.max(1, Math.round(patch.renderEndFrame));
     }
     this.renderer.setCameraGizmos(
-      this.document.cameraSummaries(),
+      this.posedCameraSummaries(),
       this.activeCameraId,
       this.workspace === 'render' && !this.renderCameraView,
       this.renderVirtualWidth / Math.max(1, this.renderVirtualHeight)
@@ -4280,7 +4423,8 @@ export class EditorRuntime {
       return;
     }
     const camera = this.getActiveCamera();
-    if (!camera) {
+    const view = this.activeCameraRenderPose();
+    if (!camera || !view) {
       this.projectError = 'Add a camera before rendering.';
       this.notify('warning', 'Render unavailable', 'Add a camera before rendering.');
       this.publish();
@@ -4294,11 +4438,7 @@ export class EditorRuntime {
         width: this.renderVirtualWidth,
         height: this.renderVirtualHeight,
         shading: this.renderShading,
-        camera: {
-          position: camera.position,
-          target: camera.target,
-          fov: camera.fov
-        },
+        camera: view,
         transparent: this.renderTransparent,
         backgroundColor: this.renderBackground
       });
@@ -4418,13 +4558,119 @@ export class EditorRuntime {
         }))
       };
     });
-    return [...transforms, ...weights, ...motions];
+    const cameras = this.document.animation.cameraTracks.map((track) => {
+      const camera = this.document.getCamera(track.targetId);
+      return {
+        id: track.id,
+        kind: 'camera' as const,
+        targetId: track.targetId,
+        targetKind: 'camera' as const,
+        targetName: `Camera · ${camera?.name ?? 'Missing camera'}`,
+        hasTrack: true,
+        keyframes: track.keyframes.map((item) => ({
+          frame: item.frame,
+          interpolation: item.interpolation
+        }))
+      };
+    });
+    const lights = this.document.animation.lightTracks.map((track) => {
+      const light = this.document.getLight(track.targetId);
+      return {
+        id: track.id,
+        kind: 'light' as const,
+        targetId: track.targetId,
+        targetKind: 'light' as const,
+        targetName: `Light · ${light?.name ?? 'Missing light'}`,
+        hasTrack: true,
+        keyframes: track.keyframes.map((item) => ({
+          frame: item.frame,
+          interpolation: item.interpolation
+        }))
+      };
+    });
+    const activeCamera = this.document.getCamera(this.activeCameraId);
+    if (
+      activeCamera &&
+      this.workspace === 'render' &&
+      !this.document.animation.getCameraTrack(activeCamera.id)
+    ) {
+      cameras.push({
+        id: `pending-camera:${activeCamera.id}`,
+        kind: 'camera' as const,
+        targetId: activeCamera.id,
+        targetKind: 'camera' as const,
+        targetName: `Camera · ${activeCamera.name}`,
+        hasTrack: false,
+        keyframes: []
+      });
+    }
+    const activeLight = this.document.getLight(this.activeLightId);
+    if (
+      activeLight &&
+      this.workspace === 'light' &&
+      !this.document.animation.getLightTrack(activeLight.id)
+    ) {
+      lights.push({
+        id: `pending-light:${activeLight.id}`,
+        kind: 'light' as const,
+        targetId: activeLight.id,
+        targetKind: 'light' as const,
+        targetName: `Light · ${activeLight.name}`,
+        hasTrack: false,
+        keyframes: []
+      });
+    }
+    return [...transforms, ...weights, ...motions, ...cameras, ...lights];
   }
 
   /** Return the animation track for the active node/group, if any. */
   getActiveAnimationTrack(): AnimationTrack | null {
     const target = this.getActiveGroup() ?? this.getActiveNode();
     return target ? this.document.animation.getTrack(target.id) : null;
+  }
+
+  /** Camera summaries with the active animation pose applied. */
+  private posedCameraSummaries(): import('../scene/SceneCamera').CameraSummary[] {
+    return this.document.cameraSummaries().map((camera) => {
+      const pose = this.animationCameraPose.get(camera.id);
+      return pose
+        ? {
+            ...camera,
+            position: [...pose.position] as [number, number, number],
+            target: [...pose.target] as [number, number, number],
+            fov: pose.fov
+          }
+        : camera;
+    });
+  }
+
+  /** Light summaries with the active animation pose applied. */
+  private posedLightSummaries(): import('../scene/SceneLight').LightSummary[] {
+    return this.document.lightSummaries().map((light) => {
+      const pose = this.animationLightPose.get(light.id);
+      return pose
+        ? {
+            ...light,
+            position: [...pose.position] as [number, number, number],
+            direction: [...pose.direction] as [number, number, number],
+            intensity: pose.intensity
+          }
+        : light;
+    });
+  }
+
+  /** Current camera pose used by render previews and stills. */
+  private activeCameraRenderPose(): CameraPose | null {
+    const camera = this.getActiveCamera();
+    if (!camera) {
+      return null;
+    }
+    const pose = this.animationCameraPose.get(camera.id);
+    return pose ?? {
+      position: [...camera.position] as [number, number, number],
+      target: [...camera.target] as [number, number, number],
+      fov: camera.fov
+    };
   }
 
   /** Keep topology replacement locked while any clip animates a node. */
@@ -4456,6 +4702,22 @@ export class EditorRuntime {
       }
     }
     this.animationPose = pose;
+    this.animationCameraPose.clear();
+    this.animationLightPose.clear();
+    for (const track of this.document.animation.cameraTracks) {
+      const camera = this.document.getCamera(track.targetId);
+      const cameraPose = track.evaluate(this.animationFrame);
+      if (camera && cameraPose) {
+        this.animationCameraPose.set(camera.id, cameraPose);
+      }
+    }
+    for (const track of this.document.animation.lightTracks) {
+      const light = this.document.getLight(track.targetId);
+      const lightPose = track.evaluate(this.animationFrame);
+      if (light && lightPose) {
+        this.animationLightPose.set(light.id, lightPose);
+      }
+    }
     for (const node of this.document.nodes) {
       node.setMotionDeltas(null);
     }
@@ -4497,6 +4759,12 @@ export class EditorRuntime {
       node.setShapeWeightOverrides(weightOverrides.get(node.id) ?? null);
     }
     this.syncScene();
+    if (this.renderCameraView) {
+      const view = this.activeCameraRenderPose();
+      if (view) {
+        this.renderer.setCameraView(view.position, view.target, view.fov);
+      }
+    }
     this.publish();
   }
 
@@ -4813,6 +5081,20 @@ export class EditorRuntime {
           interpolation: AnimationInterpolation;
           vertexIndices: readonly number[];
           values: readonly number[];
+        }
+      | {
+          kind: 'camera';
+          targetId: string;
+          frame: number;
+          interpolation: AnimationInterpolation;
+          pose: CameraPose;
+        }
+      | {
+          kind: 'light';
+          targetId: string;
+          frame: number;
+          interpolation: AnimationInterpolation;
+          pose: LightPose;
         };
     const planned: PlannedPaste[] = [];
     for (const entry of entries) {
@@ -4848,6 +5130,55 @@ export class EditorRuntime {
           interpolation: entry.interpolation,
           weight: entry.weight
         });
+        continue;
+      }
+      if (entry.kind === 'camera') {
+        const camera = this.document.getCamera(entry.targetId);
+        if (
+          !camera ||
+          !entry.cameraPosition ||
+          !entry.cameraTarget ||
+          entry.cameraFov === undefined
+        ) {
+          continue;
+        }
+        planned.push({
+          kind: 'camera',
+          targetId: camera.id,
+          frame,
+          interpolation: entry.interpolation,
+          pose: {
+            position: [...entry.cameraPosition] as [number, number, number],
+            target: [...entry.cameraTarget] as [number, number, number],
+            fov: entry.cameraFov
+          }
+        });
+        continue;
+      }
+      if (entry.kind === 'light') {
+        const light = this.document.getLight(entry.targetId);
+        if (
+          !light ||
+          !entry.lightPosition ||
+          !entry.lightDirection ||
+          entry.lightIntensity === undefined
+        ) {
+          continue;
+        }
+        planned.push({
+          kind: 'light',
+          targetId: light.id,
+          frame,
+          interpolation: entry.interpolation,
+          pose: {
+            position: [...entry.lightPosition] as [number, number, number],
+            direction: [...entry.lightDirection] as [number, number, number],
+            intensity: entry.lightIntensity
+          }
+        });
+        continue;
+      }
+      if (entry.targetKind !== 'node' && entry.targetKind !== 'group') {
         continue;
       }
       const target =
@@ -4898,6 +5229,14 @@ export class EditorRuntime {
         animation
           .ensureMeshTrack(node.id)
           .setDeltasKey(entry.frame, deltas, entry.interpolation);
+      } else if (entry.kind === 'camera') {
+        animation
+          .ensureCameraTrack(entry.targetId)
+          .setKey(entry.frame, entry.pose, entry.interpolation);
+      } else if (entry.kind === 'light') {
+        animation
+          .ensureLightTrack(entry.targetId)
+          .setKey(entry.frame, entry.pose, entry.interpolation);
       } else if (entry.kind === 'shape') {
         animation
           .ensureWeightTrack(entry.targetId, entry.shapeKeyId)
@@ -4933,6 +5272,8 @@ export class EditorRuntime {
     const transformFrames = new Map<string, Set<number>>();
     const shapeFrames = new Map<string, Set<number>>();
     const meshFrames = new Map<string, Set<number>>();
+    const cameraFrames = new Map<string, Set<number>>();
+    const lightFrames = new Map<string, Set<number>>();
     for (const reference of keys) {
       if (clip.tracks.some((track) => track.id === reference.trackId)) {
         let frames = transformFrames.get(reference.trackId);
@@ -4957,6 +5298,24 @@ export class EditorRuntime {
         if (!frames) {
           frames = new Set();
           meshFrames.set(reference.trackId, frames);
+        }
+        frames.add(reference.frame);
+      } else if (
+        clip.cameraTracks.some((track) => track.id === reference.trackId)
+      ) {
+        let frames = cameraFrames.get(reference.trackId);
+        if (!frames) {
+          frames = new Set();
+          cameraFrames.set(reference.trackId, frames);
+        }
+        frames.add(reference.frame);
+      } else if (
+        clip.lightTracks.some((track) => track.id === reference.trackId)
+      ) {
+        let frames = lightFrames.get(reference.trackId);
+        if (!frames) {
+          frames = new Set();
+          lightFrames.set(reference.trackId, frames);
         }
         frames.add(reference.frame);
       }
@@ -5009,6 +5368,38 @@ export class EditorRuntime {
         animation.removeMeshTrack(track.targetId);
       }
     }
+    for (const [trackId, frames] of cameraFrames) {
+      const track = clip.cameraTracks.find((item) => item.id === trackId);
+      if (!track) {
+        continue;
+      }
+      for (const frame of frames) {
+        const hadKey = track.keyframes.some((key) => key.frame === frame);
+        track.removeKey(frame);
+        if (hadKey) {
+          removed += 1;
+        }
+      }
+      if (track.keyframes.length === 0) {
+        animation.removeCameraTrack(track.targetId);
+      }
+    }
+    for (const [trackId, frames] of lightFrames) {
+      const track = clip.lightTracks.find((item) => item.id === trackId);
+      if (!track) {
+        continue;
+      }
+      for (const frame of frames) {
+        const hadKey = track.keyframes.some((key) => key.frame === frame);
+        track.removeKey(frame);
+        if (hadKey) {
+          removed += 1;
+        }
+      }
+      if (track.keyframes.length === 0) {
+        animation.removeLightTrack(track.targetId);
+      }
+    }
     if (removed === 0) {
       return 0;
     }
@@ -5039,8 +5430,8 @@ export class EditorRuntime {
   /** Add or update the key for one timeline track at the playhead. */
   keyAnimationTrack(
     targetId: string,
-    targetKind: import('../scene/SceneAnimation').AnimationTargetKind,
-    kind: 'transform' | 'shape' | 'mesh',
+    targetKind: import('../scene/SceneAnimation').AnimationTargetKind | 'camera' | 'light',
+    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
     shapeKeyId?: string
   ): void {
     if (this.meshPoseEdit) {
@@ -5049,7 +5440,35 @@ export class EditorRuntime {
     const keyFrame = Math.round(this.animationFrame);
     this.animationFrame = keyFrame;
     const before = this.document.animation.snapshot();
-    if (kind === 'mesh') {
+    if (kind === 'camera') {
+      const camera = this.document.getCamera(targetId);
+      if (!camera) {
+        return;
+      }
+      const pose =
+        this.animationCameraPose.get(camera.id) ?? {
+          position: [...camera.position] as [number, number, number],
+          target: [...camera.target] as [number, number, number],
+          fov: camera.fov
+        };
+      this.document.animation
+        .ensureCameraTrack(camera.id)
+        .setKey(keyFrame, pose, this.animationInterpolation);
+    } else if (kind === 'light') {
+      const light = this.document.getLight(targetId);
+      if (!light) {
+        return;
+      }
+      const pose =
+        this.animationLightPose.get(light.id) ?? {
+          position: [...light.position] as [number, number, number],
+          direction: [...light.direction] as [number, number, number],
+          intensity: light.intensity
+        };
+      this.document.animation
+        .ensureLightTrack(light.id)
+        .setKey(keyFrame, pose, this.animationInterpolation);
+    } else if (kind === 'mesh') {
       const node = this.document.getNode(targetId);
       if (!node) {
         return;
@@ -5085,6 +5504,9 @@ export class EditorRuntime {
         this.animationInterpolation
       );
     } else {
+      if (targetKind !== 'node' && targetKind !== 'group') {
+        return;
+      }
       const target =
         targetKind === 'group'
           ? this.document.getGroup(targetId)
@@ -5108,7 +5530,11 @@ export class EditorRuntime {
           ? 'Key shape weight'
           : kind === 'mesh'
             ? 'Key mesh pose'
-            : 'Key transform'
+            : kind === 'camera'
+              ? 'Key camera'
+              : kind === 'light'
+                ? 'Key light'
+                : 'Key transform'
       )
     );
     this.applyAnimationPose();
@@ -5117,13 +5543,23 @@ export class EditorRuntime {
   /** Change the interpolation of one selected key without moving it. */
   setAnimationKeyInterpolation(
     targetId: string,
-    kind: 'transform' | 'shape' | 'mesh',
+    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
     shapeKeyId: string | null,
     frame: number,
     interpolation: import('../scene/SceneAnimation').AnimationInterpolation
   ): void {
     const before = this.document.animation.snapshot();
-    if (kind === 'mesh') {
+    if (kind === 'camera') {
+      const track = this.document.animation.getCameraTrack(targetId);
+      if (!track || !track.setInterpolation(frame, interpolation)) {
+        return;
+      }
+    } else if (kind === 'light') {
+      const track = this.document.animation.getLightTrack(targetId);
+      if (!track || !track.setInterpolation(frame, interpolation)) {
+        return;
+      }
+    } else if (kind === 'mesh') {
       const track = this.document.animation.getMeshTrack(targetId);
       if (!track || !track.setInterpolation(frame, interpolation)) {
         return;
@@ -5157,12 +5593,30 @@ export class EditorRuntime {
   /** Remove one key from a transform or shape-weight track. */
   deleteAnimationKeyAt(
     targetId: string,
-    kind: 'transform' | 'shape' | 'mesh',
+    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
     shapeKeyId: string | null,
     frame: number
   ): void {
     const before = this.document.animation.snapshot();
-    if (kind === 'mesh') {
+    if (kind === 'camera') {
+      const track = this.document.animation.getCameraTrack(targetId);
+      if (!track) {
+        return;
+      }
+      track.removeKey(frame);
+      if (track.keyframes.length === 0) {
+        this.document.animation.removeCameraTrack(targetId);
+      }
+    } else if (kind === 'light') {
+      const track = this.document.animation.getLightTrack(targetId);
+      if (!track) {
+        return;
+      }
+      track.removeKey(frame);
+      if (track.keyframes.length === 0) {
+        this.document.animation.removeLightTrack(targetId);
+      }
+    } else if (kind === 'mesh') {
       const track = this.document.animation.getMeshTrack(targetId);
       if (!track) {
         return;
@@ -5207,7 +5661,7 @@ export class EditorRuntime {
   /** Move one key to another integer frame as one undoable edit. */
   moveAnimationKey(
     targetId: string,
-    kind: 'transform' | 'shape' | 'mesh',
+    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
     shapeKeyId: string | null,
     fromFrame: number,
     toFrame: number
@@ -5225,7 +5679,35 @@ export class EditorRuntime {
       return;
     }
     const before = this.document.animation.snapshot();
-    if (kind === 'mesh') {
+    if (kind === 'camera') {
+      const track = this.document.animation.getCameraTrack(targetId);
+      const key = track?.keyframes.find((item) => item.frame === fromFrame);
+      if (!track || !key) {
+        return;
+      }
+      track.removeKey(fromFrame);
+      track.setKey(
+        targetFrame,
+        { position: key.position, target: key.target, fov: key.fov },
+        key.interpolation
+      );
+    } else if (kind === 'light') {
+      const track = this.document.animation.getLightTrack(targetId);
+      const key = track?.keyframes.find((item) => item.frame === fromFrame);
+      if (!track || !key) {
+        return;
+      }
+      track.removeKey(fromFrame);
+      track.setKey(
+        targetFrame,
+        {
+          position: key.position,
+          direction: key.direction,
+          intensity: key.intensity
+        },
+        key.interpolation
+      );
+    } else if (kind === 'mesh') {
       const track = this.document.animation.getMeshTrack(targetId);
       const key = track?.keyframes.find((item) => item.frame === fromFrame);
       if (!track || !key) {
@@ -5417,7 +5899,9 @@ export class EditorRuntime {
       this.meshPoseEdit ||
       (this.document.animation.tracks.length === 0 &&
         this.document.animation.weightTracks.length === 0 &&
-        this.document.animation.meshTracks.length === 0)
+        this.document.animation.meshTracks.length === 0 &&
+        this.document.animation.cameraTracks.length === 0 &&
+        this.document.animation.lightTracks.length === 0)
     ) {
       return;
     }
@@ -5479,6 +5963,8 @@ export class EditorRuntime {
   /** Clear the preview pose when leaving animation-oriented views. */
   private clearAnimationPose(): void {
     this.animationPose.clear();
+    this.animationCameraPose.clear();
+    this.animationLightPose.clear();
     for (const node of this.document.nodes) {
       node.setShapeWeightOverrides(null);
       node.setMotionDeltas(null);
@@ -5515,7 +6001,8 @@ export class EditorRuntime {
     context.clearRect(0, 0, width, height);
 
     const camera = this.getActiveCamera();
-    if (!camera) {
+    const view = this.activeCameraRenderPose();
+    if (!camera || !view) {
       return;
     }
     let image: ImageData;
@@ -5524,11 +6011,7 @@ export class EditorRuntime {
         width: this.renderVirtualWidth,
         height: this.renderVirtualHeight,
         shading: this.renderShading,
-        camera: {
-          position: camera.position,
-          target: camera.target,
-          fov: camera.fov
-        },
+        camera: view,
         transparent: this.renderTransparent,
         backgroundColor: this.renderBackground
       });
@@ -5625,15 +6108,15 @@ export class EditorRuntime {
         .replace(/^-+|-+$/g, '') || 'render';
       for (let frame = start; frame <= end; frame += 1) {
         this.setAnimationFrame(frame);
+        const view = this.activeCameraRenderPose();
+        if (!view) {
+          throw new Error('The active render camera is unavailable.');
+        }
         const image = this.renderer.renderStill({
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
-          camera: {
-            position: camera.position,
-            target: camera.target,
-            fov: camera.fov
-          },
+          camera: view,
           transparent: this.renderTransparent,
           backgroundColor: this.renderBackground
         });
@@ -6768,29 +7251,73 @@ export class EditorRuntime {
       return;
     }
     const before = light.snapshot();
-    const after: LightSnapshot = {
+    const baseAfter: LightSnapshot = {
       ...before,
       ...(patch.name !== undefined ? { name: patch.name.trim().slice(0, 64) } : {}),
       ...(patch.color !== undefined ? { color: patch.color } : {}),
-      ...(patch.intensity !== undefined
-        ? { intensity: Math.max(0, Math.min(20, patch.intensity)) }
-        : {}),
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
       ...(patch.castShadows !== undefined ? { castShadows: patch.castShadows } : {}),
       ...(patch.shadowSoftness !== undefined
         ? { shadowSoftness: Math.max(0, Math.min(1, patch.shadowSoftness)) }
-        : {}),
-      ...(patch.position !== undefined
-        ? { position: [...patch.position] as [number, number, number] }
-        : {}),
-      ...(patch.direction !== undefined
-        ? { direction: [...patch.direction] as [number, number, number] }
         : {})
     };
-    if (after.name.length === 0 || JSON.stringify(before) === JSON.stringify(after)) {
+    if (baseAfter.name.length === 0) {
       return;
     }
-    this.history.execute(new UpdateLightCommand(light, before, after));
+    if (JSON.stringify(before) !== JSON.stringify(baseAfter)) {
+      this.history.execute(new UpdateLightCommand(light, before, baseAfter));
+    }
+    const posed =
+      this.animationLightPose.get(light.id) ?? {
+        position: [...before.position] as [number, number, number],
+        direction: [...before.direction] as [number, number, number],
+        intensity: before.intensity
+      };
+    if (
+      patch.position !== undefined ||
+      patch.direction !== undefined ||
+      patch.intensity !== undefined
+    ) {
+      const nextPose: LightPose = {
+        position:
+          patch.position !== undefined
+            ? ([...patch.position] as [number, number, number])
+            : posed.position,
+        direction:
+          patch.direction !== undefined
+            ? ([...patch.direction] as [number, number, number])
+            : posed.direction,
+        intensity:
+          patch.intensity !== undefined
+            ? Math.max(0, Math.min(20, patch.intensity))
+            : posed.intensity
+      };
+      if (
+        this.autoKeyLightPose(light, nextPose, {
+          ...baseAfter,
+          position: [...before.position] as [number, number, number],
+          direction: [...before.direction] as [number, number, number],
+          intensity: before.intensity
+        })
+      ) {
+        return;
+      }
+      const after: LightSnapshot = {
+        ...baseAfter,
+        position: nextPose.position,
+        direction: [...nextPose.direction] as [number, number, number],
+        intensity: nextPose.intensity
+      };
+      if (JSON.stringify(baseAfter) !== JSON.stringify(after)) {
+        this.history.execute(new UpdateLightCommand(light, baseAfter, after));
+      } else {
+        this.publish();
+      }
+      return;
+    }
+    if (JSON.stringify(before) === JSON.stringify(baseAfter)) {
+      return;
+    }
     this.publish();
   }
 
@@ -8192,6 +8719,16 @@ export class EditorRuntime {
         return false;
       }
       this.selectCamera(camera.id);
+      const baseBefore = camera.snapshot();
+      const cameraPose = this.animationCameraPose.get(camera.id);
+      if (cameraPose) {
+        camera.apply({
+          ...baseBefore,
+          position: [...cameraPose.position] as [number, number, number],
+          target: [...cameraPose.target] as [number, number, number],
+          fov: cameraPose.fov
+        });
+      }
       const point = new Vector3(...camera.target);
       const plane = this.renderer.createCameraFacingPlane(point);
       if (
@@ -8201,12 +8738,15 @@ export class EditorRuntime {
           plane
         )
       ) {
+        camera.apply(baseBefore);
         return false;
       }
+      this.animationCameraPose.delete(camera.id);
       this.cameraTargetDrag = {
         pointerId: sample.pointerId,
         camera,
         before: camera.snapshot(),
+        baseBefore,
         plane
       };
       return true;
@@ -8223,6 +8763,16 @@ export class EditorRuntime {
       return false;
     }
     this.selectCamera(camera.id);
+    const baseBefore = camera.snapshot();
+    const cameraPose = this.animationCameraPose.get(camera.id);
+    if (cameraPose) {
+      camera.apply({
+        ...baseBefore,
+        position: [...cameraPose.position] as [number, number, number],
+        target: [...cameraPose.target] as [number, number, number],
+        fov: cameraPose.fov
+      });
+    }
     const point = new Vector3(...camera.position);
     const plane = this.renderer.createCameraFacingPlane(point);
     const hit = this.renderer.intersectPointerPlane(
@@ -8231,12 +8781,15 @@ export class EditorRuntime {
       plane
     );
     if (!hit) {
+      camera.apply(baseBefore);
       return false;
     }
+    this.animationCameraPose.delete(camera.id);
     this.cameraDrag = {
       pointerId: sample.pointerId,
       camera,
       before: camera.snapshot(),
+      baseBefore,
       plane,
       offset: point.sub(hit)
     };
@@ -8269,12 +8822,25 @@ export class EditorRuntime {
     this.cameraTargetDrag = null;
     const after = drag.camera.snapshot();
     if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      if (
+        this.autoKeyCameraPose(
+          drag.camera,
+          {
+            position: [...after.position] as [number, number, number],
+            target: [...after.target] as [number, number, number],
+            fov: after.fov
+          },
+          drag.baseBefore
+        )
+      ) {
+        return;
+      }
       this.history.execute(
-        new UpdateCameraCommand(drag.camera, drag.before, after)
+        new UpdateCameraCommand(drag.camera, drag.baseBefore, after)
       );
     } else {
-      this.syncScene();
-      this.publish();
+      drag.camera.apply(drag.baseBefore);
+      this.applyAnimationPose();
     }
   }
 
@@ -8305,12 +8871,25 @@ export class EditorRuntime {
     this.cameraDrag = null;
     const after = drag.camera.snapshot();
     if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      if (
+        this.autoKeyCameraPose(
+          drag.camera,
+          {
+            position: [...after.position] as [number, number, number],
+            target: [...after.target] as [number, number, number],
+            fov: after.fov
+          },
+          drag.baseBefore
+        )
+      ) {
+        return;
+      }
       this.history.execute(
-        new UpdateCameraCommand(drag.camera, drag.before, after)
+        new UpdateCameraCommand(drag.camera, drag.baseBefore, after)
       );
     } else {
-      this.syncScene();
-      this.publish();
+      drag.camera.apply(drag.baseBefore);
+      this.applyAnimationPose();
     }
   }
 
@@ -8331,6 +8910,16 @@ export class EditorRuntime {
       return false;
     }
     this.selectLight(light.id);
+    const baseBefore = light.snapshot();
+    const lightPose = this.animationLightPose.get(light.id);
+    if (lightPose) {
+      light.apply({
+        ...baseBefore,
+        position: [...lightPose.position] as [number, number, number],
+        direction: [...lightPose.direction] as [number, number, number],
+        intensity: lightPose.intensity
+      });
+    }
     const point = new Vector3(
       light.position[0],
       light.position[1],
@@ -8343,12 +8932,15 @@ export class EditorRuntime {
       plane
     );
     if (!hit) {
+      light.apply(baseBefore);
       return false;
     }
+    this.animationLightPose.delete(light.id);
     this.lightDrag = {
       pointerId: sample.pointerId,
       light,
       before: light.snapshot(),
+      baseBefore,
       plane,
       offset: point.sub(hit)
     };
@@ -8364,18 +8956,31 @@ export class EditorRuntime {
       return false;
     }
     this.selectLight(light.id);
+    const baseBefore = light.snapshot();
+    const lightPose = this.animationLightPose.get(light.id);
+    if (lightPose) {
+      light.apply({
+        ...baseBefore,
+        position: [...lightPose.position] as [number, number, number],
+        direction: [...lightPose.direction] as [number, number, number],
+        intensity: lightPose.intensity
+      });
+    }
     const direction = new Vector3(...light.direction).normalize();
     const tip = new Vector3(...light.position).addScaledVector(direction, 1.55);
     const plane = this.renderer.createCameraFacingPlane(tip);
     if (
       !this.renderer.intersectPointerPlane(sample.clientX, sample.clientY, plane)
     ) {
+      light.apply(baseBefore);
       return false;
     }
+    this.animationLightPose.delete(light.id);
     this.lightDirectionDrag = {
       pointerId: sample.pointerId,
       light,
       before: light.snapshot(),
+      baseBefore,
       plane
     };
     return true;
@@ -8413,12 +9018,25 @@ export class EditorRuntime {
     this.lightDirectionDrag = null;
     const after = drag.light.snapshot();
     if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      if (
+        this.autoKeyLightPose(
+          drag.light,
+          {
+            position: [...after.position] as [number, number, number],
+            direction: [...after.direction] as [number, number, number],
+            intensity: after.intensity
+          },
+          drag.baseBefore
+        )
+      ) {
+        return;
+      }
       this.history.execute(
-        new UpdateLightCommand(drag.light, drag.before, after)
+        new UpdateLightCommand(drag.light, drag.baseBefore, after)
       );
     } else {
-      this.syncScene();
-      this.publish();
+      drag.light.apply(drag.baseBefore);
+      this.applyAnimationPose();
     }
   }
 
@@ -8449,10 +9067,24 @@ export class EditorRuntime {
     this.lightDrag = null;
     const after = drag.light.snapshot();
     if (JSON.stringify(drag.before) !== JSON.stringify(after)) {
+      if (
+        this.autoKeyLightPose(
+          drag.light,
+          {
+            position: [...after.position] as [number, number, number],
+            direction: [...after.direction] as [number, number, number],
+            intensity: after.intensity
+          },
+          drag.baseBefore
+        )
+      ) {
+        return;
+      }
       this.history.execute(
-        new UpdateLightCommand(drag.light, drag.before, after)
+        new UpdateLightCommand(drag.light, drag.baseBefore, after)
       );
     } else {
+      drag.light.apply(drag.baseBefore);
       this.syncScene();
       this.publish();
     }
@@ -8899,33 +9531,29 @@ export class EditorRuntime {
     if (this.cameraTargetDrag) {
       const drag = this.cameraTargetDrag;
       this.cameraTargetDrag = null;
-      drag.camera.apply(drag.before);
-      this.syncScene();
-      this.publish();
+      drag.camera.apply(drag.baseBefore);
+      this.applyAnimationPose();
       return;
     }
     if (this.cameraDrag) {
       const drag = this.cameraDrag;
       this.cameraDrag = null;
-      drag.camera.apply(drag.before);
-      this.syncScene();
-      this.publish();
+      drag.camera.apply(drag.baseBefore);
+      this.applyAnimationPose();
       return;
     }
     if (this.lightDirectionDrag) {
       const drag = this.lightDirectionDrag;
       this.lightDirectionDrag = null;
-      drag.light.apply(drag.before);
-      this.syncScene();
-      this.publish();
+      drag.light.apply(drag.baseBefore);
+      this.applyAnimationPose();
       return;
     }
     if (this.lightDrag) {
       const drag = this.lightDrag;
       this.lightDrag = null;
-      drag.light.apply(drag.before);
-      this.syncScene();
-      this.publish();
+      drag.light.apply(drag.baseBefore);
+      this.applyAnimationPose();
       return;
     }
     if (this.projectedPaint || this.projectedShape) {
@@ -10672,7 +11300,7 @@ export class EditorRuntime {
   private syncScene(): void {
     this.updateSelectionGizmoFrame();
     this.renderer.setLighting(
-      this.document.lightSummaries(),
+      this.posedLightSummaries(),
       this.document.ambientColor,
       this.document.ambientIntensity,
       this.activeLightId,
@@ -10693,7 +11321,7 @@ export class EditorRuntime {
       this.animationPose
     );
     this.renderer.setCameraGizmos(
-      this.document.cameraSummaries(),
+      this.posedCameraSummaries(),
       this.activeCameraId,
       this.workspace === 'render' && !this.renderCameraView,
       this.renderVirtualWidth / Math.max(1, this.renderVirtualHeight)

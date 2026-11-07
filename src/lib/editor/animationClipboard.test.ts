@@ -54,6 +54,25 @@ describe('animation clipboard', () => {
     expect(entries[0].values).toEqual([1, 0, 0, 0, 2, 0]);
   });
 
+  it('copies camera and light keys with their poses', () => {
+    const clip = new AnimationClip('Test', 'clip-test');
+    const camera = clip.ensureCameraTrack('camera-1');
+    camera.setKey(2, { position: [1, 2, 3], target: [0, 0, 0], fov: 45 });
+    const light = clip.ensureLightTrack('light-1');
+    light.setKey(4, {
+      position: [1, 1, 1],
+      direction: [0, 0, -1],
+      intensity: 2
+    });
+    const entries = buildAnimationKeyClipboard(clip, [
+      { trackId: camera.id, frame: 2 },
+      { trackId: light.id, frame: 4 }
+    ]);
+    expect(entries.map((entry) => entry.kind)).toEqual(['camera', 'light']);
+    expect(entries[0].cameraFov).toBe(45);
+    expect(entries[1].lightIntensity).toBe(2);
+  });
+
   it('deduplicates repeated references and ignores missing keys', () => {
     const clip = new AnimationClip('Test', 'clip-test');
     const track = clip.ensureTrack('node-1', 'node');

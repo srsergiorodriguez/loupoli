@@ -1036,6 +1036,12 @@
             onActivate={() => session.addCameraFromCurrentView()}
           />
         </ActionRow>
+        {#if activeCamera && animationTracks.some((track) => track.kind === 'camera' && track.targetId === activeCamera.id)}
+          <p class="hint">
+            Camera changes auto-key at the current frame while its animation
+            track exists.
+          </p>
+        {/if}
         <div class="object-list">
           {#each cameras as camera (camera.id)}
             <OutlinerRow
@@ -1339,6 +1345,12 @@
           />
           <span class="texture-note">{lights.length} {lights.length === 1 ? 'light' : 'lights'}</span>
         </ActionRow>
+        {#if activeLight && animationTracks.some((track) => track.kind === 'light' && track.targetId === activeLight.id)}
+          <p class="hint">
+            Light position, direction, and intensity auto-key at the current
+            frame while its animation track exists.
+          </p>
+        {/if}
         <div class="light-list">
           {#each lights as light (light.id)}
             <OutlinerRow

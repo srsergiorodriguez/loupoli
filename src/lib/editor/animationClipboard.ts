@@ -7,9 +7,9 @@ import type { NodeTransform } from '../scene/MeshNode';
 
 /** One detached keyframe held by the animation clipboard. */
 export interface AnimationKeyClipboardEntry {
-  readonly kind: 'transform' | 'shape' | 'mesh';
+  readonly kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light';
   readonly targetId: string;
-  readonly targetKind: AnimationTargetKind;
+  readonly targetKind: AnimationTargetKind | 'camera' | 'light';
   readonly shapeKeyId: string | null;
   readonly offsetFrame: number;
   readonly interpolation: AnimationInterpolation;
@@ -17,6 +17,12 @@ export interface AnimationKeyClipboardEntry {
   readonly weight?: number;
   readonly vertexIndices?: readonly number[];
   readonly values?: readonly number[];
+  readonly cameraPosition?: readonly [number, number, number];
+  readonly cameraTarget?: readonly [number, number, number];
+  readonly cameraFov?: number;
+  readonly lightPosition?: readonly [number, number, number];
+  readonly lightDirection?: readonly [number, number, number];
+  readonly lightIntensity?: number;
 }
 
 /** Minimal key reference accepted by the clipboard builder. */
@@ -55,6 +61,50 @@ export function buildAnimationKeyClipboard(
         interpolation: key.interpolation,
         transform: key.transform
       });
+      continue;
+    }
+    const cameraTrack = clip.cameraTracks.find(
+      (item) => item.id === reference.trackId
+    );
+    if (cameraTrack) {
+      const key = cameraTrack.keyframes.find(
+        (item) => item.frame === reference.frame
+      );
+      if (key) {
+        selected.set(`${cameraTrack.id}:${key.frame}`, {
+          kind: 'camera',
+          targetId: cameraTrack.targetId,
+          targetKind: 'camera',
+          shapeKeyId: null,
+          frame: key.frame,
+          interpolation: key.interpolation,
+          cameraPosition: [...key.position] as [number, number, number],
+          cameraTarget: [...key.target] as [number, number, number],
+          cameraFov: key.fov
+        });
+      }
+      continue;
+    }
+    const lightTrack = clip.lightTracks.find(
+      (item) => item.id === reference.trackId
+    );
+    if (lightTrack) {
+      const key = lightTrack.keyframes.find(
+        (item) => item.frame === reference.frame
+      );
+      if (key) {
+        selected.set(`${lightTrack.id}:${key.frame}`, {
+          kind: 'light',
+          targetId: lightTrack.targetId,
+          targetKind: 'light',
+          shapeKeyId: null,
+          frame: key.frame,
+          interpolation: key.interpolation,
+          lightPosition: [...key.position] as [number, number, number],
+          lightDirection: [...key.direction] as [number, number, number],
+          lightIntensity: key.intensity
+        });
+      }
       continue;
     }
     const meshTrack = clip.meshTracks.find(

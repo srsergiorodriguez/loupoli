@@ -233,8 +233,12 @@
     selectedTrackId = track.id;
     if (track.targetKind === 'node') {
       session.selectNode(track.targetId);
-    } else {
+    } else if (track.targetKind === 'group') {
       session.selectGroup(track.targetId);
+    } else if (track.targetKind === 'camera') {
+      session.selectCamera(track.targetId);
+    } else {
+      session.selectLight(track.targetId);
     }
     if (track.kind === 'shape' && track.shapeKeyId) {
       session.selectShapeKey(track.shapeKeyId);
@@ -592,6 +596,8 @@
             (!selectedTrack && activeTrack?.id === track.id)}
           class:shape-track={track.kind === 'shape'}
           class:mesh-track={track.kind === 'mesh'}
+          class:camera-track={track.kind === 'camera'}
+          class:light-track={track.kind === 'light'}
           role="button"
           tabindex="0"
           onclick={() => selectTrack(track)}
@@ -812,6 +818,11 @@
 
   .timeline-track.mesh-track .track-name {
     color: var(--accent-warning);
+  }
+
+  .timeline-track.camera-track .track-name,
+  .timeline-track.light-track .track-name {
+    color: var(--accent-secondary);
   }
 
   .timeline-lane-overlay {
