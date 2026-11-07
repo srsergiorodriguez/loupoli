@@ -6919,7 +6919,9 @@ export class EditorRuntime {
         (clip) =>
           clip.tracks.length > 0 ||
           clip.weightTracks.length > 0 ||
-          clip.meshTracks.length > 0
+          clip.meshTracks.length > 0 ||
+          clip.cameraTracks.length > 0 ||
+          clip.lightTracks.length > 0
       ).length;
       const bytes = await exportGlb(
         exportNodes,
@@ -6927,7 +6929,9 @@ export class EditorRuntime {
         textures,
         {
           clips: this.document.animation.clips,
-          fps: this.document.animation.fps
+          fps: this.document.animation.fps,
+          cameras: this.document.cameraSummaries(),
+          lights: this.document.lightSummaries()
         }
       );
       const saved = await saveBinaryFile(

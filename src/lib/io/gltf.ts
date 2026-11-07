@@ -7,10 +7,13 @@ import {
   LoopOnce,
   Matrix3,
   Matrix4,
+  DirectionalLight,
   Mesh,
   MeshBasicMaterial,
   NumberKeyframeTrack,
   Object3D,
+  PerspectiveCamera,
+  PointLight,
   Quaternion,
   QuaternionKeyframeTrack,
   Scene,
@@ -39,6 +42,8 @@ import {
   type ShapeWeightTrackSnapshot
 } from '../scene/SceneAnimation';
 import type { SceneGroup } from '../scene/SceneGroup';
+import type { CameraSnapshot } from '../scene/SceneCamera';
+import type { LightSnapshot } from '../scene/SceneLight';
 import { transformMatrix, worldTransformForNode } from '../editor/groupTransforms';
 
 /** Three's Y-up conversion for app Z-up coordinates. */
@@ -47,6 +52,38 @@ const Z_UP_TO_Y_UP = new Matrix4().makeRotationX(-Math.PI / 2);
 
 function colorHex(color: { getHexString(): string } | null | undefined): string {
   return `#${color?.getHexString() ?? 'c8c2ad'}`;
+}
+
+/** Convert one app Z-up point to glTF Y-up. */
+function yUpPoint(value: readonly [number, number, number]): Vector3 {
+  return new Vector3(value[0], value[1], value[2]).applyMatrix4(
+    Z_UP_TO_Y_UP
+  );
+}
+
+/** Camera orientation for a look-at target in the Y-up export scene. */
+function cameraQuaternion(position: Vector3, target: Vector3): Quaternion {
+  if (position.distanceToSquared(target) < 1e-10) {
+    return new Quaternion();
+  }
+  const matrix = new Matrix4().lookAt(
+    position,
+    target,
+    new Vector3(0, 1, 0)
+  );
+  return new Quaternion().setFromRotationMatrix(matrix);
+}
+
+/** Directional-light node orientation: glTF lights point down local -Z. */
+function lightQuaternion(direction: readonly [number, number, number]): Quaternion {
+  const vector = yUpPoint(direction).normalize();
+  if (vector.lengthSq() < 1e-10) {
+    vector.set(0, -1, 0);
+  }
+  return new Quaternion().setFromUnitVectors(
+    new Vector3(0, 0, -1),
+    vector
+  );
 }
 
 function normalizeName(value: string, index: number): string {
@@ -58,6 +95,10 @@ function normalizeName(value: string, index: number): string {
 export interface GlbAnimationExportOptions {
   readonly clips: readonly SceneAnimationClip[];
   readonly fps: number;
+  /** Scene cameras exported as glTF cameras. */
+  readonly cameras?: readonly CameraSnapshot[];
+  /** Scene lights exported with KHR_lights_punctual. */
+  readonly lights?: readonly LightSnapshot[];
 }
 
 interface MotionMorphSample {
@@ -69,6 +110,16 @@ interface MotionMorphSample {
 interface MotionMorphBinding {
   readonly clipId: string;
   readonly samples: readonly MotionMorphSample[];
+}
+
+interface CameraGlbAnimationContext {
+  readonly camera: CameraSnapshot;
+  readonly object: PerspectiveCamera;
+}
+
+interface LightGlbAnimationContext {
+  readonly light: LightSnapshot;
+  readonly object: DirectionalLight | PointLight;
 }
 
 interface NodeGlbAnimationContext {
@@ -786,6 +837,57 @@ export async function exportGlb(
     }
     scene.add(root);
   }
+  const cameraContexts: CameraGlbAnimationContext[] = [];
+  const lightContexts: LightGlbAnimationContext[] = [];
+  const uniqueSceneName = (value: string, fallback: string): string => {
+    const base = value.replace(/[^a-zA-Z0-9_-]+/g, '_') || fallback;
+    let name = base;
+    let suffix = 2;
+    while (usedRootNames.has(name)) {
+      name = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    usedRootNames.add(name);
+    return name;
+  };
+  for (const camera of animation?.cameras ?? []) {
+    const object = new PerspectiveCamera(
+      Math.max(5, Math.min(160, camera.fov)),
+      16 / 9,
+      0.01,
+      1000
+    );
+    object.name = uniqueSceneName(camera.name, 'Camera');
+    const position = yUpPoint(camera.position);
+    const target = yUpPoint(camera.target);
+    object.position.copy(position);
+    object.quaternion.copy(cameraQuaternion(position, target));
+    object.updateMatrixWorld(true);
+    scene.add(object);
+    cameraContexts.push({ camera, object });
+  }
+  for (const light of animation?.lights ?? []) {
+    if (!light.enabled) {
+      continue;
+    }
+    const object =
+      light.kind === 'directional'
+        ? new DirectionalLight(light.color, light.intensity)
+        : new PointLight(light.color, light.intensity, 0);
+    object.name = uniqueSceneName(light.name, 'Light');
+    object.position.copy(yUpPoint(light.position));
+    if (object instanceof DirectionalLight) {
+      object.quaternion.copy(lightQuaternion(light.direction));
+      const target = new Object3D();
+      target.position.set(0, 0, -1);
+      object.add(target);
+      object.target = target;
+    }
+    object.updateMatrixWorld(true);
+    scene.add(object);
+    lightContexts.push({ light, object });
+  }
+
   if (scene.children.length === 0) {
     throw new Error('There are no visible objects to export.');
   }
@@ -840,6 +942,71 @@ export async function exportGlb(
               `${context.root.name}.scale`,
               times,
               scales
+            )
+          );
+        }
+      }
+      for (const context of cameraContexts) {
+        const cameraTrack = clip.cameraTracks.find(
+          (track) => track.targetId === context.camera.id
+        );
+        if (!cameraTrack) {
+          continue;
+        }
+        const positions: number[] = [];
+        const rotations: number[] = [];
+        for (const frame of frames) {
+          const pose = cameraTrack.evaluate(frame) ?? context.camera;
+          const position = yUpPoint(pose.position);
+          const target = yUpPoint(pose.target);
+          const rotation = cameraQuaternion(position, target);
+          positions.push(position.x, position.y, position.z);
+          rotations.push(rotation.x, rotation.y, rotation.z, rotation.w);
+        }
+        tracks.push(
+          new VectorKeyframeTrack(
+            `${context.object.name}.position`,
+            times,
+            positions
+          ),
+          new QuaternionKeyframeTrack(
+            `${context.object.name}.quaternion`,
+            times,
+            rotations
+          )
+        );
+      }
+      for (const context of lightContexts) {
+        const lightTrack = clip.lightTracks.find(
+          (track) => track.targetId === context.light.id
+        );
+        if (!lightTrack) {
+          continue;
+        }
+        const positions: number[] = [];
+        const rotations: number[] = [];
+        const directional = context.object instanceof DirectionalLight;
+        for (const frame of frames) {
+          const pose = lightTrack.evaluate(frame) ?? context.light;
+          positions.push(...yUpPoint(pose.position).toArray());
+          if (directional) {
+            const rotation = lightQuaternion(pose.direction);
+            rotations.push(rotation.x, rotation.y, rotation.z, rotation.w);
+          }
+        }
+        tracks.push(
+          new VectorKeyframeTrack(
+            `${context.object.name}.position`,
+            times,
+            positions
+          )
+        );
+        if (directional) {
+          tracks.push(
+            new QuaternionKeyframeTrack(
+              `${context.object.name}.quaternion`,
+              times,
+              rotations
             )
           );
         }

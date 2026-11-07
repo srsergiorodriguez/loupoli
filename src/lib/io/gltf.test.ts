@@ -4,6 +4,8 @@ import { createCubeMesh } from '../geometry/primitives';
 import { MeshNode } from '../scene/MeshNode';
 import { AnimationClip } from '../scene/SceneAnimation';
 import { SceneGroup } from '../scene/SceneGroup';
+import { SceneCamera } from '../scene/SceneCamera';
+import { SceneLight } from '../scene/SceneLight';
 
 class TestFileReader {
   result: ArrayBuffer | null = null;
@@ -146,5 +148,127 @@ describe('GLB animation', () => {
     const keys = imported.clips[0].weightTracks?.[0].keyframes ?? [];
     expect(keys[0].weight).toBe(0);
     expect(keys[keys.length - 1].weight).toBe(1);
+  });
+});
+
+
+function readGlbJson(bytes: Uint8Array): {
+  cameras?: unknown[];
+  extensions?: { KHR_lights_punctual?: { lights?: unknown[] } };
+  extensionsUsed?: string[];
+  nodes?: { camera?: number; extensions?: unknown }[];
+  animations?: { channels?: { target?: { node?: number } }[] }[];
+} {
+  const view = new DataView(
+    bytes.buffer,
+    bytes.byteOffset,
+    bytes.byteLength
+  );
+  const length = view.getUint32(12, true);
+  return JSON.parse(
+    new TextDecoder().decode(bytes.subarray(20, 20 + length))
+  ) as ReturnType<typeof readGlbJson>;
+}
+
+describe('GLB cameras and lights', () => {
+  it('exports cameras, punctual lights, and their animation', async () => {
+    const node = new MeshNode(createCubeMesh(1), 'cube', 'Body', 'node-10');
+    const camera = new SceneCamera({
+      id: 'camera-10',
+      name: 'Shot Cam',
+      position: [4, -6, 4],
+      target: [0, 0, 0],
+      fov: 35
+    });
+    const light = SceneLight.fromSnapshot({
+      id: 'light-10',
+      name: 'Key Sun',
+      kind: 'directional',
+      color: '#ffffff',
+      intensity: 2,
+      enabled: true,
+      castShadows: true,
+      shadowSoftness: 0.35,
+      position: [2, 2, 4],
+      direction: [-0.35, 0.25, -1]
+    });
+    const pointLight = SceneLight.fromSnapshot({
+      id: 'light-11',
+      name: 'Fill Point',
+      kind: 'point',
+      color: '#ffffff',
+      intensity: 1,
+      enabled: true,
+      castShadows: false,
+      shadowSoftness: 0,
+      position: [0, 0, 2],
+      direction: [0, 0, -1]
+    });
+    const clip = new AnimationClip('Camera and Light', 'clip-10', 0, 8);
+    const cameraTrack = clip.ensureCameraTrack(camera.id);
+    cameraTrack.setKey(0, {
+      position: [4, -6, 4],
+      target: [0, 0, 0],
+      fov: 35
+    });
+    cameraTrack.setKey(8, {
+      position: [0, -8, 3],
+      target: [0, 0, 0],
+      fov: 45
+    });
+    const lightTrack = clip.ensureLightTrack(light.id);
+    lightTrack.setKey(0, {
+      position: [2, 2, 4],
+      direction: [-0.35, 0.25, -1],
+      intensity: 2
+    });
+    lightTrack.setKey(8, {
+      position: [3, 3, 5],
+      direction: [-0.5, 0.5, -1],
+      intensity: 4
+    });
+    const pointTrack = clip.ensureLightTrack(pointLight.id);
+    pointTrack.setKey(0, {
+      position: [0, 0, 2],
+      direction: [0, 0, -1],
+      intensity: 1
+    });
+    pointTrack.setKey(8, {
+      position: [1, 1, 3],
+      direction: [0, 0, -1],
+      intensity: 2
+    });
+    const bytes = await exportGlb([node], [], new Map(), {
+      clips: [clip],
+      fps: 24,
+      cameras: [camera.snapshot()],
+      lights: [light.snapshot(), pointLight.snapshot()]
+    });
+    const json = readGlbJson(bytes);
+    expect(json.cameras).toHaveLength(1);
+    expect(json.extensionsUsed).toContain('KHR_lights_punctual');
+    expect(
+      json.extensions?.KHR_lights_punctual?.lights
+    ).toHaveLength(2);
+    expect(json.nodes?.some((item) => item.camera !== undefined)).toBe(true);
+    expect(
+      json.nodes?.some((item) => Boolean(item.extensions))
+    ).toBe(true);
+    const cameraNode = json.nodes?.findIndex(
+      (item) => item.camera !== undefined
+    );
+    const lightNodes = new Set(
+      json.nodes
+        ?.map((item, index) => (item.extensions ? index : -1))
+        .filter((index) => index >= 0)
+    );
+    const animatedNodes = new Set(
+      json.animations?.[0]?.channels?.map((channel) => channel.target?.node)
+    );
+    expect(animatedNodes.has(cameraNode)).toBe(true);
+    for (const lightNode of lightNodes) {
+      expect(animatedNodes.has(lightNode)).toBe(true);
+    }
+    expect(json.animations?.[0]?.channels?.length).toBeGreaterThanOrEqual(5);
   });
 });
