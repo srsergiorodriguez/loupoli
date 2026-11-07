@@ -190,7 +190,7 @@ export interface AnimationClipSummary {
 /** Reactive-safe animation track projection. */
 export interface AnimationTrackSummary {
   readonly id: string;
-  readonly kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light';
+  readonly kind: 'transform' | 'shape' | 'mesh' | 'texture' | 'camera' | 'light';
   readonly targetId: string;
   readonly targetKind: AnimationTargetKind | 'camera' | 'light';
   readonly targetName: string;
@@ -301,6 +301,7 @@ export interface EditorSnapshot {
   readonly uvError: string | null;
   readonly textureAssets: readonly TextureAssetSummary[];
   readonly textureAssetId: string | null;
+  readonly activeNodeTextureId: string | null;
   readonly textureLayers: readonly TextureLayerSummary[];
   readonly textureActiveId: string | null;
   readonly textureSize: number;

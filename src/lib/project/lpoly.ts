@@ -25,6 +25,7 @@ import {
   type LightAnimationTrackSnapshot,
   type MeshMotionTrackSnapshot,
   type ShapeWeightTrackSnapshot,
+  type TextureAnimationTrackSnapshot,
   type AnimationTargetKind
 } from '../scene/SceneAnimation';
 import type {
@@ -43,7 +44,7 @@ import {
 } from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 7;
+const FORMAT_VERSION = 8;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -838,6 +839,70 @@ function validateLightAnimationTracks(
   return { tracks, keyCount, trackCount: tracks.length };
 }
 
+/** Validate optional texture-swap tracks. */
+function validateTextureAnimationTracks(
+  value: unknown,
+  trackIds: Set<string>
+): { tracks: TextureAnimationTrackSnapshot[]; keyCount: number; trackCount: number } {
+  if (value === undefined) {
+    return { tracks: [], keyCount: 0, trackCount: 0 };
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('The .lpoli texture animation is invalid.');
+  }
+  let keyCount = 0;
+  const tracks = value.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli texture animation track is invalid.');
+    }
+    const track = raw as Partial<TextureAnimationTrackSnapshot>;
+    if (
+      typeof track.id !== 'string' ||
+      track.id.length === 0 ||
+      trackIds.has(track.id) ||
+      typeof track.targetId !== 'string' ||
+      track.targetId.length === 0 ||
+      !Array.isArray(track.keyframes)
+    ) {
+      throw new Error('The .lpoli texture track metadata is invalid.');
+    }
+    const seenFrames = new Set<number>();
+    const keyframes = track.keyframes
+      .map((key) => {
+        if (typeof key !== 'object' || key === null) {
+          throw new Error('The .lpoli texture keyframe is invalid.');
+        }
+        const item = key as {
+          frame?: unknown;
+          textureId?: unknown;
+          interpolation?: unknown;
+        };
+        if (
+          !Number.isInteger(item.frame) ||
+          seenFrames.has(item.frame as number) ||
+          (item.textureId !== null &&
+            (typeof item.textureId !== 'string' ||
+              item.textureId.length === 0 ||
+              item.textureId.length > MAX_NAME_LENGTH)) ||
+          (item.interpolation !== 'step' && item.interpolation !== 'linear')
+        ) {
+          throw new Error('The .lpoli texture keyframes are invalid.');
+        }
+        seenFrames.add(item.frame as number);
+        keyCount += 1;
+        return {
+          frame: item.frame as number,
+          textureId: item.textureId as string | null,
+          interpolation: 'step' as const
+        };
+      })
+      .sort((a, b) => a.frame - b.frame);
+    trackIds.add(track.id);
+    return { id: track.id, targetId: track.targetId, keyframes };
+  });
+  return { tracks, keyCount, trackCount: tracks.length };
+}
+
 /** Validate optional Mesh Motion tracks and their stable vertex sets. */
 function validateMeshMotionTracks(
   value: unknown,
@@ -1005,11 +1070,23 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       }
       weightTrackIds.add(track.id);
     }
+    const textures = validateTextureAnimationTracks(
+      clip.textureTracks,
+      trackIds
+    );
     const motion = validateMeshMotionTracks(clip.meshTracks, trackIds);
     const cameras = validateCameraAnimationTracks(clip.cameraTracks, trackIds);
     const lights = validateLightAnimationTracks(clip.lightTracks, trackIds);
-    totalTracks += motion.trackCount + cameras.trackCount + lights.trackCount;
-    totalKeys += motion.keyCount + cameras.keyCount + lights.keyCount;
+    totalTracks +=
+      textures.trackCount +
+      motion.trackCount +
+      cameras.trackCount +
+      lights.trackCount;
+    totalKeys +=
+      textures.keyCount +
+      motion.keyCount +
+      cameras.keyCount +
+      lights.keyCount;
     return {
       id: clip.id,
       name: clip.name,
@@ -1017,6 +1094,7 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       endFrame: validated.endFrame as number,
       tracks: clipTracks,
       weightTracks: validated.weightTracks ?? [],
+      textureTracks: textures.tracks,
       meshTracks: motion.tracks,
       cameraTracks: cameras.tracks,
       lightTracks: lights.tracks

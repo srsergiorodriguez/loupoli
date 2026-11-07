@@ -7,7 +7,7 @@ import type { NodeTransform } from '../scene/MeshNode';
 
 /** One detached keyframe held by the animation clipboard. */
 export interface AnimationKeyClipboardEntry {
-  readonly kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light';
+  readonly kind: 'transform' | 'shape' | 'mesh' | 'texture' | 'camera' | 'light';
   readonly targetId: string;
   readonly targetKind: AnimationTargetKind | 'camera' | 'light';
   readonly shapeKeyId: string | null;
@@ -23,6 +23,7 @@ export interface AnimationKeyClipboardEntry {
   readonly lightPosition?: readonly [number, number, number];
   readonly lightDirection?: readonly [number, number, number];
   readonly lightIntensity?: number;
+  readonly textureId?: string | null;
 }
 
 /** Minimal key reference accepted by the clipboard builder. */
@@ -103,6 +104,26 @@ export function buildAnimationKeyClipboard(
           lightPosition: [...key.position] as [number, number, number],
           lightDirection: [...key.direction] as [number, number, number],
           lightIntensity: key.intensity
+        });
+      }
+      continue;
+    }
+    const textureTrack = clip.textureTracks.find(
+      (item) => item.id === reference.trackId
+    );
+    if (textureTrack) {
+      const key = textureTrack.keyframes.find(
+        (item) => item.frame === reference.frame
+      );
+      if (key) {
+        selected.set(`${textureTrack.id}:${key.frame}`, {
+          kind: 'texture',
+          targetId: textureTrack.targetId,
+          targetKind: 'node',
+          shapeKeyId: null,
+          frame: key.frame,
+          interpolation: key.interpolation,
+          textureId: key.textureId
         });
       }
       continue;

@@ -95,6 +95,14 @@
         track.kind === 'mesh' && track.targetId === session.snapshot.activeNodeId
     ) ?? null
   );
+  const activeTextureTrack = $derived(
+    animationTracks.find(
+      (track) =>
+        track.kind === 'texture' &&
+        track.targetId === session.snapshot.activeNodeId &&
+        track.hasTrack
+    ) ?? null
+  );
   const renderKindOptions = $derived.by(() => {
     const options: { value: string; label: string }[] = [
       { value: 'still', label: 'Still PNG' },
@@ -845,7 +853,7 @@
       <p class="hint">
         OBJ and GLB use Y-up at the file boundary; geometry and UVs are
         preserved. GLB includes object, shape-key, and Mesh Motion clips;
-        camera/light animation stays in the project timeline.
+        camera/light and texture-swap animation stay in the project timeline.
       </p>
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
@@ -951,6 +959,55 @@
             {/if}
           {:else}
             <p class="hint">Select a mesh object to animate its shape.</p>
+          {/if}
+        </div>
+        <div class="render-look">
+          <div class="render-look-head">
+            <span>Texture</span>
+            <span>
+              {activeTextureTrack
+                ? `${activeTextureTrack.keyframes.length} key${activeTextureTrack.keyframes.length === 1 ? '' : 's'}`
+                : 'No track'}
+            </span>
+          </div>
+          {#if activeNode}
+            {#if activeTextureTrack}
+              <SelectField
+                label="Texture key"
+                value={session.snapshot.activeNodeTextureId ?? ''}
+                options={[
+                  { value: '', label: 'No texture' },
+                  ...textureAssets.map((asset) => ({
+                    value: asset.id,
+                    label: asset.name
+                  }))
+                ]}
+                onChange={(value) =>
+                  session.setActiveTextureKey(value === '' ? null : value)}
+              />
+              <ActionRow>
+                <ActionButton
+                  label="Key current"
+                  icon="image"
+                  onActivate={() => session.keyActiveTexture()}
+                />
+              </ActionRow>
+              <p class="hint">
+                Texture assets use Step timing and override the object's base
+                binding. Choosing an asset keys it at the playhead.
+              </p>
+            {:else}
+              <ActionButton
+                label="Key texture"
+                icon="image"
+                onActivate={() => session.keyActiveTexture()}
+              />
+              <p class="hint">
+                Key the object's current texture to start a Step texture track.
+              </p>
+            {/if}
+          {:else}
+            <p class="hint">Select a mesh object to animate its texture.</p>
           {/if}
         </div>
         <div class="selected-name-row">

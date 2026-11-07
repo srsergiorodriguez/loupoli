@@ -59,6 +59,7 @@ const TOUCH_PIXEL_RATIO_CAP = 1.5;
 interface ViewportRendererOptions {
   readonly onViewChanged?: (orientation: readonly AxisProjection[]) => void;
   readonly resolveNodeTexture?: (node: MeshNode) => Texture | null;
+  readonly resolveNodeTextureId?: (node: MeshNode) => string | null;
   readonly resolveNodeAlphaMode?: (node: MeshNode) => 'opaque' | 'cutout' | 'blend';
 }
 
@@ -82,6 +83,7 @@ export class ViewportRenderer {
     { texture: Texture | null; alphaMode: 'opaque' | 'cutout' | 'blend'; materials: ViewportMaterials }
   >();
   private readonly resolveNodeTexture: (node: MeshNode) => Texture | null;
+  private readonly resolveNodeTextureId: (node: MeshNode) => string | null;
   private readonly resolveNodeAlphaMode: (node: MeshNode) => 'opaque' | 'cutout' | 'blend';
   private readonly groupViews = new Map<string, ThreeGroup>();
   private readonly objectGizmo: ObjectGizmo;
@@ -167,6 +169,8 @@ export class ViewportRenderer {
       powerPreference: 'high-performance'
     };
     this.resolveNodeTexture = options.resolveNodeTexture ?? (() => null);
+    this.resolveNodeTextureId =
+      options.resolveNodeTextureId ?? ((node) => node.textureId);
     this.resolveNodeAlphaMode = options.resolveNodeAlphaMode ?? (() => 'opaque');
     this.renderer = new WebGLRenderer(rendererParameters);
     this.renderer.outputColorSpace = SRGBColorSpace;
@@ -381,7 +385,7 @@ export class ViewportRenderer {
 
     const referencedTextures = new Set(
       nodes
-        .map((node) => node.textureId)
+        .map((node) => this.resolveNodeTextureId(node))
         .filter((id): id is string => id !== null)
     );
     for (const id of [...this.textureMaterials.keys()]) {
@@ -1049,9 +1053,9 @@ export class ViewportRenderer {
     return this.scratchPlaneHit.clone();
   }
 
-  /** Materials for a node's assigned texture, cached per asset. */
+  /** Materials for a node's effective texture, cached per asset. */
   private materialsForNode(node: MeshNode): ViewportMaterials {
-    const id = node.textureId;
+    const id = this.resolveNodeTextureId(node);
     if (id === null) {
       return this.materials;
     }

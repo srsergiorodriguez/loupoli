@@ -37,6 +37,20 @@ export interface ShapeWeightTrackSnapshot {
   readonly keyframes: readonly ShapeWeightKeyframe[];
 }
 
+/** One keyed texture-asset binding at an integer frame. */
+export interface TextureAnimationKeyframeSnapshot {
+  readonly frame: number;
+  readonly textureId: string | null;
+  readonly interpolation: AnimationInterpolation;
+}
+
+/** One node's texture-swap animation track. */
+export interface TextureAnimationTrackSnapshot {
+  readonly id: string;
+  readonly targetId: string;
+  readonly keyframes: readonly TextureAnimationKeyframeSnapshot[];
+}
+
 /** One keyed mesh-motion pose at an integer frame. */
 export interface MeshMotionKeyframeSnapshot {
   readonly frame: number;
@@ -107,6 +121,7 @@ export interface AnimationClipSnapshot {
   readonly endFrame: number;
   readonly tracks: readonly AnimationTrackSnapshot[];
   readonly weightTracks?: readonly ShapeWeightTrackSnapshot[];
+  readonly textureTracks?: readonly TextureAnimationTrackSnapshot[];
   readonly meshTracks?: readonly MeshMotionTrackSnapshot[];
   readonly cameraTracks?: readonly CameraAnimationTrackSnapshot[];
   readonly lightTracks?: readonly LightAnimationTrackSnapshot[];
@@ -130,6 +145,7 @@ export interface AnimationSnapshot {
 
 let nextTrackNumber = 1;
 let nextWeightTrackNumber = 1;
+let nextTextureTrackNumber = 1;
 let nextClipNumber = 1;
 let nextMeshTrackNumber = 1;
 let nextCameraTrackNumber = 1;
@@ -146,6 +162,13 @@ export function createAnimationTrackId(): string {
 export function createShapeWeightTrackId(): string {
   const id = `weight-track-${nextWeightTrackNumber}`;
   nextWeightTrackNumber += 1;
+  return id;
+}
+
+/** Create a stable texture animation track id. */
+export function createTextureAnimationTrackId(): string {
+  const id = `texture-track-${nextTextureTrackNumber}`;
+  nextTextureTrackNumber += 1;
   return id;
 }
 
@@ -419,6 +442,88 @@ export class ShapeWeightTrack {
       id: this.id,
       targetId: this.targetId,
       shapeKeyId: this.shapeKeyId,
+      keyframes: this.frames.map((key) => ({ ...key }))
+    };
+  }
+}
+
+/** One node's Step-interpolated texture-asset swaps. */
+export class TextureAnimationTrack {
+  readonly id: string;
+  readonly targetId: string;
+  private frames: TextureAnimationKeyframeSnapshot[] = [];
+
+  constructor(targetId: string, id = createTextureAnimationTrackId()) {
+    this.targetId = targetId;
+    this.id = id;
+  }
+
+  /** Restore a track from serialized data. */
+  static fromSnapshot(
+    snapshot: TextureAnimationTrackSnapshot
+  ): TextureAnimationTrack {
+    const track = new TextureAnimationTrack(snapshot.targetId, snapshot.id);
+    track.frames = snapshot.keyframes
+      .map((key) => ({
+        frame: key.frame,
+        textureId: key.textureId,
+        interpolation: 'step' as const
+      }))
+      .sort((a, b) => a.frame - b.frame);
+    return track;
+  }
+
+  /** Ordered read-only keys. */
+  get keyframes(): readonly TextureAnimationKeyframeSnapshot[] {
+    return this.frames;
+  }
+
+  /** Add or replace the texture held from one frame onward. */
+  setKey(
+    frame: number,
+    textureId: string | null,
+    interpolation: AnimationInterpolation = 'step'
+  ): void {
+    void interpolation;
+    const key: TextureAnimationKeyframeSnapshot = {
+      frame: Math.round(frame),
+      textureId,
+      interpolation: 'step'
+    };
+    const existing = this.frames.findIndex((item) => item.frame === key.frame);
+    if (existing >= 0) {
+      this.frames[existing] = key;
+    } else {
+      this.frames.push(key);
+      this.frames.sort((a, b) => a.frame - b.frame);
+    }
+  }
+
+  /** Remove one frame key. */
+  removeKey(frame: number): void {
+    this.frames = this.frames.filter((key) => key.frame !== frame);
+  }
+
+  /** Return the held texture at a frame; null is a valid unassigned key. */
+  evaluate(frame: number): string | null {
+    if (this.frames.length === 0) {
+      return null;
+    }
+    let active = this.frames[0];
+    for (const key of this.frames) {
+      if (key.frame > frame) {
+        break;
+      }
+      active = key;
+    }
+    return active.textureId;
+  }
+
+  /** Detached snapshot for commands, journal patches, and saves. */
+  snapshot(): TextureAnimationTrackSnapshot {
+    return {
+      id: this.id,
+      targetId: this.targetId,
       keyframes: this.frames.map((key) => ({ ...key }))
     };
   }
@@ -917,7 +1022,7 @@ export class LightAnimationTrack {
   }
 }
 
-/** One named animation clip containing transform and shape-weight tracks. */
+/** One named animation clip containing every supported track type. */
 export class AnimationClip {
   readonly id: string;
   name: string;
@@ -925,6 +1030,7 @@ export class AnimationClip {
   endFrame = 48;
   readonly tracks: AnimationTrack[] = [];
   readonly weightTracks: ShapeWeightTrack[] = [];
+  readonly textureTracks: TextureAnimationTrack[] = [];
   readonly meshTracks: MeshMotionTrack[] = [];
   readonly cameraTracks: CameraAnimationTrack[] = [];
   readonly lightTracks: LightAnimationTrack[] = [];
@@ -952,6 +1058,9 @@ export class AnimationClip {
     clip.tracks.push(...snapshot.tracks.map(AnimationTrack.fromSnapshot));
     clip.weightTracks.push(
       ...(snapshot.weightTracks ?? []).map(ShapeWeightTrack.fromSnapshot)
+    );
+    clip.textureTracks.push(
+      ...(snapshot.textureTracks ?? []).map(TextureAnimationTrack.fromSnapshot)
     );
     clip.meshTracks.push(
       ...(snapshot.meshTracks ?? []).map(MeshMotionTrack.fromSnapshot)
@@ -1016,6 +1125,34 @@ export class AnimationClip {
     );
     if (index >= 0) {
       this.weightTracks.splice(index, 1);
+    }
+  }
+
+  /** Find one texture track for a node. */
+  getTextureTrack(targetId: string): TextureAnimationTrack | null {
+    return (
+      this.textureTracks.find((track) => track.targetId === targetId) ?? null
+    );
+  }
+
+  /** Find or create one texture track for a node. */
+  ensureTextureTrack(targetId: string): TextureAnimationTrack {
+    const existing = this.getTextureTrack(targetId);
+    if (existing) {
+      return existing;
+    }
+    const track = new TextureAnimationTrack(targetId);
+    this.textureTracks.push(track);
+    return track;
+  }
+
+  /** Remove one texture track. */
+  removeTextureTrack(targetId: string): void {
+    const index = this.textureTracks.findIndex(
+      (track) => track.targetId === targetId
+    );
+    if (index >= 0) {
+      this.textureTracks.splice(index, 1);
     }
   }
 
@@ -1116,6 +1253,7 @@ export class AnimationClip {
       endFrame: this.endFrame,
       tracks: this.tracks.map((track) => track.snapshot()),
       weightTracks: this.weightTracks.map((track) => track.snapshot()),
+      textureTracks: this.textureTracks.map((track) => track.snapshot()),
       meshTracks: this.meshTracks.map((track) => track.snapshot()),
       cameraTracks: this.cameraTracks.map((track) => track.snapshot()),
       lightTracks: this.lightTracks.map((track) => track.snapshot())
@@ -1138,6 +1276,10 @@ export function estimateAnimationSnapshotBytes(
         ) +
         (clip.weightTracks ?? []).reduce(
           (sum, track) => sum + 96 + track.keyframes.length * 48,
+          0
+        ) +
+        (clip.textureTracks ?? []).reduce(
+          (sum, track) => sum + 96 + track.keyframes.length * 64,
           0
         ) +
         (clip.meshTracks ?? []).reduce(
@@ -1273,6 +1415,15 @@ export class SceneAnimation {
         })
       )
     );
+    const textureTracks = copy.textureTracks.splice(0);
+    copy.textureTracks.push(
+      ...textureTracks.map((track) =>
+        TextureAnimationTrack.fromSnapshot({
+          ...track.snapshot(),
+          id: createTextureAnimationTrackId()
+        })
+      )
+    );
     const meshTracks = copy.meshTracks.splice(0);
     copy.meshTracks.push(
       ...meshTracks.map((track) =>
@@ -1346,6 +1497,10 @@ export class SceneAnimation {
           (count, track) => count + track.keyframes.length,
           0
         ) +
+        clip.textureTracks.reduce(
+          (count, track) => count + track.keyframes.length,
+          0
+        ) +
         clip.meshTracks.reduce(
           (count, track) => count + track.keyframes.length,
           0
@@ -1380,6 +1535,26 @@ export class SceneAnimation {
   /** Proxy: active clip shape-weight tracks. */
   get weightTracks(): readonly ShapeWeightTrack[] {
     return this.activeClip.weightTracks;
+  }
+
+  /** Proxy: active clip texture-swap tracks. */
+  get textureTracks(): readonly TextureAnimationTrack[] {
+    return this.activeClip.textureTracks;
+  }
+
+  /** Proxy: one texture track for a node. */
+  getTextureTrack(targetId: string): TextureAnimationTrack | null {
+    return this.activeClip.getTextureTrack(targetId);
+  }
+
+  /** Proxy: find or create a texture track for a node. */
+  ensureTextureTrack(targetId: string): TextureAnimationTrack {
+    return this.activeClip.ensureTextureTrack(targetId);
+  }
+
+  /** Proxy: remove one texture track for a node. */
+  removeTextureTrack(targetId: string): void {
+    this.activeClip.removeTextureTrack(targetId);
   }
 
   /** Proxy: active clip mesh-motion tracks. */

@@ -637,6 +637,7 @@ export class EditorRuntime {
   private animationLoop = true;
   private animationInterpolation: AnimationInterpolation = 'linear';
   private animationPose = new Map<string, NodeTransform>();
+  private animationTexturePose = new Map<string, string | null>();
   private animationCameraPose = new Map<string, CameraPose>();
   private animationLightPose = new Map<string, LightPose>();
   private animationKeyClipboard: AnimationKeyClipboardEntry[] = [];
@@ -681,10 +682,17 @@ export class EditorRuntime {
       onViewChanged: () => {
         this.publish();
       },
-      resolveNodeTexture: (node) =>
-        this.textureLibrary.get(node.textureId)?.texture ?? null,
-      resolveNodeAlphaMode: (node) =>
-        this.textureLibrary.get(node.textureId)?.textureAlphaMode ?? 'opaque'
+      resolveNodeTexture: (node) => {
+        const id = this.effectiveNodeTextureId(node);
+        return id === null ? null : (this.textureLibrary.get(id)?.texture ?? null);
+      },
+      resolveNodeTextureId: (node) => this.effectiveNodeTextureId(node),
+      resolveNodeAlphaMode: (node) => {
+        const id = this.effectiveNodeTextureId(node);
+        return id === null
+          ? 'opaque'
+          : (this.textureLibrary.get(id)?.textureAlphaMode ?? 'opaque');
+      }
     });
 
     this.inputHost = {
@@ -858,6 +866,7 @@ export class EditorRuntime {
       uvError: this.uvError,
       textureAssets: this.textureLibrary.summaries(),
       textureAssetId: this.textureLibrary.activeAssetId,
+      activeNodeTextureId: active ? this.effectiveNodeTextureId(active) : null,
       textureLayers: this.textureStack.summaries(),
       textureActiveId: this.textureStack.activeLayerId,
       textureSize: this.textureStack.width,
@@ -954,6 +963,7 @@ export class EditorRuntime {
         trackCount:
           clip.tracks.length +
           clip.weightTracks.length +
+          clip.textureTracks.length +
           clip.meshTracks.length +
           clip.cameraTracks.length +
           clip.lightTracks.length
@@ -1039,8 +1049,18 @@ export class EditorRuntime {
     if (!asset || this.textureLibrary.list().length <= 1) {
       return;
     }
-    if (this.document.nodes.some((node) => node.textureId === asset.id)) {
-      this.projectError = 'Unassign this texture before deleting it.';
+    const animated = this.document.animation.clips.some((clip) =>
+      clip.textureTracks.some((track) =>
+        track.keyframes.some((key) => key.textureId === asset.id)
+      )
+    );
+    if (
+      animated ||
+      this.document.nodes.some((node) => node.textureId === asset.id)
+    ) {
+      this.projectError = animated
+        ? 'Remove this texture from animation before deleting it.'
+        : 'Unassign this texture before deleting it.';
       this.publish();
       return;
     }
@@ -4558,6 +4578,36 @@ export class EditorRuntime {
         }))
       };
     });
+    const textures = this.document.animation.textureTracks.map((track) => {
+      const node = this.document.getNode(track.targetId);
+      return {
+        id: track.id,
+        kind: 'texture' as const,
+        targetId: track.targetId,
+        targetKind: 'node' as const,
+        targetName: `${node?.name ?? 'Missing object'} · Texture`,
+        hasTrack: true,
+        keyframes: track.keyframes.map((item) => ({
+          frame: item.frame,
+          interpolation: item.interpolation
+        }))
+      };
+    });
+    if (
+      activeNode &&
+      this.workspace === 'animation' &&
+      !this.document.animation.getTextureTrack(activeNode.id)
+    ) {
+      textures.push({
+        id: `pending-texture:${activeNode.id}`,
+        kind: 'texture' as const,
+        targetId: activeNode.id,
+        targetKind: 'node' as const,
+        targetName: `${activeNode.name} · Texture`,
+        hasTrack: false,
+        keyframes: []
+      });
+    }
     const cameras = this.document.animation.cameraTracks.map((track) => {
       const camera = this.document.getCamera(track.targetId);
       return {
@@ -4620,7 +4670,14 @@ export class EditorRuntime {
         keyframes: []
       });
     }
-    return [...transforms, ...weights, ...motions, ...cameras, ...lights];
+    return [
+      ...transforms,
+      ...weights,
+      ...motions,
+      ...textures,
+      ...cameras,
+      ...lights
+    ];
   }
 
   /** Return the animation track for the active node/group, if any. */
@@ -4682,6 +4739,13 @@ export class EditorRuntime {
     }
   }
 
+  /** Effective texture id for a node after the current animated pose. */
+  private effectiveNodeTextureId(node: MeshNode): string | null {
+    return this.animationTexturePose.has(node.id)
+      ? (this.animationTexturePose.get(node.id) ?? null)
+      : node.textureId;
+  }
+
   /** Evaluate and apply the current animation pose to the viewport. */
   private applyAnimationPose(): void {
     if (this.meshPoseEdit) {
@@ -4702,6 +4766,14 @@ export class EditorRuntime {
       }
     }
     this.animationPose = pose;
+    this.animationTexturePose.clear();
+    for (const track of this.document.animation.textureTracks) {
+      const node = this.document.getNode(track.targetId);
+      if (!node || track.keyframes.length === 0) {
+        continue;
+      }
+      this.animationTexturePose.set(node.id, track.evaluate(this.animationFrame));
+    }
     this.animationCameraPose.clear();
     this.animationLightPose.clear();
     for (const track of this.document.animation.cameraTracks) {
@@ -5083,6 +5155,13 @@ export class EditorRuntime {
           values: readonly number[];
         }
       | {
+          kind: 'texture';
+          targetId: string;
+          frame: number;
+          interpolation: AnimationInterpolation;
+          textureId: string | null;
+        }
+      | {
           kind: 'camera';
           targetId: string;
           frame: number;
@@ -5099,6 +5178,20 @@ export class EditorRuntime {
     const planned: PlannedPaste[] = [];
     for (const entry of entries) {
       const frame = base + entry.offsetFrame;
+      if (entry.kind === 'texture') {
+        const node = this.document.getNode(entry.targetId);
+        if (!node || entry.textureId === undefined) {
+          continue;
+        }
+        planned.push({
+          kind: 'texture',
+          targetId: node.id,
+          frame,
+          interpolation: entry.interpolation,
+          textureId: entry.textureId
+        });
+        continue;
+      }
       if (entry.kind === 'mesh') {
         const node = this.document.getNode(entry.targetId);
         if (!node || !entry.vertexIndices || !entry.values) {
@@ -5210,7 +5303,11 @@ export class EditorRuntime {
     }
     let pasted = 0;
     for (const entry of planned) {
-      if (entry.kind === 'mesh') {
+      if (entry.kind === 'texture') {
+        animation
+          .ensureTextureTrack(entry.targetId)
+          .setKey(entry.frame, entry.textureId, 'step');
+      } else if (entry.kind === 'mesh') {
         const node = this.document.getNode(entry.targetId);
         if (!node) {
           continue;
@@ -5272,6 +5369,7 @@ export class EditorRuntime {
     const transformFrames = new Map<string, Set<number>>();
     const shapeFrames = new Map<string, Set<number>>();
     const meshFrames = new Map<string, Set<number>>();
+    const textureFrames = new Map<string, Set<number>>();
     const cameraFrames = new Map<string, Set<number>>();
     const lightFrames = new Map<string, Set<number>>();
     for (const reference of keys) {
@@ -5289,6 +5387,15 @@ export class EditorRuntime {
         if (!frames) {
           frames = new Set();
           shapeFrames.set(reference.trackId, frames);
+        }
+        frames.add(reference.frame);
+      } else if (
+        clip.textureTracks.some((track) => track.id === reference.trackId)
+      ) {
+        let frames = textureFrames.get(reference.trackId);
+        if (!frames) {
+          frames = new Set();
+          textureFrames.set(reference.trackId, frames);
         }
         frames.add(reference.frame);
       } else if (
@@ -5350,6 +5457,22 @@ export class EditorRuntime {
       }
       if (track.keyframes.length === 0) {
         animation.removeWeightTrack(track.targetId, track.shapeKeyId);
+      }
+    }
+    for (const [trackId, frames] of textureFrames) {
+      const track = clip.textureTracks.find((item) => item.id === trackId);
+      if (!track) {
+        continue;
+      }
+      for (const frame of frames) {
+        const hadKey = track.keyframes.some((key) => key.frame === frame);
+        track.removeKey(frame);
+        if (hadKey) {
+          removed += 1;
+        }
+      }
+      if (track.keyframes.length === 0) {
+        animation.removeTextureTrack(track.targetId);
       }
     }
     for (const [trackId, frames] of meshFrames) {
@@ -5431,7 +5554,7 @@ export class EditorRuntime {
   keyAnimationTrack(
     targetId: string,
     targetKind: import('../scene/SceneAnimation').AnimationTargetKind | 'camera' | 'light',
-    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
+    kind: 'transform' | 'shape' | 'mesh' | 'texture' | 'camera' | 'light',
     shapeKeyId?: string
   ): void {
     if (this.meshPoseEdit) {
@@ -5468,6 +5591,14 @@ export class EditorRuntime {
       this.document.animation
         .ensureLightTrack(light.id)
         .setKey(keyFrame, pose, this.animationInterpolation);
+    } else if (kind === 'texture') {
+      const node = this.document.getNode(targetId);
+      if (!node) {
+        return;
+      }
+      this.document.animation
+        .ensureTextureTrack(node.id)
+        .setKey(keyFrame, this.effectiveNodeTextureId(node), 'step');
     } else if (kind === 'mesh') {
       const node = this.document.getNode(targetId);
       if (!node) {
@@ -5530,11 +5661,52 @@ export class EditorRuntime {
           ? 'Key shape weight'
           : kind === 'mesh'
             ? 'Key mesh pose'
-            : kind === 'camera'
-              ? 'Key camera'
-              : kind === 'light'
-                ? 'Key light'
-                : 'Key transform'
+            : kind === 'texture'
+              ? 'Key texture'
+              : kind === 'camera'
+                ? 'Key camera'
+                : kind === 'light'
+                  ? 'Key light'
+                  : 'Key transform'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
+  /** Key the active object's visible texture at the playhead. */
+  keyActiveTexture(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    this.keyAnimationTrack(node.id, 'node', 'texture');
+  }
+
+  /** Set and key the active object's animated texture at the playhead. */
+  setActiveTextureKey(textureId: string | null): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const keyFrame = Math.round(this.animationFrame);
+    this.animationFrame = keyFrame;
+    const before = this.document.animation.snapshot();
+    this.document.animation
+      .ensureTextureTrack(node.id)
+      .setKey(keyFrame, textureId, 'step');
+    const after = this.document.animation.snapshot();
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return;
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        this.document.animation,
+        before,
+        after,
+        'Set texture key'
       )
     );
     this.applyAnimationPose();
@@ -5543,12 +5715,15 @@ export class EditorRuntime {
   /** Change the interpolation of one selected key without moving it. */
   setAnimationKeyInterpolation(
     targetId: string,
-    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
+    kind: 'transform' | 'shape' | 'mesh' | 'texture' | 'camera' | 'light',
     shapeKeyId: string | null,
     frame: number,
     interpolation: import('../scene/SceneAnimation').AnimationInterpolation
   ): void {
     const before = this.document.animation.snapshot();
+    if (kind === 'texture') {
+      return;
+    }
     if (kind === 'camera') {
       const track = this.document.animation.getCameraTrack(targetId);
       if (!track || !track.setInterpolation(frame, interpolation)) {
@@ -5593,12 +5768,21 @@ export class EditorRuntime {
   /** Remove one key from a transform or shape-weight track. */
   deleteAnimationKeyAt(
     targetId: string,
-    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
+    kind: 'transform' | 'shape' | 'mesh' | 'texture' | 'camera' | 'light',
     shapeKeyId: string | null,
     frame: number
   ): void {
     const before = this.document.animation.snapshot();
-    if (kind === 'camera') {
+    if (kind === 'texture') {
+      const track = this.document.animation.getTextureTrack(targetId);
+      if (!track) {
+        return;
+      }
+      track.removeKey(frame);
+      if (track.keyframes.length === 0) {
+        this.document.animation.removeTextureTrack(targetId);
+      }
+    } else if (kind === 'camera') {
       const track = this.document.animation.getCameraTrack(targetId);
       if (!track) {
         return;
@@ -5661,7 +5845,7 @@ export class EditorRuntime {
   /** Move one key to another integer frame as one undoable edit. */
   moveAnimationKey(
     targetId: string,
-    kind: 'transform' | 'shape' | 'mesh' | 'camera' | 'light',
+    kind: 'transform' | 'shape' | 'mesh' | 'texture' | 'camera' | 'light',
     shapeKeyId: string | null,
     fromFrame: number,
     toFrame: number
@@ -5679,7 +5863,15 @@ export class EditorRuntime {
       return;
     }
     const before = this.document.animation.snapshot();
-    if (kind === 'camera') {
+    if (kind === 'texture') {
+      const track = this.document.animation.getTextureTrack(targetId);
+      const key = track?.keyframes.find((item) => item.frame === fromFrame);
+      if (!track || !key) {
+        return;
+      }
+      track.removeKey(fromFrame);
+      track.setKey(targetFrame, key.textureId, 'step');
+    } else if (kind === 'camera') {
       const track = this.document.animation.getCameraTrack(targetId);
       const key = track?.keyframes.find((item) => item.frame === fromFrame);
       if (!track || !key) {
@@ -5969,6 +6161,7 @@ export class EditorRuntime {
   /** Clear the preview pose when leaving animation-oriented views. */
   private clearAnimationPose(): void {
     this.animationPose.clear();
+    this.animationTexturePose.clear();
     this.animationCameraPose.clear();
     this.animationLightPose.clear();
     for (const node of this.document.nodes) {
@@ -6385,7 +6578,13 @@ export class EditorRuntime {
       this.history.execute(new CompositeCommand('Import GLB', commands));
       if (imported.clips.length > 0) {
         this.animationFrame = this.document.animation.startFrame;
-        this.applyAnimationPose();
+        if (
+          this.workspace === 'animation' ||
+          this.workspace === 'render' ||
+          this.workspace === 'light'
+        ) {
+          this.applyAnimationPose();
+        }
       }
       this.activeGroupId = null;
       this.activeNodeId = nodes[0]?.id ?? this.activeNodeId;
@@ -11274,6 +11473,23 @@ export class EditorRuntime {
       }
     }
 
+    const animationChanged =
+      event.command instanceof SetAnimationCommand ||
+      (event.command instanceof CompositeCommand &&
+        event.command.label === 'Import GLB');
+    if (animationChanged && this.meshPoseEdit === null) {
+      if (
+        this.workspace === 'animation' ||
+        this.workspace === 'render' ||
+        this.workspace === 'light'
+      ) {
+        this.applyAnimationPose();
+      } else {
+        this.clearAnimationPose();
+        this.publish();
+      }
+      return;
+    }
     this.syncScene();
     this.publish();
   }

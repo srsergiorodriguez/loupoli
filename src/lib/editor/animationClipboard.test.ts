@@ -73,6 +73,20 @@ describe('animation clipboard', () => {
     expect(entries[1].lightIntensity).toBe(2);
   });
 
+  it('copies texture keys including an explicit unassigned texture', () => {
+    const clip = new AnimationClip('Test', 'clip-test');
+    const track = clip.ensureTextureTrack('node-1');
+    track.setKey(2, 'texture-a');
+    track.setKey(6, null);
+    const entries = buildAnimationKeyClipboard(clip, [
+      { trackId: track.id, frame: 2 },
+      { trackId: track.id, frame: 6 }
+    ]);
+    expect(entries.map((entry) => entry.kind)).toEqual(['texture', 'texture']);
+    expect(entries[0].textureId).toBe('texture-a');
+    expect(entries[1].textureId).toBeNull();
+  });
+
   it('deduplicates repeated references and ignores missing keys', () => {
     const clip = new AnimationClip('Test', 'clip-test');
     const track = clip.ensureTrack('node-1', 'node');

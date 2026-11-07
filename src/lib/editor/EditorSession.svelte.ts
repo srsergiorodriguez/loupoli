@@ -74,6 +74,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvError: null,
   textureAssets: [],
   textureAssetId: null,
+  activeNodeTextureId: null,
   textureLayers: [],
   textureActiveId: null,
   textureSize: 0,
@@ -1068,6 +1069,14 @@ export class EditorSession {
       track.kind,
       track.shapeKeyId
     );
+  }
+
+  keyActiveTexture(): void {
+    this.runtime?.keyActiveTexture();
+  }
+
+  setActiveTextureKey(textureId: string | null): void {
+    this.runtime?.setActiveTextureKey(textureId);
   }
 
   deleteAnimationKeyAt(

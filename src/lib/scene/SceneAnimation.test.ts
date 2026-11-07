@@ -116,6 +116,38 @@ describe('SceneAnimation', () => {
     expect(SceneAnimation.fromSnapshot(legacy.snapshot()).clips).toHaveLength(1);
   });
 
+  it('duplicates texture tracks with fresh track ids', () => {
+    const animation = new SceneAnimation();
+    const track = animation.ensureTextureTrack('node-1');
+    track.setKey(0, 'texture-a');
+    track.setKey(8, 'texture-b');
+    const copy = animation.duplicateClip();
+    expect(copy).not.toBeNull();
+    const duplicated = copy?.getTextureTrack('node-1');
+    expect(duplicated).not.toBeNull();
+    expect(duplicated?.id).not.toBe(track.id);
+    expect(duplicated?.keyframes.map((key) => key.textureId)).toEqual([
+      'texture-a',
+      'texture-b'
+    ]);
+  });
+
+  it('evaluates Step texture-swap tracks', () => {
+    const clip = new AnimationClip('Textures', 'clip-textures');
+    const track = clip.ensureTextureTrack('node-1');
+    track.setKey(0, 'texture-a');
+    track.setKey(12, 'texture-b');
+    track.setKey(24, null);
+    expect(track.evaluate(0)).toBe('texture-a');
+    expect(track.evaluate(6)).toBe('texture-a');
+    expect(track.evaluate(12)).toBe('texture-b');
+    expect(track.evaluate(20)).toBe('texture-b');
+    expect(track.evaluate(24)).toBeNull();
+    const restored = AnimationClip.fromSnapshot(clip.snapshot());
+    expect(restored.getTextureTrack('node-1')?.keyframes).toHaveLength(3);
+    expect(restored.getTextureTrack('node-1')?.evaluate(13)).toBe('texture-b');
+  });
+
   it('evaluates and snapshots camera and light animation tracks', () => {
     const clip = new AnimationClip('Shot', 'clip-shot');
     const camera = clip.ensureCameraTrack('camera-1');

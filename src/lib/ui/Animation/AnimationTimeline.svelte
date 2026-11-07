@@ -573,7 +573,7 @@
     </div>
   </div>
 
-  {#if selectedKeyData && !snapshot.meshPoseEditing}
+  {#if selectedKeyData && !snapshot.meshPoseEditing && selectedKeyData.track.kind !== 'texture'}
     <div class="timeline-key-editor">
       <SelectField
         label="Key interpolation"
@@ -634,6 +634,7 @@
             (!selectedTrack && activeTrack?.id === track.id)}
           class:shape-track={track.kind === 'shape'}
           class:mesh-track={track.kind === 'mesh'}
+          class:texture-track={track.kind === 'texture'}
           class:camera-track={track.kind === 'camera'}
           class:light-track={track.kind === 'light'}
           role="button"
@@ -856,6 +857,10 @@
 
   .timeline-track.mesh-track .track-name {
     color: var(--accent-warning);
+  }
+
+  .timeline-track.texture-track .track-name {
+    color: var(--accent-success);
   }
 
   .timeline-track.camera-track .track-name,

@@ -252,7 +252,7 @@ describe('.lpoli', () => {
 
     const bytes = encodeLpoly(document, SETTINGS);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    expect(view.getUint16(8, true)).toBe(7);
+    expect(view.getUint16(8, true)).toBe(8);
     const decoded = decodeLpoly(bytes).document.animation;
     expect(decoded.clips.map((clip) => clip.name)).toEqual(['Idle', 'Walk']);
     expect(decoded.activeClipId).toBe(second.id);
@@ -263,6 +263,22 @@ describe('.lpoli', () => {
     expect(decoded.clips[0].tracks[0].keyframes[0].transform.position).toEqual([
       0, 0, 0
     ]);
+  });
+
+  it('round-trips Step texture animation tracks', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    const track = document.animation.ensureTextureTrack(node.id);
+    track.setKey(0, 'texasset-1');
+    track.setKey(12, 'texasset-2');
+    track.setKey(24, null);
+
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    const restored = decoded.animation.getTextureTrack(node.id);
+    expect(restored?.keyframes).toHaveLength(3);
+    expect(restored?.evaluate(6)).toBe('texasset-1');
+    expect(restored?.evaluate(12)).toBe('texasset-2');
+    expect(restored?.evaluate(30)).toBeNull();
   });
 
   it('round-trips Mesh Motion tracks and interpolates their deltas', () => {
