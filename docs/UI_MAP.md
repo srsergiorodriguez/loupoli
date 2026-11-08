@@ -26,7 +26,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas with optional read-only UV overlay, brush footer |
 | **Render Preview** | Always-open live output inside PaneHost | Dimensions/upscale/frame header, play/pause, live canvas; camera and scene edits refresh it |
 | **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace; full-space About/Documentation modals |
-| **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide |
+| **Action Dock** | One-shot topology actions | Extrude, Inset, Loop Cut, Loop Slide (selected loop) |
 | **Status Bar** | Persistent status | Context hint, mesh counts, and snap state; no renderer internals |
 | **Notifications** | Transient operation feedback | Bottom-center toast stack above the status bar; import, export, render, and recoverable operation results |
 
@@ -46,7 +46,7 @@ This is the authoritative map of the application shell. New controls must be ass
 
 ### Inspector section sets
 
-- **Model:** Scene → Transform → Selection → Mesh → Modifiers. PS1 look controls live in Render.
+- **Model:** Scene → Transform → Selection → Mesh → Modifiers. Modifiers includes Apply modifiers. PS1 look controls live in Render.
 - **UV:** Scene → Selection. Selection remains for edge/seam authoring; 3D editing sections are hidden.
 - **Paint:** Scene → Brush → Texture. Brush and Texture are adjacent; 3D selection overlays are hidden while the selection set persists.
 - **Light:** Scene → Lighting. Mesh editing and selection chrome are hidden; Scene remains for choosing the bake target.

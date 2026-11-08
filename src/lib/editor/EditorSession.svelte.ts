@@ -88,6 +88,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   modifiers: [],
   modifiersActive: false,
   modifierError: null,
+  canApplyModifiers: false,
+  modifierApplyBlockedReason: null,
   evaluatedCounts: { vertices: 0, edges: 0, faces: 0, triangles: 0 },
   boundaryEdges: 0,
   seamCount: 0,
@@ -1241,6 +1243,10 @@ export class EditorSession {
 
   removeModifier(id: string): void {
     this.runtime?.removeModifier(id);
+  }
+
+  applyModifierStack(): void {
+    this.runtime?.applyModifierStack();
   }
 
   moveModifier(id: string, direction: -1 | 1): void {

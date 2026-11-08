@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectEdgeLoop, collectEdgeLoops } from './topology';
+import { collectEdgeLoop, collectEdgeLoops, edgeLoopSlidePlan } from './topology';
 import { createCubeMesh, createGridMesh } from './primitives';
 import type { HalfEdgeMesh } from './HalfEdgeMesh';
 
@@ -58,6 +58,22 @@ describe('edge loop collection', () => {
     expect(loop.closed).toBe(true);
     expect(loop.edges.length).toBeGreaterThan(3);
     expectConnectedLoop(grid, loop.edges);
+  });
+
+  it('plans a slide for a selected closed loop', () => {
+    const cube = createCubeMesh(2);
+    const plan = edgeLoopSlidePlan(cube, [0, 1, 2, 3]);
+    expect(plan).not.toBeNull();
+    expect(plan?.vertices).toHaveLength(4);
+    for (const vertex of plan?.vertices ?? []) {
+      expect(plan?.candidates.get(vertex)?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('rejects a single edge or disconnected loop selection', () => {
+    const cube = createCubeMesh(2);
+    expect(edgeLoopSlidePlan(cube, [0])).toBeNull();
+    expect(edgeLoopSlidePlan(cube, [0, 8])).toBeNull();
   });
 
   it('unions loops for a multi-edge selection', () => {

@@ -2434,6 +2434,25 @@
             </div>
           {/if}
 
+          {#if modifiers.length > 0}
+            <ActionRow align="end">
+              <ActionButton
+                label="Apply modifiers"
+                icon="merge"
+                disabled={!session.snapshot.canApplyModifiers}
+                onActivate={() => session.applyModifierStack()}
+              />
+            </ActionRow>
+            {#if session.snapshot.modifierApplyBlockedReason}
+              <p class="hint">{session.snapshot.modifierApplyBlockedReason}</p>
+            {:else}
+              <p class="hint">
+                Bakes the enabled stack into the base mesh and clears the stack.
+                Undo restores both.
+              </p>
+            {/if}
+          {/if}
+
           {#if modifiersActive}
             <p class="hint">
               Modifiers are non-destructive. Picking maps through provenance;

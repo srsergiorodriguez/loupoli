@@ -26,6 +26,8 @@ import {
   extrudeSelectedFaces,
   collectEdgeLoop,
   collectEdgeLoops,
+  edgeLoopSlidePlan,
+  type EdgeLoopSlidePlan,
   insetSelectedFace,
   loopCutFromEdge,
   mergeSelectedVertices
@@ -437,9 +439,14 @@ interface ActionDrag {
   readonly startValue: number;
   readonly faceIndex: number | null;
   readonly edgeIndex: number | null;
-  readonly loopBase: HalfEdgeMesh | null;
+  readonly slide: LoopSlideDrag | null;
   numeric: string;
   value: number;
+}
+
+interface LoopSlideDrag {
+  readonly plan: EdgeLoopSlidePlan;
+  targets: Map<number, number> | null;
 }
 
 /** A live raster paint stroke over the active texture layer. */
@@ -527,6 +534,7 @@ export class EditorRuntime {
   private readonly selection = new ElementSelection('vertex');
   private selectionCombineMode: SelectionCombineMode = 'replace';
   private loopSelect = false;
+  private lastGeneratedSeamNoticeAt = 0;
   private activeEditor: EditorPane = '3d';
   private workspace: Workspace = 'model';
   private uvOpen = false;
@@ -827,6 +835,8 @@ export class EditorRuntime {
       selectedElements[0] < mesh.vertexCount
         ? mesh.getVertexPosition(selectedElements[0])
         : null;
+    const modifierApplyBlockedReason =
+      this.modifierApplyBlockedReason();
 
     return {
       shading: this.shading,
@@ -894,6 +904,8 @@ export class EditorRuntime {
       modifiers: active ? active.modifiers.map((modifier) => ({ ...modifier })) : [],
       modifiersActive: evaluated?.modifiersActive ?? false,
       modifierError: evaluated?.error ?? null,
+      canApplyModifiers: modifierApplyBlockedReason === null,
+      modifierApplyBlockedReason,
       evaluatedCounts: evaluated
         ? {
             vertices: evaluated.mesh.vertexCount,
@@ -907,9 +919,7 @@ export class EditorRuntime {
       transformOrientation: this.transformOrientation,
       modalTransform: this.modalSnapshot(),
       actionState: this.actionSnapshot(),
-      loopSlideAvailable:
-        this.lastLoopCut !== null &&
-        this.lastLoopCut.node === this.getActiveNode(),
+      loopSlideAvailable: this.activeLoopSlidePlan() !== null,
       boundaryEdges: mesh?.boundaryEdgeCount ?? 0,
       seamCount,
       counts: mesh
@@ -4224,6 +4234,84 @@ export class EditorRuntime {
       this.projectError = this.errorMessage(error);
       this.publish();
     }
+  }
+
+  /** Why the active modifier stack cannot be applied, or null when it can. */
+  private modifierApplyBlockedReason(): string | null {
+    const node = this.getActiveNode();
+    if (!node) {
+      return 'Select a mesh object first.';
+    }
+    if (node.reference || this.getActiveGroup() !== null) {
+      return 'Select a mesh object first.';
+    }
+    if (this.meshPoseEdit) {
+      return 'Finish the Mesh Motion pose before applying modifiers.';
+    }
+    if (this.drag || this.gizmoDrag || this.modalTransform || this.actionDrag) {
+      return 'Finish the current edit before applying modifiers.';
+    }
+    if (node.shapeKeys.length > 0) {
+      return 'Applying a modifier would invalidate shape keys.';
+    }
+    if (
+      this.document.animation.meshTracks.some(
+        (track) => track.targetId === node.id
+      )
+    ) {
+      return 'Applying a modifier would invalidate Mesh Motion keys.';
+    }
+    if (!node.modifiers.some((modifier) => modifier.enabled)) {
+      return 'No enabled modifiers to apply.';
+    }
+    const evaluated = node.getEvaluatedMesh();
+    if (evaluated.error) {
+      return evaluated.error;
+    }
+    return null;
+  }
+
+  /** Bake every enabled modifier into the base mesh and clear the stack. */
+  applyModifierStack(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const reason = this.modifierApplyBlockedReason();
+    if (reason) {
+      this.notify('warning', 'Cannot apply modifiers', reason);
+      return;
+    }
+    const evaluated = node.getEvaluatedMesh();
+    if (!evaluated.modifiersActive) {
+      return;
+    }
+    const before = cloneModifiers(node.modifiers);
+    this.lastLoopCut = null;
+    this.armedAction = null;
+    this.renderer.setActionPreviewLine(null);
+    this.selection.clear();
+    this.selection.setContext(node.id, this.selection.mode);
+    this.history.execute(
+      new CompositeCommand('Apply modifiers', [
+        new ReplaceMeshCommand(
+          node,
+          node.mesh,
+          evaluated.mesh,
+          'Apply modifiers'
+        ),
+        new SetModifiersCommand(node, before, [], 'Apply modifiers')
+      ])
+    );
+    this.syncScene();
+    this.publish();
+    this.notify(
+      'success',
+      'Modifiers applied',
+      `${before.filter((modifier) => modifier.enabled).length} enabled modifier${
+        before.filter((modifier) => modifier.enabled).length === 1 ? '' : 's'
+      } baked into the base mesh.`
+    );
   }
 
   /**
@@ -8530,7 +8618,7 @@ export class EditorRuntime {
         this.notify(
           'warning',
           'Loop Slide unavailable',
-          'Cut a loop first; Loop Slide then moves the most recent cut.'
+          'Select an edge loop first; Loop Slide then moves that loop.'
         );
       }
       return;
@@ -8540,12 +8628,12 @@ export class EditorRuntime {
     this.publish();
   }
 
-  private actionAvailable(kind: MeshActionKind, node: MeshNode): boolean {
+  private actionAvailable(kind: MeshActionKind, _node: MeshNode): boolean {
     if (this.getActiveGroup() !== null) {
       return false;
     }
     if (kind === 'loop-slide') {
-      return this.lastLoopCut !== null && this.lastLoopCut.node === node;
+      return this.activeLoopSlidePlan() !== null;
     }
     if (this.selection.mode === 'face') {
       if (kind === 'extrude') {
@@ -8562,6 +8650,23 @@ export class EditorRuntime {
     return false;
   }
 
+  /** Selected edge loop ready for a position-only slide. */
+  private activeLoopSlidePlan(): EdgeLoopSlidePlan | null {
+    if (this.getActiveGroup() !== null) {
+      return null;
+    }
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      node.reference ||
+      this.selection.mode !== 'edge' ||
+      this.selection.count < 2
+    ) {
+      return null;
+    }
+    return edgeLoopSlidePlan(node.mesh, this.selection.values());
+  }
+
   private defaultActionValue(kind: MeshActionKind): number {
     if (kind === 'extrude') {
       return 0.25;
@@ -8570,7 +8675,7 @@ export class EditorRuntime {
       return 0.2;
     }
     if (kind === 'loop-slide') {
-      return this.lastLoopCut?.t ?? 0.5;
+      return 0.5;
     }
     return 0.5;
   }
@@ -8605,7 +8710,7 @@ export class EditorRuntime {
     }
     let faceIndex: number | null = null;
     let edgeIndex: number | null = null;
-    let loopBase: HalfEdgeMesh | null = null;
+    let slide: LoopSlideDrag | null = null;
     let selection: readonly number[] = [];
     let value = this.defaultActionValue(kind);
 
@@ -8633,16 +8738,15 @@ export class EditorRuntime {
       selection = this.selection.values();
       edgeIndex = selection[0];
     } else {
-      if (
-        this.lastLoopCut === null ||
-        this.lastLoopCut.node !== node
-      ) {
+      const plan = this.activeLoopSlidePlan();
+      if (!plan) {
         this.armedAction = null;
         this.publish();
         return false;
       }
-      loopBase = this.lastLoopCut.baseMesh;
-      edgeIndex = this.lastLoopCut.edge;
+      selection = this.selection.values();
+      slide = { plan, targets: null };
+      value = 0;
     }
 
     const drag: ActionDrag = {
@@ -8657,7 +8761,7 @@ export class EditorRuntime {
       startValue: value,
       faceIndex,
       edgeIndex,
-      loopBase,
+      slide,
       numeric: '',
       value
     };
@@ -8667,7 +8771,9 @@ export class EditorRuntime {
       this.actionDrag = drag;
       node.setMesh(preview);
       this.updateActionPreviewLine(drag, preview);
-      this.selection.clear();
+      if (drag.kind !== 'loop-slide') {
+        this.selection.clear();
+      }
       this.projectError = null;
       this.syncScene();
       this.publish();
@@ -8693,21 +8799,75 @@ export class EditorRuntime {
       }
       return insetSelectedFace(drag.before, drag.faceIndex, value);
     }
-    if (drag.edgeIndex === null) {
-      throw new Error('Loop action requires one edge.');
-    }
     if (drag.kind === 'loop-cut') {
+      if (drag.edgeIndex === null) {
+        throw new Error('Loop cut requires one edge.');
+      }
       return loopCutFromEdge(drag.before, drag.edgeIndex, value);
     }
-    if (!drag.loopBase) {
-      throw new Error('Loop slide has no source loop.');
+    if (drag.kind === 'loop-slide') {
+      if (!drag.slide) {
+        throw new Error('Loop slide has no selected loop.');
+      }
+      const targets = drag.slide.targets;
+      if (!targets || targets.size === 0) {
+        return drag.before;
+      }
+      const positions = drag.before.positions.slice();
+      for (const vertex of drag.slide.plan.vertices) {
+        const target = targets.get(vertex);
+        if (target === undefined) {
+          continue;
+        }
+        const from = vertex * 3;
+        const to = target * 3;
+        positions[from] =
+          drag.before.positions[from] +
+          (drag.before.positions[to] - drag.before.positions[from]) * value;
+        positions[from + 1] =
+          drag.before.positions[from + 1] +
+          (drag.before.positions[to + 1] - drag.before.positions[from + 1]) * value;
+        positions[from + 2] =
+          drag.before.positions[from + 2] +
+          (drag.before.positions[to + 2] - drag.before.positions[from + 2]) * value;
+      }
+      return drag.before.withPositions(positions);
     }
-    return loopCutFromEdge(drag.loopBase, drag.edgeIndex, value);
+    throw new Error('Loop action requires one edge.');
   }
 
   private updateActionPointer(sample: PointerSample): void {
     const drag = this.actionDrag;
     if (!drag || drag.pointerId !== sample.pointerId) {
+      return;
+    }
+    if (drag.kind === 'loop-slide') {
+      if (drag.slide?.targets === null || drag.slide?.targets === undefined) {
+        this.pickLoopSlideTargets(drag, sample);
+      }
+      if (!drag.slide?.targets) {
+        return;
+      }
+      const distance = Math.hypot(
+        sample.clientX - drag.startX,
+        sample.clientY - drag.startY
+      );
+      const value = Math.min(0.95, Math.max(0.05, 0.05 + distance * 0.004));
+      if (Math.abs(value - drag.value) < 1e-6) {
+        return;
+      }
+      try {
+        const preview = this.buildActionMesh(drag, value);
+        drag.value = value;
+        drag.node.setMesh(preview);
+        this.updateActionPreviewLine(drag, preview);
+        this.projectError = null;
+        this.syncScene();
+        this.publish();
+      } catch (error) {
+        this.projectError = this.errorMessage(error);
+        this.publish();
+      }
       return;
     }
     const travel =
@@ -8739,19 +8899,80 @@ export class EditorRuntime {
     }
   }
 
+  /** Pick a consistent slide side from the initial screen-space drag. */
+  private pickLoopSlideTargets(
+    drag: ActionDrag,
+    sample: PointerSample
+  ): void {
+    const slide = drag.slide;
+    if (!slide) {
+      return;
+    }
+    const dx = sample.clientX - drag.startX;
+    const dy = sample.clientY - drag.startY;
+    if (Math.hypot(dx, dy) < 3) {
+      return;
+    }
+    const node = drag.node;
+    const parent = this.document.getGroup(node.parentId);
+    const matrix = transformMatrix(
+      worldTransformForNode(node.transform, parent?.transform ?? null)
+    );
+    const targets = new Map<number, number>();
+    for (const vertex of slide.plan.vertices) {
+      const base = new Vector3(
+        drag.before.positions[vertex * 3],
+        drag.before.positions[vertex * 3 + 1],
+        drag.before.positions[vertex * 3 + 2]
+      ).applyMatrix4(matrix);
+      const baseScreen = this.renderer.worldToClient(base);
+      const candidates = slide.plan.candidates.get(vertex) ?? [];
+      let best: number | null = candidates[0] ?? null;
+      let bestScore = -Infinity;
+      for (const candidate of candidates) {
+        const point = new Vector3(
+          drag.before.positions[candidate * 3],
+          drag.before.positions[candidate * 3 + 1],
+          drag.before.positions[candidate * 3 + 2]
+        ).applyMatrix4(matrix);
+        const screen = this.renderer.worldToClient(point);
+        if (!baseScreen || !screen) {
+          continue;
+        }
+        const length = Math.hypot(
+          screen.x - baseScreen.x,
+          screen.y - baseScreen.y
+        );
+        if (length < 1e-4) {
+          continue;
+        }
+        const score =
+          ((screen.x - baseScreen.x) * dx +
+            (screen.y - baseScreen.y) * dy) /
+          length;
+        if (score > bestScore || (score === bestScore && candidate < (best ?? Infinity))) {
+          best = candidate;
+          bestScore = score;
+        }
+      }
+      if (best !== null) {
+        targets.set(vertex, best);
+      }
+    }
+    if (targets.size === slide.plan.vertices.length) {
+      slide.targets = targets;
+    }
+  }
+
   private updateActionPreviewLine(
     drag: ActionDrag,
     preview: HalfEdgeMesh
   ): void {
-    if (
-      (drag.kind !== 'loop-cut' && drag.kind !== 'loop-slide') ||
-      drag.node.getEvaluatedMesh().modifiersActive
-    ) {
+    if (drag.kind !== 'loop-cut' || drag.node.getEvaluatedMesh().modifiersActive) {
       this.renderer.setActionPreviewLine(null);
       return;
     }
-    const source =
-      drag.kind === 'loop-cut' ? drag.before : drag.loopBase;
+    const source = drag.before;
     if (!source) {
       this.renderer.setActionPreviewLine(null);
       return;
@@ -8813,27 +9034,62 @@ export class EditorRuntime {
     this.armedAction = null;
     this.renderer.setActionPreviewLine(null);
     const after = drag.node.mesh;
+
+    if (drag.kind === 'loop-slide') {
+      const plan = drag.slide?.plan;
+      const targets = drag.slide?.targets;
+      if (!plan || !targets) {
+        drag.node.setMesh(drag.before);
+        this.selection.setValues(drag.selection);
+        this.syncScene();
+        this.publish();
+        return;
+      }
+      const beforePositions = plan.vertices.map((vertex) =>
+        drag.before.getVertexPosition(vertex)
+      );
+      const afterPositions = plan.vertices.map((vertex) =>
+        after.getVertexPosition(vertex)
+      );
+      const changed = afterPositions.some((position, index) =>
+        position.some(
+          (value, component) =>
+            Math.abs(value - beforePositions[index][component]) > 1e-7
+        )
+      );
+      if (changed) {
+        this.history.execute(
+          new TransformVerticesCommand(
+            after,
+            plan.vertices,
+            beforePositions,
+            afterPositions,
+            drag.node.id,
+            'Loop slide'
+          )
+        );
+      }
+      this.selection.setValues(drag.selection);
+      this.syncScene();
+      this.publish();
+      return;
+    }
+
     const label =
       drag.kind === 'extrude'
         ? `Extrude ${drag.selection.length} face${drag.selection.length === 1 ? '' : 's'}`
         : drag.kind === 'inset'
           ? 'Inset face'
-          : drag.kind === 'loop-cut'
-            ? 'Loop cut'
-            : 'Loop slide';
+          : 'Loop cut';
     this.selection.clear();
     const loopTransition: ReplaceMeshLoopTransition | null =
-      (drag.kind === 'loop-cut' || drag.kind === 'loop-slide') &&
-      drag.edgeIndex !== null
+      drag.kind === 'loop-cut' && drag.edgeIndex !== null
         ? {
             before: this.loopContext(),
             after: {
               nodeId: drag.node.id,
               edge: drag.edgeIndex,
-              baseMesh:
-                drag.kind === 'loop-cut'
-                  ? drag.before
-                  : (drag.loopBase ?? drag.before),
+              baseMesh: drag.before,
               t: drag.value
             }
           }
@@ -8847,6 +9103,47 @@ export class EditorRuntime {
         loopTransition
       )
     );
+    if (drag.kind === 'loop-cut') {
+      const loop = this.newLoopEdges(drag.before, after);
+      if (loop.length > 0) {
+        this.selection.setValues(loop);
+        this.syncScene();
+        this.publish();
+      }
+    }
+  }
+
+  /** Edges whose endpoints were created by the latest topology replacement. */
+  private newLoopEdges(
+    source: HalfEdgeMesh,
+    after: HalfEdgeMesh
+  ): number[] {
+    const key = (mesh: HalfEdgeMesh, vertex: number): string => {
+      const offset = vertex * 3;
+      return `${Math.fround(mesh.positions[offset])}|${Math.fround(
+        mesh.positions[offset + 1]
+      )}|${Math.fround(mesh.positions[offset + 2])}`;
+    };
+    const sourcePositions = new Set<string>();
+    for (let vertex = 0; vertex < source.vertexCount; vertex += 1) {
+      sourcePositions.add(key(source, vertex));
+    }
+    const newVertices = new Set<number>();
+    for (let vertex = 0; vertex < after.vertexCount; vertex += 1) {
+      if (!sourcePositions.has(key(after, vertex))) {
+        newVertices.add(vertex);
+      }
+    }
+    const edges: number[] = [];
+    for (let edge = 0; edge < after.edgeCount; edge += 1) {
+      const halfEdge = after.edgeHalfEdge[edge];
+      const from = after.heOrigin[halfEdge];
+      const to = after.heOrigin[after.heNext[halfEdge]];
+      if (newVertices.has(from) && newVertices.has(to)) {
+        edges.push(edge);
+      }
+    }
+    return edges;
   }
 
   private cancelActionGesture(): void {
@@ -9276,7 +9573,19 @@ export class EditorRuntime {
       if (clearOnMiss && combine === 'replace') {
         this.selection.clear();
       }
-    } else if (baseIndex >= 0) {
+    } else if (baseIndex < 0) {
+      if (
+        node.modifiers.some((modifier) => modifier.enabled) &&
+        Date.now() - this.lastGeneratedSeamNoticeAt > 3000
+      ) {
+        this.lastGeneratedSeamNoticeAt = Date.now();
+        this.notify(
+          'warning',
+          'Generated modifier geometry',
+          'Apply modifiers to make this seam editable.'
+        );
+      }
+    } else {
       this.pointerSelectionHit = true;
       if (this.selection.mode === 'edge' && this.loopSelect) {
         const loop = collectEdgeLoop(evaluated.mesh, evaluatedIndex);

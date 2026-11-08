@@ -47,13 +47,6 @@
     }
     return snapshot.loopSlideAvailable;
   }
-
-  function clickable(kind: MeshActionKind): boolean {
-    // Loop Slide stays clickable so the editor can explain that a loop cut
-    // must exist first; the other actions are unavailable until their
-    // selection prerequisites are met.
-    return kind === 'loop-slide' || available(kind);
-  }
 </script>
 
 {#if session.snapshot.activeNodeId !== null && session.snapshot.activeGroupId === null}
@@ -63,14 +56,12 @@
         <button
           type="button"
           class:active={activeKind === action.kind}
-          disabled={!clickable(action.kind) || busy}
-          class:context-missing={action.kind === 'loop-slide' &&
-            !available(action.kind)}
+          disabled={!available(action.kind) || busy}
           aria-label={action.kind === 'loop-slide' && !available(action.kind)
-            ? `${action.label} — cut a loop first`
+            ? `${action.label} — select an edge loop first`
             : action.label}
           title={action.kind === 'loop-slide' && !available(action.kind)
-            ? `${action.label} — cut a loop first`
+            ? `${action.label} — select an edge loop first`
             : action.label}
           onclick={() => session.armAction(action.kind)}
         >
@@ -79,6 +70,10 @@
         </button>
       {/each}
     </div>
+    {#if session.snapshot.selectionMode === 'edge' &&
+      !session.snapshot.loopSlideAvailable}
+      <p class="action-hint">Select an edge loop to enable Loop Slide.</p>
+    {/if}
   </aside>
 {/if}
 
@@ -98,6 +93,15 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(64px, 1fr));
     gap: 4px;
+  }
+
+  .action-hint {
+    max-width: 148px;
+    margin: 4px 2px 2px;
+    color: var(--text-tertiary);
+    font-family: var(--font-body);
+    font-size: var(--text-2xs);
+    line-height: var(--leading-tight);
   }
 
   button {

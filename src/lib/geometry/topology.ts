@@ -1091,3 +1091,111 @@ export function loopCutFromEdge(
 
   return HalfEdgeMesh.fromPolygons(faces);
 }
+
+/** A selectable edge loop that can be slid along perpendicular quad edges. */
+export interface EdgeLoopSlidePlan {
+  /** Interior loop vertices; open endpoints are omitted and stay fixed. */
+  readonly vertices: readonly number[];
+  /** Candidate neighbor vertex for each interior loop vertex. */
+  readonly candidates: ReadonlyMap<number, readonly number[]>;
+}
+
+/**
+ * Validate selected edges as one connected loop and collect cross-edge targets.
+ *
+ * A closed loop has degree two at every vertex. An open loop has exactly two
+ * degree-one endpoints, which remain fixed during the slide. Disconnected
+ * selections, junctions, and vertices without a perpendicular edge are
+ * rejected rather than producing twisted geometry.
+ */
+export function edgeLoopSlidePlan(
+  mesh: HalfEdgeMesh,
+  selectedEdges: readonly number[]
+): EdgeLoopSlidePlan | null {
+  const selected = new Set<number>();
+  for (const edge of selectedEdges) {
+    if (!Number.isInteger(edge) || edge < 0 || edge >= mesh.edgeCount) {
+      return null;
+    }
+    selected.add(edge);
+  }
+  if (selected.size < 2) {
+    return null;
+  }
+  const incident = new Map<number, number[]>();
+  const loopNeighbors = new Map<number, Set<number>>();
+  for (const edge of selected) {
+    const halfEdge = mesh.edgeHalfEdge[edge];
+    const a = mesh.heOrigin[halfEdge];
+    const b = mesh.heOrigin[mesh.heNext[halfEdge]];
+    incident.set(a, [...(incident.get(a) ?? []), edge]);
+    incident.set(b, [...(incident.get(b) ?? []), edge]);
+    const neighborsA = loopNeighbors.get(a) ?? new Set<number>();
+    neighborsA.add(b);
+    loopNeighbors.set(a, neighborsA);
+    const neighborsB = loopNeighbors.get(b) ?? new Set<number>();
+    neighborsB.add(a);
+    loopNeighbors.set(b, neighborsB);
+  }
+
+  const endpoints = [...incident.entries()]
+    .filter(([, edges]) => edges.length === 1)
+    .map(([vertex]) => vertex);
+  if (endpoints.length !== 0 && endpoints.length !== 2) {
+    return null;
+  }
+  for (const edges of incident.values()) {
+    if (edges.length > 2) {
+      return null;
+    }
+  }
+
+  // The selected edges must be one connected component.
+  const allVertices = [...incident.keys()];
+  if (allVertices.length === 0) {
+    return null;
+  }
+  const visited = new Set<number>([allVertices[0]]);
+  const pending = [allVertices[0]];
+  while (pending.length > 0) {
+    const vertex = pending.pop() as number;
+    for (const next of loopNeighbors.get(vertex) ?? []) {
+      if (!visited.has(next)) {
+        visited.add(next);
+        pending.push(next);
+      }
+    }
+  }
+  if (visited.size !== allVertices.length) {
+    return null;
+  }
+
+  const interior = allVertices.filter(
+    (vertex) => (incident.get(vertex)?.length ?? 0) === 2
+  );
+  if (interior.length === 0) {
+    return null;
+  }
+  const candidates = new Map<number, readonly number[]>();
+  for (const vertex of interior) {
+    const choices = new Set<number>();
+    for (let halfEdge = 0; halfEdge < mesh.halfEdgeCount; halfEdge += 1) {
+      if (mesh.heOrigin[halfEdge] !== vertex) {
+        continue;
+      }
+      const edge = mesh.heEdge[halfEdge];
+      if (selected.has(edge)) {
+        continue;
+      }
+      const other = mesh.heOrigin[mesh.heNext[halfEdge]];
+      if (!loopNeighbors.get(vertex)?.has(other)) {
+        choices.add(other);
+      }
+    }
+    if (choices.size === 0) {
+      return null;
+    }
+    candidates.set(vertex, [...choices]);
+  }
+  return { vertices: interior, candidates };
+}

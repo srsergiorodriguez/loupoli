@@ -40,8 +40,8 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Transforms and topology',
         paragraphs: [
           'The Move, Rotate, and Scale tools use the object transform when the element set is empty. With elements selected, the gizmo sits at the selection median and moves only those vertices. Typed values in Transform commit exact numbers; Enter confirms and Escape cancels a modal transform.',
-          'Extrude and Inset are face operations available from the ActionDock. Loop Cut uses the first selected edge (or a selected edge loop) and splits the surrounding quad ring. Loop Slide moves the most recent cut. These operations commit one validated mesh replacement and remain editable through undo.',
-          'With modifiers active, direct vertex edits and topology operations target the base mesh. The stack re-evaluates after each commit, so the displayed surface and the editable base can differ.'
+          'Extrude and Inset are face operations available from the ActionDock. Loop Cut uses the first selected edge (or a selected edge loop) and splits the surrounding quad ring. Loop Slide moves the selected edge loop. These operations commit one validated mesh replacement and remain editable through undo.',
+          'With modifiers active, direct vertex edits and topology operations target the base mesh. The stack re-evaluates after each commit, so the displayed surface and the editable base can differ. Apply modifiers bakes the enabled stack into the base mesh; this is the way to edit Mirror-generated seam geometry. Shape keys and Mesh Motion block Apply because their indices depend on the current vertex count.'
         ],
         controls: [
           'G / R / S: move, rotate, or scale',

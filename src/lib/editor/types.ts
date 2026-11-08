@@ -316,6 +316,8 @@ export interface EditorSnapshot {
   readonly modifiers: readonly Modifier[];
   readonly modifiersActive: boolean;
   readonly modifierError: string | null;
+  readonly canApplyModifiers: boolean;
+  readonly modifierApplyBlockedReason: string | null;
   readonly evaluatedCounts: MeshCounts;
   readonly counts: MeshCounts;
   readonly boundaryEdges: number;
