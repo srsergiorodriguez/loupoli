@@ -1444,8 +1444,9 @@
             onChange={(value) => session.setPs1Affine(value)}
           />
           <p class="hint">
-            Unlit only. Both effects are off by default, so correct perspective
-            mapping is the default view.
+            Texture / Texture + Wire only. Enabling either effect switches the
+            viewport to Texture + Wire and render shading to Texture / baked so
+            the look is visible immediately. Both effects start off.
           </p>
         </div>
         <ActionRow align="end">

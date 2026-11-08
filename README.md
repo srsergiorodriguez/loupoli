@@ -41,9 +41,9 @@ A simple and friendly 3D modeler for iPad and desktop. Z-up, quad-centric, on-de
 
 - **ActionDock.** Model-only bottom-left one-shot actions for Extrude, Inset, Loop Cut, and Loop Slide, available on touch and desktop. Tap/click to arm, then drag for a live amount or type an exact amount; Enter/release commits one undoable edit. Keyboard shortcuts: E extrude, I inset, L loop cut, Shift+L loop slide. Loop Slide targets the selected edge loop; Loop Cut auto-selects its new loop.
 - **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the **PS1 look** block in the Render workspace:
-  - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster.
+  - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster for camera-motion wobble.
   - **PS1 affine** — enable affine UV swim.
-  Both start off, apply only to Unlit shading, and the module starts collapsed. It is a render effect, not a geometry modifier.
+  Both start off. Enabling either one switches the viewport to Texture + Wire and render shading to Texture / baked so the effect is visible immediately. Effects apply to the Texture and Texture + Wire shader paths, including textured per-asset materials; they are render effects, not geometry modifiers.
 - **General half-edge kernel.** Columnar DCEL with explicit face and boundary loops, per-corner UVs, per-edge seam flags, per-face materials, Newell normals, invariant validation, n-gon fan triangulation, and validated reconstruction from serialized columns.
 - **UV seam authoring.** Select edges in Edge mode and use **Seam** to mark or clear UV seams. Seams render as an amber overlay, use one localized undoable command with per-edge autosave patches, and round-trip through `.lpoli`. A UV viewport, seam charts, LSCM unwrap, and linked corner editing are implemented.
 

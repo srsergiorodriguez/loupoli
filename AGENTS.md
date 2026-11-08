@@ -107,7 +107,7 @@ See [docs/PERSISTENCE.md](docs/PERSISTENCE.md) for the full protocol and format.
 - **Vertex snapping:** snap clip-space XY to a low-resolution virtual raster (default 320 × 240) by dividing, rounding, and re-multiplying by w. Do not snap Z. Handle clipping correctly.
 - **Affine texture mapping:** GLSL ES has no `noperspective`; pass `uv * w` and `w` varyings and divide in the fragment shader. Do not settle for perspective-correct interpolation.
 - PS1 effects are optional toggles; Solid and Lit must stay readable modeling modes.
-- **Within Texture/Unlit, correct unsnapped perspective mapping is the default.** Vertex snapping and affine UV interpolation are opt-in. Do not silently turn either on; PS1 is a deliberate aesthetic mode. The app itself starts in Texture + Wire on Model, with workspace-specific shading defaults.
+- **Within Texture/Unlit, correct unsnapped perspective mapping is the default.** Vertex snapping and affine UV interpolation are opt-in. Do not silently turn either on; PS1 is a deliberate aesthetic mode. Enabling either effect switches the viewport to Texture + Wire and render shading to Texture / baked so it is immediately visible. The uniforms must be propagated to per-texture PS1 material clones, not only the base material. The app itself starts in Texture + Wire on Model, with workspace-specific shading defaults.
 - Test near-plane clipping, extreme zoom, multiple aspect ratios, nearest filtering, and color-space output.
 
 ---

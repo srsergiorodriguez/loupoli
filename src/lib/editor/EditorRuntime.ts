@@ -1537,14 +1537,29 @@ export class EditorRuntime {
 
   setPs1Snap(enabled: boolean): void {
     this.ps1Snap = enabled;
+    this.activatePs1Preview(enabled);
     this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
     this.publish();
   }
 
   setPs1Affine(enabled: boolean): void {
     this.ps1Affine = enabled;
+    this.activatePs1Preview(enabled);
     this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
     this.publish();
+  }
+
+  /** PS1 effects only exist in the Texture paths; make them visible at once. */
+  private activatePs1Preview(enabled: boolean): void {
+    if (!enabled) {
+      return;
+    }
+    if (this.shading !== 'unlit' && this.shading !== 'texture-wire') {
+      this.setShadingMode('texture-wire');
+    }
+    if (this.renderShading !== 'texture') {
+      this.updateRenderSettings({ renderShading: 'texture' });
+    }
   }
 
   setTransformOrientation(orientation: TransformOrientation): void {

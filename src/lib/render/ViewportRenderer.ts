@@ -18,6 +18,7 @@ import {
   Scene,
   SRGBColorSpace,
   type Ray,
+  type ShaderMaterial,
   type Texture,
   Vector2,
   Vector3,
@@ -774,9 +775,17 @@ export class ViewportRenderer {
 
   /** Toggle PS1 vertex snapping and affine UV interpolation. */
   setPs1Options(snap: boolean, affine: boolean): void {
-    const uniforms = this.materials.ps1.uniforms as unknown as Ps1Uniforms;
-    uniforms.uSnapEnabled.value = snap ? 1 : 0;
-    uniforms.uAffineEnabled.value = affine ? 1 : 0;
+    const apply = (material: ShaderMaterial): void => {
+      const uniforms = material.uniforms as unknown as Ps1Uniforms;
+      uniforms.uSnapEnabled.value = snap ? 1 : 0;
+      uniforms.uAffineEnabled.value = affine ? 1 : 0;
+    };
+    apply(this.materials.ps1);
+    // Textured nodes use cloned per-asset materials, so the base material
+    // alone is not what the viewport draws.
+    for (const record of this.textureMaterials.values()) {
+      apply(record.materials.ps1);
+    }
     if (
       this.currentMode === 'unlit' ||
       this.currentMode === 'texture-wire'

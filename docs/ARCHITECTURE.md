@@ -603,7 +603,7 @@ gl_FragColor = albedo;
 
 ### Requirements and edge cases
 
-- The two PS1 effects are exposed as independent toggles under the Inspector's **PS1 effects** section: **Vertex snapping** and **PS1 affine**. Both are off by default. Turning affine off restores standard perspective-correct texture interpolation while leaving the Unlit material active; turning vertex snapping off restores unsnapped geometry.
+- The two PS1 effects are exposed as independent toggles under the Render Inspector's **PS1 look** block: **Vertex snapping** and **PS1 affine**. Both are off by default. Turning affine off restores standard perspective-correct texture interpolation while leaving the Texture material active; turning vertex snapping off restores unsnapped geometry. Enabling either effect switches the viewport to Texture + Wire and render shading to Texture / baked. Uniform updates must reach every per-texture PS1 material clone as well as the base material.
 - Default Unlit rendering must therefore look like a correctly mapped, unsnapped albedo view. PS1 is a deliberate mode, not a default.
 - Apply quantization in clip space **before** the GPU's clipping stage. Shared vertices snap identically, so no cracks appear within a mesh.
 - Do not snap Z; avoid depth fighting. If depth precision needs attention, solve it separately.
