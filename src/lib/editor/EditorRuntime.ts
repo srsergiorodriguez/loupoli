@@ -161,7 +161,12 @@ import { AssignTextureCommand } from './commands/AssignTextureCommand';
 import { BakeLightingCommand } from './commands/BakeLightingCommand';
 import { CompositeCommand } from './commands/CompositeCommand';
 import { WithShadingCommand } from './commands/WithShadingCommand';
-import { bakeLighting, hasUvOverlap, uvCoverage } from '../lighting/bake';
+import {
+  bakeLighting,
+  BakeCancelledError,
+  hasUvOverlap,
+  uvCoverage
+} from '../lighting/bake';
 import type {
   TextureEffect,
   TextureEffectType
@@ -276,8 +281,17 @@ import {
   type ToastKind,
   type ToastMessage,
   type AnimationKeyReference,
-  type ObjFrameExportOptions
+  type ObjFrameExportOptions,
+  type ActiveJobSnapshot
 } from './types';
+
+/** Cancellation sentinel for cooperative export/bake jobs. */
+class JobCancelledError extends Error {
+  constructor() {
+    super('Cancelled');
+    this.name = 'JobCancelledError';
+  }
+}
 
 /** Transactional animation pose edit on a temporary mesh. */
 interface MeshPoseEditSession {
@@ -665,6 +679,8 @@ export class EditorRuntime {
   private bakeBusy = false;
   private bakeAtlasPrompt: import('./types').BakeAtlasPrompt | null = null;
   private renderBusy = false;
+  private activeJob: ActiveJobSnapshot | null = null;
+  private jobCancelled = false;
   private renderCameraView = false;
   private renderKind: 'still' | 'sequence' | 'webm' | 'mp4' = 'still';
   private renderPreviewSplit = 0.38;
@@ -997,6 +1013,8 @@ export class EditorRuntime {
       bakeBusy: this.bakeBusy,
       bakeAtlasPrompt: this.bakeAtlasPrompt,
       renderBusy: this.renderBusy,
+      job: this.activeJob,
+      jobCancelling: this.jobCancelled,
       renderCameraView: this.renderCameraView,
       renderKind: this.renderKind,
       renderStartFrame: this.renderStartFrame,
@@ -1527,7 +1545,59 @@ export class EditorRuntime {
     this.publish();
   }
 
-  /** Show/hide the timeline in Light and Render; Animate always shows it. */
+  /** Start a cancellable long-running export or bake job. */
+  private beginJob(
+    kind: ActiveJobSnapshot['kind'],
+    label: string,
+    detail: string,
+    total: number
+  ): void {
+    this.jobCancelled = false;
+    this.activeJob = {
+      kind,
+      label,
+      detail,
+      current: 0,
+      total: Math.max(1, total)
+    };
+    this.publish();
+  }
+
+  /** Update the global job strip; called from each completed work unit. */
+  private updateJob(current: number, detail?: string): void {
+    if (!this.activeJob) {
+      return;
+    }
+    this.activeJob = {
+      ...this.activeJob,
+      current: Math.min(this.activeJob.total, Math.max(0, current)),
+      detail: detail ?? this.activeJob.detail
+    };
+    this.publish();
+  }
+
+  /** Clear the global job strip. */
+  private endJob(): void {
+    this.activeJob = null;
+    this.jobCancelled = false;
+    this.publish();
+  }
+
+  private throwIfJobCancelled(): void {
+    if (this.jobCancelled) {
+      throw new JobCancelledError();
+    }
+  }
+
+  /** Request cancellation of the current export or bake. */
+  cancelActiveJob(): void {
+    if (!this.activeJob || this.jobCancelled) {
+      return;
+    }
+    this.jobCancelled = true;
+    this.publish();
+  }
+
   /** Record whether the native MP4 backend is available on this platform. */
   setNativeMp4Available(available: boolean): void {
     if (this.nativeMp4 === available) {
@@ -1537,6 +1607,7 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Show/hide the timeline in Light and Render; Animate always shows it. */
   setTimelineVisible(visible: boolean): void {
     if (this.timelineVisible === visible) {
       return;
@@ -6788,12 +6859,20 @@ export class EditorRuntime {
     this.pauseAnimation();
     const originalFrame = this.animationFrame;
     this.publish();
+    const total = end - start + 1;
+    this.beginJob(
+      'render',
+      'Exporting PNG frames',
+      `${this.renderOutputWidth} × ${this.renderOutputHeight}`,
+      total
+    );
     const frames: { name: string; bytes: Uint8Array }[] = [];
     try {
       const base = (this.projectName || 'render')
         .replace(/[^a-z0-9_-]+/gi, '-')
         .replace(/^-+|-+$/g, '') || 'render';
       for (let frame = start; frame <= end; frame += 1) {
+        this.throwIfJobCancelled();
         this.setAnimationFrame(frame);
         const view = this.activeCameraRenderPose();
         if (!view) {
@@ -6821,7 +6900,10 @@ export class EditorRuntime {
           name: `${base}_${String(frame - start).padStart(4, '0')}.png`,
           bytes: await canvasToPng(canvas)
         });
+        this.updateJob(frame - start + 1);
       }
+      this.throwIfJobCancelled();
+      this.endJob();
       const saved = await saveFrameSequence(frames, `${base}-frames.zip`);
       if (saved) {
         this.notify(
@@ -6831,10 +6913,15 @@ export class EditorRuntime {
         );
       }
     } catch (error) {
-      const message = this.errorMessage(error);
-      this.projectError = message;
-      this.notify('error', 'Frame export failed', message);
+      if (error instanceof JobCancelledError) {
+        this.notify('info', 'Frame export cancelled', 'No files were written.');
+      } else {
+        const message = this.errorMessage(error);
+        this.projectError = message;
+        this.notify('error', 'Frame export failed', message);
+      }
     } finally {
+      this.endJob();
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
       this.publish();
@@ -6886,6 +6973,13 @@ export class EditorRuntime {
     this.pauseAnimation();
     const originalFrame = this.animationFrame;
     this.publish();
+    const total = end - start + 1;
+    this.beginJob(
+      'video',
+      `Recording ${videoLabel(format)}`,
+      `${this.renderOutputWidth} × ${this.renderOutputHeight}`,
+      total
+    );
     const output = document.createElement('canvas');
     output.width = this.renderOutputWidth;
     output.height = this.renderOutputHeight;
@@ -6893,15 +6987,19 @@ export class EditorRuntime {
     if (!context) {
       this.projectError = 'The video canvas could not be created.';
       this.renderBusy = false;
+      this.endJob();
       this.publish();
       return;
     }
+    let activeRecorder: MediaRecorder | null = null;
+    let activeStream: MediaStream | null = null;
     try {
       const fps = Math.max(1, this.document.animation.fps);
       // A zero-rate stream plus an explicit requestFrame() after every drawn
       // frame is more reliable than the timer-driven captureStream(fps) path,
       // especially in WKWebView and headless Chromium.
       const stream = output.captureStream(0);
+      activeStream = stream;
       const track = stream.getVideoTracks()[0] as
         | CanvasCaptureMediaStreamTrack
         | undefined;
@@ -6909,6 +7007,7 @@ export class EditorRuntime {
         mimeType: mime,
         videoBitsPerSecond: 8_000_000
       });
+      activeRecorder = recorder;
       const chunks: Blob[] = [];
       recorder.addEventListener('dataavailable', (event) => {
         if (event.data.size > 0) {
@@ -6923,6 +7022,7 @@ export class EditorRuntime {
       });
       recorder.start(250);
       for (let frame = start; frame <= end; frame += 1) {
+        this.throwIfJobCancelled();
         this.setAnimationFrame(frame);
         const image = this.renderer.renderStill({
           width: this.renderVirtualWidth,
@@ -6948,12 +7048,15 @@ export class EditorRuntime {
         );
         context.drawImage(frameCanvas, 0, 0);
         track?.requestFrame();
+        this.updateJob(frame - start + 1);
         await new Promise((resolve) =>
           window.setTimeout(resolve, 1000 / fps)
         );
       }
+      this.throwIfJobCancelled();
       recorder.stop();
       await stopped;
+      this.endJob();
       const bytes = new Uint8Array(await new Blob(chunks, { type: mime }).arrayBuffer());
       const base = (this.projectName || 'render')
         .replace(/[^a-z0-9_-]+/gi, '-')
@@ -6972,10 +7075,19 @@ export class EditorRuntime {
         );
       }
     } catch (error) {
-      const message = this.errorMessage(error);
-      this.projectError = message;
-      this.notify('error', 'Video export failed', message);
+      if (error instanceof JobCancelledError) {
+        this.notify('info', 'Video export cancelled', 'No file was written.');
+      } else {
+        const message = this.errorMessage(error);
+        this.projectError = message;
+        this.notify('error', 'Video export failed', message);
+      }
     } finally {
+      if (activeRecorder && activeRecorder.state !== 'inactive') {
+        activeRecorder.stop();
+      }
+      activeStream?.getTracks().forEach((track) => track.stop());
+      this.endJob();
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
       this.publish();
@@ -7016,10 +7128,18 @@ export class EditorRuntime {
     this.pauseAnimation();
     const originalFrame = this.animationFrame;
     this.publish();
+    const total = end - start + 1;
+    this.beginJob(
+      'video',
+      'Encoding MP4',
+      `${width} × ${height}`,
+      total
+    );
     let session: string | null = null;
     try {
       session = await beginNativeMp4(path, width, height, fps);
       for (let frame = start; frame <= end; frame += 1) {
+        this.throwIfJobCancelled();
         this.setAnimationFrame(frame);
         const pose = this.activeCameraRenderPose() ?? {
           position: camera.position,
@@ -7045,9 +7165,12 @@ export class EditorRuntime {
           }
         );
         await appendNativeMp4(session, await canvasToJpeg(canvas));
+        this.updateJob(frame - start + 1);
       }
+      this.throwIfJobCancelled();
       await finishNativeMp4(session);
       session = null;
+      this.endJob();
       this.notify(
         'success',
         'MP4 exported',
@@ -7057,10 +7180,15 @@ export class EditorRuntime {
       if (session !== null) {
         await cancelNativeMp4(session).catch(() => undefined);
       }
-      const message = this.errorMessage(error);
-      this.projectError = message;
-      this.notify('error', 'MP4 export failed', message);
+      if (error instanceof JobCancelledError) {
+        this.notify('info', 'MP4 export cancelled', 'The partial file was removed.');
+      } else {
+        const message = this.errorMessage(error);
+        this.projectError = message;
+        this.notify('error', 'MP4 export failed', message);
+      }
     } finally {
+      this.endJob();
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
       this.publish();
@@ -7816,11 +7944,18 @@ export class EditorRuntime {
     this.bakeAtlasPrompt = null;
     this.projectError = null;
     this.publish();
+    this.beginJob(
+      'bake',
+      'Preparing bake atlas',
+      `${target.width} × ${target.height}`,
+      1
+    );
     let asset: TextureAsset | null = null;
     let inserted = false;
     let shouldBake = false;
     try {
       await new Promise((resolve) => setTimeout(resolve, 0));
+      this.throwIfJobCancelled();
       if (source.layerCount >= 8 && source.lightingLayerId() === null) {
         throw new Error(
           'This texture already has eight layers. Remove a layer before creating a bake atlas.'
@@ -7836,12 +7971,14 @@ export class EditorRuntime {
           'The UV charts could not be packed into a unique atlas at the supported texture size.'
         );
       }
+      this.throwIfJobCancelled();
       const data = await source.exportData();
       const resampled = await resampleTextureDataForBakeAtlas(
         data,
         plan,
         source.textureFilter
       );
+      this.throwIfJobCancelled();
       asset = this.textureLibrary.build(
         plan.width,
         plan.height,
@@ -7849,6 +7986,7 @@ export class EditorRuntime {
         source.textureFilter
       );
       await asset.importData(resampled);
+      this.throwIfJobCancelled();
       asset.setAlphaMode(source.textureAlphaMode);
 
       const mesh = node.mesh.withPositions(node.mesh.positions);
@@ -7901,6 +8039,7 @@ export class EditorRuntime {
       this.uvRevision += 1;
       this.renderer.refreshTexture();
       this.syncScene();
+      this.updateJob(1);
       this.publish();
       shouldBake = true;
       this.notify(
@@ -7912,10 +8051,15 @@ export class EditorRuntime {
       if (!inserted) {
         asset?.dispose();
       }
-      const message = this.errorMessage(error);
-      this.projectError = message;
-      this.notify('error', 'Bake atlas failed', message);
+      if (error instanceof JobCancelledError) {
+        this.notify('info', 'Bake atlas cancelled', 'The scene was not changed.');
+      } else {
+        const message = this.errorMessage(error);
+        this.projectError = message;
+        this.notify('error', 'Bake atlas failed', message);
+      }
     } finally {
+      this.endJob();
       this.bakeBusy = false;
       this.publish();
     }
@@ -7991,10 +8135,17 @@ export class EditorRuntime {
     this.bakeBusy = true;
     this.projectError = null;
     this.publish();
+    this.beginJob(
+      'bake',
+      'Baking lighting',
+      `${source.width} × ${source.height}`,
+      Math.max(1, bakeMesh.faceCount)
+    );
     let copy: TextureAsset | null = null;
     try {
       // Yield one frame so the busy state can paint before CPU rasterization.
       await new Promise((resolve) => setTimeout(resolve, 0));
+      this.throwIfJobCancelled();
       let target = source;
       if (shared) {
         copy = this.textureLibrary.build(
@@ -8017,22 +8168,34 @@ export class EditorRuntime {
       const before = existingLayerId
         ? target.getLayerPixels(existingLayerId)
         : null;
-      const after = bakeLighting({
-        mesh: bakeMesh,
-        node,
-        parent: this.document.getGroup(node.parentId) ?? null,
-        lights: this.document.lightSummaries(),
-        ambientColor: this.document.ambientColor,
-        ambientIntensity: this.document.ambientIntensity,
-        width: target.width,
-        height: target.height,
-        occluders: this.bakeOccluders(),
-        shadowSamples: 16,
-        ambientOcclusion: this.document.ambientOcclusion
-      });
+      this.throwIfJobCancelled();
+      const after = await bakeLighting(
+        {
+          mesh: bakeMesh,
+          node,
+          parent: this.document.getGroup(node.parentId) ?? null,
+          lights: this.document.lightSummaries(),
+          ambientColor: this.document.ambientColor,
+          ambientIntensity: this.document.ambientIntensity,
+          width: target.width,
+          height: target.height,
+          occluders: this.bakeOccluders(),
+          shadowSamples: 16,
+          ambientOcclusion: this.document.ambientOcclusion
+        },
+        {
+          shouldCancel: () => this.jobCancelled,
+          onProgress: (completed) =>
+            this.updateJob(
+              completed,
+              `${target.width} × ${target.height}`
+            )
+        }
+      );
       if (!after) {
         throw new Error('The object has no UV-covered surface to bake.');
       }
+      this.throwIfJobCancelled();
       const commands: import('./commands/EditorCommand').EditorCommand[] = [];
       if (copy) {
         commands.push(new CreateTextureAssetCommand(this.textureLibrary, copy));
@@ -8064,8 +8227,16 @@ export class EditorRuntime {
       );
     } catch (error) {
       copy?.dispose();
-      this.projectError = this.errorMessage(error);
+      if (
+        error instanceof BakeCancelledError ||
+        error instanceof JobCancelledError
+      ) {
+        this.notify('info', 'Lighting bake cancelled', 'The texture was not changed.');
+      } else {
+        this.projectError = this.errorMessage(error);
+      }
     } finally {
+      this.endJob();
       this.bakeBusy = false;
       this.publish();
     }

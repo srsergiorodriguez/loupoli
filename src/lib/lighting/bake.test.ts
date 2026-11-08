@@ -5,7 +5,14 @@ import { importObjNodes } from '../io/obj';
 import { createCubeMesh } from '../geometry/primitives';
 import { extractUvCharts } from '../geometry/uvCharts';
 import { unwrapUvCharts } from '../geometry/lscm';
-import { bakeNormalSign, hasUvOverlap, uvCoverage } from './bake';
+import {
+  bakeLighting,
+  BakeCancelledError,
+  bakeNormalSign,
+  hasUvOverlap,
+  uvCoverage
+} from './bake';
+import { MeshNode } from '../scene/MeshNode';
 
 describe('UV bake coverage guard', () => {
   it('rejects the default folded cube UVs', () => {
@@ -63,5 +70,28 @@ describe('bake normal orientation', () => {
     const mesh = nodes[0].mesh;
     expect(mesh.boundaryEdgeCount).toBe(0);
     expect(bakeNormalSign(mesh, new Matrix4())).toBe(1);
+  });
+});
+
+
+describe('bake cancellation', () => {
+  it('honours a cancellation request before rasterization', async () => {
+    const mesh = createCubeMesh();
+    const node = new MeshNode(mesh, 'cube', 'Cube');
+    await expect(
+      bakeLighting(
+        {
+          mesh,
+          node,
+          parent: null,
+          lights: [],
+          ambientColor: '#ffffff',
+          ambientIntensity: 1,
+          width: 64,
+          height: 64
+        },
+        { shouldCancel: () => true }
+      )
+    ).rejects.toBeInstanceOf(BakeCancelledError);
   });
 });

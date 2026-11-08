@@ -92,7 +92,7 @@ Rendered focus shadows are baked by the renderer's current light state; baked li
 - **WebM:** uses `MediaRecorder` on a canvas capture and is enabled only when the WebView reports support.
 - **MP4:** macOS and iPad stream JPEG frames through Tauri raw IPC into an AVFoundation `AVAssetWriter` H.264 MP4. Windows and Linux use `MediaRecorder` when the WebView supports an MP4 codec; otherwise MP4 is omitted and WebM or PNG frames remain available.
 - Video rendering is real-time driven by the animation FPS; it is not a production-grade offline encoder yet.
-- PNG stills, sequences, WebM, and MP4 all use the same color-managed frame canvas.
+- PNG stills, sequences, WebM, and MP4 all use the same color-managed frame canvas. Frame-sequence, video, bake-atlas, and lighting-bake operations report progress in the global job strip; Cancel aborts the loop, restores the animation frame, discards partial output, and leaves the texture/document unchanged for bakes.
 - The Frame range is explicit and separate from the animation range.
 
 ## 6. Next

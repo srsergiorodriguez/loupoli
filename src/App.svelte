@@ -9,6 +9,7 @@
   import ActionHud from './lib/ui/Chrome/ActionHud.svelte';
   import OrientationGizmo from './lib/ui/Chrome/OrientationGizmo.svelte';
   import StatusBar from './lib/ui/Chrome/StatusBar.svelte';
+  import JobProgress from './lib/ui/Chrome/JobProgress.svelte';
   import Inspector from './lib/ui/Panels/Inspector.svelte';
   import ProjectBanner from './lib/ui/Chrome/ProjectBanner.svelte';
   import UvPanel from './lib/ui/Uv/UvPanel.svelte';
@@ -368,6 +369,7 @@
   {/if}
   <Inspector {session} />
   <StatusBar {session} />
+  <JobProgress {session} />
   <ToastStack {session} />
   {#if session.snapshot.bakeAtlasPrompt}
     <BakeAtlasDialog {session} />

@@ -261,7 +261,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The docked preview pane is always visible and updates live through the active camera whenever the camera, scene, lighting, or animation pose changes. Play and Pause run the existing animation playback without leaving Render. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM appears when the WebView supports it. Render MP4 is native on macOS/iPad and falls back to the WebView recorder on Windows/Linux when available. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
         ],
         controls: [
-          'Output kind: still, frame sequence, WebM, or MP4. MP4 is native on macOS/iPad; other platforms use the WebView recorder when available.',
+          'Output kind: still, frame sequence, WebM, or MP4. Long exports and bakes show progress in the global strip and can be cancelled. MP4 is native on macOS/iPad; other platforms use the WebView recorder when available.',
           'Virtual width / height: internal render size',
           'Output width / height: saved image size',
           'Play/Pause: run the animation in the live preview',

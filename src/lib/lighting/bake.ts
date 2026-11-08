@@ -24,6 +24,20 @@ export interface BakeLightingInput {
   readonly ambientOcclusion?: AmbientOcclusionSettings;
 }
 
+/** Cooperative progress/cancellation hooks for long CPU bakes. */
+export interface BakeLightingOptions {
+  readonly onProgress?: (completed: number, total: number) => void;
+  readonly shouldCancel?: () => boolean;
+}
+
+/** Thrown when a caller cancels an in-flight bake. */
+export class BakeCancelledError extends Error {
+  constructor() {
+    super('Bake cancelled');
+    this.name = 'BakeCancelledError';
+  }
+}
+
 interface Rgb {
   readonly r: number;
   readonly g: number;
@@ -626,8 +640,17 @@ function blurLighting(
  * Flat face normals match the low-poly Lit path. Soft shadows average visibility rays through the supplied
  * world-space occluders; ambient is never shadowed.
  */
-export function bakeLighting(input: BakeLightingInput): ImageData | null {
+export async function bakeLighting(
+  input: BakeLightingInput,
+  options: BakeLightingOptions = {}
+): Promise<ImageData | null> {
   const { mesh, width, height } = input;
+  if (options.shouldCancel?.()) {
+    throw new BakeCancelledError();
+  }
+  const totalFaces = mesh.faceCount;
+  let lastYield = performance.now();
+  options.onProgress?.(0, totalFaces);
   const data = new Uint8ClampedArray(width * height * 4);
   data.fill(255);
   for (let offset = 3; offset < data.length; offset += 4) {
@@ -676,6 +699,14 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
   }
   const normalSign = bakeNormalSign(mesh, matrix);
   for (let face = 0; face < mesh.faceCount; face += 1) {
+    if (face > 0 && performance.now() - lastYield > 16) {
+      options.onProgress?.(face, totalFaces);
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      lastYield = performance.now();
+      if (options.shouldCancel?.()) {
+        throw new BakeCancelledError();
+      }
+    }
     const first = mesh.faceHalfEdge[face];
     const loop: number[] = [];
     let h = first;
@@ -810,6 +841,7 @@ export function bakeLighting(input: BakeLightingInput): ImageData | null {
       }
     }
   }
+  options.onProgress?.(totalFaces, totalFaces);
   if (!covered) {
     return null;
   }

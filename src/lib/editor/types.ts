@@ -111,6 +111,15 @@ export const SHADING_MODES = [
   'lit'
 ] as const;
 
+/** A long-running export or bake shown with progress and cancellation. */
+export interface ActiveJobSnapshot {
+  readonly kind: 'render' | 'video' | 'bake';
+  readonly label: string;
+  readonly detail: string;
+  readonly current: number;
+  readonly total: number;
+}
+
 /** A shading mode accepted by the viewport material router. */
 export type ShadingMode = (typeof SHADING_MODES)[number];
 
@@ -342,6 +351,8 @@ export interface EditorSnapshot {
   readonly bakeBusy: boolean;
   readonly bakeAtlasPrompt: BakeAtlasPrompt | null;
   readonly renderBusy: boolean;
+  readonly job: ActiveJobSnapshot | null;
+  readonly jobCancelling: boolean;
   readonly renderCameraView: boolean;
   readonly renderKind: 'still' | 'sequence' | 'webm' | 'mp4';
   readonly renderStartFrame: number;

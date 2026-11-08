@@ -8,14 +8,20 @@
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+
+struct Mp4Session {
+  handle: usize,
+  path: PathBuf,
+}
 
 /// Active native MP4 sessions, keyed by the opaque frontend session id.
 #[derive(Default)]
 pub struct Mp4Sessions {
   next_id: AtomicU64,
-  writers: Mutex<HashMap<String, usize>>,
+  writers: Mutex<HashMap<String, Mp4Session>>,
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -72,6 +78,7 @@ impl Mp4Sessions {
     }
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
+      let destination = PathBuf::from(&path);
       let path = CString::new(path).map_err(|_| "The MP4 path is invalid.".to_string())?;
       let mut error: *mut c_char = std::ptr::null_mut();
       let handle = unsafe {
@@ -84,6 +91,7 @@ impl Mp4Sessions {
         )
       };
       if handle.is_null() {
+        let _ = std::fs::remove_file(&destination);
         return Err(unsafe { take_error(error) });
       }
       let id = format!("mp4-{}", self.next_id.fetch_add(1, Ordering::Relaxed) + 1);
@@ -91,7 +99,13 @@ impl Mp4Sessions {
         .writers
         .lock()
         .map_err(|_| "The MP4 session lock failed.".to_string())?
-        .insert(id.clone(), handle as usize);
+        .insert(
+          id.clone(),
+          Mp4Session {
+            handle: handle as usize,
+            path: destination,
+          },
+        );
       return Ok(id);
     }
     #[allow(unreachable_code)]
@@ -109,8 +123,9 @@ impl Mp4Sessions {
         .writers
         .lock()
         .map_err(|_| "The MP4 session lock failed.".to_string())?;
-      let handle = *writers
+      let handle = writers
         .get(id)
+        .map(|session| session.handle)
         .ok_or_else(|| "The MP4 session is no longer active.".to_string())?;
       let mut error: *mut c_char = std::ptr::null_mut();
       let result = unsafe {
@@ -135,18 +150,19 @@ impl Mp4Sessions {
   pub fn finish(&self, id: &str) -> Result<(), String> {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-      let handle = self
+      let session = self
         .writers
         .lock()
         .map_err(|_| "The MP4 session lock failed.".to_string())?
         .remove(id)
         .ok_or_else(|| "The MP4 session is no longer active.".to_string())?;
       let mut error: *mut c_char = std::ptr::null_mut();
-      let result = unsafe { loupoli_mp4_finish(handle as *mut c_void, &mut error) };
-      unsafe { loupoli_mp4_release(handle as *mut c_void) };
+      let result = unsafe { loupoli_mp4_finish(session.handle as *mut c_void, &mut error) };
+      unsafe { loupoli_mp4_release(session.handle as *mut c_void) };
       return if result == 0 {
         Ok(())
       } else {
+        let _ = std::fs::remove_file(&session.path);
         Err(unsafe { take_error(error) })
       };
     }
@@ -159,8 +175,9 @@ impl Mp4Sessions {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
       if let Ok(mut writers) = self.writers.lock() {
-        if let Some(handle) = writers.remove(id) {
-          unsafe { loupoli_mp4_cancel(handle as *mut c_void) };
+        if let Some(session) = writers.remove(id) {
+          unsafe { loupoli_mp4_cancel(session.handle as *mut c_void) };
+          let _ = std::fs::remove_file(&session.path);
         }
       }
     }
@@ -197,5 +214,29 @@ mod tests {
     assert!(metadata.len() > 100);
     println!("NATIVE_MP4_PATH={}", path.display());
     let _ = std::fs::remove_file(path);
+  }
+
+  #[test]
+  fn cancelling_a_native_mp4_removes_the_partial_file() {
+    if !available() {
+      return;
+    }
+    let path = std::env::temp_dir().join(format!(
+      "loupoli-native-mp4-cancel-{}-{}.mp4",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_nanos())
+        .unwrap_or(0)
+    ));
+    let sessions = Mp4Sessions::default();
+    let session = sessions
+      .begin(path.to_string_lossy().into_owned(), 64, 64, 24)
+      .expect("start native MP4");
+    sessions
+      .append(&session, include_bytes!("../native/test-frame.jpg"))
+      .expect("append frame");
+    sessions.cancel(&session);
+    assert!(!path.exists());
   }
 }

@@ -126,6 +126,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   bakeBusy: false,
   bakeAtlasPrompt: null,
   renderBusy: false,
+  job: null,
+  jobCancelling: false,
   renderCameraView: false,
   renderKind: 'still',
   renderStartFrame: 0,
@@ -880,6 +882,11 @@ export class EditorSession {
 
   bakeLighting(): Promise<void> {
     return this.runtime?.bakeLighting() ?? Promise.resolve();
+  }
+
+  /** Request cancellation of the active export or bake job. */
+  cancelActiveJob(): void {
+    this.runtime?.cancelActiveJob();
   }
 
   prepareBakeAtlas(): Promise<void> {
