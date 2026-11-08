@@ -99,3 +99,18 @@ export async function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array
   }
   return new Uint8Array(await blob.arrayBuffer());
 }
+
+
+/** Encode a canvas as a JPEG byte array for native video streaming. */
+export async function canvasToJpeg(
+  canvas: HTMLCanvasElement,
+  quality = 0.92
+): Promise<Uint8Array> {
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', quality);
+  });
+  if (!blob) {
+    throw new Error('The rendered image could not be encoded as JPEG.');
+  }
+  return new Uint8Array(await blob.arrayBuffer());
+}

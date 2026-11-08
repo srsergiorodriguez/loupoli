@@ -751,6 +751,7 @@ The Rust layer is deliberately thin:
 - Validate container magic/length/checksum before returning bytes.
 - Atomic project write: temp file in destination directory, flush/sync, rename.
 - App data/Documents path resolution.
+- Native MP4 streaming on macOS/iOS: an Objective-C AVFoundation `AVAssetWriter` receives JPEG frames over Tauri raw IPC, one frame per command, and finalizes the H.264 container. The writer is compiled only for Apple targets; Windows/Linux report the capability as unavailable and use the WebView recorder or PNG frames.
 - No geometry parsing, no document semantics, no autosave scheduling in Rust.
 
 The TypeScript codec is authoritative for document format. Rust validates the container envelope and protects filesystem integrity.

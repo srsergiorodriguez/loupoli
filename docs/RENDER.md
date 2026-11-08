@@ -1,6 +1,6 @@
 # Render workspace and camera
 
-**Status:** Camera and render foundation implemented. Scene cameras, camera-driven preview, virtual/output resolution, nearest/smooth upscaling, color-managed PNG stills, deterministic PNG frame sequences, and WebM/MP4 recording where the WebView supports the codec are implemented.
+**Status:** Camera and render foundation implemented. Scene cameras, camera-driven preview, virtual/output resolution, nearest/smooth upscaling, color-managed PNG stills, deterministic PNG frame sequences, and native AVFoundation MP4 on Apple platforms plus WebM/MP4 WebView recording fallback elsewhere are implemented.
 
 ## Contents
 
@@ -90,7 +90,7 @@ Rendered focus shadows are baked by the renderer's current light state; baked li
 
 - **PNG frame sequence:** renders each frame at the exact animation time, upscales it, and saves a folder on native platforms or a ZIP in the browser. Verified with a 64×36 sequence and valid PNG entries.
 - **WebM:** uses `MediaRecorder` on a canvas capture and is enabled only when the WebView reports support.
-- **MP4:** also uses `MediaRecorder` when the WebView supports an MP4 codec; otherwise the UI omits it and points to WebM/frames. Native AVFoundation encoding remains the reliable path for iPad production.
+- **MP4:** macOS and iPad stream JPEG frames through Tauri raw IPC into an AVFoundation `AVAssetWriter` H.264 MP4. Windows and Linux use `MediaRecorder` when the WebView supports an MP4 codec; otherwise MP4 is omitted and WebM or PNG frames remain available.
 - Video rendering is real-time driven by the animation FPS; it is not a production-grade offline encoder yet.
 - PNG stills, sequences, WebM, and MP4 all use the same color-managed frame canvas.
 - The Frame range is explicit and separate from the animation range.
@@ -98,7 +98,6 @@ Rendered focus shadows are baked by the renderer's current light state; baked li
 ## 6. Next
 
 - Camera animation tracks
-- Native iPad/macOS MP4 encoder
 - Render progress/cancel UI and progress reporting
 
 AO is bakeable into the lighting layer; the realtime Lit preview remains direct-light only.

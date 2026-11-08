@@ -92,6 +92,14 @@ import {
 import type { PaintGradient, PaintTool } from '../paint/types';
 import type { ImageFitOptions } from '../texture/imageFit';
 import {
+  appendNativeMp4,
+  beginNativeMp4,
+  cancelNativeMp4,
+  chooseNativeMp4Path,
+  finishNativeMp4,
+  nativeMp4Available
+} from '../platform/nativeVideo';
+import {
   normalizeAmbientOcclusion,
   type AmbientOcclusionSettings
 } from '../lighting/ao';
@@ -218,7 +226,12 @@ import type {
   CameraPose,
   LightPose
 } from '../scene/SceneAnimation';
-import { fitRect, upscaleRenderImage, canvasToPng } from '../render/renderImage';
+import {
+  fitRect,
+  upscaleRenderImage,
+  canvasToPng,
+  canvasToJpeg
+} from '../render/renderImage';
 import {
   videoExtension,
   videoLabel,
@@ -665,6 +678,7 @@ export class EditorRuntime {
   private renderOutputHeight = 720;
   private renderUpscale: RenderUpscale = 'nearest';
   private renderShading: RenderShading = 'lit';
+  private nativeMp4 = false;
   private renderTransparent = false;
   private renderBackground = '#121214';
   private animationFrame = 0;
@@ -993,6 +1007,7 @@ export class EditorRuntime {
       renderOutputHeight: this.renderOutputHeight,
       renderUpscale: this.renderUpscale,
       renderShading: this.renderShading,
+      nativeMp4Available: this.nativeMp4,
       renderTransparent: this.renderTransparent,
       renderBackground: this.renderBackground,
       renderPreviewSplit: this.renderPreviewSplit,
@@ -1513,6 +1528,15 @@ export class EditorRuntime {
   }
 
   /** Show/hide the timeline in Light and Render; Animate always shows it. */
+  /** Record whether the native MP4 backend is available on this platform. */
+  setNativeMp4Available(available: boolean): void {
+    if (this.nativeMp4 === available) {
+      return;
+    }
+    this.nativeMp4 = available;
+    this.publish();
+  }
+
   setTimelineVisible(visible: boolean): void {
     if (this.timelineVisible === visible) {
       return;
@@ -6817,7 +6841,7 @@ export class EditorRuntime {
     }
   }
 
-  /** Encode the render range to WebM or MP4 through the platform recorder. */
+  /** Encode the render range to WebM or MP4 through native or WebView paths. */
   async renderVideo(): Promise<void> {
     if (this.renderBusy) {
       return;
@@ -6830,13 +6854,14 @@ export class EditorRuntime {
       return;
     }
     const format = this.renderKind === 'mp4' ? 'mp4' : 'webm';
-    const mime = videoMimeFor(format);
-    if (!mime) {
-      this.projectError = `${videoLabel(format)} recording is not supported by this WebView. Use a PNG frame sequence instead.`;
+    const nativeMp4 = format === 'mp4' && (await nativeMp4Available());
+    const mime = nativeMp4 ? null : videoMimeFor(format);
+    if (!nativeMp4 && !mime) {
+      this.projectError = `${videoLabel(format)} recording is not supported on this platform. Use a PNG frame sequence instead.`;
       this.notify(
         'warning',
         `${videoLabel(format)} unavailable`,
-        'Use a PNG frame sequence in this WebView.'
+        'Use a PNG frame sequence instead.'
       );
       this.publish();
       return;
@@ -6847,6 +6872,13 @@ export class EditorRuntime {
       this.projectError = 'The video is limited to 1200 frames.';
       this.notify('warning', 'Video limited', 'The maximum is 1200 frames.');
       this.publish();
+      return;
+    }
+    if (nativeMp4) {
+      await this.renderNativeMp4(camera, start, end);
+      return;
+    }
+    if (mime === null) {
       return;
     }
     this.renderBusy = true;
@@ -6943,6 +6975,91 @@ export class EditorRuntime {
       const message = this.errorMessage(error);
       this.projectError = message;
       this.notify('error', 'Video export failed', message);
+    } finally {
+      this.setAnimationFrame(originalFrame);
+      this.renderBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Stream rendered frames into AVFoundation on Apple platforms. */
+  private async renderNativeMp4(
+    camera: SceneCamera,
+    start: number,
+    end: number
+  ): Promise<void> {
+    const width = this.renderOutputWidth;
+    const height = this.renderOutputHeight;
+    if (width % 2 !== 0 || height % 2 !== 0) {
+      this.projectError = 'MP4 output width and height must be even.';
+      this.notify(
+        'warning',
+        'MP4 output unavailable',
+        'Set even output dimensions for H.264 MP4.'
+      );
+      this.publish();
+      return;
+    }
+    const base = (this.projectName || 'render')
+      .replace(/[^a-z0-9_-]+/gi, '-')
+      .replace(/^-+|-+$/g, '') || 'render';
+    const chosen = await chooseNativeMp4Path(`${base}.mp4`);
+    if (!chosen) {
+      return;
+    }
+    const path = chosen.toLowerCase().endsWith('.mp4')
+      ? chosen
+      : `${chosen}.mp4`;
+    const fps = Math.max(1, this.document.animation.fps);
+    this.renderBusy = true;
+    this.projectError = null;
+    this.pauseAnimation();
+    const originalFrame = this.animationFrame;
+    this.publish();
+    let session: string | null = null;
+    try {
+      session = await beginNativeMp4(path, width, height, fps);
+      for (let frame = start; frame <= end; frame += 1) {
+        this.setAnimationFrame(frame);
+        const pose = this.activeCameraRenderPose() ?? {
+          position: camera.position,
+          target: camera.target,
+          fov: camera.fov
+        };
+        const image = this.renderer.renderStill({
+          width: this.renderVirtualWidth,
+          height: this.renderVirtualHeight,
+          shading: this.renderShading,
+          camera: pose,
+          transparent: false,
+          backgroundColor: this.renderBackground
+        });
+        const canvas = upscaleRenderImage(
+          image,
+          width,
+          height,
+          this.renderUpscale,
+          {
+            transparent: false,
+            background: this.renderBackground
+          }
+        );
+        await appendNativeMp4(session, await canvasToJpeg(canvas));
+      }
+      await finishNativeMp4(session);
+      session = null;
+      this.notify(
+        'success',
+        'MP4 exported',
+        `${end - start + 1} frames · ${width} × ${height}`
+      );
+    } catch (error) {
+      if (session !== null) {
+        await cancelNativeMp4(session).catch(() => undefined);
+      }
+      const message = this.errorMessage(error);
+      this.projectError = message;
+      this.notify('error', 'MP4 export failed', message);
     } finally {
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;

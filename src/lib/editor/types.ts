@@ -352,6 +352,7 @@ export interface EditorSnapshot {
   readonly renderOutputHeight: number;
   readonly renderUpscale: RenderUpscale;
   readonly renderShading: RenderShading;
+  readonly nativeMp4Available: boolean;
   readonly renderTransparent: boolean;
   readonly renderBackground: string;
   readonly renderPreviewSplit: number;

@@ -2,6 +2,7 @@ import type { PrimitiveKind } from '../geometry/primitives';
 import type { NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { EditorRuntime } from './EditorRuntime';
 import { workspaceCan, type WorkspaceCapability } from './workspaces';
+import { nativeMp4Available } from '../platform/nativeVideo';
 import {
   DEFAULT_PS1_AFFINE,
   DEFAULT_PS1_SNAP,
@@ -135,6 +136,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   renderOutputHeight: 720,
   renderUpscale: 'nearest',
   renderShading: 'lit',
+  nativeMp4Available: false,
   renderTransparent: false,
   renderBackground: '#121214',
   renderPreviewSplit: 0.38,
@@ -236,6 +238,9 @@ export class EditorSession {
     }
     // A fresh app load always opens Model; workspace choice is session-only.
     runtime.setWorkspace('model');
+    void nativeMp4Available().then((available) =>
+      runtime.setNativeMp4Available(available)
+    );
     this.snapshot = runtime.getSnapshot();
   }
 

@@ -288,7 +288,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 
 ### Phase 6 — Render and publish
 
-**Status:** foundation implemented. Scene cameras, Render workspace, camera-driven clean preview, virtual/output resolution, nearest/smooth upscaling, PNG stills and frame sequences, WebM/MP4 recording where the codec is supported, a free camera-editing view with camera list/name/FOV, camera frustum/arrow handles, View through toggle, and an always-open live preview pane with animation playback are implemented. Native MP4 remains.
+**Status:** foundation implemented. Scene cameras, Render workspace, camera-driven clean preview, virtual/output resolution, nearest/smooth upscaling, PNG stills and frame sequences, WebM/MP4 recording where the codec is supported, a free camera-editing view with camera list/name/FOV, camera frustum/arrow handles, View through toggle, and an always-open live preview pane with animation playback are implemented. Native MP4 export is implemented on Apple; Windows/Linux use the WebView recorder or frame sequence fallback.
 
 - Render workspace after Animation.
 - Document cameras with position, target, and FOV.

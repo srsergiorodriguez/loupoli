@@ -3,6 +3,8 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use tauri_plugin_opener::OpenerExt;
 
+mod mp4;
+
 const MAX_PROJECT_BYTES: u64 = 128 * 1024 * 1024;
 
 const PROJECT_HEADER_BYTES: usize = 28;
@@ -236,6 +238,50 @@ fn temporary_path(parent: &Path, file_name: &str) -> PathBuf {
   parent.join(format!(".{file_name}.tmp-{}-{stamp}", std::process::id()))
 }
 
+/// Whether this platform has the native AVFoundation MP4 writer.
+#[tauri::command]
+fn mp4_available() -> bool {
+  mp4::available()
+}
+
+/// Start a native MP4 session and return its opaque id.
+#[tauri::command]
+fn mp4_begin(path: String, width: u32, height: u32, fps: u32) -> Result<String, String> {
+  mp4_sessions().begin(path, width, height, fps)
+}
+
+/// Append one encoded frame as raw binary IPC.
+#[tauri::command]
+fn mp4_append(request: tauri::ipc::Request<'_>) -> Result<(), String> {
+  let session = request
+    .headers()
+    .get("x-mp4-session")
+    .and_then(|value| value.to_str().ok())
+    .ok_or_else(|| "The MP4 session header is missing.".to_string())?;
+  let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+    return Err("The MP4 frame must use raw binary IPC.".into());
+  };
+  mp4_sessions().append(session, bytes)
+}
+
+/// Finalize and release a native MP4 session.
+#[tauri::command]
+fn mp4_finish(session: String) -> Result<(), String> {
+  mp4_sessions().finish(&session)
+}
+
+/// Abort and release a native MP4 session.
+#[tauri::command]
+fn mp4_cancel(session: String) {
+  mp4_sessions().cancel(&session);
+}
+
+static MP4_SESSIONS: std::sync::OnceLock<mp4::Mp4Sessions> = std::sync::OnceLock::new();
+
+fn mp4_sessions() -> &'static mp4::Mp4Sessions {
+  MP4_SESSIONS.get_or_init(mp4::Mp4Sessions::default)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -246,7 +292,12 @@ pub fn run() {
       read_import_file,
       write_project_file,
       write_export_file,
-      open_external_link
+      open_external_link,
+      mp4_available,
+      mp4_begin,
+      mp4_append,
+      mp4_finish,
+      mp4_cancel
     ])
     .run(tauri::generate_context!())
     .expect("error while building loupoli");

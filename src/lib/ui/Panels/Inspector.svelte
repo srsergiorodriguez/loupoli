@@ -117,7 +117,12 @@
       { value: 'sequence', label: 'PNG frame sequence' }
     ];
     if (videoMimeFor('webm')) options.push({ value: 'webm', label: 'WebM video' });
-    if (videoMimeFor('mp4')) options.push({ value: 'mp4', label: 'MP4 video' });
+    if (
+      session.snapshot.nativeMp4Available ||
+      videoMimeFor('mp4')
+    ) {
+      options.push({ value: 'mp4', label: 'MP4 video' });
+    }
     return options;
   });
   const shapeKeys = $derived(session.snapshot.shapeKeys);
@@ -1353,9 +1358,6 @@
             onCommit={(value) => session.updateRenderSettings({ renderOutputHeight: value })}
           />
         </div>
-        {#if !videoMimeFor('mp4')}
-          <p class="texture-note">MP4 is not available in this WebView; use WebM or frames.</p>
-        {/if}
         {#if session.snapshot.renderKind !== 'still'}
           <div class="render-field">
             <span>Start frame</span>
