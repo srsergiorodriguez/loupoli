@@ -9796,6 +9796,11 @@ export class EditorRuntime {
     detail?: string,
     timeoutMs = kind === 'error' ? 7000 : 4200
   ): void {
+    if (kind === 'error') {
+      // The toast carries the same failure; do not leave a duplicate
+      // persistent project-error card behind when it expires.
+      this.projectError = null;
+    }
     const id = `toast-${++this.toastSequence}`;
     this.toasts = [...this.toasts, { id, kind, message, detail }].slice(-4);
     const timer = window.setTimeout(() => this.dismissToast(id), timeoutMs);

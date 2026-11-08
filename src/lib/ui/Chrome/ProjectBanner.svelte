@@ -1,8 +1,7 @@
 <script lang="ts">
-  import IconButton from '../Primitives/IconButton.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
 
-  /** Props for recovery and project-error notices. */
+  /** Props for the actionable autosave-recovery banner. */
   interface Props {
     session: EditorSession;
   }
@@ -44,17 +43,6 @@
       </button>
     </div>
   </section>
-{/if}
-
-{#if session.snapshot.projectError && !session.snapshot.toasts.some((toast) => toast.kind === 'error')}
-  <div class="project-error loupoli-panel" role="alert">
-    <p>{session.snapshot.projectError}</p>
-    <IconButton
-      label="Dismiss error"
-      icon="close"
-      onActivate={() => session.dismissProjectError()}
-    />
-  </div>
 {/if}
 
 <style>
@@ -129,27 +117,6 @@
   .banner-button:disabled {
     opacity: var(--opacity-disabled);
     cursor: default;
-  }
-
-  .project-error {
-    position: fixed;
-    z-index: var(--z-popover);
-    right: calc(var(--safe-right) + var(--space-3));
-    bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    max-width: min(440px, calc(100vw - 32px));
-    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-    border-color: var(--accent-warning);
-    border-radius: var(--radius-md);
-  }
-
-  .project-error p {
-    margin: 0;
-    color: var(--text-secondary);
-    font-size: var(--text-xs);
-    line-height: var(--leading-body);
   }
 
   @media (max-width: 640px) {

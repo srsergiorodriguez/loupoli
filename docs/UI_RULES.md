@@ -125,9 +125,10 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 
 ### Notifications
 
-- Use `ToastStack` for transient operation results: import, export, render, recovery, and warnings when an action cannot proceed.
-- Success/warning/error toasts auto-dismiss; errors remain longer and expose the same detail as the persistent project-error banner. The banner returns when the transient error toast clears.
-- Notifications sit bottom-center above the status bar and never block the inspector or viewport. They are supplemental, never the only place a persistent error is recorded.
+- Use `ToastStack` for operation results: import, export, render, recovery, warnings, and project errors. Success/warning/error operation toasts auto-dismiss.
+- Persistent `projectError` state renders as a dismissible error card in the same bottom-center stack. When an operation also raises an error toast, the persistent fallback is cleared so the failure is announced once.
+- Recovery is the exception: it remains an actionable top banner with Recover/Discard because it requires a document decision, not a transient notification.
+- Notifications sit bottom-center above the status bar and never block the inspector or viewport.
 - Do not use toasts for field validation or destructive confirmation; those belong inline or in `ModalDialog`.
 
 ![Toast notification](media/toasts.png)

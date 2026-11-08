@@ -2,16 +2,34 @@
   import IconButton from '../Primitives/IconButton.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
 
-  /** Transient operation notifications above the status bar. */
+  /** Operation notifications and persistent project errors above the status bar. */
   interface Props {
     session: EditorSession;
   }
 
   let { session }: Props = $props();
   const toasts = $derived(session.snapshot.toasts);
+  const persistentError = $derived(
+    session.snapshot.projectError !== null &&
+      !toasts.some((toast) => toast.kind === 'error')
+  );
 </script>
 
 <section class="toast-stack" aria-label="Notifications" aria-live="polite" aria-atomic="false">
+    {#if persistentError}
+      <article class="toast toast--error toast--persistent" role="alert">
+        <div class="toast-copy">
+          <span class="toast-kind">Error</span>
+          <p class="toast-message">{session.snapshot.projectError}</p>
+        </div>
+        <IconButton
+          label="Dismiss error"
+          icon="close"
+          tooltip="Dismiss"
+          onActivate={() => session.dismissProjectError()}
+        />
+      </article>
+    {/if}
     {#each toasts as toast (toast.id)}
       <article class="toast toast--{toast.kind}" role={toast.kind === 'error' ? 'alert' : 'status'}>
         <div class="toast-copy">
@@ -72,6 +90,10 @@
 
   .toast--error {
     border-left-color: var(--accent-danger);
+  }
+
+  .toast--persistent {
+    border-left-width: 3px;
   }
 
   .toast-copy {
