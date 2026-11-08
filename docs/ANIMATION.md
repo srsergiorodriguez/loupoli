@@ -34,6 +34,7 @@ The `Animate` workspace is a 3D workspace with a bottom timeline.
 
 - Scene outliner remains available for target selection.
 - Inspector sections are ordered **Scene**, **Animation**, **Shape keys**, **Transform**, and **Selection**. Animate does not expose Mesh, Modifiers, or PS1 look, and it does not show the ActionDock. Shape keys are authored in Animate only.
+- Animate always shows the timeline. Light and Render hide it by default; the top-bar **Timeline** toggle reveals it, and hiding it pauses playback.
 - Timeline:
   - Play/pause
   - Scrubbable ruler

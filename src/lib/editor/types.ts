@@ -313,6 +313,7 @@ export interface EditorSnapshot {
   readonly modalTransform: ModalTransformSnapshot | null;
   readonly actionState: MeshActionSnapshot | null;
   readonly loopSlideAvailable: boolean;
+  readonly timelineVisible: boolean;
   readonly modifiers: readonly Modifier[];
   readonly modifiersActive: boolean;
   readonly modifierError: string | null;

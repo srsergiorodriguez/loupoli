@@ -299,8 +299,9 @@
       {/if}
       <ActionHud state={session.snapshot.actionState} />
       {#if session.snapshot.workspace === 'animation' ||
-        session.snapshot.workspace === 'render' ||
-        session.snapshot.workspace === 'light'}
+        ((session.snapshot.workspace === 'render' ||
+          session.snapshot.workspace === 'light') &&
+          session.snapshot.timelineVisible)}
         <AnimationTimeline {session} />
       {/if}
     {:else}

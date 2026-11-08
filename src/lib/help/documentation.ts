@@ -159,7 +159,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Lights and markers',
         paragraphs: [
           'A directional light has a position marker and a direction arrow. The position is an editor anchor; the arrow direction defines the incoming light. A point light uses its marker position directly. Select a light in the Lighting list or click its marker to edit Color, Intensity, Cast shadows, and Shadow softness.',
-          'Lit mode applies the document lights to the shaded viewport. Ambient color and intensity fill the unlit parts of the surface. Hard and soft shadows are available in Lit rendering; the same light state is used by the bake.'
+          'Lit mode applies the document lights to the shaded viewport. Ambient color and intensity fill the unlit parts of the surface. Hard and soft shadows are available in Lit rendering; the same light state is used by the bake. Camera and light animation are edited from the optional top-bar timeline in Light and Render.'
         ],
         controls: [
           'Add light: directional or point',
@@ -202,7 +202,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Tracks and keys',
         paragraphs: [
           'The timeline shows one transform row for the active object or group and one weight row for each shape key. Move the playhead to a whole frame, change the transform or weight, then use + Key on the row. A key stores the visible pose at that frame.',
-          'Diamonds can be dragged between whole frames and selected for interpolation editing. Linear blends between values; Step holds the previous value until the next key. Delete removes the selected key. The Animation section controls FPS, start and end frames, looping, and the default interpolation for new keys. Camera and light animation are not part of the animation system yet.'
+          'Diamonds can be dragged between whole frames and selected for interpolation editing. Linear blends between values; Step holds the previous value until the next key. Delete removes the selected key. The Animation section controls FPS, start and end frames, looping, and the default interpolation for new keys. Camera and light animation use the same clip timeline. In Light and Render, the timeline is hidden by default and can be opened from the top-bar Timeline button; Animate always shows it.'
         ],
         controls: [
           'Play / pause: transport buttons',

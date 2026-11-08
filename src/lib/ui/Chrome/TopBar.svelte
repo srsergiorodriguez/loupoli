@@ -152,6 +152,17 @@
         ? 'Pause background autosave'
         : 'Resume background autosave'}
     />
+    {#if workspace === 'light' || workspace === 'render'}
+      <span class="divider divider--actions" aria-hidden="true"></span>
+      <IconButton
+        label={session.snapshot.timelineVisible ? 'Hide timeline' : 'Show timeline'}
+        icon="rows"
+        active={session.snapshot.timelineVisible}
+        pressed={session.snapshot.timelineVisible}
+        onActivate={() => session.toggleTimeline()}
+        tooltip={session.snapshot.timelineVisible ? 'Hide timeline' : 'Show timeline'}
+      />
+    {/if}
     <span class="divider divider--actions" aria-hidden="true"></span>
     <IconButton
       label={undoLabel}

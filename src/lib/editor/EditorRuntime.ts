@@ -546,6 +546,7 @@ export class EditorRuntime {
   private readonly selection = new ElementSelection('vertex');
   private selectionCombineMode: SelectionCombineMode = 'replace';
   private loopSelect = false;
+  private timelineVisible = false;
   private lastGeneratedSeamNoticeAt = 0;
   private activeEditor: EditorPane = '3d';
   private workspace: Workspace = 'model';
@@ -932,6 +933,7 @@ export class EditorRuntime {
       modalTransform: this.modalSnapshot(),
       actionState: this.actionSnapshot(),
       loopSlideAvailable: this.activeLoopSlidePlan() !== null,
+      timelineVisible: this.timelineVisible,
       boundaryEdges: mesh?.boundaryEdgeCount ?? 0,
       seamCount,
       counts: mesh
@@ -1508,6 +1510,21 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Show/hide the timeline in Light and Render; Animate always shows it. */
+  setTimelineVisible(visible: boolean): void {
+    if (this.timelineVisible === visible) {
+      return;
+    }
+    this.timelineVisible = visible;
+    if (
+      !visible &&
+      (this.workspace === 'light' || this.workspace === 'render')
+    ) {
+      this.pauseAnimation();
+    }
+    this.publish();
+  }
+
   setShadingMode(mode: ShadingMode): void {
     this.workspaceShading[this.workspace] = mode;
     if (this.shading === mode) {
@@ -1808,6 +1825,7 @@ export class EditorRuntime {
     this.activeEditor = '3d';
     this.workspace = 'model';
     this.workspaceShading = { ...DEFAULT_WORKSPACE_SHADING };
+    this.timelineVisible = false;
     this.shading = this.workspaceShading.model;
     this.renderer.setShadingMode(this.shading);
     this.renderer.setGridVisible(true);
@@ -12725,6 +12743,7 @@ export class EditorRuntime {
     this.selectedVertexDragClear();
     this.history.clear();
     this.workspaceShading = { ...DEFAULT_WORKSPACE_SHADING };
+    this.timelineVisible = false;
     this.workspaceShading[this.workspace] = decoded.settings.shading;
     this.shading = decoded.settings.shading;
     this.ps1Snap = decoded.settings.ps1Snap;

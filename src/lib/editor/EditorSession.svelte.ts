@@ -85,6 +85,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   modalTransform: null,
   actionState: null,
   loopSlideAvailable: false,
+  timelineVisible: false,
   modifiers: [],
   modifiersActive: false,
   modifierError: null,
@@ -362,6 +363,14 @@ export class EditorSession {
 
   setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'): void {
     this.runtime?.setWorkspace(workspace);
+  }
+
+  setTimelineVisible(visible: boolean): void {
+    this.runtime?.setTimelineVisible(visible);
+  }
+
+  toggleTimeline(): void {
+    this.runtime?.setTimelineVisible(!this.snapshot.timelineVisible);
   }
 
   setUvAxisLock(axis: 'u' | 'v'): void {
