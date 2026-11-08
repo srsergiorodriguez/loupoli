@@ -119,7 +119,7 @@ Safety rules:
 - Bake undo removes a newly created layer or restores prior layer pixels.
 - Baking marks the texture dirty and forces a v4 checkpoint with PNG chunks.
 
-Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is evaluated only when enabled and multiplies the baked lighting result. Lit mode reuses document lights and disposes shadow maps when lights are removed. Baked lighting undo stores a compact monochrome/RGB snapshot, with RGBA retained when alpha is meaningful. The Lit preview evaluates AO per source face from the same scene occluders; the bake evaluates it per texel. Bake scratch buffers are streamed/released between phases to reduce peak memory at 4096².
+Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is evaluated only when enabled and multiplies the baked lighting result. Lit mode reuses document lights and disposes shadow maps when lights are removed. Baked lighting undo stores a compact monochrome/RGB snapshot, with RGBA retained when alpha is meaningful. The Lit preview evaluates AO per source face from the same scene occluders; the bake evaluates it per texel. Bake scratch buffers are streamed between phases to reduce peak memory at 4096²; coverage comes from the raster loop rather than an OffscreenCanvas. Lit directional shadow cameras fit the visible scene bounds and snap their target to shadow texels so translated scenes keep covered shadows.
 
 ![Baked shadows](media/light-baked-shadow.png)
 

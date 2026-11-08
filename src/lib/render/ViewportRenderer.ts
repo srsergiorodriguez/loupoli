@@ -131,6 +131,7 @@ export class ViewportRenderer {
       readonly kind: 'directional' | 'point';
       readonly light: DirectionalLight | PointLight;
       readonly target: Object3D | null;
+      readonly direction: Vector3;
     }
   >();
 
@@ -467,6 +468,7 @@ export class ViewportRenderer {
     }
 
     this.applyActionPreviewLine();
+    this.fitDirectionalShadowCameras();
     this.markAmbientOcclusionDirty();
     this.schedule();
   }
@@ -866,6 +868,7 @@ export class ViewportRenderer {
     readonly kind: 'directional';
     readonly light: DirectionalLight;
     readonly target: Object3D;
+    readonly direction: Vector3;
   } {
     const light = new DirectionalLight(
       new Color(summary.color),
@@ -873,13 +876,20 @@ export class ViewportRenderer {
     );
     const target = new Object3D();
     light.target = target;
-    return { kind: 'directional', light, target };
+    light.shadow.camera.up.set(0, 0, 1);
+    return {
+      kind: 'directional',
+      light,
+      target,
+      direction: new Vector3(0, 0, -1)
+    };
   }
 
   private createPointLight(summary: LightSummary): {
     readonly kind: 'point';
     readonly light: PointLight;
     readonly target: null;
+    readonly direction: Vector3;
   } {
     return {
       kind: 'point',
@@ -889,7 +899,8 @@ export class ViewportRenderer {
         0,
         2
       ),
-      target: null
+      target: null,
+      direction: new Vector3()
     };
   }
 
@@ -898,6 +909,7 @@ export class ViewportRenderer {
       readonly kind: 'directional' | 'point';
       readonly light: DirectionalLight | PointLight;
       readonly target: Object3D | null;
+      readonly direction: Vector3;
     },
     summary: LightSummary
   ): void {
@@ -914,6 +926,7 @@ export class ViewportRenderer {
         summary.direction[1],
         summary.direction[2]
       ).normalize();
+      entry.direction.copy(direction);
       directional.position.set(
         -direction.x * 10,
         -direction.y * 10,
@@ -936,6 +949,7 @@ export class ViewportRenderer {
       directional.shadow.normalBias = 0.02;
       directional.shadow.radius = 1 + summary.shadowSoftness * 6;
     } else {
+      entry.direction.set(0, 0, 0);
       light.position.set(
         summary.position[0],
         summary.position[1],
@@ -958,6 +972,81 @@ export class ViewportRenderer {
     entry.light.removeFromParent();
     entry.target?.removeFromParent();
     entry.light.dispose();
+  }
+
+  /** Fit each shadow-casting directional light to the visible scene bounds. */
+  private fitDirectionalShadowCameras(): void {
+    const bounds = new Box3();
+    for (const view of this.nodeViews.values()) {
+      if (!view.isReference && this.isViewVisible(view)) {
+        bounds.union(view.getWorldBounds());
+      }
+    }
+    const center = bounds.isEmpty()
+      ? new Vector3()
+      : bounds.getCenter(new Vector3());
+    const size = bounds.isEmpty()
+      ? new Vector3(12, 12, 12)
+      : bounds.getSize(new Vector3());
+    const rawRadius = Math.max(2, size.length() * 0.55);
+    const radius = Math.max(2, Math.ceil(rawRadius * 2) * 0.5);
+    const mapSize = 1024;
+    const texel = (radius * 2) / mapSize;
+
+    for (const entry of this.documentLights.values()) {
+      if (
+        entry.kind !== 'directional' ||
+        entry.target === null ||
+        !entry.light.castShadow
+      ) {
+        continue;
+      }
+      const directional = entry.light as DirectionalLight;
+      const direction = entry.direction.clone();
+      if (direction.lengthSq() < 1e-8) {
+        direction.set(0, 0, -1);
+      } else {
+        direction.normalize();
+      }
+      const up =
+        Math.abs(direction.z) < 0.9
+          ? new Vector3(0, 0, 1)
+          : new Vector3(1, 0, 0);
+      const right = new Vector3()
+        .crossVectors(direction, up)
+        .normalize();
+      const cameraUp = new Vector3()
+        .crossVectors(right, direction)
+        .normalize();
+      const snappedCenter = new Vector3()
+        .addScaledVector(
+          right,
+          Math.round(center.dot(right) / texel) * texel
+        )
+        .addScaledVector(
+          cameraUp,
+          Math.round(center.dot(cameraUp) / texel) * texel
+        )
+        .addScaledVector(direction, center.dot(direction));
+
+      entry.target.position.copy(snappedCenter);
+      entry.target.updateMatrixWorld();
+      directional.position
+        .copy(snappedCenter)
+        .addScaledVector(direction, -radius * 2);
+      directional.updateMatrixWorld();
+      const shadowCamera = directional.shadow.camera;
+      if (shadowCamera instanceof PerspectiveCamera === false) {
+        shadowCamera.up.copy(cameraUp);
+        shadowCamera.left = -radius;
+        shadowCamera.right = radius;
+        shadowCamera.top = radius;
+        shadowCamera.bottom = -radius;
+        shadowCamera.near = 0.1;
+        shadowCamera.far = radius * 4;
+        shadowCamera.updateProjectionMatrix();
+      }
+    }
   }
 
   private applyDocumentLightVisibility(): void {

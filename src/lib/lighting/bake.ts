@@ -745,13 +745,10 @@ export async function bakeLighting(
       position: new Vector3(...light.position)
     }));
   let covered = false;
-  const coverageCanvas = new OffscreenCanvas(width, height);
-  const coverageContext = coverageCanvas.getContext('2d', {
-    willReadFrequently: true
-  });
-  if (coverageContext) {
-    coverageContext.fillStyle = '#fff';
-  }
+  // Derive the coverage mask from the same barycentric rasterization as the
+  // lighting pass. This avoids a full-resolution OffscreenCanvas and its
+  // getImageData copy.
+  const coverageMask = new Uint8Array(width * height);
   const normalSign = bakeNormalSign(mesh, matrix);
   for (let face = 0; face < mesh.faceCount; face += 1) {
     if (face > 0 && performance.now() - lastYield > 16) {
@@ -785,19 +782,6 @@ export async function bakeLighting(
       mesh.heUv[edge * 2] * width,
       (1 - mesh.heUv[edge * 2 + 1]) * height
     ] as const);
-    if (coverageContext) {
-      const path = new Path2D();
-      uv.forEach((point, index) => {
-        if (index === 0) {
-          path.moveTo(point[0], point[1]);
-        } else {
-          path.lineTo(point[0], point[1]);
-        }
-      });
-      path.closePath();
-      coverageContext.fill(path);
-    }
-
     for (let triangle = 1; triangle < loop.length - 1; triangle += 1) {
       const ia = 0;
       const ib = triangle;
@@ -825,6 +809,9 @@ export async function bakeLighting(
           const c = 1 - a - b;
           if (a < -0.03 || b < -0.03 || c < -0.03) {
             continue;
+          }
+          if (a >= -1e-4 && b >= -1e-4 && c >= -1e-4) {
+            coverageMask[y * width + x] = 1;
           }
           const texelSeed =
             (face + 1) * 73856093 ^
@@ -908,23 +895,6 @@ export async function bakeLighting(
   // Fill only interior raster gaps, then blur inside UV coverage. Padding the
   // gutter before blur would let the blur pull the lit gutter back into the
   // island edge and create bright seams under soft shadows.
-  const coverageMask = new Uint8Array(width * height);
-  if (coverageContext) {
-    let coverage: ImageData | null = coverageContext.getImageData(
-      0,
-      0,
-      width,
-      height
-    );
-    for (let pixel = 0; pixel < coverageMask.length; pixel += 1) {
-      coverageMask[pixel] = coverage.data[pixel * 4 + 3] > 0 ? 1 : 0;
-    }
-    coverage = null;
-    // Release the full-resolution coverage bitmap before the bleed/blur
-    // passes allocate their own scratch buffers.
-    coverageCanvas.width = 0;
-    coverageCanvas.height = 0;
-  }
   bleedImageData(data, width, height, 2, coverageMask);
   fillBrightCracks(data, width, height, 2);
   const softness = Math.max(
