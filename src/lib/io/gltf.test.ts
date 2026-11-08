@@ -270,5 +270,70 @@ describe('GLB cameras and lights', () => {
       expect(animatedNodes.has(lightNode)).toBe(true);
     }
     expect(json.animations?.[0]?.channels?.length).toBeGreaterThanOrEqual(5);
+
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    const imported = await importGlb(buffer, 24);
+    expect(imported.cameras).toHaveLength(1);
+    expect(imported.cameras[0].name).toBe('Shot_Cam');
+    expect(imported.cameras[0].fov).toBeCloseTo(35);
+    const importedCameraDirection = [
+      imported.cameras[0].target[0] - imported.cameras[0].position[0],
+      imported.cameras[0].target[1] - imported.cameras[0].position[1],
+      imported.cameras[0].target[2] - imported.cameras[0].position[2]
+    ];
+    expect(importedCameraDirection[0]).toBeLessThan(0);
+    expect(importedCameraDirection[1]).toBeGreaterThan(0);
+    expect(importedCameraDirection[2]).toBeLessThan(0);
+    expect(imported.lights).toHaveLength(2);
+    expect(imported.lights.map((item) => item.kind).sort()).toEqual([
+      'directional',
+      'point'
+    ]);
+    const importedSun = imported.lights.find(
+      (item) => item.kind === 'directional'
+    );
+    const sunDirection = importedSun?.direction ?? [0, 0, 0];
+    expect(sunDirection[2]).toBeLessThan(-0.8);
+    expect(imported.clips[0].cameraTracks).toHaveLength(1);
+    expect(imported.clips[0].lightTracks).toHaveLength(2);
+    const importedCameraTrack = imported.clips[0].cameraTracks?.[0];
+    expect(importedCameraTrack?.targetId).toBe(imported.cameras[0].id);
+    expect(importedCameraTrack?.keyframes[0].position[0]).toBeCloseTo(4, 1);
+    expect(importedCameraTrack?.keyframes.at(-1)?.position[1]).toBeCloseTo(-8, 1);
+    for (const track of imported.clips[0].lightTracks ?? []) {
+      const target = imported.lights.find(
+        (item) => item.id === track.targetId
+      );
+      expect(target).toBeDefined();
+      expect(track.keyframes.length).toBeGreaterThan(1);
+    }
+  });
+
+  it('imports a camera-only GLB without requiring triangle meshes', async () => {
+    const camera = new SceneCamera({
+      id: 'camera-11',
+      name: 'Camera Only',
+      position: [1, -2, 3],
+      target: [0, 0, 0],
+      fov: 40
+    });
+    const bytes = await exportGlb([], [], new Map(), {
+      clips: [],
+      fps: 24,
+      cameras: [camera.snapshot()],
+      lights: []
+    });
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    const imported = await importGlb(buffer, 24);
+    expect(imported.nodes).toHaveLength(0);
+    expect(imported.cameras).toHaveLength(1);
+    expect(imported.cameras[0].fov).toBeCloseTo(40);
+    expect(imported.lights).toHaveLength(0);
   });
 });

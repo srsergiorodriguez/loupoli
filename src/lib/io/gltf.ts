@@ -38,17 +38,22 @@ import {
   type AnimationClip as SceneAnimationClip,
   type AnimationClipSnapshot,
   type AnimationTrackSnapshot,
+  type CameraAnimationTrackSnapshot,
+  type LightAnimationTrackSnapshot,
+  createCameraAnimationTrackId,
+  createLightAnimationTrackId,
   type MeshMotionTrack,
   type ShapeWeightTrackSnapshot
 } from '../scene/SceneAnimation';
 import type { SceneGroup } from '../scene/SceneGroup';
-import type { CameraSnapshot } from '../scene/SceneCamera';
-import type { LightSnapshot } from '../scene/SceneLight';
+import { createCameraId, type CameraSnapshot } from '../scene/SceneCamera';
+import { createLightId, type LightSnapshot } from '../scene/SceneLight';
 import { transformMatrix, worldTransformForNode } from '../editor/groupTransforms';
 
 /** Three's Y-up conversion for app Z-up coordinates. */
 const Y_UP_TO_Z_UP = new Matrix4().makeRotationX(Math.PI / 2);
 const Z_UP_TO_Y_UP = new Matrix4().makeRotationX(-Math.PI / 2);
+const IMPORTED_CAMERA_TARGET_DISTANCE = 5;
 
 function colorHex(color: { getHexString(): string } | null | undefined): string {
   return `#${color?.getHexString() ?? 'c8c2ad'}`;
@@ -59,6 +64,13 @@ function yUpPoint(value: readonly [number, number, number]): Vector3 {
   return new Vector3(value[0], value[1], value[2]).applyMatrix4(
     Z_UP_TO_Y_UP
   );
+}
+
+/** Convert one glTF Y-up direction back to app Z-up. */
+function appDirection(value: Vector3): Vector3 {
+  return value
+    .applyMatrix3(new Matrix3().setFromMatrix4(Y_UP_TO_Z_UP))
+    .normalize();
 }
 
 /** Camera orientation for a look-at target in the Y-up export scene. */
@@ -189,7 +201,19 @@ function sampleMotionWeights(
 /** Imported meshes plus glTF animation clips converted to app frames. */
 export interface GlbImportResult {
   readonly nodes: MeshNode[];
+  readonly cameras: CameraSnapshot[];
+  readonly lights: LightSnapshot[];
   readonly clips: AnimationClipSnapshot[];
+}
+
+interface GlbCameraBinding {
+  readonly object: PerspectiveCamera;
+  readonly snapshot: CameraSnapshot;
+}
+
+interface GlbLightBinding {
+  readonly object: DirectionalLight | PointLight;
+  readonly snapshot: LightSnapshot;
 }
 
 interface GlbMeshBinding {
@@ -201,12 +225,14 @@ interface GlbMeshBinding {
 }
 
 /**
- * Import a binary glTF into world-baked DCEL nodes and animation clips.
+ * Import a binary glTF into DCEL nodes, scene cameras/lights, and clips.
  *
  * glTF is triangulated by definition. Per-corner UVs survive because each
  * triangle corner keeps its own attribute values. Material base colors become
  * the node's simple material palette. Transform channels are baked into
- * node-relative tracks; morph weights become shape-weight tracks.
+ * node-relative tracks; morph weights become shape-weight tracks. Camera
+ * orientation is restored with a derived target because glTF stores no target
+ * distance.
  */
 export async function importGlb(
   data: ArrayBuffer,
@@ -216,8 +242,61 @@ export async function importGlb(
   const gltf = await loader.parseAsync(data, '');
   gltf.scene.updateMatrixWorld(true);
   const nodes: MeshNode[] = [];
+  const cameras: CameraSnapshot[] = [];
+  const lights: LightSnapshot[] = [];
   const bindings: GlbMeshBinding[] = [];
+  const cameraBindings: GlbCameraBinding[] = [];
+  const lightBindings: GlbLightBinding[] = [];
   gltf.scene.traverse((object) => {
+    if (object instanceof PerspectiveCamera) {
+      const position = new Vector3()
+        .setFromMatrixPosition(object.matrixWorld)
+        .applyMatrix4(Y_UP_TO_Z_UP);
+      const quaternion = new Quaternion();
+      object.getWorldQuaternion(quaternion);
+      const direction = appDirection(
+        new Vector3(0, 0, -1).applyQuaternion(quaternion)
+      );
+      const target = position
+        .clone()
+        .addScaledVector(direction, IMPORTED_CAMERA_TARGET_DISTANCE);
+      const snapshot: CameraSnapshot = {
+        id: createCameraId(),
+        name: normalizeName(object.name, cameras.length),
+        position: [position.x, position.y, position.z],
+        target: [target.x, target.y, target.z],
+        fov: Math.max(5, Math.min(160, object.fov))
+      };
+      cameras.push(snapshot);
+      cameraBindings.push({ object, snapshot });
+      return;
+    }
+    if (object instanceof DirectionalLight || object instanceof PointLight) {
+      const position = new Vector3()
+        .setFromMatrixPosition(object.matrixWorld)
+        .applyMatrix4(Y_UP_TO_Z_UP);
+      const quaternion = new Quaternion();
+      object.getWorldQuaternion(quaternion);
+      const direction =
+        object instanceof DirectionalLight
+          ? appDirection(new Vector3(0, 0, -1).applyQuaternion(quaternion))
+          : new Vector3(0, 0, -1);
+      const snapshot: LightSnapshot = {
+        id: createLightId(),
+        name: normalizeName(object.name, lights.length),
+        kind: object instanceof DirectionalLight ? 'directional' : 'point',
+        color: `#${object.color.getHexString()}`,
+        intensity: Math.max(0, object.intensity),
+        enabled: true,
+        castShadows: false,
+        shadowSoftness: 0.35,
+        position: [position.x, position.y, position.z],
+        direction: [direction.x, direction.y, direction.z]
+      };
+      lights.push(snapshot);
+      lightBindings.push({ object, snapshot });
+      return;
+    }
     if (!(object instanceof Mesh)) {
       return;
     }
@@ -364,21 +443,35 @@ export async function importGlb(
       );
     }
   });
-  if (nodes.length === 0) {
-    throw new Error('The GLB contains no triangle meshes.');
+  if (nodes.length === 0 && cameras.length === 0 && lights.length === 0) {
+    throw new Error('The GLB contains no importable meshes, cameras, or lights.');
   }
-  const clips = importGlbAnimation(gltf.animations, bindings, fps, gltf.scene);
-  return { nodes, clips };
+  const clips = importGlbAnimation(
+    gltf.animations,
+    bindings,
+    cameraBindings,
+    lightBindings,
+    fps,
+    gltf.scene
+  );
+  return { nodes, cameras, lights, clips };
 }
 
 /** Convert glTF animation clips into app integer-frame clips. */
 function importGlbAnimation(
   animations: readonly import('three').AnimationClip[],
   bindings: readonly GlbMeshBinding[],
+  cameraBindings: readonly GlbCameraBinding[],
+  lightBindings: readonly GlbLightBinding[],
   fps: number,
   scene: Object3D
 ): AnimationClipSnapshot[] {
-  if (animations.length === 0 || bindings.length === 0) {
+  if (
+    animations.length === 0 ||
+    (bindings.length === 0 &&
+      cameraBindings.length === 0 &&
+      lightBindings.length === 0)
+  ) {
     return [];
   }
   const rate = Math.max(1, Math.min(120, Math.round(fps)));
@@ -405,6 +498,20 @@ function importGlbAnimation(
       }[]
     >();
     const sampledWeights = bindings.map(() => [] as number[][]);
+    const sampledCameras = cameraBindings.map(
+      () =>
+        [] as {
+          position: [number, number, number];
+          target: [number, number, number];
+        }[]
+    );
+    const sampledLights = lightBindings.map(
+      () =>
+        [] as {
+          position: [number, number, number];
+          direction: [number, number, number];
+        }[]
+    );
     for (let frame = 0; frame <= endFrame; frame += 1) {
       mixer.setTime(frame / rate);
       scene.updateMatrixWorld(true);
@@ -438,6 +545,40 @@ function importGlbAnimation(
             (_id, index) => binding.object.morphTargetInfluences?.[index] ?? 0
           )
         );
+      }
+      for (let index = 0; index < cameraBindings.length; index += 1) {
+        const binding = cameraBindings[index];
+        const position = new Vector3()
+          .setFromMatrixPosition(binding.object.matrixWorld)
+          .applyMatrix4(Y_UP_TO_Z_UP);
+        const quaternion = new Quaternion();
+        binding.object.getWorldQuaternion(quaternion);
+        const direction = appDirection(
+          new Vector3(0, 0, -1).applyQuaternion(quaternion)
+        );
+        const target = position
+          .clone()
+          .addScaledVector(direction, IMPORTED_CAMERA_TARGET_DISTANCE);
+        sampledCameras[index].push({
+          position: [position.x, position.y, position.z],
+          target: [target.x, target.y, target.z]
+        });
+      }
+      for (let index = 0; index < lightBindings.length; index += 1) {
+        const binding = lightBindings[index];
+        const position = new Vector3()
+          .setFromMatrixPosition(binding.object.matrixWorld)
+          .applyMatrix4(Y_UP_TO_Z_UP);
+        const quaternion = new Quaternion();
+        binding.object.getWorldQuaternion(quaternion);
+        const direction =
+          binding.object instanceof DirectionalLight
+            ? appDirection(new Vector3(0, 0, -1).applyQuaternion(quaternion))
+            : new Vector3(0, 0, -1);
+        sampledLights[index].push({
+          position: [position.x, position.y, position.z],
+          direction: [direction.x, direction.y, direction.z]
+        });
       }
     }
     action.stop();
@@ -499,8 +640,71 @@ function importGlbAnimation(
         });
       }
     }
+    const cameraTracks: CameraAnimationTrackSnapshot[] = [];
+    for (let index = 0; index < cameraBindings.length; index += 1) {
+      const binding = cameraBindings[index];
+      const samples = sampledCameras[index];
+      const rest = binding.snapshot;
+      const changed = samples.some(
+        (sample) =>
+          Math.abs(sample.position[0] - rest.position[0]) > 1e-6 ||
+          Math.abs(sample.position[1] - rest.position[1]) > 1e-6 ||
+          Math.abs(sample.position[2] - rest.position[2]) > 1e-6 ||
+          Math.abs(sample.target[0] - rest.target[0]) > 1e-6 ||
+          Math.abs(sample.target[1] - rest.target[1]) > 1e-6 ||
+          Math.abs(sample.target[2] - rest.target[2]) > 1e-6
+      );
+      if (!changed) {
+        continue;
+      }
+      cameraTracks.push({
+        id: createCameraAnimationTrackId(),
+        targetId: rest.id,
+        keyframes: samples.map((sample, frame) => ({
+          frame,
+          position: sample.position,
+          target: sample.target,
+          fov: rest.fov,
+          interpolation: 'linear' as const
+        }))
+      });
+    }
+    const lightTracks: LightAnimationTrackSnapshot[] = [];
+    for (let index = 0; index < lightBindings.length; index += 1) {
+      const binding = lightBindings[index];
+      const samples = sampledLights[index];
+      const rest = binding.snapshot;
+      const changed = samples.some(
+        (sample) =>
+          Math.abs(sample.position[0] - rest.position[0]) > 1e-6 ||
+          Math.abs(sample.position[1] - rest.position[1]) > 1e-6 ||
+          Math.abs(sample.position[2] - rest.position[2]) > 1e-6 ||
+          Math.abs(sample.direction[0] - rest.direction[0]) > 1e-6 ||
+          Math.abs(sample.direction[1] - rest.direction[1]) > 1e-6 ||
+          Math.abs(sample.direction[2] - rest.direction[2]) > 1e-6
+      );
+      if (!changed) {
+        continue;
+      }
+      lightTracks.push({
+        id: createLightAnimationTrackId(),
+        targetId: rest.id,
+        keyframes: samples.map((sample, frame) => ({
+          frame,
+          position: sample.position,
+          direction: sample.direction,
+          intensity: rest.intensity,
+          interpolation: 'linear' as const
+        }))
+      });
+    }
     const end = Math.max(0, endFrame);
-    if (tracks.length === 0 && weightTracks.length === 0) {
+    if (
+      tracks.length === 0 &&
+      weightTracks.length === 0 &&
+      cameraTracks.length === 0 &&
+      lightTracks.length === 0
+    ) {
       continue;
     }
     clips.push({
@@ -509,7 +713,9 @@ function importGlbAnimation(
       startFrame: 0,
       endFrame: end <= 0 ? 1 : end,
       tracks,
-      weightTracks
+      weightTracks,
+      ...(cameraTracks.length > 0 ? { cameraTracks } : {}),
+      ...(lightTracks.length > 0 ? { lightTracks } : {})
     });
   }
   mixer.stopAllAction();

@@ -205,8 +205,8 @@ import {
   SetAmbientOcclusionCommand,
   type AmbientLightSnapshot
 } from './commands/LightCommands';
-import type { LightKind, LightSnapshot } from '../scene/SceneLight';
-import type { CameraSnapshot, SceneCamera } from '../scene/SceneCamera';
+import { SceneLight, type LightKind, type LightSnapshot } from '../scene/SceneLight';
+import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import type {
   AnimationInterpolation,
   AnimationSnapshot,
@@ -222,7 +222,6 @@ import {
   videoMimeFor
 } from '../render/videoExport';
 import type { RenderShading, RenderUpscale } from '../render/renderSettings';
-import type { SceneLight } from '../scene/SceneLight';
 import {
   decodeLpoly,
   encodeLpoly,
@@ -6845,12 +6844,34 @@ export class EditorRuntime {
       ) as ArrayBuffer;
       const imported = await importGlb(buffer, this.document.animation.fps);
       const nodes = imported.nodes;
+      const cameras = imported.cameras.map((snapshot) =>
+        SceneCamera.fromSnapshot(snapshot)
+      );
+      const lights = imported.lights.map((snapshot) =>
+        SceneLight.fromSnapshot(snapshot)
+      );
       const start = this.document.nodes.length;
+      const cameraStart = this.document.cameras.length;
+      const lightStart = this.document.lights.length;
       const commands: import('./commands/EditorCommand').EditorCommand[] =
         nodes.map(
           (node, index) =>
             new CreateMeshNodeCommand(this.document, node, start + index)
         );
+      commands.push(
+        ...cameras.map(
+          (camera, index) =>
+            new CreateCameraCommand(
+              this.document,
+              camera,
+              cameraStart + index
+            )
+        ),
+        ...lights.map(
+          (light, index) =>
+            new CreateLightCommand(this.document, light, lightStart + index)
+        )
+      );
       if (imported.clips.length > 0) {
         const animation = this.document.animation;
         const beforeAnimation = animation.snapshot();
@@ -6881,17 +6902,29 @@ export class EditorRuntime {
       }
       this.activeGroupId = null;
       this.activeNodeId = nodes[0]?.id ?? this.activeNodeId;
+      this.activeCameraId = cameras[0]?.id ?? this.activeCameraId;
+      this.activeLightId = lights[0]?.id ?? this.activeLightId;
       this.selectedNodeIds.clear();
       if (this.activeNodeId) {
         this.selectedNodeIds.add(this.activeNodeId);
       }
       this.selection.setContext(this.activeNodeId, 'vertex');
       this.renderer.frameActiveNode();
-      this.notify(
-        'success',
-        'GLB imported',
-        `${nodes.length} object${nodes.length === 1 ? '' : 's'}${imported.clips.length > 0 ? ` · ${imported.clips.length} animation clip${imported.clips.length === 1 ? '' : 's'}` : ''}`
-      );
+      const parts = [
+        `${nodes.length} object${nodes.length === 1 ? '' : 's'}`,
+        ...(cameras.length > 0
+          ? [`${cameras.length} camera${cameras.length === 1 ? '' : 's'}`]
+          : []),
+        ...(lights.length > 0
+          ? [`${lights.length} light${lights.length === 1 ? '' : 's'}`]
+          : []),
+        ...(imported.clips.length > 0
+          ? [
+              `${imported.clips.length} animation clip${imported.clips.length === 1 ? '' : 's'}`
+            ]
+          : [])
+      ];
+      this.notify('success', 'GLB imported', parts.join(' · '));
       this.publish();
     } catch (error) {
       const message = this.errorMessage(error);

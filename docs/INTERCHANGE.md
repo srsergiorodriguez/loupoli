@@ -40,7 +40,7 @@ Limitations:
 
 Implemented with Three's GLTF loader/exporter:
 
-- Binary GLB import
+- Binary GLB import, including scene cameras and punctual lights
 - Triangles converted to validated DCEL topology
 - Per-corner UVs and split seams preserved
 - Material base colors become the node palette
@@ -51,14 +51,15 @@ Implemented with Three's GLTF loader/exporter:
 - Node TRS output and material names for broad DCC compatibility
 - Scene cameras export as glTF perspective cameras
 - Directional and point lights export with `KHR_lights_punctual`
-- Camera/light animation exports as node position and rotation channels
+- Camera/light animation imports and exports as node position/rotation channels
 - Exported evaluated, textured GLB opened successfully in Blender 5.1
 
 Limitations:
 
 - PBR material complexity is reduced to base color plus the assigned composite texture; roughness/metalness remain defaults.
-- GLTF textures, skins, cameras, lights, and camera/light animation are not imported yet. Object and morph animations are imported. Morph targets import into shape keys and export as relative GLB morph targets with influences when exporting the unmodified base mesh.
+- GLTF textures and skins are not imported yet. Object, morph, camera, and light animations are imported. Morph targets import into shape keys and export as relative GLB morph targets with influences when exporting the unmodified base mesh.
 - Camera FOV and light intensity are fixed in the GLB because glTF node animation cannot animate camera/light properties; the project file retains their full animation.
+- glTF stores camera orientation but not the original target distance, so imported camera targets are placed five units ahead along the view direction.
 - Non-manifold GLB triangle soup is rejected with a clear error.
 - Export uses the evaluated modifier mesh and simple per-face colors.
 - GLB embeds the assigned composite texture; it does not yet export normal maps or a full material graph.
