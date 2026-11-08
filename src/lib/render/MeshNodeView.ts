@@ -1317,10 +1317,22 @@ export class MeshNodeView {
     toVertex: number,
     radius: number
   ): void {
-    const start = new Vector3(
-      ...this.mesh.getVertexPosition(fromVertex)
+    this.writeEdgeTubePositions(
+      target,
+      index,
+      new Vector3(...this.mesh.getVertexPosition(fromVertex)),
+      new Vector3(...this.mesh.getVertexPosition(toVertex)),
+      radius
     );
-    const end = new Vector3(...this.mesh.getVertexPosition(toVertex));
+  }
+
+  private writeEdgeTubePositions(
+    target: InstancedMesh,
+    index: number,
+    start: Vector3,
+    end: Vector3,
+    radius: number
+  ): void {
     this.edgeDirection.copy(end).sub(start);
     const length = this.edgeDirection.length();
     if (length <= Number.EPSILON) {
@@ -1389,17 +1401,43 @@ export class MeshNodeView {
       if (!frontA && !frontB) {
         continue;
       }
-      this.frontWirePositions[cursor] = this.mesh.positions[from];
-      this.frontWirePositions[cursor + 1] = this.mesh.positions[from + 1];
-      this.frontWirePositions[cursor + 2] = this.mesh.positions[from + 2];
-      this.frontWirePositions[cursor + 3] = this.mesh.positions[to];
-      this.frontWirePositions[cursor + 4] = this.mesh.positions[to + 1];
-      this.frontWirePositions[cursor + 5] = this.mesh.positions[to + 2];
-      this.writeEdgeTube(
+      // Front-facing normals still include surfaces hidden behind another
+      // part of the model. Depth-test the overlay and lift it just off the
+      // visible surface so only edges visible from this camera remain.
+      const nx =
+        (frontA ? this.faceNormals[faceA * 3] : 0) +
+        (frontB ? this.faceNormals[faceB * 3] : 0);
+      const ny =
+        (frontA ? this.faceNormals[faceA * 3 + 1] : 0) +
+        (frontB ? this.faceNormals[faceB * 3 + 1] : 0);
+      const nz =
+        (frontA ? this.faceNormals[faceA * 3 + 2] : 0) +
+        (frontB ? this.faceNormals[faceB * 3 + 2] : 0);
+      const normalLength = Math.hypot(nx, ny, nz);
+      const cameraDistance = Math.hypot(viewX, viewY, viewZ);
+      const offset = Math.max(0.0005, cameraDistance * 0.0012);
+      const scale = normalLength > 1e-8 ? offset / normalLength : 0;
+      const start = new Vector3(
+        this.mesh.positions[from] + nx * scale,
+        this.mesh.positions[from + 1] + ny * scale,
+        this.mesh.positions[from + 2] + nz * scale
+      );
+      const end = new Vector3(
+        this.mesh.positions[to] + nx * scale,
+        this.mesh.positions[to + 1] + ny * scale,
+        this.mesh.positions[to + 2] + nz * scale
+      );
+      this.frontWirePositions[cursor] = start.x;
+      this.frontWirePositions[cursor + 1] = start.y;
+      this.frontWirePositions[cursor + 2] = start.z;
+      this.frontWirePositions[cursor + 3] = end.x;
+      this.frontWirePositions[cursor + 4] = end.y;
+      this.frontWirePositions[cursor + 5] = end.z;
+      this.writeEdgeTubePositions(
         this.frontWireTubeMesh,
         tubeCount,
-        fromVertex,
-        toVertex,
+        start,
+        end,
         FRONT_WIRE_TUBE_RADIUS
       );
       tubeCount += 1;

@@ -536,7 +536,7 @@ Desktop G/R/S runs a transient modal transform in the runtime, targeting selecte
 
 ### Viewport shading modes
 
-Wireframe, Solid, Texture (the PS1/Unlit path), Texture + Wire, and Lit. A fresh app load opens on Model with Texture + Wire; workspace defaults are Texture + Wire for Model/UV/Paint and Lit for Light/Animate/Render, with per-workspace manual choices remembered for the session. Texture + Wire rebuilds a camera-facing edge subset when rendering: each edge is kept when either adjacent face normal points toward the camera. Back-facing edges are excluded; front edges use an unoccluded overlay. The overlay updates on camera or object changes. A separate blue preview line marks a pending loop cut.
+Wireframe, Solid, Texture (the PS1/Unlit path), Texture + Wire, and Lit. A fresh app load opens on Model with Texture + Wire; workspace defaults are Texture + Wire for Model/UV/Paint and Lit for Light/Animate/Render, with per-workspace manual choices remembered for the session. Texture + Wire rebuilds a camera-facing edge subset when rendering: each edge is kept when either adjacent face normal points toward the camera, then depth-tested so edges hidden behind another part of the model do not show through. Visible front edges receive a small camera-distance-scaled normal offset to avoid surface z-fighting. The overlay updates on camera or object changes. A separate blue preview line marks a pending loop cut.
 
 | Mode | Implementation |
 |---|---|

@@ -208,7 +208,7 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
     color: theme.wireframe.color,
     transparent: true,
     opacity: Math.max(theme.wireframe.alpha, 0.7),
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
     toneMapped: false
   });
@@ -225,7 +225,7 @@ export function createViewportMaterials(theme: Theme): ViewportMaterials {
     color: theme.wireframe.color,
     transparent: true,
     opacity: Math.max(theme.wireframe.alpha, 0.7),
-    depthTest: false,
+    depthTest: true,
     depthWrite: false,
     toneMapped: false
   });
