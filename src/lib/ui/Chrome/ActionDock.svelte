@@ -43,9 +43,16 @@
       return snapshot.selectionMode === 'face' && count === 1;
     }
     if (kind === 'loop-cut') {
-      return snapshot.selectionMode === 'edge' && count === 1;
+      return snapshot.selectionMode === 'edge' && count >= 1;
     }
     return snapshot.loopSlideAvailable;
+  }
+
+  function clickable(kind: MeshActionKind): boolean {
+    // Loop Slide stays clickable so the editor can explain that a loop cut
+    // must exist first; the other actions are unavailable until their
+    // selection prerequisites are met.
+    return kind === 'loop-slide' || available(kind);
   }
 </script>
 
@@ -56,9 +63,15 @@
         <button
           type="button"
           class:active={activeKind === action.kind}
-          disabled={!available(action.kind) || busy}
-          aria-label={action.label}
-          title={action.label}
+          disabled={!clickable(action.kind) || busy}
+          class:context-missing={action.kind === 'loop-slide' &&
+            !available(action.kind)}
+          aria-label={action.kind === 'loop-slide' && !available(action.kind)
+            ? `${action.label} — cut a loop first`
+            : action.label}
+          title={action.kind === 'loop-slide' && !available(action.kind)
+            ? `${action.label} — cut a loop first`
+            : action.label}
           onclick={() => session.armAction(action.kind)}
         >
           <Icon name={action.icon} size={18} />

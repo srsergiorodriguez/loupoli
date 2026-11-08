@@ -135,7 +135,7 @@ export class ViewportRenderer {
   private currentMode: ShadingMode = 'unlit';
   private seamOverlayVisible = false;
   private transformMode: TransformMode = 'select';
-  private transformOrientation: TransformOrientation = 'local';
+  private transformOrientation: TransformOrientation = 'global';
   private actionPreviewLine: Float32Array | null = null;
   private selectionGizmoOrigin: Vector3 | null = null;
   private selectionGizmoQuaternion: Quaternion | null = null;

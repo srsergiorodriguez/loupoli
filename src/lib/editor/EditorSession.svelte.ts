@@ -81,7 +81,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   textureHeight: 0,
   activeTransform: null,
   globalTransform: null,
-  transformOrientation: 'local',
+  transformOrientation: 'global',
   modalTransform: null,
   actionState: null,
   loopSlideAvailable: false,

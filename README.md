@@ -31,7 +31,7 @@ A simple and friendly 3D modeler for iPad and desktop. Z-up, quad-centric, on-de
 - **On-demand rendering.** The scheduler draws only for camera, resize, document, selection, or shading invalidation. Headless Chrome measured a stable render count while idle.
 - **Camera rig.** Orbit by dragging empty canvas, by Alt/Option-drag, by middle-mouse drag, or with one-finger touch. Two-finger touch pans/pinches, wheel zooms, and the orientation gizmo animates axis-aligned views. No damping loop.
 - **Five viewport modes.** Wireframe (true topological edges), Solid (flat-shaded clay), Texture (custom GLSL PS1 path), Texture + Wire (front-only topological overlay over the texture surface), and Lit (flat-shaded checker material). The mode selector now sits immediately left of the orientation gizmo, icon-only on touch layouts and labeled on wide desktop layouts.
-- **Local/Global transforms.** Node transforms stay parent-local in the document; the Inspector can display world-space position/rotation and orient translate/rotate gizmos to world axes. Scale remains local to avoid unsupported shear.
+- **Local/Global transforms.** Global orientation is the default; node transforms still stay parent-local in the document. The Inspector can display world-space position/rotation and orient translate/rotate gizmos to world axes. Scale remains local to avoid unsupported shear.
 - **Context-sensitive Desktop G/R/S.** If vertices, edges, or faces are selected, Grab/Rotate/Scale transform those elements around their median pivot; with no element selection they transform the active object or group. Mouse preview, X/Y/Z constraints, typed exact values, a transform HUD, Enter/click commit, and Escape/right-click cancel are shared. Element transforms are localized vertex moves with their own undo/autosave patches.
 - **Selection gizmo on iPad and desktop.** With elements selected, the Move/Rotate/Scale tools place a gizmo at the selection median. Move has X/Y/Z axes plus a free view-plane center handle; Scale has axes plus a uniform center handle; Rotate uses axis rings. Drag with the Pencil or mouse; the object/group gizmo returns when the element selection is empty. Selection stays active after commit.
 - **Collapsible sidebar and centered viewport.** On desktop the 3D canvas ends at the inspector's left edge, so the camera, picking, UV split, and HUD center inside the visible modeling area rather than behind the sidebar. The Application Bar control is the only sidebar toggle; there is no redundant sidebar X. Every Inspector section uses the shared `InspectorSection` native `<details>/<summary>`; Scene is open on first run and the rest are closed. Sidebar and section state persist in `localStorage`.
@@ -93,7 +93,7 @@ A simple and friendly 3D modeler for iPad and desktop. Z-up, quad-centric, on-de
 - **Numeric object transforms.** Position, rotation (degrees in the UI, radians in the document), and scale rows in the Inspector commit undoable `TransformNodeCommand`s. Transforms are local object transforms and persist in `.lpoli` and autosave deltas.
 - **Object/group transform gizmos.** With no element selection, Move/Rotate/Scale show object-space handles. Dragging an axis commits one `TransformNodeCommand`; mouse and pen are supported, while finger touch remains camera navigation.
 - **Consistent edge overlays.** Selected edges use constant-width instanced tubes rather than length-scaled radius, so cube and QuadSphere selections have comparable weight. Wireframe and Texture + Wire add instanced tubes for a heavier, readable line without replacing the DCEL edges.
-- **Selection loops and seam cleanup.** In 3D Edge mode, **Loop** selects the connected quad edge loop from the clicked edge. Open boundaries continue along the boundary; poles and non-quad junctions stop the walk. The Selection inspector can clear every seam on the active mesh in one undoable command. ActionDock is hidden while the UV split is open because it owns 3D topology actions.
+- **Selection loops and seam cleanup.** In 3D Edge mode, **Loop** selects the connected quad edge loop from the clicked edge and expands the current edge selection when enabled. The toggle stays on across mode changes. Open boundaries continue along the boundary; poles and non-quad junctions stop the walk. The Selection inspector can clear every seam on the active mesh in one undoable command. ActionDock is hidden while the UV split is open because it owns 3D topology actions.
 - **Stable UV view.** The pane caches its fitted projection while transforming and only refits on open, resize, or **Fit**. Scale uses a damped pointer-displacement factor with a live × readout, so scaling cannot run away when started near the pivot.
 - **Default UV seams.** New primitives start with practical seams: Cube uses three two-face strips, QuadSphere uses six patch charts, Cylinder separates both caps and cuts the side into two strips, and Grid remains unseamed. Charts are corner-based, so authored pinched nets also unwrap correctly; seam overlays are depth-tested so back-facing cuts stay hidden.
 - **Element selection and overlays.** V/E/F selection uses a 16 CSS px screen-space tolerance with occlusion rejection; faces use a front-face raycast mapped back to source DCEL faces. Shift/Cmd/Ctrl-click, the sticky **Add** toggle, and one-finger touch taps build a set. Shift-drag orbits on empty space, so additive selection and camera movement work together. Selected vertices, edges, and faces render distinct overlays. Replace/Add/Subtract applies to clicks and lasso in both 3D and UV. Selection changes are undoable but remain session-only and are never written to `.lpoli` or autosave.
@@ -184,7 +184,7 @@ Native file dialogs are provided by the Tauri dialog plugin; there is no second 
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | ActionDock | Tap/click Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. |
 | E / I | Arm Extrude / Inset for the current face selection. |
-| L / Shift+L | Arm Loop Cut for one selected edge / Loop Slide for the most recent loop cut. |
+| L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the most recent loop cut. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | Shift, Cmd, or Ctrl + click | Add or remove an element from the current selection. |
 | Right-drag | Pan the view. |
@@ -314,7 +314,7 @@ Phase 3 topology polish and Phase 4 texturing are feature-complete. [Phase 4 has
 - Secondary scene actions (**Group**, **Join**, **Ungroup**, **Delete**) are a compact wrapped row rather than full-width bars.
 - Selection actions use compact icon-and-label chips; full-width controls are reserved for primary actions such as Add.
 - Touch controls keep 44 px hit areas even when their visual footprint is reduced.
-- The Transform header switches between Local and Global. Global space is useful for grouped children: the numeric fields and move/rotate gizmo use world axes while the stored node transform remains parent-local.
+- The Transform header switches between Local and Global; Global is the default. Global space is useful for grouped children: the numeric fields and move/rotate gizmo use world axes while the stored node transform remains parent-local.
 
 ![iPad layout with icon-only shading control](docs/media/workflow-ipad.png)
 
@@ -364,13 +364,13 @@ Context-sensitive element transform: face selection, local X constraint, exact 0
 - Appears at the bottom-left when an object is active, on both touch and desktop layouts.
 - **Extrude** requires one or more selected faces.
 - **Inset** requires exactly one selected face.
-- **Loop Cut** requires exactly one selected edge.
+- **Loop Cut** requires at least one selected edge; if a loop is selected, the first edge seeds the cut.
 - **Loop Slide** becomes available after a loop cut and adjusts that most recent cut loop.
 - Tap or click once to arm; the active button and HUD identify the action. Drag up or right in the viewport to increase the amount, then release to apply one undoable command. On desktop, type an exact amount and press Enter instead of dragging.
 - Amounts are shown live: world units for extrude, percentages for inset and loop position.
 - Desktop shortcuts: **E** extrude, **I** inset, **L** loop cut, **Shift+L** loop slide. The ActionDock remains visible for mouse use.
 - **Esc** or tapping the active action again cancels an armed action; cancelling a drag restores both the mesh and selection.
-- Loop Cut inserts a loop; Loop Slide re-cuts the retained original loop source at a new position. While adjusting, a blue loop-preview line marks the prospective cut. The last-loop context is restored through undo/redo of loop cuts and slides, and clears on unrelated edits. Undo, autosave mesh patches, and modifier evaluation apply normally.
+- Loop Cut inserts a loop; Loop Slide re-cuts the retained original loop source at a new position. While adjusting, a blue loop-preview line marks the prospective cut. The last-loop context is restored through undo/redo of loop cuts and slides, and is retained across selection changes; vertex/topology edits clear it. Undo, autosave mesh patches, and modifier evaluation apply normally.
 
 Desktop action with an exact typed amount:
 

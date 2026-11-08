@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collectEdgeLoop } from './topology';
+import { collectEdgeLoop, collectEdgeLoops } from './topology';
 import { createCubeMesh, createGridMesh } from './primitives';
 import type { HalfEdgeMesh } from './HalfEdgeMesh';
 
@@ -58,6 +58,14 @@ describe('edge loop collection', () => {
     expect(loop.closed).toBe(true);
     expect(loop.edges.length).toBeGreaterThan(3);
     expectConnectedLoop(grid, loop.edges);
+  });
+
+  it('unions loops for a multi-edge selection', () => {
+    const cube = createCubeMesh(2);
+    expect(collectEdgeLoops(cube, [0])).toEqual([0, 1, 2, 3]);
+    expect(collectEdgeLoops(cube, [0, 8])).toEqual([0, 1, 2, 3, 4, 8, 9]);
+    expect(collectEdgeLoops(cube, [])).toEqual([]);
+    expect(collectEdgeLoops(cube, [-1, 999])).toEqual([]);
   });
 
   it('stops an interior loop at open boundaries', () => {

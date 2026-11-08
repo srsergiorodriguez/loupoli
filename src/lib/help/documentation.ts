@@ -28,7 +28,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Selection',
         paragraphs: [
           'The V, E, and F buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Add, Shift, Cmd, or Ctrl extends it; Sub removes elements. Changing mode clears the element set, while object selection remains in the Scene outliner.',
-          'The Loop toggle is available in Edge mode. It walks through connected quad edges, follows an open boundary, and stops at a pole or a non-quad junction. The same Edge mode supports marking seams for UV work.'
+          'The Loop toggle is available in Edge mode. Enabling it expands the current edge selection; it walks through connected quad edges, follows an open boundary, and stops at a pole or a non-quad junction. The same Edge mode supports marking seams for UV work.'
         ],
         controls: [
           'V / E / F: vertex, edge, or face mode',
@@ -40,7 +40,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Transforms and topology',
         paragraphs: [
           'The Move, Rotate, and Scale tools use the object transform when the element set is empty. With elements selected, the gizmo sits at the selection median and moves only those vertices. Typed values in Transform commit exact numbers; Enter confirms and Escape cancels a modal transform.',
-          'Extrude and Inset are face operations available from the ActionDock. Loop Cut requires one selected edge and splits the surrounding quad ring. Loop Slide moves the most recent cut. These operations commit one validated mesh replacement and remain editable through undo.',
+          'Extrude and Inset are face operations available from the ActionDock. Loop Cut uses the first selected edge (or a selected edge loop) and splits the surrounding quad ring. Loop Slide moves the most recent cut. These operations commit one validated mesh replacement and remain editable through undo.',
           'With modifiers active, direct vertex edits and topology operations target the base mesh. The stack re-evaluates after each commit, so the displayed surface and the editable base can differ.'
         ],
         controls: [

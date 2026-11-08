@@ -25,6 +25,7 @@ import {
   deletionLabel,
   extrudeSelectedFaces,
   collectEdgeLoop,
+  collectEdgeLoops,
   insetSelectedFace,
   loopCutFromEdge,
   mergeSelectedVertices
@@ -505,7 +506,7 @@ export class EditorRuntime {
   private transformMode: TransformMode = 'select';
   private lassoMode = false;
   private lassoPath: [number, number][] = [];
-  private transformOrientation: TransformOrientation = 'local';
+  private transformOrientation: TransformOrientation = 'global';
   private modalTransform: ModalTransform | null = null;
   private armedAction: MeshActionKind | null = null;
   private actionDrag: ActionDrag | null = null;
@@ -1742,6 +1743,7 @@ export class EditorRuntime {
     this.surfaceCursor = null;
     this.projectionPreview = null;
     this.armedAction = null;
+    this.lastLoopCut = null;
     this.renderer.setActionPreviewLine(null);
     this.cancelLasso();
     this.lassoMode = false;
@@ -4023,9 +4025,6 @@ export class EditorRuntime {
       this.cancelToolPointer();
     }
     this.selection.setMode(mode);
-    if (mode !== 'edge') {
-      this.loopSelect = false;
-    }
     if (mode !== 'vertex') {
       this.axisLock = null;
     }
@@ -4042,12 +4041,27 @@ export class EditorRuntime {
     this.publish();
   }
 
-  /** Toggle edge-loop expansion for the next edge pick. */
+  /** Toggle edge-loop expansion and expand an existing edge selection. */
   setLoopSelect(enabled: boolean): void {
     if (this.loopSelect === enabled) {
       return;
     }
+    const before = this.captureSelection();
     this.loopSelect = enabled && this.selection.mode === 'edge';
+    if (this.loopSelect && this.selection.count > 0) {
+      const node = this.getActiveNode();
+      if (node) {
+        const expanded = collectEdgeLoops(
+          node.mesh,
+          this.selection.values()
+        );
+        if (expanded.length > this.selection.count) {
+          this.selection.setValues(expanded);
+          this.syncScene();
+          this.recordSelection(before, 'Select edge loop');
+        }
+      }
+    }
     this.publish();
   }
 
@@ -5168,6 +5182,7 @@ export class EditorRuntime {
     }
     node.mesh = baseMesh.withPositions(positions);
     this.animationFrame = frame;
+    this.lastLoopCut = null;
     this.meshPoseEdit = {
       node,
       baseMesh,
@@ -8511,6 +8526,13 @@ export class EditorRuntime {
     }
     const node = this.getActiveNode();
     if (!node || !this.actionAvailable(kind, node)) {
+      if (kind === 'loop-slide') {
+        this.notify(
+          'warning',
+          'Loop Slide unavailable',
+          'Cut a loop first; Loop Slide then moves the most recent cut.'
+        );
+      }
       return;
     }
     this.projectError = null;
@@ -8535,7 +8557,7 @@ export class EditorRuntime {
       return false;
     }
     if (this.selection.mode === 'edge' && kind === 'loop-cut') {
-      return this.selection.count === 1;
+      return this.selection.count >= 1;
     }
     return false;
   }
@@ -8603,7 +8625,7 @@ export class EditorRuntime {
       selection = this.selection.values();
       faceIndex = selection[0];
     } else if (kind === 'loop-cut') {
-      if (this.selection.mode !== 'edge' || this.selection.count !== 1) {
+      if (this.selection.mode !== 'edge' || this.selection.count < 1) {
         this.armedAction = null;
         this.publish();
         return false;
@@ -9222,7 +9244,8 @@ export class EditorRuntime {
     clientX: number,
     clientY: number,
     combine: SelectionCombineMode,
-    node: MeshNode
+    node: MeshNode,
+    clearOnMiss = true
   ): void {
     const evaluated = node.getEvaluatedMesh();
     let evaluatedIndex: number | null;
@@ -9250,7 +9273,7 @@ export class EditorRuntime {
     }
 
     if (evaluatedIndex === null) {
-      if (combine === 'replace') {
+      if (clearOnMiss && combine === 'replace') {
         this.selection.clear();
       }
     } else if (baseIndex >= 0) {
@@ -9838,7 +9861,8 @@ export class EditorRuntime {
         sample.clientX,
         sample.clientY,
         combine,
-        node
+        node,
+        false
       );
       return false;
     }
@@ -11783,24 +11807,35 @@ export class EditorRuntime {
       this.renderer.clearAllTextureMaterials();
     }
     this.uvRevision += 1;
-    const loopContext =
-      event.command instanceof ReplaceMeshCommand
-        ? event.action === 'undo'
+    if (event.command instanceof ReplaceMeshCommand) {
+      const loopContext =
+        event.action === 'undo'
           ? event.command.loopContextBefore
-          : event.command.loopContextAfter
+          : event.command.loopContextAfter;
+      const loopNode = loopContext
+        ? this.document.getNode(loopContext.nodeId)
         : null;
-    const loopNode = loopContext
-      ? this.document.getNode(loopContext.nodeId)
-      : null;
-    this.lastLoopCut =
-      loopContext && loopNode
-        ? {
-            node: loopNode,
-            edge: loopContext.edge,
-            baseMesh: loopContext.baseMesh,
-            t: loopContext.t
-          }
-        : null;
+      this.lastLoopCut =
+        loopContext && loopNode
+          ? {
+              node: loopNode,
+              edge: loopContext.edge,
+              baseMesh: loopContext.baseMesh,
+              t: loopContext.t
+            }
+          : null;
+    } else if (
+      event.command instanceof MoveVertexCommand ||
+      event.command instanceof TransformVerticesCommand ||
+      event.command instanceof JoinNodesCommand
+    ) {
+      this.lastLoopCut = null;
+    } else if (
+      this.lastLoopCut !== null &&
+      !this.document.getNode(this.lastLoopCut.node.id)
+    ) {
+      this.lastLoopCut = null;
+    }
     this.armedAction = null;
     if (this.activeLightId !== null && !this.document.getLight(this.activeLightId)) {
       this.activeLightId = null;
@@ -12342,6 +12377,9 @@ export class EditorRuntime {
     this.document.replaceCameras(decoded.document.cameras);
     this.document.replaceAnimation(decoded.document.animation);
     this.document.annotations.apply(decoded.document.annotations.snapshot());
+    this.lastLoopCut = null;
+    this.armedAction = null;
+    this.renderer.setActionPreviewLine(null);
     this.refreshMotionLocks();
     this.stopAnimationLoop();
     this.animationFrame = decoded.document.animation.startFrame;

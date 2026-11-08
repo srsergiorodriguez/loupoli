@@ -832,6 +832,23 @@ export function collectEdgeLoop(mesh: HalfEdgeMesh, edge: number): EdgeLoop {
   };
 }
 
+/** Union the connected quad loops for several seed edges. */
+export function collectEdgeLoops(
+  mesh: HalfEdgeMesh,
+  seeds: readonly number[]
+): number[] {
+  const result = new Set<number>();
+  for (const seed of seeds) {
+    if (!Number.isInteger(seed) || seed < 0 || seed >= mesh.edgeCount) {
+      continue;
+    }
+    for (const edge of collectEdgeLoop(mesh, seed).edges) {
+      result.add(edge);
+    }
+  }
+  return [...result].sort((a, b) => a - b);
+}
+
 /**
  * Cut one quad edge loop at a position along its crossing edges.
  *
