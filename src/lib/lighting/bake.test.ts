@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { Matrix4 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import { importObjNodes } from '../io/obj';
 import { createCubeMesh } from '../geometry/primitives';
 import { extractUvCharts } from '../geometry/uvCharts';
 import { unwrapUvCharts } from '../geometry/lscm';
 import {
+  ambientVisibility,
   bakeLighting,
   BakeCancelledError,
   bakeNormalSign,
@@ -93,5 +94,51 @@ describe('bake cancellation', () => {
         { shouldCancel: () => true }
       )
     ).rejects.toBeInstanceOf(BakeCancelledError);
+  });
+});
+
+
+describe('ambient visibility sampling', () => {
+  it('returns full visibility without occluders', () => {
+    const settings = {
+      enabled: true,
+      strength: 1,
+      distance: 2,
+      bias: 0,
+      samples: 16
+    };
+    expect(
+      ambientVisibility(
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 1),
+        settings,
+        [],
+        7
+      )
+    ).toBe(1);
+  });
+
+  it('attenuates rays below a nearby occluder', () => {
+    const settings = {
+      enabled: true,
+      strength: 1,
+      distance: 2,
+      bias: 0,
+      samples: 32
+    };
+    const occluder = new Float32Array([
+      -4, -4, 1,
+      4, -4, 1,
+      0, 4, 1
+    ]);
+    const visibility = ambientVisibility(
+      new Vector3(0, 0, 0),
+      new Vector3(0, 0, 1),
+      settings,
+      [occluder],
+      11
+    );
+    expect(visibility).toBeGreaterThanOrEqual(0);
+    expect(visibility).toBeLessThan(1);
   });
 });

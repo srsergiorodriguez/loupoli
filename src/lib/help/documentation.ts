@@ -171,7 +171,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Baking',
         paragraphs: [
-          'Bake lighting writes direct light and shadows into a multiply layer on the active texture. If the active object has overlapping UV islands, Bake offers a confirmed Prepare bake atlas step: it creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps the original object and texture for recovery. The copy and its lighting layer are created in one action. Existing non-overlapping UV layers are preserved, whole-island packing and a four-pixel bleed protect island edges, and symmetric painting ends on the duplicate. Bake normals follow authored winding on concave surfaces instead of a per-face center test. The result is a normal texture layer, so it can be previewed in Texture, edited in Paint, and removed with undo.',
+          'Bake lighting writes direct light and shadows into a multiply layer on the active texture. If the active object has overlapping UV islands, Bake offers a confirmed Prepare bake atlas step: it creates a duplicate object with a unique shelf-packed UV layout and a resampled texture, hides the original, and keeps the original object and texture for recovery. The copy and its lighting layer are created in one action. Existing non-overlapping UV layers are preserved, whole-island packing and a four-pixel bleed protect island edges, and symmetric painting ends on the duplicate. Bake normals follow authored winding on concave surfaces instead of a per-face center test. Ambient occlusion is previewed per face in Lit and baked per texel into the same result. The result is a normal texture layer, so it can be previewed in Texture, edited in Paint, and removed with undo.',
           'If several objects share the texture, the bake creates a copy for the active object before adding the lighting layer. Other objects keep their original asset.'
         ],
         controls: [
@@ -261,7 +261,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The docked preview pane is always visible and updates live through the active camera whenever the camera, scene, lighting, or animation pose changes. Play and Pause run the existing animation playback without leaving Render. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM appears when the WebView supports it. Render MP4 is native on macOS/iPad and falls back to the WebView recorder on Windows/Linux when available. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
         ],
         controls: [
-          'Output kind: still, frame sequence, WebM, or MP4. Long exports and bakes show progress in the global strip and can be cancelled. MP4 is native on macOS/iPad; other platforms use the WebView recorder when available.',
+          'Output kind: still, frame sequence, WebM, or MP4. Long exports and bakes show progress in the global strip and can be cancelled. MP4 is native on macOS/iPad; other platforms use the WebView recorder when available. Video export is silent; audio is not part of the project timeline.',
           'Virtual width / height: internal render size',
           'Output width / height: saved image size',
           'Play/Pause: run the animation in the live preview',

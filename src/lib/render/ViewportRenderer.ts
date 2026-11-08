@@ -6,6 +6,7 @@ import {
   DoubleSide,
   Group as ThreeGroup,
   LineBasicMaterial,
+  Matrix4,
   MeshBasicMaterial,
   Object3D,
   PCFSoftShadowMap,
@@ -43,6 +44,11 @@ import { ViewportGrid } from './Grid';
 import { MeshNodeView } from './MeshNodeView';
 import { LightGizmos } from './LightGizmos';
 import { CameraGizmos } from './CameraGizmos';
+import { ambientVisibility, bakeNormalSign } from '../lighting/bake';
+import {
+  DEFAULT_AMBIENT_OCCLUSION,
+  type AmbientOcclusionSettings
+} from '../lighting/ao';
 import { AnnotationOverlay } from './AnnotationOverlay';
 import {
   createViewportMaterials,
@@ -56,6 +62,8 @@ export const PICK_RADIUS_CSS = 16;
 
 const DESKTOP_PIXEL_RATIO_CAP = 2;
 const TOUCH_PIXEL_RATIO_CAP = 1.5;
+/** AO preview is CPU-facing; keep the interactive budget bounded. */
+const MAX_AO_PREVIEW_FACES = 16000;
 
 /** Optional callbacks for the editor runtime that owns this viewport. */
 interface ViewportRendererOptions {
@@ -134,6 +142,13 @@ export class ViewportRenderer {
   };
 
   private currentMode: ShadingMode = 'texture-wire';
+  private ambientOcclusion: AmbientOcclusionSettings = {
+    ...DEFAULT_AMBIENT_OCCLUSION
+  };
+  private aoDirty = true;
+  private aoApplied = false;
+  private aoDirtyAt = 0;
+  private aoTimer = 0;
   private seamOverlayVisible = false;
   private transformMode: TransformMode = 'select';
   private transformOrientation: TransformOrientation = 'global';
@@ -448,6 +463,7 @@ export class ViewportRenderer {
     }
 
     this.applyActionPreviewLine();
+    this.markAmbientOcclusionDirty();
     this.schedule();
   }
 
@@ -669,6 +685,7 @@ export class ViewportRenderer {
       camera.position.set(...options.camera.position);
       camera.lookAt(new Vector3(...options.camera.target));
       camera.updateMatrixWorld(true);
+      this.updateAmbientOcclusionPreview(true);
       this.renderer.setRenderTarget(target);
       this.renderer.setViewport(0, 0, width, height);
       this.renderer.setClearColor(
@@ -881,6 +898,22 @@ export class ViewportRenderer {
     const lit = this.currentMode === 'lit';
     this.sceneAmbient.visible = lit;
     this.documentLightGroup.visible = lit;
+  }
+
+  /** Update the interactive AO preview settings. */
+  setAmbientOcclusion(settings: AmbientOcclusionSettings): void {
+    if (
+      this.ambientOcclusion.enabled === settings.enabled &&
+      this.ambientOcclusion.strength === settings.strength &&
+      this.ambientOcclusion.distance === settings.distance &&
+      this.ambientOcclusion.bias === settings.bias &&
+      this.ambientOcclusion.samples === settings.samples
+    ) {
+      return;
+    }
+    this.ambientOcclusion = { ...settings };
+    this.markAmbientOcclusionDirty();
+    this.schedule();
   }
 
   /** Pick a transform gizmo handle on the active object. */
@@ -1250,6 +1283,10 @@ export class ViewportRenderer {
     }
 
     window.removeEventListener('resize', this.handleWindowResize);
+    if (this.aoTimer !== 0) {
+      window.clearTimeout(this.aoTimer);
+      this.aoTimer = 0;
+    }
     this.resizeObserver.disconnect();
 
     for (const view of this.nodeViews.values()) {
@@ -1332,6 +1369,7 @@ export class ViewportRenderer {
   }
 
   private applyShadingMode(mode: ShadingMode): void {
+    this.markAmbientOcclusionDirty();
     for (const view of this.nodeViews.values()) {
       view.setShadingMode(mode);
       if (mode === 'texture-wire') {
@@ -1347,6 +1385,170 @@ export class ViewportRenderer {
     this.keyLight.visible = solid;
     this.fillLight.visible = solid;
     this.applyDocumentLightVisibility();
+  }
+
+  private markAmbientOcclusionDirty(): void {
+    this.aoDirty = true;
+    this.aoDirtyAt = performance.now();
+    if (this.aoTimer !== 0 || this.disposed) {
+      return;
+    }
+    this.aoTimer = window.setTimeout(() => {
+      this.aoTimer = 0;
+      this.schedule();
+    }, 90);
+  }
+
+  /** Recompute the per-face AO preview when the Lit scene changes. */
+  private updateAmbientOcclusionPreview(force = false): void {
+    if (!this.ambientOcclusion.enabled || this.currentMode !== 'lit') {
+      if (this.aoApplied) {
+        for (const view of this.nodeViews.values()) {
+          view.setFaceAo(null);
+        }
+        this.aoApplied = false;
+      }
+      this.aoDirty = false;
+      return;
+    }
+    if (!this.aoDirty) {
+      return;
+    }
+    if (!force && performance.now() - this.aoDirtyAt < 80) {
+      if (this.aoTimer === 0) {
+        this.aoTimer = window.setTimeout(() => {
+          this.aoTimer = 0;
+          this.schedule();
+        }, 80);
+      }
+      return;
+    }
+    this.aoDirty = false;
+    const views = [...this.nodeViews.values()].filter(
+      (view) => !view.isReference && this.isViewVisible(view)
+    );
+    const faceTotal = views.reduce(
+      (total, view) => total + view.evaluatedMesh.faceCount,
+      0
+    );
+    if (faceTotal === 0 || faceTotal > MAX_AO_PREVIEW_FACES) {
+      for (const view of this.nodeViews.values()) {
+        view.setFaceAo(null);
+      }
+      this.aoApplied = false;
+      return;
+    }
+    const occluders = views.map((view) =>
+      this.occlusionTriangles(view, view.worldMatrix)
+    );
+    views.forEach((view, viewIndex) => {
+      view.setFaceAo(
+        this.faceAmbientOcclusion(
+          view,
+          view.worldMatrix,
+          occluders,
+          viewIndex
+        )
+      );
+    });
+    this.aoApplied = true;
+  }
+
+  private isViewVisible(view: MeshNodeView): boolean {
+    let object: Object3D | null = view.group;
+    while (object) {
+      if (!object.visible) {
+        return false;
+      }
+      object = object.parent;
+    }
+    return true;
+  }
+
+  private occlusionTriangles(
+    view: MeshNodeView,
+    matrix: Matrix4
+  ): Float32Array {
+    const mesh = view.evaluatedMesh;
+    const triangles: number[] = [];
+    for (let face = 0; face < mesh.faceCount; face += 1) {
+      const first = mesh.faceHalfEdge[face];
+      const loop: number[] = [];
+      let halfEdge = first;
+      do {
+        loop.push(mesh.heOrigin[halfEdge]);
+        halfEdge = mesh.heNext[halfEdge];
+      } while (halfEdge !== first && loop.length < 64);
+      if (loop.length < 3) {
+        continue;
+      }
+      for (let corner = 1; corner < loop.length - 1; corner += 1) {
+        for (const vertex of [loop[0], loop[corner], loop[corner + 1]]) {
+          const point = new Vector3(
+            mesh.positions[vertex * 3],
+            mesh.positions[vertex * 3 + 1],
+            mesh.positions[vertex * 3 + 2]
+          ).applyMatrix4(matrix);
+          triangles.push(point.x, point.y, point.z);
+        }
+      }
+    }
+    return new Float32Array(triangles);
+  }
+
+  private faceAmbientOcclusion(
+    view: MeshNodeView,
+    matrix: Matrix4,
+    occluders: readonly Float32Array[],
+    viewIndex: number
+  ): Float32Array {
+    const mesh = view.evaluatedMesh;
+    const factors = new Float32Array(mesh.faceCount);
+    const sign = bakeNormalSign(mesh, matrix);
+    for (let face = 0; face < mesh.faceCount; face += 1) {
+      const first = mesh.faceHalfEdge[face];
+      const loop: number[] = [];
+      let halfEdge = first;
+      do {
+        loop.push(mesh.heOrigin[halfEdge]);
+        halfEdge = mesh.heNext[halfEdge];
+      } while (halfEdge !== first && loop.length < 64);
+      if (loop.length < 3) {
+        factors[face] = 1;
+        continue;
+      }
+      const world = loop.map((vertex) =>
+        new Vector3(
+          mesh.positions[vertex * 3],
+          mesh.positions[vertex * 3 + 1],
+          mesh.positions[vertex * 3 + 2]
+        ).applyMatrix4(matrix)
+      );
+      const normal = new Vector3()
+        .subVectors(world[1], world[0])
+        .cross(new Vector3().subVectors(world[2], world[0]))
+        .normalize()
+        .multiplyScalar(sign);
+      if (normal.lengthSq() < 1e-8) {
+        factors[face] = 1;
+        continue;
+      }
+      const center = new Vector3();
+      for (const point of world) {
+        center.add(point);
+      }
+      center.multiplyScalar(1 / world.length);
+      const visibility = ambientVisibility(
+        center,
+        normal,
+        this.ambientOcclusion,
+        occluders,
+        (viewIndex + 1) * 73856093 ^ (face + 1) * 19349663
+      );
+      factors[face] =
+        1 - (1 - visibility) * this.ambientOcclusion.strength;
+    }
+    return factors;
   }
 
   private markCameraChanged(): void {
@@ -1374,6 +1576,7 @@ export class ViewportRenderer {
     }
 
     this.updateGizmo();
+    this.updateAmbientOcclusionPreview();
     if (this.currentMode === 'texture-wire') {
       for (const view of this.nodeViews.values()) {
         view.updateFrontWire(this.cameraRig.camera);
@@ -1428,6 +1631,7 @@ export class ViewportRenderer {
     // setSize clears the drawing buffer. Render synchronously so a pointer-move
     // resize never leaves a blank frame before the next animation-frame paint.
     this.updateGizmo();
+    this.updateAmbientOcclusionPreview();
     if (this.currentMode === 'texture-wire') {
       for (const view of this.nodeViews.values()) {
         view.updateFrontWire(this.cameraRig.camera);

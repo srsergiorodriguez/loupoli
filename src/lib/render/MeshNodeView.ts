@@ -130,6 +130,7 @@ export class MeshNodeView {
   private readonly mesh: HalfEdgeMesh;
   private seamVisible = false;
   private shadingMode: ShadingMode = 'unlit';
+  private faceAo: Float32Array | null = null;
   private cleanRender = false;
   private active = false;
   private selectionMode: SelectionMode = 'vertex';
@@ -478,6 +479,7 @@ export class MeshNodeView {
     } else {
       this.triangleMesh.material = this.surfaceMaterials.ps1;
     }
+    this.refreshMaterialColors();
   }
 
   /** Swap the per-texture material set without rebuilding geometry. */
@@ -494,6 +496,33 @@ export class MeshNodeView {
     }
     this.seamSegments.visible = visible;
     this.seamEdgeMesh.visible = visible && this.seamEdgeMesh.count > 0;
+  }
+
+  /** Evaluated DCEL used by the AO preview's occlusion pass. */
+  get evaluatedMesh(): HalfEdgeMesh {
+    return this.mesh;
+  }
+
+  /** World matrix for the evaluated mesh and any group parents. */
+  get worldMatrix(): Matrix4 {
+    this.group.updateWorldMatrix(true, false);
+    return this.group.matrixWorld;
+  }
+
+  /** Apply one ambient-occlusion factor per source face. */
+  setFaceAo(factors: Float32Array | null): void {
+    if (factors === null) {
+      if (this.faceAo === null) {
+        return;
+      }
+      this.faceAo = null;
+    } else {
+      if (factors.length !== this.mesh.faceCount) {
+        return;
+      }
+      this.faceAo = factors.slice();
+    }
+    this.refreshMaterialColors();
   }
 
   /** Hide all editor-only overlays for one clean render. */
@@ -571,6 +600,15 @@ export class MeshNodeView {
     this.updateSelectionGeometry();
   }
 
+  /** Reapply material colors after an AO or shading-mode change. */
+  private refreshMaterialColors(): void {
+    if (this.referenceMaterial) {
+      return;
+    }
+    this.writeMaterialColors(this.mesh);
+    this.triangleGeometry.getAttribute('color').needsUpdate = true;
+  }
+
   /** Write one flat material color per render triangle. */
   private writeMaterialColors(mesh: HalfEdgeMesh): void {
     const palette = this.node.materialPalette;
@@ -585,12 +623,18 @@ export class MeshNodeView {
       const r = parseInt(hex.slice(0, 2), 16) / 255;
       const g = parseInt(hex.slice(2, 4), 16) / 255;
       const b = parseInt(hex.slice(4, 6), 16) / 255;
+      const ao =
+        this.shadingMode === 'lit' &&
+        this.faceAo !== null &&
+        this.faceAo.length === mesh.faceCount
+          ? this.faceAo[face]
+          : 1;
       const count = mesh.renderTriangleCountForFace(face) * 3;
       for (let i = 0; i < count; i += 1) {
         const offset = (cursor + i) * 3;
-        this.triangleColors[offset] = r;
-        this.triangleColors[offset + 1] = g;
-        this.triangleColors[offset + 2] = b;
+        this.triangleColors[offset] = r * ao;
+        this.triangleColors[offset + 1] = g * ao;
+        this.triangleColors[offset + 2] = b * ao;
       }
       cursor += count;
     }

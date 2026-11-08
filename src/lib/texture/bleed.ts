@@ -25,21 +25,22 @@ export function bleedImageData(
   if (maxPass === 0) {
     return;
   }
-  const filled = new Uint8Array(count);
+  // 255 marks an unfilled pixel; filled pixels carry their bleed distance.
   const depth = new Uint8Array(count);
+  depth.fill(255);
+  for (let pixel = 0; pixel < count; pixel += 1) {
+    if (data[pixel * 4 + 3] > 0) {
+      depth[pixel] = 0;
+    }
+  }
   const queue = new Int32Array(count);
   let head = 0;
   let tail = 0;
-  for (let pixel = 0; pixel < count; pixel += 1) {
-    if (data[pixel * 4 + 3] > 0) {
-      filled[pixel] = 1;
-    }
-  }
   // Seed only chart-edge pixels; interior pixels cannot contribute a bleed.
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const pixel = y * width + x;
-      if (filled[pixel] === 0) {
+      if (depth[pixel] === 255) {
         continue;
       }
       let boundary = false;
@@ -53,7 +54,7 @@ export function bleedImageData(
           if (nx < 0 || nx >= width || (ox === 0 && oy === 0)) {
             continue;
           }
-          if (filled[ny * width + nx] === 0) {
+          if (depth[ny * width + nx] === 255) {
             boundary = true;
             break;
           }
@@ -85,7 +86,7 @@ export function bleedImageData(
           continue;
         }
         const target = ny * width + nx;
-        if (filled[target] !== 0 || (allowed && allowed[target] === 0)) {
+        if (depth[target] !== 255 || (allowed && allowed[target] === 0)) {
           continue;
         }
         const sourceOffset = donor * 4;
@@ -94,7 +95,6 @@ export function bleedImageData(
         data[targetOffset + 1] = data[sourceOffset + 1];
         data[targetOffset + 2] = data[sourceOffset + 2];
         data[targetOffset + 3] = data[sourceOffset + 3];
-        filled[target] = 1;
         depth[target] = donorDepth + 1;
         queue[tail] = target;
         tail += 1;

@@ -320,7 +320,7 @@ function hashNoise(x: number, y: number, seed: number): number {
 }
 
 /** Cosine-weighted hemisphere visibility at one surface texel. */
-function ambientVisibility(
+export function ambientVisibility(
   origin: Vector3,
   normal: Vector3,
   settings: AmbientOcclusionSettings,
@@ -471,42 +471,68 @@ function fillBrightCracks(
   height: number,
   passes: number
 ): void {
-  const luminance = (offset: number): number =>
-    (data[offset] + data[offset + 1] + data[offset + 2]) / 3;
+  const rowBytes = width * 4;
+  const luminance = (row: Uint8ClampedArray, offset: number): number =>
+    (row[offset] + row[offset + 1] + row[offset + 2]) / 3;
+  const dark = (row: Uint8ClampedArray, offset: number): boolean =>
+    row[offset + 3] > 0 && luminance(row, offset) < 100;
+  const copyRow = (row: Uint8ClampedArray, sourceRow: number): void => {
+    row.set(
+      data.subarray(sourceRow * rowBytes, sourceRow * rowBytes + rowBytes)
+    );
+  };
   for (let pass = 0; pass < passes; pass += 1) {
-    const source = new Uint8ClampedArray(data);
+    if (width < 3 || height < 3) {
+      return;
+    }
+    let previous = new Uint8ClampedArray(rowBytes);
+    let current = new Uint8ClampedArray(rowBytes);
+    let next = new Uint8ClampedArray(rowBytes);
+    copyRow(previous, 0);
+    copyRow(current, 1);
+    copyRow(next, 2);
     let changed = 0;
     for (let y = 1; y < height - 1; y += 1) {
       for (let x = 1; x < width - 1; x += 1) {
-        const offset = (y * width + x) * 4;
-        if (
-          source[offset + 3] < 255 ||
-          luminance(offset) < 240
-        ) {
+        const offset = x * 4;
+        if (current[offset + 3] < 255 || luminance(current, offset) < 240) {
           continue;
         }
-        const left = offset - 4;
-        const right = offset + 4;
-        const up = offset - width * 4;
-        const down = offset + width * 4;
-        const dark = (neighbor: number): boolean =>
-          source[neighbor + 3] > 0 && luminance(neighbor) < 100;
-        const horizontal = dark(left) && dark(right);
-        const vertical = dark(up) && dark(down);
+        const horizontal =
+          dark(current, offset - 4) && dark(current, offset + 4);
+        const vertical = dark(previous, offset) && dark(next, offset);
         if (!horizontal && !vertical) {
           continue;
         }
         const donors = [
-          ...(horizontal ? [left, right] : []),
-          ...(vertical ? [up, down] : [])
+          ...(horizontal
+            ? [
+                { row: current, offset: offset - 4 },
+                { row: current, offset: offset + 4 }
+              ]
+            : []),
+          ...(vertical
+            ? [
+                { row: previous, offset },
+                { row: next, offset }
+              ]
+            : [])
         ];
+        const target = (y * width + x) * 4;
         for (let channel = 0; channel < 3; channel += 1) {
-          data[offset + channel] = Math.round(
-            donors.reduce((sum, donor) => sum + source[donor + channel], 0) /
+          data[target + channel] = Math.round(
+            donors.reduce((sum, donor) => sum + donor.row[donor.offset + channel], 0) /
               donors.length
           );
         }
         changed += 1;
+      }
+      if (y < height - 2) {
+        const recycled = previous;
+        previous = current;
+        current = next;
+        next = recycled;
+        copyRow(next, y + 2);
       }
     }
     if (changed === 0) {
@@ -563,7 +589,6 @@ function blurLighting(
   const valid = (pixel: number): boolean =>
     allowed === undefined || allowed[pixel] !== 0;
   for (let pass = 0; pass < 2; pass += 1) {
-    const source = new Uint8ClampedArray(data);
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         const pixel = y * width + x;
@@ -581,9 +606,9 @@ function blurLighting(
             continue;
           }
           const index = sample * 4;
-          r += source[index];
-          g += source[index + 1];
-          b += source[index + 2];
+          r += data[index];
+          g += data[index + 1];
+          b += data[index + 2];
           count += 1;
         }
         if (count === 0) {
@@ -850,11 +875,20 @@ export async function bakeLighting(
   // island edge and create bright seams under soft shadows.
   const coverageMask = new Uint8Array(width * height);
   if (coverageContext) {
-    const coverage = coverageContext.getImageData(0, 0, width, height);
+    let coverage: ImageData | null = coverageContext.getImageData(
+      0,
+      0,
+      width,
+      height
+    );
     for (let pixel = 0; pixel < coverageMask.length; pixel += 1) {
-      coverageMask[pixel] =
-        coverage.data[pixel * 4 + 3] > 0 ? 1 : 0;
+      coverageMask[pixel] = coverage.data[pixel * 4 + 3] > 0 ? 1 : 0;
     }
+    coverage = null;
+    // Release the full-resolution coverage bitmap before the bleed/blur
+    // passes allocate their own scratch buffers.
+    coverageCanvas.width = 0;
+    coverageCanvas.height = 0;
   }
   bleedImageData(data, width, height, 2, coverageMask);
   fillBrightCracks(data, width, height, 2);

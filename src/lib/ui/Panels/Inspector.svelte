@@ -1618,12 +1618,12 @@
         <div class="light-subhead">
           <span>Ambient occlusion</span>
           <span class="texture-note">
-            {session.snapshot.ambientOcclusion.enabled ? 'Baked' : 'Off'}
+            {session.snapshot.ambientOcclusion.enabled ? 'Preview + bake' : 'Off'}
           </span>
         </div>
         <Switch
-          label="Bake ambient occlusion"
-          description="Darken crevices in the baked lighting layer."
+          label="Ambient occlusion"
+          description="Preview crevice shading in Lit and include it in Bake lighting."
           checked={session.snapshot.ambientOcclusion.enabled}
           onChange={(value) => session.setAmbientOcclusion({ enabled: value })}
         />
@@ -1676,9 +1676,8 @@
               session.setAmbientOcclusion({ samples: Number(value) })}
           />
           <p class="hint">
-            AO is evaluated during Bake lighting and multiplied into the same
-            lighting layer. The realtime Lit preview shows direct lights and
-            shadows only.
+            Lit previews ambient occlusion per face; Bake lighting evaluates
+            it per texel and multiplies it into the same lighting layer.
           </p>
         {/if}
         <div class="light-divider"></div>

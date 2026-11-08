@@ -297,7 +297,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 - Clean render pass with shadows and baked textures.
 - Still PNG, PNG frame sequence, and capability-gated WebM/MP4.
 
-AO is implemented as a bake-time pass; the realtime Lit preview remains direct-light only.
+AO is implemented as an interactive per-face Lit preview and a per-texel bake-time pass; bake scratch memory is streamed and released between phases. Video output is silent because the document has no audio tracks.
 
 ---
 

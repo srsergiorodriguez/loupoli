@@ -1,6 +1,6 @@
 # Phase 5A — Lighting and texture bake
 
-**Status:** Implemented. Direct-ambient/directional/point lighting, per-light hard/soft shadows in Lit and the texture bake, Light workspace, Lit preview, and texture-layer bake are implemented. AO is implemented as an optional bake-time pass over the same lighting layer; the realtime Lit preview remains direct-light only.
+**Status:** Implemented. Direct-ambient/directional/point lighting, per-light hard/soft shadows in Lit and the texture bake, Light workspace, Lit preview, and texture-layer bake are implemented. AO is implemented as an optional per-face Lit preview and a per-texel bake-time pass over the same lighting layer.
 
 **Goal:** Light a low-poly scene with a deliberately small model, preview it in `Lit`, then bake direct light into a dedicated texture lighting layer for final textured display.
 
@@ -23,7 +23,7 @@ Supported:
 - enabled/disabled lights
 - flat-shaded Lit preview
 - per-light hard/soft shadows in Lit and direct-light baking into a texture lighting layer
-- optional bake-time ambient occlusion with strength, distance, bias, and ray controls
+- optional per-face Lit ambient-occlusion preview plus bake-time occlusion with strength, distance, bias, and ray controls
 
 Not supported:
 
@@ -119,7 +119,7 @@ Safety rules:
 - Bake undo removes a newly created layer or restores prior layer pixels.
 - Baking marks the texture dirty and forces a v4 checkpoint with PNG chunks.
 
-Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is evaluated only when enabled and multiplies the baked lighting result.
+Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is evaluated only when enabled and multiplies the baked lighting result. The Lit preview evaluates AO per source face from the same scene occluders; the bake evaluates it per texel. Bake scratch buffers are streamed/released between phases to reduce peak memory at 4096².
 
 ![Baked shadows](media/light-baked-shadow.png)
 

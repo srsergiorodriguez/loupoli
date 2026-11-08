@@ -8393,6 +8393,7 @@ export class EditorRuntime {
     this.history.execute(
       new SetAmbientOcclusionCommand(this.document, before, after)
     );
+    this.renderer.setAmbientOcclusion(this.document.ambientOcclusion);
     this.publish();
   }
 
@@ -12941,6 +12942,7 @@ export class EditorRuntime {
       this.activeLightId,
       this.workspace === 'light'
     );
+    this.renderer.setAmbientOcclusion(this.document.ambientOcclusion);
     this.renderer.syncScene(
       this.document.nodes,
       this.document.groups,
