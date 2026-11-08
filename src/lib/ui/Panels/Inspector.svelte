@@ -1432,21 +1432,15 @@
             <span>Render effect · Opt-in</span>
           </div>
           <Switch
-            label="Vertex snapping"
-            description="Snap vertices to a 320 × 240 grid for PS1 wobble."
-            checked={session.snapshot.ps1Snap}
-            onChange={(value) => session.setPs1Snap(value)}
-          />
-          <Switch
-            label="PS1 affine"
-            description="On: PS1 UV swim. Off: perspective-correct mapping."
-            checked={session.snapshot.ps1Affine}
-            onChange={(value) => session.setPs1Affine(value)}
+            label="PS1 look"
+            description="Snap vertices to 320 × 240 and use affine UVs."
+            checked={session.snapshot.ps1Snap && session.snapshot.ps1Affine}
+            onChange={(value) => session.setPs1Enabled(value)}
           />
           <p class="hint">
-            Texture / Texture + Wire only. Enabling either effect switches the
-            viewport to Texture + Wire and render shading to Texture / baked so
-            the look is visible immediately. Both effects start off.
+            Enabling switches to Texture + Wire and Texture / baked render
+            shading so the look is visible. Disabling restores the shading used
+            before PS1.
           </p>
         </div>
         <ActionRow align="end">

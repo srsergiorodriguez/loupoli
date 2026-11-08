@@ -462,7 +462,7 @@ Approved on 2026-11-01:
 2. **Minimum iPadOS.** iPadOS **16.4+**. This is the first Safari version with `OffscreenCanvas`, which Phase 4 depends on. Older iPads are not supported by the texture stack.
 3. **Texture packing in `.lpoli`.** Texture layers use **binary PNG chunks** in the container rather than base64 strings, to avoid the size and peak-memory penalty on iOS. This supersedes the literal base64 example in the addendum.
 4. **Bundle identifier.** `com.loupoli.studio`, chosen instead of the initial `com.loupoli.app` after Tauri warned that a `.app` suffix conflicts with the macOS application bundle extension. Signing credentials stay local and out of version control.
-5. **PS1 is opt-in.** Unlit defaults to correct perspective-correct mapping with no vertex snapping. Vertex snapping and PS1 affine UVs are independent toggles in the Inspector and are off on first load.
+5. **PS1 is opt-in.** Unlit defaults to correct perspective-correct mapping with no vertex snapping. A single PS1 look toggle enables vertex snapping and affine UVs; it is off on first load and restores prior shading when disabled.
 6. **Bent quads are render-only bilinear patches.** Non-planar quads keep a single editable DCEL face but use adaptive render tessellation to avoid a triangle-diagonal texture crease. This is a rendering exception to the usual in-place buffer policy and does not change topological counts.
 7. **Persistence v1.** The project format is a 28-byte-header CRC-checked binary envelope with a JSON manifest and fixed-order aligned typed-array columns. Autosave uses one IndexedDB checkpoint plus bounded command deltas; it is never a per-edit scene clone.
 

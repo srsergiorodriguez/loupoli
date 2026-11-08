@@ -537,6 +537,8 @@ export class EditorRuntime {
   private axisLock: AxisLock = null;
   private ps1Snap = DEFAULT_PS1_SNAP;
   private ps1Affine = DEFAULT_PS1_AFFINE;
+  private ps1PreviousShading: ShadingMode | null = null;
+  private ps1PreviousRenderShading: RenderShading | null = null;
   private activeNodeId: string | null;
   private activeGroupId: string | null = null;
   private activeLightId: string | null = null;
@@ -1535,31 +1537,44 @@ export class EditorRuntime {
     this.publish();
   }
 
-  setPs1Snap(enabled: boolean): void {
-    this.ps1Snap = enabled;
-    this.activatePs1Preview(enabled);
-    this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
-    this.publish();
-  }
-
-  setPs1Affine(enabled: boolean): void {
-    this.ps1Affine = enabled;
-    this.activatePs1Preview(enabled);
-    this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
-    this.publish();
-  }
-
-  /** PS1 effects only exist in the Texture paths; make them visible at once. */
-  private activatePs1Preview(enabled: boolean): void {
-    if (!enabled) {
+  /** Toggle the single PS1 look (vertex snapping plus affine UVs). */
+  setPs1Enabled(enabled: boolean): void {
+    if (this.ps1Snap === enabled && this.ps1Affine === enabled) {
       return;
     }
-    if (this.shading !== 'unlit' && this.shading !== 'texture-wire') {
-      this.setShadingMode('texture-wire');
+    if (enabled) {
+      if (!this.ps1Snap && !this.ps1Affine) {
+        this.ps1PreviousShading = this.shading;
+        this.ps1PreviousRenderShading = this.renderShading;
+      }
+      this.ps1Snap = true;
+      this.ps1Affine = true;
+      this.renderer.setPs1Options(true, true);
+      if (this.shading !== 'unlit' && this.shading !== 'texture-wire') {
+        this.setShadingMode('texture-wire');
+      }
+      if (this.renderShading !== 'texture') {
+        this.updateRenderSettings({ renderShading: 'texture' });
+      }
+      this.publish();
+      return;
     }
-    if (this.renderShading !== 'texture') {
-      this.updateRenderSettings({ renderShading: 'texture' });
+
+    this.ps1Snap = false;
+    this.ps1Affine = false;
+    this.renderer.setPs1Options(false, false);
+    const previousShading =
+      this.ps1PreviousShading ?? DEFAULT_WORKSPACE_SHADING[this.workspace];
+    const previousRenderShading = this.ps1PreviousRenderShading ?? 'lit';
+    this.ps1PreviousShading = null;
+    this.ps1PreviousRenderShading = null;
+    if (this.shading !== previousShading) {
+      this.setShadingMode(previousShading);
     }
+    if (this.renderShading !== previousRenderShading) {
+      this.updateRenderSettings({ renderShading: previousRenderShading });
+    }
+    this.publish();
   }
 
   setTransformOrientation(orientation: TransformOrientation): void {
@@ -1840,9 +1855,14 @@ export class EditorRuntime {
     this.activeEditor = '3d';
     this.workspace = 'model';
     this.workspaceShading = { ...DEFAULT_WORKSPACE_SHADING };
+    this.ps1Snap = false;
+    this.ps1Affine = false;
+    this.ps1PreviousShading = null;
+    this.ps1PreviousRenderShading = null;
     this.timelineVisible = false;
     this.shading = this.workspaceShading.model;
     this.renderer.setShadingMode(this.shading);
+    this.renderer.setPs1Options(false, false);
     this.renderer.setGridVisible(true);
     this.renderer.setSeamOverlayVisible(false);
     this.uvSelection.clear();
@@ -12761,8 +12781,11 @@ export class EditorRuntime {
     this.timelineVisible = false;
     this.workspaceShading[this.workspace] = decoded.settings.shading;
     this.shading = decoded.settings.shading;
-    this.ps1Snap = decoded.settings.ps1Snap;
-    this.ps1Affine = decoded.settings.ps1Affine;
+    const loadedPs1 = decoded.settings.ps1Snap || decoded.settings.ps1Affine;
+    this.ps1Snap = loadedPs1;
+    this.ps1Affine = loadedPs1;
+    this.ps1PreviousShading = null;
+    this.ps1PreviousRenderShading = null;
     this.renderer.setShadingMode(this.shading);
     this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
     this.syncScene();

@@ -40,10 +40,8 @@ A simple and friendly 3D modeler for iPad and desktop. Z-up, quad-centric, on-de
 ![Collapsed Transform section with a viewport-centered sidebar](docs/media/sidebar-collapse.png)
 
 - **ActionDock.** Model-only bottom-left one-shot actions for Extrude, Inset, Loop Cut, and Loop Slide, available on touch and desktop. Tap/click to arm, then drag for a live amount or type an exact amount; Enter/release commits one undoable edit. Keyboard shortcuts: E extrude, I inset, L loop cut, Shift+L loop slide. Loop Slide targets the selected edge loop; Loop Cut auto-selects its new loop.
-- **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. The two independent effects live inside the **PS1 look** block in the Render workspace:
-  - **Vertex snapping** — snap vertices to the 320 × 240 PS1 raster for camera-motion wobble.
-  - **PS1 affine** — enable affine UV swim.
-  Both start off. Enabling either one switches the viewport to Texture + Wire and render shading to Texture / baked so the effect is visible immediately. Effects apply to the Texture and Texture + Wire shader paths, including textured per-asset materials; they are render effects, not geometry modifiers.
+- **PS1 is opt-in and tucked away.** Correct perspective mapping and unsnapped geometry are the default. A single **PS1 look** toggle in the Render workspace enables both vertex snapping to the 320 × 240 PS1 raster and affine UV swim.
+  The toggle starts off. Enabling it switches the viewport to Texture + Wire and render shading to Texture / baked so the effect is visible immediately. Disabling it restores the viewport and render shading that were active before PS1. Effects apply to the Texture and Texture + Wire shader paths, including textured per-asset materials; they are render effects, not geometry modifiers.
 - **General half-edge kernel.** Columnar DCEL with explicit face and boundary loops, per-corner UVs, per-edge seam flags, per-face materials, Newell normals, invariant validation, n-gon fan triangulation, and validated reconstruction from serialized columns.
 - **UV seam authoring.** Select edges in Edge mode and use **Seam** to mark or clear UV seams. Seams render as an amber overlay, use one localized undoable command with per-edge autosave patches, and round-trip through `.lpoli`. A UV viewport, seam charts, LSCM unwrap, and linked corner editing are implemented.
 
@@ -281,7 +279,7 @@ Selection modes are switched with the **Vertex / Edge / Face** control at the to
   - Per-copy modifier linear maps round-tripped through their inverses for Radial Array geometry, covering mapped base-vertex editing.
   - Vertex drag through the real DCEL, undo, redo, and teardown without console errors.
   - Primitive creation, outliner selection, deletion, and undo/redo.
-  - PS1 effects default off; enabling both produces snapping/UV swim.
+  - PS1 effects default off; one toggle enables snapping and UV swim, and disabling restores the prior shading modes.
   - Touch orbit while the non-modal iPad inspector is open.
   - Autosave flush, simulated reload, recovery banner, Recover/Discard, and structural (node add/delete) journal replay.
   - Browser save produced a valid `.lpoli`; browser open through a file input restored the saved two-node scene.

@@ -281,12 +281,8 @@ export class EditorSession {
     this.runtime?.setAxisLock(axis);
   }
 
-  setPs1Snap(enabled: boolean): void {
-    this.runtime?.setPs1Snap(enabled);
-  }
-
-  setPs1Affine(enabled: boolean): void {
-    this.runtime?.setPs1Affine(enabled);
+  setPs1Enabled(enabled: boolean): void {
+    this.runtime?.setPs1Enabled(enabled);
   }
 
   setSelectionMode(mode: SelectionMode): void {
