@@ -114,8 +114,8 @@ export const SHADING_MODES = [
 /** A shading mode accepted by the viewport material router. */
 export type ShadingMode = (typeof SHADING_MODES)[number];
 
-/** The initial shading path: correct unlit mapping, not the opt-in PS1 look. */
-export const DEFAULT_SHADING: ShadingMode = 'unlit';
+/** New sessions start with textured surfaces plus the front wire overlay. */
+export const DEFAULT_SHADING: ShadingMode = 'texture-wire';
 
 /** PS1 vertex snapping starts off so the default view is geometrically exact. */
 export const DEFAULT_PS1_SNAP = false;

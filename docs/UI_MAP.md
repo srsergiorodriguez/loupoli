@@ -33,7 +33,7 @@ This is the authoritative map of the application shell. New controls must be ass
 ## Subregions
 
 - **Viewport context strip** — object/group name, element mode, active-editor marker. Its left inset follows Tool Rail visibility; Paint, Light, and Render start at the pane inset when the rail is hidden.
-- **Shading Bar** — icon-only Wireframe, Solid, Texture, Texture + Wire, Lit, below the Selection Bar.
+- **Shading Bar** — icon-only Wireframe, Solid, Texture, Texture + Wire, Lit, below the Selection Bar. Workspace defaults: Model/UV/Paint Texture + Wire, Light/Animate/Render Lit; manual choices persist per workspace for the session.
 - **Seam overlay** — 3D seams appear only in the UV workspace; the UV canvas always shows seams.
 - **PaneHeader** — one 44 px title row with active dot, detail, meta, and optional actions.
 - **PaneToolbar** — optional second row for pane-specific commands, such as UV operations.

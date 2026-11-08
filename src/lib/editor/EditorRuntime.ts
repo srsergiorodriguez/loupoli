@@ -485,6 +485,15 @@ interface EditorRuntimeOptions {
 /** Persisted user preference for background autosave. */
 const AUTOSAVE_ENABLED_KEY = 'loupoli-autosave-enabled';
 
+const DEFAULT_WORKSPACE_SHADING: Readonly<Record<Workspace, ShadingMode>> = {
+  model: 'texture-wire',
+  uv: 'texture-wire',
+  paint: 'texture-wire',
+  light: 'lit',
+  animation: 'lit',
+  render: 'lit'
+};
+
 const EMPTY_COUNTS: MeshCounts = {
   vertices: 0,
   edges: 0,
@@ -510,6 +519,9 @@ export class EditorRuntime {
   private readonly autosave: AutosaveService;
 
   private shading: ShadingMode = DEFAULT_SHADING;
+  private workspaceShading: Record<Workspace, ShadingMode> = {
+    ...DEFAULT_WORKSPACE_SHADING
+  };
   private transformMode: TransformMode = 'select';
   private lassoMode = false;
   private lassoPath: [number, number][] = [];
@@ -1497,6 +1509,7 @@ export class EditorRuntime {
   }
 
   setShadingMode(mode: ShadingMode): void {
+    this.workspaceShading[this.workspace] = mode;
     if (this.shading === mode) {
       return;
     }
@@ -1794,8 +1807,9 @@ export class EditorRuntime {
     this.uvPaintMode = false;
     this.activeEditor = '3d';
     this.workspace = 'model';
-    this.shading = 'lit';
-    this.renderer.setShadingMode('lit');
+    this.workspaceShading = { ...DEFAULT_WORKSPACE_SHADING };
+    this.shading = this.workspaceShading.model;
+    this.renderer.setShadingMode(this.shading);
     this.renderer.setGridVisible(true);
     this.renderer.setSeamOverlayVisible(false);
     this.uvSelection.clear();
@@ -1886,24 +1900,13 @@ export class EditorRuntime {
         this.renderer.setSeamOverlayVisible(false);
         this.syncScene();
       }
-      if (workspace === 'render' || workspace === 'animation') {
-        if (this.shading !== 'lit') {
-          this.shading = 'lit';
-          this.renderer.setShadingMode('lit');
-        }
-      }
-      if (workspace === 'light') {
-        if (this.shading !== 'lit') {
-          this.shading = 'lit';
-          this.renderer.setShadingMode('lit');
-        }
-        if (this.activeLightId === null) {
-          this.activeLightId = this.document.lights[0]?.id ?? null;
-        }
+      if (workspace === 'light' && this.activeLightId === null) {
+        this.activeLightId = this.document.lights[0]?.id ?? null;
       }
       // closeUvView() resets the workspace to Model; restore the requested
-      // Light workspace after closing a pane that was open on entry.
+      // workspace after closing a pane that was open on entry.
       this.workspace = workspace;
+      this.applyWorkspaceShading(workspace);
       this.syncScene();
       if (workspace === 'light') {
         this.renderer.frameLightWorkspace();
@@ -1931,6 +1934,7 @@ export class EditorRuntime {
       this.openUvView();
     }
     this.workspace = workspace;
+    this.applyWorkspaceShading(workspace);
     const paint = workspace === 'paint';
     if (!paint && this.uvPaintMode) {
       this.cancelTexturePaint();
@@ -1949,6 +1953,16 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Restore the shading choice remembered for a workspace. */
+  private applyWorkspaceShading(workspace: Workspace): void {
+    const shading = this.workspaceShading[workspace];
+    if (this.shading === shading) {
+      return;
+    }
+    this.shading = shading;
+    this.renderer.setShadingMode(shading);
+  }
+
   private openUvView(): void {
     if (this.modalTransform) {
       this.cancelModalTransform();
@@ -1961,6 +1975,7 @@ export class EditorRuntime {
     }
     this.uvOpen = true;
     this.workspace = 'uv';
+    this.applyWorkspaceShading('uv');
     this.activeEditor = 'uv';
     this.uvZoom = 1;
     this.uvPanX = 0;
@@ -1984,6 +1999,7 @@ export class EditorRuntime {
     this.cancelTexturePaint();
     this.uvOpen = false;
     this.workspace = 'model';
+    this.applyWorkspaceShading('model');
     this.activeEditor = '3d';
     this.uvPaintMode = false;
     this.uvActiveChart = null;
@@ -12708,6 +12724,8 @@ export class EditorRuntime {
     this.selection.setContext(this.activeNodeId, 'vertex');
     this.selectedVertexDragClear();
     this.history.clear();
+    this.workspaceShading = { ...DEFAULT_WORKSPACE_SHADING };
+    this.workspaceShading[this.workspace] = decoded.settings.shading;
     this.shading = decoded.settings.shading;
     this.ps1Snap = decoded.settings.ps1Snap;
     this.ps1Affine = decoded.settings.ps1Affine;

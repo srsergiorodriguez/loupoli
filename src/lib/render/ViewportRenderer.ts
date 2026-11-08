@@ -132,7 +132,7 @@ export class ViewportRenderer {
     this.resize();
   };
 
-  private currentMode: ShadingMode = 'unlit';
+  private currentMode: ShadingMode = 'texture-wire';
   private seamOverlayVisible = false;
   private transformMode: TransformMode = 'select';
   private transformOrientation: TransformOrientation = 'global';
@@ -303,7 +303,7 @@ export class ViewportRenderer {
     window.addEventListener('resize', this.handleWindowResize);
 
     this.resize();
-    this.applyShadingMode('unlit');
+    this.applyShadingMode('texture-wire');
     this.schedule();
   }
 

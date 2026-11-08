@@ -175,7 +175,6 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
 };
 
 const SIDEBAR_STORAGE_KEY = 'loupoli:sidebar:open';
-const WORKSPACE_STORAGE_KEY = 'loupoli:workspace';
 const UV_LAYOUT_STORAGE_KEY = 'loupoli:uv-layout';
 const PAINT_UV_OVERLAY_STORAGE_KEY = 'loupoli:paint-uv-overlay';
 const RENDER_PREVIEW_SPLIT_STORAGE_KEY = 'loupoli:render-preview-split';
@@ -234,16 +233,8 @@ export class EditorSession {
     if (Number.isFinite(previewSplit)) {
       runtime.setRenderPreviewSplit(previewSplit);
     }
-    const workspace = readPreference(WORKSPACE_STORAGE_KEY, 'model');
-    runtime.setWorkspace(
-      workspace === 'paint'
-        ? 'paint'
-        : workspace === 'uv'
-          ? 'uv'
-          : workspace === 'light'
-            ? 'light'
-            : 'model'
-    );
+    // A fresh app load always opens Model; workspace choice is session-only.
+    runtime.setWorkspace('model');
     this.snapshot = runtime.getSnapshot();
   }
 
@@ -371,7 +362,6 @@ export class EditorSession {
 
   setWorkspace(workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'): void {
     this.runtime?.setWorkspace(workspace);
-    writePreference(WORKSPACE_STORAGE_KEY, workspace);
   }
 
   setUvAxisLock(axis: 'u' | 'v'): void {
