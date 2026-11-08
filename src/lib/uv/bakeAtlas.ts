@@ -163,9 +163,10 @@ function unitFromFaces(
 /**
  * Split faces into true UV islands using shared UV coordinates.
  *
- * Seam flags alone are not enough for imported meshes: two faces can meet on a
- * non-seam mesh edge but carry different UVs. Unioning only across edges whose
- * endpoint UVs match keeps each painted island intact.
+ * Seam flags describe edit topology, but the painted texture is continuous
+ * wherever the corner UVs match. An unwrapped seam can therefore still be one
+ * paint island. Unioning only across edges whose endpoint UVs match preserves
+ * that continuity without relying on seam flags.
  */
 function uvIslandFaces(mesh: HalfEdgeMesh): number[][] {
   const parent = new Int32Array(mesh.faceCount);
@@ -190,9 +191,6 @@ function uvIslandFaces(mesh: HalfEdgeMesh): number[][] {
   for (let halfEdge = 0; halfEdge < mesh.halfEdgeCount; halfEdge += 1) {
     const twin = mesh.heTwin[halfEdge];
     if (twin <= halfEdge || mesh.heFace[twin] < 0) {
-      continue;
-    }
-    if (mesh.isEdgeSeam(mesh.heEdge[halfEdge])) {
       continue;
     }
     const next = mesh.heNext[halfEdge];

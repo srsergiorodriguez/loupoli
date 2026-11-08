@@ -104,7 +104,7 @@ Algorithm:
 1. Rasterize source faces into texture space.
 2. Interpolate world position with flat face normals. Closed meshes use signed shell volume only to decide whether the authored winding is globally inverted; per-face center tests are deliberately not used because they flip normals in concavities.
 3. Evaluate ambient + directional + point lights.
-4. For each shadow-enabled light, trace deterministic visibility rays through every visible scene mesh before adding its contribution. Softness widens directional cones or point-light source disks. Penumbra samples use the full stratified sample set; a per-texel rotation breaks up concentric bands before the bake blur.
+4. For each shadow-enabled light, trace deterministic visibility rays through a flat BVH over every visible scene mesh before adding its contribution. Softness widens directional cones or point-light source disks. Penumbra samples use the full stratified sample set; a per-texel rotation breaks up concentric bands before the bake blur.
 5. Write a transparent-backed RGBA lighting image, then bleed its edge pixels into the transparent gutter so filtered sampling does not produce seams.
 6. Commit one undoable `Bake lighting` command.
 
@@ -119,7 +119,7 @@ Safety rules:
 - Bake undo removes a newly created layer or restores prior layer pixels.
 - Baking marks the texture dirty and forces a v4 checkpoint with PNG chunks.
 
-Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is evaluated only when enabled and multiplies the baked lighting result. Lit mode reuses document lights and disposes shadow maps when lights are removed. Baked lighting undo stores a compact monochrome/RGB snapshot, with RGBA retained when alpha is meaningful. The Lit preview evaluates AO per source face from the same scene occluders; the bake evaluates it per texel. Bake scratch buffers are streamed between phases to reduce peak memory at 4096²; coverage comes from the raster loop rather than an OffscreenCanvas. Lit directional shadow cameras fit the visible scene bounds and snap their target to shadow texels so translated scenes keep covered shadows.
+Shadows are visibility tests against all visible scene meshes, including the active mesh. Softness is controlled by the light; AO is evaluated only when enabled and multiplies the baked lighting result. Lit mode reuses document lights and disposes shadow maps when lights are removed. Baked lighting undo stores a compact monochrome/RGB snapshot, with RGBA retained when alpha is meaningful. The Lit preview evaluates AO per source face from the same scene occluders; the bake evaluates it per texel. Bake scratch buffers are streamed between phases to reduce peak memory at 4096²; coverage comes from the raster loop rather than an OffscreenCanvas. Lit directional shadow cameras fit the visible scene bounds and snap their target to shadow texels so translated scenes keep covered shadows. The BVH is parity-tested against the linear ray path, and bake-atlas islands follow continuous corner UVs so marking a seam without changing UVs does not break painted continuity.
 
 ![Baked shadows](media/light-baked-shadow.png)
 

@@ -5,6 +5,11 @@ import type { SceneGroup } from '../scene/SceneGroup';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import { bleedImageData } from '../texture/bleed';
 import type { AmbientOcclusionSettings } from './ao';
+import {
+  bvhRayOccluded,
+  buildFlatBvh,
+  type FlatBvh
+} from './bvh';
 
 /** Direct-light bake inputs, including optional world-space shadow occluders. */
 export interface BakeLightingInput {
@@ -261,7 +266,7 @@ function rayHitsTriangle(
 }
 
 /** Test a shadow ray against all visible world-space scene triangles. */
-function rayOccluded(
+export function rayOccluded(
   origin: Vector3,
   direction: Vector3,
   maxDistance: number,
@@ -320,16 +325,17 @@ function hashNoise(x: number, y: number, seed: number): number {
 }
 
 /** Cosine-weighted hemisphere visibility at one surface texel. */
-export function ambientVisibility(
+function ambientVisibilityWith(
   origin: Vector3,
   normal: Vector3,
   settings: AmbientOcclusionSettings,
-  occluders: readonly Float32Array[],
-  seed: number
+  seed: number,
+  occluded: (
+    origin: Vector3,
+    direction: Vector3,
+    maxDistance: number
+  ) => boolean
 ): number {
-  if (occluders.length === 0) {
-    return 1;
-  }
   const samples = Math.max(4, Math.min(32, Math.round(settings.samples)));
   const distance = Math.max(0.01, settings.distance);
   const bias = Math.max(0, settings.bias);
@@ -346,11 +352,43 @@ export function ambientVisibility(
       .addScaledVector(u, Math.cos(angle) * radial)
       .addScaledVector(v, Math.sin(angle) * radial)
       .normalize();
-    if (!rayOccluded(biased, direction, distance, occluders)) {
+    if (!occluded(biased, direction, distance)) {
       visible += 1;
     }
   }
   return visible / samples;
+}
+
+/** Cosine-weighted hemisphere visibility against triangle arrays. */
+export function ambientVisibility(
+  origin: Vector3,
+  normal: Vector3,
+  settings: AmbientOcclusionSettings,
+  occluders: readonly Float32Array[],
+  seed: number
+): number {
+  if (occluders.length === 0) {
+    return 1;
+  }
+  return ambientVisibilityWith(origin, normal, settings, seed, (point, direction, maxDistance) =>
+    rayOccluded(point, direction, maxDistance, occluders)
+  );
+}
+
+/** Cosine-weighted hemisphere visibility against a baked BVH. */
+export function ambientVisibilityBvh(
+  origin: Vector3,
+  normal: Vector3,
+  settings: AmbientOcclusionSettings,
+  bvh: FlatBvh,
+  seed: number
+): number {
+  if (bvh.leftOrStart.length === 0) {
+    return 1;
+  }
+  return ambientVisibilityWith(origin, normal, settings, seed, (point, direction, maxDistance) =>
+    bvhRayOccluded(bvh, point, direction, maxDistance)
+  );
 }
 
 /**
@@ -431,7 +469,7 @@ function shadowVisibility(
   },
   origin: Vector3,
   sampleCount: number,
-  occluders: readonly Float32Array[],
+  bvh: FlatBvh,
   texelSeed: number
 ): number {
   const count =
@@ -445,7 +483,7 @@ function shadowVisibility(
       const ray = shadowRayForSample(light, origin, i, count, angleOffset);
       if (
         ray &&
-        !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)
+        !bvhRayOccluded(bvh, origin, ray.direction, ray.maxDistance)
       ) {
         visible += 1;
       }
@@ -469,7 +507,10 @@ function shadowVisibility(
       count,
       angleOffset
     );
-    if (ray && !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
+    if (
+      ray &&
+      !bvhRayOccluded(bvh, origin, ray.direction, ray.maxDistance)
+    ) {
       visible += 1;
     }
   }
@@ -481,7 +522,10 @@ function shadowVisibility(
       continue;
     }
     const ray = shadowRayForSample(light, origin, i, count, angleOffset);
-    if (ray && !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
+    if (
+      ray &&
+      !bvhRayOccluded(bvh, origin, ray.direction, ray.maxDistance)
+    ) {
       visible += 1;
     }
   }
@@ -750,6 +794,7 @@ export async function bakeLighting(
   // getImageData copy.
   const coverageMask = new Uint8Array(width * height);
   const normalSign = bakeNormalSign(mesh, matrix);
+  const bvh = buildFlatBvh(occluders);
   for (let face = 0; face < mesh.faceCount; face += 1) {
     if (face > 0 && performance.now() - lastYield > 16) {
       options.onProgress?.(face, totalFaces);
@@ -848,7 +893,7 @@ export async function bakeLighting(
                 light,
                 worldPosition.clone().addScaledVector(normal, 0.005),
                 shadowSamples,
-                occluders,
+                bvh,
                 texelSeed
               );
               if (visibility <= 0) {
@@ -866,11 +911,11 @@ export async function bakeLighting(
             bl += light.rgb.b * energy;
           }
           if (ao) {
-            const visibility = ambientVisibility(
+            const visibility = ambientVisibilityBvh(
               worldPosition,
               normal,
               ao,
-              occluders,
+              bvh,
               texelSeed
             );
             const factor = 1 - (1 - visibility) * ao.strength;

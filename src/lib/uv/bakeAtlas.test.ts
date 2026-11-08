@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { importObjNodes } from '../io/obj';
 import { hasUvOverlap } from '../lighting/bake';
-import { createCubeMesh } from '../geometry/primitives';
+import { createCubeMesh, createGridMesh } from '../geometry/primitives';
 import { buildBakeAtlasPlan } from './bakeAtlas';
 
 function splitCube() {
@@ -150,5 +150,18 @@ describe('unique bake atlas planning', () => {
       } while (corner !== start);
     }
     expect(buildBakeAtlasPlan(mesh, 1024, 1024)).toBeNull();
+  });
+});
+
+
+describe('painted island continuity', () => {
+  it('keeps continuous UVs in one island across seam flags', () => {
+    const mesh = createGridMesh(4, 2);
+    for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+      mesh.setEdgeSeam(edge, true);
+    }
+    const plan = buildBakeAtlasPlan(mesh, 1024, 1024);
+    expect(plan).not.toBeNull();
+    expect(plan?.charts).toHaveLength(1);
   });
 });
