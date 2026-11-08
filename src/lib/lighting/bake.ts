@@ -369,7 +369,8 @@ function shadowRayForSample(
   },
   origin: Vector3,
   sampleIndex: number,
-  sampleCount: number
+  sampleCount: number,
+  angleOffset: number
 ): { direction: Vector3; maxDistance: number } | null {
   const softness = Math.max(0, Math.min(1, light.shadowSoftness));
   if (light.kind === 'directional') {
@@ -379,7 +380,7 @@ function shadowRayForSample(
     }
     const [u, v] = tangentBasis(base);
     const radius = Math.tan(softness * 0.35) * Math.sqrt((sampleIndex + 0.5) / sampleCount);
-    const angle = sampleIndex * GOLDEN_ANGLE;
+    const angle = sampleIndex * GOLDEN_ANGLE + angleOffset;
     return {
       direction: base
         .addScaledVector(u, Math.cos(angle) * radius)
@@ -404,7 +405,7 @@ function shadowRayForSample(
   const [u, v] = tangentBasis(base);
   const sourceRadius = Math.min(distance * 0.8, softness * 1.5);
   const radius = sourceRadius * Math.sqrt((sampleIndex + 0.5) / sampleCount);
-  const angle = sampleIndex * GOLDEN_ANGLE;
+  const angle = sampleIndex * GOLDEN_ANGLE + angleOffset;
   const sampledLight = light.position
     .clone()
     .addScaledVector(u, Math.cos(angle) * radius)
@@ -430,27 +431,56 @@ function shadowVisibility(
   },
   origin: Vector3,
   sampleCount: number,
-  occluders: readonly Float32Array[]
+  occluders: readonly Float32Array[],
+  texelSeed: number
 ): number {
   const count =
     light.shadowSoftness > 0
       ? Math.max(1, Math.min(32, Math.floor(sampleCount)))
       : 1;
-  // Resolve the common fully-lit and fully-occluded cases with four rays.
-  // Only texels on a penumbra need the full sample count.
-  const coarseCount = Math.min(4, count);
+  const angleOffset = hashNoise(texelSeed, 13, 37) * Math.PI * 2;
+  if (count <= 4) {
+    let visible = 0;
+    for (let i = 0; i < count; i += 1) {
+      const ray = shadowRayForSample(light, origin, i, count, angleOffset);
+      if (
+        ray &&
+        !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)
+      ) {
+        visible += 1;
+      }
+    }
+    return visible / count;
+  }
+  // Probe four indices from the full stratified distribution. This avoids
+  // mixing a 4-sample pattern with the outer part of a 16-sample pattern.
+  const coarse = [
+    0,
+    Math.floor(count * 0.25),
+    Math.floor(count * 0.6),
+    count - 1
+  ] as const;
   let visible = 0;
-  for (let i = 0; i < coarseCount; i += 1) {
-    const ray = shadowRayForSample(light, origin, i, coarseCount);
+  for (const index of coarse) {
+    const ray = shadowRayForSample(
+      light,
+      origin,
+      index,
+      count,
+      angleOffset
+    );
     if (ray && !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
       visible += 1;
     }
   }
-  if (visible === 0 || visible === coarseCount) {
-    return visible / coarseCount;
+  if (visible === 0 || visible === 4) {
+    return visible / 4;
   }
-  for (let i = coarseCount; i < count; i += 1) {
-    const ray = shadowRayForSample(light, origin, i, count);
+  for (let i = 0; i < count; i += 1) {
+    if (coarse.includes(i as (typeof coarse)[number])) {
+      continue;
+    }
+    const ray = shadowRayForSample(light, origin, i, count, angleOffset);
     if (ray && !rayOccluded(origin, ray.direction, ray.maxDistance, occluders)) {
       visible += 1;
     }
@@ -796,6 +826,10 @@ export async function bakeLighting(
           if (a < -0.03 || b < -0.03 || c < -0.03) {
             continue;
           }
+          const texelSeed =
+            (face + 1) * 73856093 ^
+            (x + 1) * 19349663 ^
+            (y + 1) * 83492791;
           const worldPosition = new Vector3()
             .addScaledVector(world[ia], a)
             .addScaledVector(world[ib], b)
@@ -827,7 +861,8 @@ export async function bakeLighting(
                 light,
                 worldPosition.clone().addScaledVector(normal, 0.005),
                 shadowSamples,
-                occluders
+                occluders,
+                texelSeed
               );
               if (visibility <= 0) {
                 continue;
@@ -849,7 +884,7 @@ export async function bakeLighting(
               normal,
               ao,
               occluders,
-              (face + 1) * 73856093 ^ (x + 1) * 19349663 ^ (y + 1) * 83492791
+              texelSeed
             );
             const factor = 1 - (1 - visibility) * ao.strength;
             r *= factor;

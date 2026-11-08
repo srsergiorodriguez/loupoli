@@ -9,7 +9,7 @@ import {
   Matrix4,
   MeshBasicMaterial,
   Object3D,
-  PCFSoftShadowMap,
+  PCFShadowMap,
   PerspectiveCamera,
   Plane,
   PointLight,
@@ -125,10 +125,14 @@ export class ViewportRenderer {
   private readonly fillLight: DirectionalLight;
   private readonly sceneAmbient: AmbientLight;
   private readonly documentLightGroup = new ThreeGroup();
-  private documentLights: Array<{
-    light: DirectionalLight | PointLight;
-    target: Object3D | null;
-  }> = [];
+  private readonly documentLights = new Map<
+    string,
+    {
+      readonly kind: 'directional' | 'point';
+      readonly light: DirectionalLight | PointLight;
+      readonly target: Object3D | null;
+    }
+  >();
 
   private readonly raycaster = new Raycaster();
   private readonly pointerNdc = new Vector2();
@@ -820,78 +824,140 @@ export class ViewportRenderer {
     showLightGizmos = false
   ): void {
     this.lightGizmos.sync(lights, activeLightId, showLightGizmos);
-    for (const entry of this.documentLights) {
-      entry.light.removeFromParent();
-      entry.target?.removeFromParent();
-    }
-    this.documentLights = [];
     this.sceneAmbient.color.set(ambientColor);
     this.sceneAmbient.intensity = Math.max(0, ambientIntensity);
-    for (const summary of lights) {
-      if (summary.kind === 'directional') {
-        const light = new DirectionalLight(
-          new Color(summary.color),
-          Math.max(0, summary.intensity)
-        );
-        const direction = new Vector3(
-          summary.direction[0],
-          summary.direction[1],
-          summary.direction[2]
-        ).normalize();
-        light.position.set(
-          -direction.x * 10,
-          -direction.y * 10,
-          -direction.z * 10
-        );
-        const target = new Object3D();
-        target.position.set(0, 0, 0);
-        light.target = target;
-        light.visible = summary.enabled && summary.intensity > 0;
-        light.castShadow =
-          light.visible && summary.castShadows;
-        if (light.castShadow) {
-          light.shadow.mapSize.set(1024, 1024);
-          light.shadow.camera.left = -12;
-          light.shadow.camera.right = 12;
-          light.shadow.camera.top = 12;
-          light.shadow.camera.bottom = -12;
-          light.shadow.camera.near = 0.1;
-          light.shadow.camera.far = 50;
-          light.shadow.bias = -0.0005;
-          light.shadow.normalBias = 0.02;
-          light.shadow.radius = 1 + summary.shadowSoftness * 6;
-        }
-        this.documentLightGroup.add(light, target);
-        this.documentLights.push({ light, target });
-      } else {
-        const light = new PointLight(
-          new Color(summary.color),
-          Math.max(0, summary.intensity),
-          0,
-          2
-        );
-        light.position.set(
-          summary.position[0],
-          summary.position[1],
-          summary.position[2]
-        );
-        light.visible = summary.enabled && summary.intensity > 0;
-        light.castShadow =
-          light.visible && summary.castShadows;
-        if (light.castShadow) {
-          light.shadow.mapSize.set(512, 512);
-          light.shadow.camera.near = 0.1;
-          light.shadow.camera.far = 30;
-          light.shadow.bias = -0.001;
-          light.shadow.normalBias = 0.02;
-          light.shadow.radius = 1 + summary.shadowSoftness * 6;
-        }
-        this.documentLightGroup.add(light);
-        this.documentLights.push({ light, target: null });
+
+    const incoming = new Map(lights.map((light) => [light.id, light]));
+    for (const [id, entry] of this.documentLights) {
+      const summary = incoming.get(id);
+      if (summary && summary.kind === entry.kind) {
+        continue;
       }
+      this.disposeDocumentLight(entry);
+      this.documentLights.delete(id);
+    }
+
+    for (const summary of lights) {
+      let entry = this.documentLights.get(summary.id);
+      if (!entry || entry.kind !== summary.kind) {
+        if (entry) {
+          this.disposeDocumentLight(entry);
+        }
+        const created =
+          summary.kind === 'directional'
+            ? this.createDirectionalLight(summary)
+            : this.createPointLight(summary);
+        this.documentLights.set(summary.id, created);
+        this.documentLightGroup.add(created.light);
+        if (created.target) {
+          this.documentLightGroup.add(created.target);
+        }
+        entry = created;
+      }
+      this.updateDocumentLight(entry, summary);
     }
     this.applyDocumentLightVisibility();
     this.schedule();
+  }
+
+  private createDirectionalLight(
+    summary: LightSummary
+  ): {
+    readonly kind: 'directional';
+    readonly light: DirectionalLight;
+    readonly target: Object3D;
+  } {
+    const light = new DirectionalLight(
+      new Color(summary.color),
+      Math.max(0, summary.intensity)
+    );
+    const target = new Object3D();
+    light.target = target;
+    return { kind: 'directional', light, target };
+  }
+
+  private createPointLight(summary: LightSummary): {
+    readonly kind: 'point';
+    readonly light: PointLight;
+    readonly target: null;
+  } {
+    return {
+      kind: 'point',
+      light: new PointLight(
+        new Color(summary.color),
+        Math.max(0, summary.intensity),
+        0,
+        2
+      ),
+      target: null
+    };
+  }
+
+  private updateDocumentLight(
+    entry: {
+      readonly kind: 'directional' | 'point';
+      readonly light: DirectionalLight | PointLight;
+      readonly target: Object3D | null;
+    },
+    summary: LightSummary
+  ): void {
+    const light = entry.light;
+    light.color.set(summary.color);
+    light.intensity = Math.max(0, summary.intensity);
+    light.visible = summary.enabled && summary.intensity > 0;
+    light.castShadow = light.visible && summary.castShadows;
+
+    if (entry.kind === 'directional' && entry.target) {
+      const directional = light as DirectionalLight;
+      const direction = new Vector3(
+        summary.direction[0],
+        summary.direction[1],
+        summary.direction[2]
+      ).normalize();
+      directional.position.set(
+        -direction.x * 10,
+        -direction.y * 10,
+        -direction.z * 10
+      );
+      entry.target.position.set(0, 0, 0);
+      entry.target.updateMatrixWorld();
+      const shadowCamera = directional.shadow.camera;
+      if (shadowCamera instanceof PerspectiveCamera === false) {
+        shadowCamera.left = -12;
+        shadowCamera.right = 12;
+        shadowCamera.top = 12;
+        shadowCamera.bottom = -12;
+        shadowCamera.updateProjectionMatrix();
+      }
+      directional.shadow.mapSize.set(1024, 1024);
+      directional.shadow.camera.near = 0.1;
+      directional.shadow.camera.far = 50;
+      directional.shadow.bias = -0.0005;
+      directional.shadow.normalBias = 0.02;
+      directional.shadow.radius = 1 + summary.shadowSoftness * 6;
+    } else {
+      light.position.set(
+        summary.position[0],
+        summary.position[1],
+        summary.position[2]
+      );
+      light.shadow.mapSize.set(512, 512);
+      light.shadow.camera.near = 0.1;
+      light.shadow.camera.far = 30;
+      light.shadow.bias = -0.001;
+      light.shadow.normalBias = 0.02;
+      light.shadow.radius = 1 + summary.shadowSoftness * 6;
+      light.shadow.camera.updateProjectionMatrix();
+    }
+  }
+
+  private disposeDocumentLight(entry: {
+    readonly light: DirectionalLight | PointLight;
+    readonly target: Object3D | null;
+  }): void {
+    entry.light.removeFromParent();
+    entry.target?.removeFromParent();
+    entry.light.dispose();
   }
 
   private applyDocumentLightVisibility(): void {
@@ -1244,11 +1310,10 @@ export class ViewportRenderer {
       record.materials.ps1.dispose();
     }
     this.textureMaterials.clear();
-    for (const entry of this.documentLights) {
-      entry.light.removeFromParent();
-      entry.target?.removeFromParent();
+    for (const entry of this.documentLights.values()) {
+      this.disposeDocumentLight(entry);
     }
-    this.documentLights = [];
+    this.documentLights.clear();
   }
 
   /** Schedule a frame after a texture composite or layer change. */
@@ -1322,6 +1387,10 @@ export class ViewportRenderer {
       record.materials.ps1.dispose();
     }
     this.textureMaterials.clear();
+    for (const entry of this.documentLights.values()) {
+      this.disposeDocumentLight(entry);
+    }
+    this.documentLights.clear();
     disposeViewportMaterials(this.materials);
 
     this.scene.clear();
@@ -1614,7 +1683,7 @@ export class ViewportRenderer {
 
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFSoftShadowMap;
+    this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setSize(width, height, false);
 
     const camera = this.cameraRig.camera;

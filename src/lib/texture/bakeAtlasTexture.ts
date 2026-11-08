@@ -52,7 +52,7 @@ function chartBounds(
 }
 
 /** Pixels sampled inward before the outward bleed. */
-const EDGE_DONOR_PIXELS = 4;
+const EDGE_DONOR_PIXELS = 1;
 /** Gutter filled around every UV island. */
 const EDGE_BLEED_PIXELS = 4;
 
@@ -82,7 +82,7 @@ function buildChartPaths(plan: BakeAtlasPlan): Path2D[] {
 }
 
 /** Erode a binary coverage mask by a whole-pixel radius. */
-function erodeCoverage(
+export function erodeCoverage(
   coverage: Uint8ClampedArray,
   width: number,
   height: number,
@@ -115,6 +115,37 @@ function erodeCoverage(
       }
     }
     current = next;
+  }
+  // Thin low-poly strips can be narrower than twice the donor radius. Preserve
+  // their original pixels when no surviving core pixel is within reach.
+  const search = Math.max(1, radius + 1);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const pixel = y * width + x;
+      if (current[pixel] !== 0 || coverage[pixel * 4 + 3] === 0) {
+        continue;
+      }
+      let hasCore = false;
+      for (let oy = -search; oy <= search && !hasCore; oy += 1) {
+        const ny = y + oy;
+        if (ny < 0 || ny >= height) {
+          continue;
+        }
+        for (let ox = -search; ox <= search; ox += 1) {
+          const nx = x + ox;
+          if (nx < 0 || nx >= width) {
+            continue;
+          }
+          if (current[ny * width + nx] !== 0) {
+            hasCore = true;
+            break;
+          }
+        }
+      }
+      if (!hasCore) {
+        current[pixel] = 1;
+      }
+    }
   }
   return current;
 }
