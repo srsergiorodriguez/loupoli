@@ -487,8 +487,8 @@ const AUTOSAVE_ENABLED_KEY = 'loupoli-autosave-enabled';
 
 const DEFAULT_WORKSPACE_SHADING: Readonly<Record<Workspace, ShadingMode>> = {
   model: 'texture-wire',
-  uv: 'texture-wire',
-  paint: 'texture-wire',
+  uv: 'unlit',
+  paint: 'unlit',
   light: 'lit',
   animation: 'lit',
   render: 'lit'
