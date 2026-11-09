@@ -389,6 +389,8 @@ The same shell in iPad landscape, with the inspector docked:
 
 The iPad inspector is a non-modal bottom sheet: one-finger orbit still works above it, and the scene/primitive controls stay reachable. On desktop the inspector is a true right column, not an overlay.
 
+The same frontend can be deployed as an installable PWA. See [PWA deployment](docs/PWA.md) for build, installation, offline behavior, and the browser-only file/export limitations.
+
 ![loupoli Phase 2 iPad inspector](docs/media/phase2-ipad-inspector.png)
 
 Target baseline: **iPadOS 16.4+**. The Tauri app is structured for iOS, but the iOS project has not been initialized or built: CocoaPods, Rust iOS targets, simulator runtimes, and physical-device signing are still missing. The iOS packaging and hardware validation pass comes next.

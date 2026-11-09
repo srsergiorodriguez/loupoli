@@ -14,6 +14,11 @@ function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
+/** Whether project files use the native save/open dialogs instead of downloads. */
+export function hasNativeProjectFiles(): boolean {
+  return isTauriRuntime();
+}
+
 /** Normalize a project name to the primary `.lpoli` extension. */
 export function projectFileName(name: string): string {
   const trimmed = name.trim() || 'Untitled';

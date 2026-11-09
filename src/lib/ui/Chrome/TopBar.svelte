@@ -6,6 +6,7 @@
   import SegmentedControl from '../Primitives/SegmentedControl.svelte';
   import { shortcut } from '../../input/shortcuts';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
+  import { hasNativeProjectFiles } from '../../platform/projectFiles';
 
   /** Session projection used by the application bar. */
   interface Props {
@@ -133,11 +134,13 @@
       shortcut={shortcut('open').display}
     />
     <IconButton
-      label="Save project"
+      label={hasNativeProjectFiles() ? 'Save project' : 'Download project'}
       icon="save"
       disabled={session.snapshot.fileBusy || session.snapshot.recoveryAvailable}
       onActivate={() => void session.saveProject()}
-      tooltip="Save project"
+      tooltip={hasNativeProjectFiles()
+        ? 'Save project'
+        : 'Download a project copy'}
       shortcut={shortcut('save').display}
     />
     <IconButton

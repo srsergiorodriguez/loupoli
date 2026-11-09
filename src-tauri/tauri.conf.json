@@ -42,6 +42,9 @@
     "longDescription": "loupoli is a simple and friendly 3D modeler for iPad and desktop.",
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "iOS": {
+      "minimumSystemVersion": "16.4"
     }
   }
 }

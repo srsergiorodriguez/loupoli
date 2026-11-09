@@ -8,6 +8,7 @@
     "dev": "vite --port 1420 --strictPort",
     "build": "vite build",
     "preview": "vite preview",
+    "preview:pwa": "vite preview --host 127.0.0.1 --port 4173",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "tauri": "tauri"

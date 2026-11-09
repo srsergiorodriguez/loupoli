@@ -255,6 +255,7 @@ import {
   PROJECT_EXTENSION,
   saveBinaryFile,
   saveFrameSequence,
+  hasNativeProjectFiles,
   saveProjectFile
 } from '../platform/projectFiles';
 import {
@@ -9720,7 +9721,11 @@ export class EditorRuntime {
         await this.autosave.clear();
         const checkpoint = await this.makeCheckpoint();
         await this.autosave.start(checkpoint.bytes, checkpoint.settings);
-        this.notify('success', 'Project saved', `${this.projectName}.${PROJECT_EXTENSION}`);
+        this.notify(
+          'success',
+          hasNativeProjectFiles() ? 'Project saved' : 'Project downloaded',
+          `${this.projectName}.${PROJECT_EXTENSION}`
+        );
       }
     } catch (error) {
       const message = this.errorMessage(error);
