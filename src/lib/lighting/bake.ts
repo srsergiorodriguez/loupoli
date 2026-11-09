@@ -841,6 +841,13 @@ export async function bakeLighting(
       if (Math.abs(denominator) < 1e-8) {
         continue;
       }
+      const absDenominator = Math.abs(denominator);
+      const edgeScaleA =
+        absDenominator / Math.max(1e-8, Math.hypot(y1 - y2, x2 - x1));
+      const edgeScaleB =
+        absDenominator / Math.max(1e-8, Math.hypot(y2 - y0, x0 - x2));
+      const edgeScaleC =
+        absDenominator / Math.max(1e-8, Math.hypot(y0 - y1, x1 - x0));
       const minX = Math.max(0, Math.floor(Math.min(x0, x1, x2)) - 1);
       const maxX = Math.min(width - 1, Math.ceil(Math.max(x0, x1, x2)) + 1);
       const minY = Math.max(0, Math.floor(Math.min(y0, y1, y2)) - 1);
@@ -852,11 +859,19 @@ export async function bakeLighting(
           const a = ((y1 - y2) * (px - x2) + (x2 - x1) * (py - y2)) / denominator;
           const b = ((y2 - y0) * (px - x2) + (x0 - x2) * (py - y2)) / denominator;
           const c = 1 - a - b;
-          if (a < -0.03 || b < -0.03 || c < -0.03) {
+          const edgeDistance = Math.min(
+            a * edgeScaleA,
+            b * edgeScaleB,
+            c * edgeScaleC
+          );
+          if (edgeDistance < -1.25) {
             continue;
           }
-          if (a >= -1e-4 && b >= -1e-4 && c >= -1e-4) {
-            coverageMask[y * width + x] = 1;
+          const pixelIndex = y * width + x;
+          if (edgeDistance >= -0.707) {
+            coverageMask[pixelIndex] = 1;
+          } else if (data[pixelIndex * 4 + 3] === 255) {
+            continue;
           }
           const texelSeed =
             (face + 1) * 73856093 ^

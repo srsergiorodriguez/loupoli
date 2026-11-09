@@ -927,6 +927,7 @@ export class ViewportRenderer {
         summary.direction[2]
       ).normalize();
       entry.direction.copy(direction);
+      const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
       directional.position.set(
         -direction.x * 10,
         -direction.y * 10,
@@ -945,10 +946,11 @@ export class ViewportRenderer {
       directional.shadow.mapSize.set(1024, 1024);
       directional.shadow.camera.near = 0.1;
       directional.shadow.camera.far = 50;
-      directional.shadow.bias = -0.0005;
-      directional.shadow.normalBias = 0.02;
-      directional.shadow.radius = 1 + summary.shadowSoftness * 6;
+      directional.shadow.bias = -(0.0003 + 0.0006 * softness);
+      directional.shadow.normalBias = 0.015 + 0.01 * softness;
+      directional.shadow.radius = 1 + softness * 6;
     } else {
+      const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
       entry.direction.set(0, 0, 0);
       light.position.set(
         summary.position[0],
@@ -958,9 +960,9 @@ export class ViewportRenderer {
       light.shadow.mapSize.set(512, 512);
       light.shadow.camera.near = 0.1;
       light.shadow.camera.far = 30;
-      light.shadow.bias = -0.001;
-      light.shadow.normalBias = 0.02;
-      light.shadow.radius = 1 + summary.shadowSoftness * 6;
+      light.shadow.bias = -(0.0006 + 0.0006 * softness);
+      light.shadow.normalBias = 0.015 + 0.01 * softness;
+      light.shadow.radius = 1 + softness * 6;
       light.shadow.camera.updateProjectionMatrix();
     }
   }
@@ -1562,7 +1564,7 @@ export class ViewportRenderer {
     if (!this.ambientOcclusion.enabled || this.currentMode !== 'lit') {
       if (this.aoApplied) {
         for (const view of this.nodeViews.values()) {
-          view.setFaceAo(null);
+          view.setCornerAo(null);
         }
         this.aoApplied = false;
       }
@@ -1591,7 +1593,7 @@ export class ViewportRenderer {
     );
     if (faceTotal === 0 || faceTotal > MAX_AO_PREVIEW_FACES) {
       for (const view of this.nodeViews.values()) {
-        view.setFaceAo(null);
+        view.setCornerAo(null);
       }
       this.aoApplied = false;
       return;
@@ -1600,8 +1602,8 @@ export class ViewportRenderer {
       this.occlusionTriangles(view, view.worldMatrix)
     );
     views.forEach((view, viewIndex) => {
-      view.setFaceAo(
-        this.faceAmbientOcclusion(
+      view.setCornerAo(
+        this.cornerAmbientOcclusion(
           view,
           view.worldMatrix,
           occluders,
@@ -1654,57 +1656,62 @@ export class ViewportRenderer {
     return new Float32Array(triangles);
   }
 
-  private faceAmbientOcclusion(
+  private cornerAmbientOcclusion(
     view: MeshNodeView,
     matrix: Matrix4,
     occluders: readonly Float32Array[],
     viewIndex: number
   ): Float32Array {
     const mesh = view.evaluatedMesh;
-    const factors = new Float32Array(mesh.faceCount);
+    const factors = new Float32Array(mesh.halfEdgeCount);
     const sign = bakeNormalSign(mesh, matrix);
     for (let face = 0; face < mesh.faceCount; face += 1) {
       const first = mesh.faceHalfEdge[face];
-      const loop: number[] = [];
+      const corners: number[] = [];
+      const world: Vector3[] = [];
       let halfEdge = first;
       do {
-        loop.push(mesh.heOrigin[halfEdge]);
+        corners.push(halfEdge);
+        const vertex = mesh.heOrigin[halfEdge];
+        world.push(
+          new Vector3(
+            mesh.positions[vertex * 3],
+            mesh.positions[vertex * 3 + 1],
+            mesh.positions[vertex * 3 + 2]
+          ).applyMatrix4(matrix)
+        );
         halfEdge = mesh.heNext[halfEdge];
-      } while (halfEdge !== first && loop.length < 64);
-      if (loop.length < 3) {
-        factors[face] = 1;
+      } while (halfEdge !== first && corners.length < 64);
+      if (corners.length < 3) {
+        for (const corner of corners) {
+          factors[corner] = 1;
+        }
         continue;
       }
-      const world = loop.map((vertex) =>
-        new Vector3(
-          mesh.positions[vertex * 3],
-          mesh.positions[vertex * 3 + 1],
-          mesh.positions[vertex * 3 + 2]
-        ).applyMatrix4(matrix)
-      );
       const normal = new Vector3()
         .subVectors(world[1], world[0])
         .cross(new Vector3().subVectors(world[2], world[0]))
         .normalize()
         .multiplyScalar(sign);
       if (normal.lengthSq() < 1e-8) {
-        factors[face] = 1;
+        for (const corner of corners) {
+          factors[corner] = 1;
+        }
         continue;
       }
-      const center = new Vector3();
-      for (const point of world) {
-        center.add(point);
+      for (let index = 0; index < corners.length; index += 1) {
+        const visibility = ambientVisibility(
+          world[index],
+          normal,
+          this.ambientOcclusion,
+          occluders,
+          (viewIndex + 1) * 73856093 ^
+            (face + 1) * 19349663 ^
+            (corners[index] + 1) * 83492791
+        );
+        factors[corners[index]] =
+          1 - (1 - visibility) * this.ambientOcclusion.strength;
       }
-      center.multiplyScalar(1 / world.length);
-      const visibility = ambientVisibility(
-        center,
-        normal,
-        this.ambientOcclusion,
-        occluders,
-        (viewIndex + 1) * 73856093 ^ (face + 1) * 19349663
-      );
-      factors[face] =
-        1 - (1 - visibility) * this.ambientOcclusion.strength;
     }
     return factors;
   }

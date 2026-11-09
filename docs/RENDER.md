@@ -100,4 +100,4 @@ Rendered focus shadows are baked by the renderer's current light state; baked li
 - Camera animation tracks
 - Render progress/cancel UI and progress reporting
 
-AO is previewable in Lit as per-face visibility and bakeable into the lighting layer at texel resolution. Bake memory is bounded by streaming crack repair, reusing one blur scratch buffer, and deriving coverage directly from the raster loop. Shadow and AO rays use a parity-tested flat BVH. MP4/WebM output is silent; there is no audio track in the project timeline.
+AO is previewable in Lit as per-corner visibility and bakeable into the lighting layer at texel resolution. Bake memory is bounded by streaming crack repair, reusing one blur scratch buffer, and deriving coverage directly from the raster loop. Shadow and AO rays use a parity-tested flat BVH. MP4/WebM output is silent; there is no audio track in the project timeline.

@@ -231,123 +231,126 @@ export async function resampleTextureDataForBakeAtlas(
     bounds: chartBounds(chart, plan.width, plan.height)
   }));
   const chartPaths = buildChartPaths(plan);
-  const coverageCanvas = new OffscreenCanvas(plan.width, plan.height);
-  const coverageContext = coverageCanvas.getContext('2d', {
+  const workCanvas = new OffscreenCanvas(plan.width, plan.height);
+  const context = workCanvas.getContext('2d', {
     willReadFrequently: true
   });
-  let core: Uint8Array | null = null;
-  let allowed: Uint8Array | null = null;
-  if (coverageContext) {
-    coverageContext.fillStyle = '#fff';
+  if (!context) {
+    workCanvas.width = 0;
+    workCanvas.height = 0;
+    throw new Error('Unable to create the bake atlas work canvas.');
+  }
+
+  try {
+    context.clearRect(0, 0, plan.width, plan.height);
+    context.fillStyle = '#fff';
     for (const path of chartPaths) {
-      coverageContext.fill(path);
+      context.fill(path);
     }
-    const coverage = coverageContext.getImageData(
+    const coverage = context.getImageData(
       0,
       0,
       plan.width,
       plan.height
     );
-    core = erodeCoverage(
+    const core = erodeCoverage(
       coverage.data,
       plan.width,
       plan.height,
       EDGE_DONOR_PIXELS
     );
-    const allowedCanvas = new OffscreenCanvas(plan.width, plan.height);
-    const allowedContext = allowedCanvas.getContext('2d', {
-      willReadFrequently: true
-    });
-    if (allowedContext) {
-      allowedContext.fillStyle = '#fff';
-      allowedContext.strokeStyle = '#fff';
-      allowedContext.lineWidth = EDGE_BLEED_PIXELS * 2;
-      allowedContext.lineJoin = 'round';
-      for (const path of chartPaths) {
-        allowedContext.fill(path);
-        allowedContext.stroke(path);
-      }
-      const allowedImage = allowedContext.getImageData(
-        0,
-        0,
-        plan.width,
-        plan.height
-      );
-      allowed = new Uint8Array(plan.width * plan.height);
-      for (let pixel = 0; pixel < allowed.length; pixel += 1) {
-        allowed[pixel] =
-          allowedImage.data[pixel * 4 + 3] > 0 ? 1 : 0;
-      }
-    }
-  }
-  const layers: TextureLayerRecord[] = [];
-  for (const source of data.layers) {
-    if (source.kind === 'effect') {
-      layers.push({ ...source });
-      continue;
-    }
-    const pngBuffer = source.png.buffer.slice(
-      source.png.byteOffset,
-      source.png.byteOffset + source.png.byteLength
-    ) as ArrayBuffer;
-    const bitmap = await createImageBitmap(
-      new Blob([pngBuffer], { type: 'image/png' })
-    );
-    const canvas = new OffscreenCanvas(plan.width, plan.height);
-    const context = canvas.getContext('2d');
-    if (!context) {
-      bitmap.close();
-      throw new Error('Unable to create the bake atlas layer.');
-    }
+
     context.clearRect(0, 0, plan.width, plan.height);
-    context.imageSmoothingEnabled = filter === 'linear';
-    for (const { transform, bounds } of transforms) {
-      if (bounds.width <= 0 || bounds.height <= 0) {
+    context.fillStyle = '#fff';
+    context.strokeStyle = '#fff';
+    context.lineWidth = EDGE_BLEED_PIXELS * 2;
+    context.lineJoin = 'round';
+    for (const path of chartPaths) {
+      context.fill(path);
+      context.stroke(path);
+    }
+    const allowedImage = context.getImageData(
+      0,
+      0,
+      plan.width,
+      plan.height
+    );
+    const allowed = new Uint8Array(plan.width * plan.height);
+    for (let pixel = 0; pixel < allowed.length; pixel += 1) {
+      allowed[pixel] = allowedImage.data[pixel * 4 + 3] > 0 ? 1 : 0;
+    }
+
+    const layers: TextureLayerRecord[] = [];
+    for (const source of data.layers) {
+      if (source.kind === 'effect') {
+        layers.push({ ...source });
         continue;
       }
-      context.save();
-      // A rectangular clip preserves a continuous image across every face in
-      // the island. Per-face clipping introduced hairline gaps that showed up
-      // as white seams after filtering.
-      context.beginPath();
-      context.rect(
-        bounds.x - 4,
-        bounds.y - 4,
-        bounds.width + 8,
-        bounds.height + 8
+      const pngBuffer = source.png.buffer.slice(
+        source.png.byteOffset,
+        source.png.byteOffset + source.png.byteLength
+      ) as ArrayBuffer;
+      const bitmap = await createImageBitmap(
+        new Blob([pngBuffer], { type: 'image/png' })
       );
-      context.clip();
-      context.setTransform(...transform);
-      context.drawImage(bitmap, 0, 0);
-      context.restore();
+      try {
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.globalAlpha = 1;
+        context.globalCompositeOperation = 'source-over';
+        context.clearRect(0, 0, plan.width, plan.height);
+        context.imageSmoothingEnabled = filter === 'linear';
+        for (const { transform, bounds } of transforms) {
+          if (bounds.width <= 0 || bounds.height <= 0) {
+            continue;
+          }
+          context.save();
+          // A rectangular clip preserves a continuous image across every face
+          // in the island. Per-face clipping introduced hairline gaps that
+          // showed up as white seams after filtering.
+          context.beginPath();
+          context.rect(
+            bounds.x - 4,
+            bounds.y - 4,
+            bounds.width + 8,
+            bounds.height + 8
+          );
+          context.clip();
+          context.setTransform(...transform);
+          context.drawImage(bitmap, 0, 0);
+          context.restore();
+        }
+        const pixels = context.getImageData(
+          0,
+          0,
+          plan.width,
+          plan.height
+        );
+        bleedIslandEdges(
+          pixels.data,
+          core,
+          allowed,
+          plan.width,
+          plan.height
+        );
+        context.putImageData(pixels, 0, 0);
+        const blob = await workCanvas.convertToBlob({ type: 'image/png' });
+        layers.push({
+          ...source,
+          png: new Uint8Array(await blob.arrayBuffer())
+        });
+      } finally {
+        bitmap.close();
+      }
     }
-    if (core && allowed) {
-      const pixels = context.getImageData(
-        0,
-        0,
-        plan.width,
-        plan.height
-      );
-      bleedIslandEdges(
-        pixels.data,
-        core,
-        allowed,
-        plan.width,
-        plan.height
-      );
-      context.putImageData(pixels, 0, 0);
-    }
-    const blob = await canvas.convertToBlob({ type: 'image/png' });
-    bitmap.close();
-    layers.push({
-      ...source,
-      png: new Uint8Array(await blob.arrayBuffer())
-    });
+    return {
+      width: plan.width,
+      height: plan.height,
+      activeId: data.activeId,
+      layers
+    };
+  } finally {
+    // Release the shared backing store immediately on WKWebView.
+    workCanvas.width = 0;
+    workCanvas.height = 0;
   }
-  return {
-    width: plan.width,
-    height: plan.height,
-    activeId: data.activeId,
-    layers
-  };
 }

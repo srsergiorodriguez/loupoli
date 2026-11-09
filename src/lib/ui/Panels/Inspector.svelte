@@ -1676,8 +1676,8 @@
               session.setAmbientOcclusion({ samples: Number(value) })}
           />
           <p class="hint">
-            Lit previews ambient occlusion per face; Bake lighting evaluates
-            it per texel and multiplies it into the same lighting layer.
+            Lit previews ambient occlusion per face corner; Bake lighting
+            evaluates it per texel and multiplies it into the same lighting layer.
           </p>
         {/if}
         <div class="light-divider"></div>

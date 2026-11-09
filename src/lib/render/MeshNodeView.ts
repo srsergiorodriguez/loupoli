@@ -52,6 +52,14 @@ const SELECTED_EDGE_RADIUS = 0.025;
 const SEAM_TUBE_RADIUS = 0.019;
 const Y_AXIS = new Vector3(0, 1, 0);
 
+/** Convert one authored sRGB byte to the linear color space of vertex colors. */
+function srgbByteToLinear(byte: number): number {
+  const value = byte / 255;
+  return value <= 0.04045
+    ? value / 12.92
+    : ((value + 0.055) / 1.055) ** 2.4;
+}
+
 function pointInPolygon(
   x: number,
   y: number,
@@ -130,7 +138,7 @@ export class MeshNodeView {
   private readonly mesh: HalfEdgeMesh;
   private seamVisible = false;
   private shadingMode: ShadingMode = 'unlit';
-  private faceAo: Float32Array | null = null;
+  private cornerAo: Float32Array | null = null;
   private cleanRender = false;
   private active = false;
   private selectionMode: SelectionMode = 'vertex';
@@ -509,18 +517,18 @@ export class MeshNodeView {
     return this.group.matrixWorld;
   }
 
-  /** Apply one ambient-occlusion factor per source face. */
-  setFaceAo(factors: Float32Array | null): void {
+  /** Apply one ambient-occlusion factor per source face corner. */
+  setCornerAo(factors: Float32Array | null): void {
     if (factors === null) {
-      if (this.faceAo === null) {
+      if (this.cornerAo === null) {
         return;
       }
-      this.faceAo = null;
+      this.cornerAo = null;
     } else {
-      if (factors.length !== this.mesh.faceCount) {
+      if (factors.length !== this.mesh.halfEdgeCount) {
         return;
       }
-      this.faceAo = factors.slice();
+      this.cornerAo = factors.slice();
     }
     this.refreshMaterialColors();
   }
@@ -620,21 +628,63 @@ export class MeshNodeView {
           ? palette[material]
           : '#ffffff';
       const hex = /^#([0-9a-fA-F]{6})$/.exec(color)?.[1] ?? 'ffffff';
-      const r = parseInt(hex.slice(0, 2), 16) / 255;
-      const g = parseInt(hex.slice(2, 4), 16) / 255;
-      const b = parseInt(hex.slice(4, 6), 16) / 255;
-      const ao =
-        this.shadingMode === 'lit' &&
-        this.faceAo !== null &&
-        this.faceAo.length === mesh.faceCount
-          ? this.faceAo[face]
-          : 1;
+      const r = srgbByteToLinear(parseInt(hex.slice(0, 2), 16));
+      const g = srgbByteToLinear(parseInt(hex.slice(2, 4), 16));
+      const b = srgbByteToLinear(parseInt(hex.slice(4, 6), 16));
       const count = mesh.renderTriangleCountForFace(face) * 3;
-      for (let i = 0; i < count; i += 1) {
-        const offset = (cursor + i) * 3;
-        this.triangleColors[offset] = r * ao;
-        this.triangleColors[offset + 1] = g * ao;
-        this.triangleColors[offset + 2] = b * ao;
+      const cornerAo =
+        this.shadingMode === 'lit' &&
+        this.cornerAo !== null &&
+        this.cornerAo.length === mesh.halfEdgeCount
+          ? this.cornerAo
+          : null;
+      if (!cornerAo) {
+        for (let i = 0; i < count; i += 1) {
+          const offset = (cursor + i) * 3;
+          this.triangleColors[offset] = r;
+          this.triangleColors[offset + 1] = g;
+          this.triangleColors[offset + 2] = b;
+        }
+        cursor += count;
+        continue;
+      }
+      const start = mesh.faceHalfEdge[face];
+      const faceSize = mesh.faceVertexCount(face);
+      if (count !== (faceSize - 2) * 3) {
+        // Adaptive bilinear quads have render-only corners without source
+        // half-edges; use the face average for those.
+        let sum = 0;
+        let corner = start;
+        do {
+          sum += cornerAo[corner];
+          corner = mesh.heNext[corner];
+        } while (corner !== start);
+        const average = sum / faceSize;
+        for (let i = 0; i < count; i += 1) {
+          const offset = (cursor + i) * 3;
+          this.triangleColors[offset] = r * average;
+          this.triangleColors[offset + 1] = g * average;
+          this.triangleColors[offset + 2] = b * average;
+        }
+      } else {
+        let a = start;
+        let bHalfEdge = mesh.heNext[a];
+        for (let corner = 2; corner < faceSize; corner += 1) {
+          const cHalfEdge = mesh.heNext[bHalfEdge];
+          for (const halfEdge of [a, bHalfEdge, cHalfEdge]) {
+            const factor = cornerAo[halfEdge] ?? 1;
+            const offset = cursor * 3;
+            this.triangleColors[offset] = r * factor;
+            this.triangleColors[offset + 1] = g * factor;
+            this.triangleColors[offset + 2] = b * factor;
+            cursor += 1;
+          }
+          bHalfEdge = cHalfEdge;
+        }
+      }
+      if (count === (faceSize - 2) * 3) {
+        // The planar fan above advanced the cursor itself.
+        continue;
       }
       cursor += count;
     }
