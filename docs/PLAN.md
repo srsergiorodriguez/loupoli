@@ -221,7 +221,7 @@ Each phase is shippable and testable on its own. A later phase may refine a prio
 | Join objects | **3B (implemented)** | Session object multi-selection joins into the active target with relative-transform baking, UV/material preservation, undo, and journal replay. Exact coincident positions can still weld in the DCEL builder. |
 | Merge vertices | **3B (implemented)** | Selected vertices weld to their centroid; collapsed faces are dropped and the resulting DCEL is validated. No tolerance-based auto-weld yet. |
 | Bridge edges | **3B (implemented)** | Two ordered boundary chains or loops with equal segment counts bridge into a validated quad strip. Twist/orientation controls and non-boundary bridge paths remain. |
-| Select multiple vertices, edges, and faces | **3B (implemented)** | Session selection sets per active node and element mode. Additive/toggle selection via Shift/Cmd/Ctrl, a sticky 44px Add toggle, and one-finger touch taps. Multi-element overlays, no duplicate indices, selection stays non-undoable; touch drag remains camera orbit. |
+| Select multiple vertices, edges, and faces | **3B (implemented)** | Session selection sets per active node and element mode. Additive/toggle selection via Shift/Cmd/Ctrl, a sticky 44px Add toggle, and one-finger touch taps. Multi-element overlays, no duplicate indices, selection stays non-undoable; touch drags handles/gizmos and orbits on empty space. |
 | Hide PS1 options in a collapsible/render-effect module | **3C (implemented)** | The Inspector now exposes a collapsed **PS1 look** render-effect module. It remains a view/render effect, not a geometry modifier; both toggles remain off by default and unaffected by Solid/Lit. |
 
 ---

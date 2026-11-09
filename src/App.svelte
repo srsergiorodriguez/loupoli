@@ -155,7 +155,7 @@
       Z-up 3D viewport. Choose vertex, edge, or face selection. With a pen or the
       primary mouse button, select elements; use Add mode or Shift/Cmd-click to
       select multiple; right-drag pans. With elements selected, Move, Rotate, and Scale place a
-      gizmo at their median; drag its axes with the pen or mouse. The ActionDock
+      gizmo at their median; drag its axes with the Pencil, mouse, or touch. The ActionDock
       provides E/I/L/Shift+L actions with drag or exact amounts. Desktop G/R/S
       transforms selections or the active object. Use one finger to orbit, two
       fingers to pan and pinch, two-finger tap to undo, and three-finger tap to
@@ -259,7 +259,7 @@
       {#if annotationsActive}
         <div class="annotation-hud loupoli-panel">
           <span class="annotation-title">Annotate</span>
-          <span class="annotation-hint">Draw with pen or mouse</span>
+          <span class="annotation-hint">Draw with Pencil or mouse</span>
           <ActionButton
             label="Undo"
             icon="undo"

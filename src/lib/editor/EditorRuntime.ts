@@ -769,6 +769,7 @@ export class EditorRuntime {
     this.inputHost = {
       activateEditor: (editor) => this.setActiveEditor(editor),
       isUvActive: () => this.activeEditor !== '3d',
+      isAnnotationMode: () => this.annotationMode,
       orbit: (dx, dy) => {
         this.renderer.orbit(dx, dy);
         this.leaveCameraView();
@@ -3407,7 +3408,7 @@ export class EditorRuntime {
    * InputRouter falls through to camera orbit.
    */
   private beginProjectionPaint(sample: PointerSample): boolean {
-    if (this.workspace !== 'paint') {
+    if (this.workspace !== 'paint' || sample.pointerType === 'touch') {
       return false;
     }
     const node = this.getActiveNode();
@@ -9864,6 +9865,12 @@ export class EditorRuntime {
     clientY: number,
     additive = false
   ): void {
+    // A touch down on a topology handle selects immediately. Do not duplicate
+    // that selection when the same gesture resolves as a tap.
+    if (this.pointerSelectionHit) {
+      this.pointerSelectionHit = false;
+      return;
+    }
     if (this.workspace === 'light') {
       const lightId = this.renderer.pickLight(clientX, clientY);
       if (lightId) {
@@ -12712,7 +12719,7 @@ export class EditorRuntime {
     );
   }
 
-  /** Enable or disable the pen/mouse annotation overlay tool. */
+  /** Enable or disable the Pencil/mouse annotation overlay tool. Touch is excluded. */
   setAnnotationMode(enabled: boolean): void {
     if (enabled && this.workspace !== 'model') {
       return;
@@ -12833,6 +12840,8 @@ export class EditorRuntime {
       this.annotationStroke ||
       (sample.pointerType !== 'pen' && sample.pointerType !== 'mouse')
     ) {
+      // Annotation is deliberately Pencil/mouse only; finger touch remains
+      // navigation/selection.
       return false;
     }
     const target = this.annotationPlane();

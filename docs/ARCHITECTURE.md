@@ -674,7 +674,7 @@ Implementation details:
 - Two-finger tap and three-finger tap are recognized on pointer-up, once, with a small guard interval to prevent duplicate browser click events.
 - Ignore synthesized mouse events after touch/pen input.
 - Palm rejection: while an active pen pointer exists and for a short cooldown afterward (initial value 300 ms), ignore touch-driven camera gestures. Pen remains fully responsive. This rule lives in the router, not in UI components.
-- One-finger touch taps can select the current topology element; a drag past the camera-start threshold switches to orbit. The sticky Add mode provides touch additive selection. Two-finger taps stay reserved for undo and three-finger taps for redo.
+- One-finger touch taps can select the current topology element; a drag that starts on a handle/gizmo edits it, while a drag past the camera-start threshold on empty space switches to orbit. The sticky Add mode provides touch additive selection. Two-finger taps stay reserved for undo and three-finger taps for redo.
 - Use `event.getCoalescedEvents()` for pen/mouse moves where supported; coalesce to one tool update per display frame at most and one document commit at gesture end.
 - Cancel gestures on `pointercancel`, window blur, or context loss; restore preview state.
 - Disable default browser panning/zooming via `touch-action: none` on the canvas and `overscroll-behavior: none` on the shell, not via global event hacks.

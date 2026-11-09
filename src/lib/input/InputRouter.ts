@@ -28,6 +28,7 @@ export interface InputRouterHost {
    */
   activateEditor(editor: '3d' | 'uv'): void;
   isUvActive(): boolean;
+  isAnnotationMode(): boolean;
   beginToolPointer(sample: PointerSample): boolean;
   hoverToolPointer(sample: PointerSample | null): void;
   moveToolPointer(sample: PointerSample): void;
@@ -64,7 +65,14 @@ export interface InputRouterHost {
 }
 
 /** The current phase of a multi-touch recognizer. */
-type TouchMode = 'none' | 'pending' | 'single' | 'pair' | 'lasso' | 'blocked';
+type TouchMode =
+  | 'none'
+  | 'pending'
+  | 'single'
+  | 'pair'
+  | 'lasso'
+  | 'tool'
+  | 'blocked';
 
 /** Start and latest positions for one active touch pointer. */
 interface TouchRecord {
@@ -426,6 +434,9 @@ export class InputRouter {
     }
 
     if (event.pointerType === 'touch') {
+      if (this.touchMode === 'tool') {
+        this.host.cancelToolPointer();
+      }
       this.ignoredTouches.delete(event.pointerId);
       this.touches.delete(event.pointerId);
       this.clearTouchGesture();
@@ -649,11 +660,26 @@ export class InputRouter {
       return;
     }
 
+    if (this.touches.size === 1 && !this.host.isAnnotationMode()) {
+      // Touch may grab a vertex handle, gizmo, action, light, or camera
+      // handle. A miss remains camera orbit.
+      if (this.host.beginToolPointer(sample)) {
+        this.touchMode = 'tool';
+        return;
+      }
+    }
+
     if (this.touches.size === 2 && this.touchMode === 'lasso') {
       this.host.cancelLasso();
       this.touchLasso = false;
       this.touchMode = 'pair';
       this.captureTouchBaseline();
+      return;
+    }
+
+    if (this.touchMode === 'tool' && this.touches.size >= 2) {
+      this.host.cancelToolPointer();
+      this.touchMode = 'blocked';
       return;
     }
 
@@ -684,6 +710,11 @@ export class InputRouter {
     );
 
     if (this.touchInvalidated || this.touchMode === 'blocked') {
+      return;
+    }
+
+    if (this.touchMode === 'tool' && this.touches.size === 1) {
+      this.host.moveToolPointer(sample);
       return;
     }
 
@@ -725,6 +756,19 @@ export class InputRouter {
         this.host.endLasso(event.clientX, event.clientY);
       }
       this.touchLasso = false;
+      this.clearTouchGesture();
+      return;
+    }
+
+    if (this.touchMode === 'tool') {
+      if (this.touches.size > 0) {
+        this.host.cancelToolPointer();
+      } else {
+        const sample = this.toSample(event);
+        if (sample) {
+          this.host.endToolPointer(sample);
+        }
+      }
       this.clearTouchGesture();
       return;
     }
@@ -816,8 +860,10 @@ export class InputRouter {
     if (isValidTap && this.touchMaxPointers === 1) {
       // A deliberate one-finger tap selects; a drag remains orbit. The sticky
       // Add mode supplies the additive behavior because touch has no modifier
-      // keys.
-      this.host.tapSelect(x, y);
+      // keys. Annotation mode is Pencil/mouse only.
+      if (!this.host.isAnnotationMode()) {
+        this.host.tapSelect(x, y);
+      }
     } else if (isValidTap && this.touchMaxPointers === 2) {
       this.host.undo();
     } else if (isValidTap && this.touchMaxPointers === 3) {
