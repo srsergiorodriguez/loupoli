@@ -16,6 +16,9 @@ src-tauri/gen
 .chrome-debug
 .chrome-profile
 
+# Local review handoff; never part of the published project
+forArgon/
+
 # Editor / OS
 .DS_Store
 .vscode/*

@@ -27,7 +27,11 @@
   let pinchActive = false;
   let pinchLastCenter = { x: 0, y: 0 };
   let pinchLastDistance = 0;
+  let penActive = false;
+  let activePointerType: string | null = null;
+  let lastPenUpAt = -Infinity;
   const touchPointers = new Map<number, { x: number; y: number }>();
+  const PEN_TOUCH_COOLDOWN_MS = 350;
 
   const textureAssets = $derived(session.snapshot.textureAssets);
   const activeAsset = $derived(
@@ -96,7 +100,23 @@
   }
 
   function pointerDown(event: PointerEvent): void {
-    if (event.pointerType === 'touch') {
+    if (event.pointerType === 'pen') {
+      penActive = true;
+      // A missed pointerup from a previous pencil stroke must be committed
+      // before starting another stroke, not silently discarded.
+      if (painting) {
+        endPointer(true);
+      }
+      if (touchPointers.size > 0) {
+        detachTouchTracking();
+      }
+    } else if (event.pointerType === 'touch') {
+      if (
+        penActive ||
+        performance.now() - lastPenUpAt < PEN_TOUCH_COOLDOWN_MS
+      ) {
+        return;
+      }
       const point = localPoint(event);
       touchPointers.set(event.pointerId, point);
       if (touchPointers.size === 1) {
@@ -104,9 +124,7 @@
       } else if (touchPointers.size === 2) {
         event.preventDefault();
         if (painting) {
-          detachPointer();
-          painting = false;
-          session.cancelTexturePaint();
+          endPointer(false);
         }
         beginPinch();
         return;
@@ -141,10 +159,20 @@
         tilt.y
       )
     ) {
+      if (event.pointerType === 'pen') {
+        penActive = false;
+        lastPenUpAt = performance.now();
+      }
       return;
     }
     painting = true;
     activePointerId = event.pointerId;
+    activePointerType = event.pointerType;
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture is best-effort; window listeners still cover the gesture.
+    }
     window.addEventListener('pointermove', windowPointerMove);
     window.addEventListener('pointerup', windowPointerUp);
     window.addEventListener('pointercancel', windowPointerCancel);
@@ -158,9 +186,11 @@
   }
 
   function windowPointerMove(event: PointerEvent): void {
+    const samePen =
+      event.pointerType === 'pen' && activePointerType === 'pen';
     if (
       !painting ||
-      event.pointerId !== activePointerId ||
+      (event.pointerId !== activePointerId && !samePen) ||
       (event.pointerType === 'touch' && touchPointers.size > 1)
     ) {
       return;
@@ -182,28 +212,57 @@
   }
 
   function windowPointerUp(event: PointerEvent): void {
-    if (event.pointerId !== activePointerId) {
+    const samePen =
+      event.pointerType === 'pen' && activePointerType === 'pen';
+    if (event.pointerId !== activePointerId && !samePen) {
       return;
     }
-    detachPointer();
-    painting = false;
-    session.finishTexturePaint();
+    if (event.pointerType === 'pen' || activePointerType === 'pen') {
+      penActive = false;
+      lastPenUpAt = performance.now();
+    }
+    endPointer(true);
   }
 
   function windowPointerCancel(event: PointerEvent): void {
-    if (event.pointerId !== activePointerId) {
+    const samePen =
+      event.pointerType === 'pen' && activePointerType === 'pen';
+    if (event.pointerId !== activePointerId && !samePen) {
       return;
     }
+    if (event.pointerType === 'pen' || activePointerType === 'pen') {
+      penActive = false;
+      lastPenUpAt = performance.now();
+    }
+    endPointer(false);
+  }
+
+  function endPointer(commit: boolean): void {
+    const wasPainting = painting;
     detachPointer();
     painting = false;
-    session.cancelTexturePaint();
+    if (wasPainting && commit) {
+      session.finishTexturePaint();
+    } else if (wasPainting) {
+      session.cancelTexturePaint();
+    }
   }
 
   function detachPointer(): void {
     window.removeEventListener('pointermove', windowPointerMove);
     window.removeEventListener('pointerup', windowPointerUp);
     window.removeEventListener('pointercancel', windowPointerCancel);
+    if (canvas && activePointerId !== null) {
+      try {
+        if (canvas.hasPointerCapture(activePointerId)) {
+          canvas.releasePointerCapture(activePointerId);
+        }
+      } catch {
+        // The capture may already have been released by the system.
+      }
+    }
     activePointerId = null;
+    activePointerType = null;
   }
 
   function attachTouchTracking(): void {
@@ -352,9 +411,7 @@
     }
     if (painting) {
       event.preventDefault();
-      detachPointer();
-      painting = false;
-      session.cancelTexturePaint();
+      endPointer(false);
     }
   }
 
@@ -402,6 +459,8 @@
       tabindex="0"
       aria-label="Texture paint surface"
       onpointerdown={pointerDown}
+      onpointerup={windowPointerUp}
+      onpointercancel={windowPointerCancel}
       onpointermove={pointerTrack}
       onpointerenter={pointerTrack}
       onpointerleave={() => {

@@ -133,7 +133,6 @@ export class InputRouter {
   private lastPinchDistance = 0;
 
   private activePenPointers = 0;
-  private activePenPointerId: number | null = null;
   private activePenLasso = false;
   private touchLasso = false;
   private lastPenUpAt = -Infinity;
@@ -193,8 +192,19 @@ export class InputRouter {
     }
 
     if (sample.pointerType === 'pen') {
-      this.activePenPointers += 1;
-      this.activePenPointerId = sample.pointerId;
+      // Pen contact should be a single continuous gesture. If a pointerup was
+      // lost by the WebView, close the stale gesture before accepting the new
+      // contact instead of leaving a paint transaction latched.
+      if (this.activePenPointers > 0) {
+        if (this.activePenLasso) {
+          this.host.cancelLasso();
+        } else {
+          this.host.endToolPointer(sample);
+        }
+        this.activePenLasso = false;
+      }
+      this.activePenPointers = 1;
+      this.activePenLasso = false;
       this.invalidateActiveTouchGesture();
       this.host.setPointerReading(sample);
       this.activePenLasso = this.host.isLassoMode();
@@ -293,7 +303,10 @@ export class InputRouter {
     }
 
     if (sample.pointerType === 'pen') {
-      if (this.activePenPointerId !== sample.pointerId) {
+      // Do not depend on pointer ID stability across an Apple Pencil contact.
+      // WKWebView can report a different ID on the terminal event in some
+      // iPadOS versions, which otherwise leaves the paint gesture open.
+      if (this.activePenPointers === 0) {
         return;
       }
       this.host.setPointerReading(sample);
@@ -369,7 +382,7 @@ export class InputRouter {
     this.releasePointerCapture(event.pointerId);
 
     if (sample.pointerType === 'pen') {
-      if (this.activePenPointerId === sample.pointerId) {
+      if (this.activePenPointers > 0) {
         if (this.activePenLasso) {
           this.host.endLasso(sample.clientX, sample.clientY);
         } else {
@@ -377,8 +390,7 @@ export class InputRouter {
         }
         this.activePenLasso = false;
         this.host.setPointerReading(null);
-        this.activePenPointerId = null;
-        this.activePenPointers = Math.max(0, this.activePenPointers - 1);
+        this.activePenPointers = 0;
         this.lastPenUpAt = performance.now();
       }
       return;
@@ -427,8 +439,7 @@ export class InputRouter {
       }
       this.activePenLasso = false;
       this.host.setPointerReading(null);
-      this.activePenPointerId = null;
-      this.activePenPointers = Math.max(0, this.activePenPointers - 1);
+      this.activePenPointers = 0;
       this.lastPenUpAt = performance.now();
       return;
     }
