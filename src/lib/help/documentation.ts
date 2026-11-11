@@ -13,6 +13,8 @@ export interface DocumentationPage {
   }[];
 }
 
+const APP_BASE = import.meta.env.BASE_URL;
+
 /** Workspace documentation used by the application-bar reference dialog. */
 export const DOCUMENTATION: readonly DocumentationPage[] = [
   {
@@ -21,7 +23,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     title: 'Modeling',
     summary:
       'Model is the direct-edit workspace. Selection, transforms, one-shot topology tools, modifiers, and shape keys all act on the active editable mesh.',
-    image: '/documentation/model.png',
+    image: `${APP_BASE}documentation/model.png`,
     alt: 'Model workspace with a textured sample model, grid ground, Scene outliner, and vertex selection handles.',
     sections: [
       {
@@ -64,7 +66,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     title: 'UV editing',
     summary:
       'UV holds per-corner texture coordinates. The UV pane edits the same object selection shown in the 3D viewport, so chart work stays linked to the mesh.',
-    image: '/documentation/uv.png',
+    image: `${APP_BASE}documentation/uv.png`,
     alt: 'UV workspace with a sample texture atlas, UV charts, and the 3D viewport.',
     sections: [
       {
@@ -108,7 +110,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     title: 'Texture painting',
     summary:
       'Paint edits the active texture layer. The texture pane shows the atlas, while the 3D viewport can project brush strokes onto the selected surface.',
-    image: '/documentation/paint.png',
+    image: `${APP_BASE}documentation/paint.png`,
     alt: 'Paint workspace showing a sample atlas, Paint toolbar, and Brush inspector.',
     sections: [
       {
@@ -152,7 +154,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     title: 'Lighting',
     summary:
       'Light owns the document light rig. Directional and point lights drive the Lit viewport and the direct-light texture bake.',
-    image: '/documentation/light.png',
+    image: `${APP_BASE}documentation/light.png`,
     alt: 'Light workspace with sun and fill markers, a ground shadow, and the Lighting inspector.',
     sections: [
       {
@@ -195,7 +197,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     title: 'Animation',
     summary:
       'Animate adds transform tracks and shape-weight tracks to the document. A key stores a value at a whole frame; playback evaluates the tracks without changing the rest transforms.',
-    image: '/documentation/animate.png',
+    image: `${APP_BASE}documentation/animate.png`,
     alt: 'Animate workspace with a sample model, shape-key track, timeline, and Animation inspector.',
     sections: [
       {
@@ -238,7 +240,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     title: 'Rendering',
     summary:
       'Render composes a clean image through a saved scene camera. The viewport is a free camera-editing view; the camera and output settings define the capture.',
-    image: '/documentation/render.png',
+    image: `${APP_BASE}documentation/render.png`,
     alt: 'Render workspace with a sample model framed by the camera and Camera and Render inspector sections.',
     sections: [
       {

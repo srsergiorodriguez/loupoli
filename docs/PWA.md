@@ -12,17 +12,36 @@ npm run preview:pwa
 ```
 
 Open `http://127.0.0.1:4173` in a browser for local verification. Production
-deployment must use HTTPS at the site root; service workers are unavailable on
-plain HTTP except for localhost.
+deployment must use HTTPS; service workers are unavailable on plain HTTP except
+for localhost.
 
 The Vite production build emits `sw.js` and precaches the app shell, manifest,
 icons, and hashed scripts. The client registers the worker only in a normal
 browser. Registration is explicitly disabled when `window.__TAURI_INTERNALS__`
 exists, so the native app never serves a stale web cache.
 
+## GitHub Pages
+
+The repository includes `site/` for the public landing page and
+`.github/workflows/pages.yml` for deployment. A project Pages site is assembled
+as:
+
+```text
+https://<user>.github.io/<repo>/       site/index.html
+https://<user>.github.io/<repo>/app/   dist/ (the PWA)
+```
+
+Enable **Settings → Pages → Build and deployment → GitHub Actions**, then push
+to `main`. The workflow passes the repository base path to Vite, so hashed
+assets, the manifest, documentation images, the service worker, and its scope
+all stay under `/app/`.
+
+For a custom domain at the root, create a repository variable
+`PWA_BASE_PATH=/app/`; the landing page already links to `app/`.
+
 ## Install on iPad
 
-1. Open the HTTPS deployment in Safari.
+1. Open the HTTPS landing page in Safari and choose **Open web app**.
 2. Tap **Share → Add to Home Screen**.
 3. Launch loupoli from the Home Screen icon.
 
@@ -48,8 +67,8 @@ codecs. PNG stills and frame sequences remain available.
 
 ## Deployment notes
 
-- Serve the `dist/` directory over HTTPS.
-- The manifest uses root-relative scope and start URL, so deploy at the site root.
+- The PWA lives at `/app/` on a project Pages site; `site/` is the root landing page.
+- The manifest and icons are relative to the app directory.
 - The service worker uses network-first navigation and cache-first hashed assets.
 - Rebuild and redeploy to replace the cached shell. The old cache is removed on
   activation.

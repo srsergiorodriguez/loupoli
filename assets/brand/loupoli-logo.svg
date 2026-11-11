@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="1024"
+   height="1024"
+   viewBox="0 0 1024 1024"
+   version="1.1"
+   id="svg1"
+   inkscape:export-filename="loupoliLogo.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     showgrid="true">
+    <inkscape:grid
+       id="grid1"
+       units="px"
+       originx="64"
+       originy="64"
+       spacingx="64"
+       spacingy="64"
+       empcolor="#0099e5"
+       empopacity="0.30196078"
+       color="#0099e5"
+       opacity="0.14901961"
+       empspacing="4"
+       enabled="true"
+       visible="true" />
+    <inkscape:page
+       x="0"
+       y="0"
+       width="1024"
+       height="1024"
+       id="page2"
+       margin="0"
+       bleed="0" />
+  </sodipodi:namedview>
+  <defs
+     id="defs1">
+    <inkscape:path-effect
+       effect="fillet_chamfer"
+       id="path-effect4"
+       is_visible="true"
+       lpeversion="1"
+       nodesatellites_param="F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1 @ F,0,0,1,0,22,0,1"
+       radius="22"
+       unit="px"
+       method="auto"
+       mode="F"
+       chamfer_steps="1"
+       flexible="false"
+       use_knot_distance="true"
+       apply_no_radius="true"
+       apply_with_radius="true"
+       only_selected="false"
+       hide_knots="false" />
+    <inkscape:path-effect
+       effect="fillet_chamfer"
+       id="path-effect3"
+       is_visible="true"
+       lpeversion="1"
+       nodesatellites_param="F,0,0,1,0,68,0,1 @ F,0,0,1,0,68,0,1 @ F,0,0,1,0,68,0,1 @ F,0,0,1,0,68,0,1 @ F,0,0,1,0,68,0,1 @ F,0,0,1,0,68,0,1"
+       radius="68"
+       unit="px"
+       method="auto"
+       mode="F"
+       chamfer_steps="1"
+       flexible="false"
+       use_knot_distance="true"
+       apply_no_radius="true"
+       apply_with_radius="true"
+       only_selected="false"
+       hide_knots="false" />
+  </defs>
+  <path
+     style="fill:#c9f45c;fill-opacity:1;stroke-width:0.5;stroke-linecap:round;paint-order:markers stroke fill"
+     d="m 128,324 v 312 a 110.02631,110.02631 58.282526 0 0 60.82105,98.41052 l 262.3579,131.17896 a 136,136 0 0 0 121.6421,0 L 835.17895,734.41052 A 110.02631,110.02631 121.71747 0 0 896,636 V 324 A 110.02631,110.02631 58.282526 0 0 835.17895,225.58948 L 572.82105,94.410524 a 136,136 0 0 0 -121.6421,0 L 188.82105,225.58948 A 110.02631,110.02631 121.71747 0 0 128,324 Z"
+     id="path1"
+     sodipodi:nodetypes="ccccccc"
+     inkscape:label="Box"
+     inkscape:path-effect="#path-effect3"
+     inkscape:original-d="M 128,256 V 704 L 512,896 896,704 V 256 L 512,64 Z"
+     transform="translate(0,36)" />
+  <ellipse
+     style="fill:#121214;fill-opacity:1;stroke-width:0.260178;stroke-linecap:round;paint-order:markers stroke fill"
+     id="path2"
+     cx="512"
+     cy="267.49951"
+     rx="84.500473"
+     ry="52.500481"
+     inkscape:label="Eye2" />
+  <ellipse
+     style="fill:#121214;fill-opacity:1;stroke-width:0.329239;stroke-linecap:round;paint-order:markers stroke fill"
+     id="path2-9"
+     cx="320"
+     cy="566"
+     rx="74"
+     ry="96"
+     inkscape:label="Eye1" />
+  <path
+     id="rect3"
+     style="fill:#121214;fill-opacity:1;stroke-width:0.353554;stroke-linecap:round;paint-order:markers stroke fill"
+     d="m 384,662 v 20 64 a 22,22 45 0 0 22,22 h 212 a 22,22 135 0 0 22,-22 v -20 -64 a 22,22 45 0 0 -22,-22 h -20 a 22,22 135 0 0 -22,22 v 20 a 22,22 135 0 1 -22,22 h -84 a 22,22 45 0 1 -22,-22 v -20 a 22,22 45 0 0 -22,-22 h -20 a 22,22 135 0 0 -22,22 z"
+     inkscape:path-effect="#path-effect4"
+     inkscape:original-d="m 384,640 v 64 64 h 256 v -64 -64 h -64 v 64 H 448 v -64 z"
+     transform="matrix(0.79051786,-0.26257076,-0.02753738,0.9056367,320.85881,66.622195)"
+     inkscape:label="Mouth" />
+</svg>
