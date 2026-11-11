@@ -11,6 +11,15 @@ export type PaintTool =
 /** Gradient direction options. */
 export type PaintGradient = 'linear' | 'radial';
 
+/** Minimum stamp spacing as a fraction of the brush diameter. */
+export const MIN_PAINT_SPACING = 0.02;
+
+/** Maximum stamp spacing as a fraction of the brush diameter. */
+export const MAX_PAINT_SPACING = 2;
+
+/** Default stamp spacing: one stamp every quarter of the brush diameter. */
+export const DEFAULT_PAINT_SPACING = 0.25;
+
 /** Complete brush/tool settings for one paint gesture. */
 export interface PaintSettings {
   readonly tool: PaintTool;
@@ -23,6 +32,7 @@ export interface PaintSettings {
   readonly hardness: number;
   readonly smoothing: number;
   readonly noise: number;
+  /** Distance between stamps as a fraction of the pressure-adjusted diameter. */
   readonly spacing: number;
   readonly shapeFilled: boolean;
   readonly gradient: PaintGradient;

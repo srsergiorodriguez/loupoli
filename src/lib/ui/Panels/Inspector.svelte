@@ -6,6 +6,10 @@
   import Vector3Field from '../Primitives/Vector3Field.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
   import SliderField from '../Primitives/SliderField.svelte';
+  import {
+    MAX_PAINT_SPACING,
+    MIN_PAINT_SPACING
+  } from '../../paint/types';
   import SelectField from '../Primitives/SelectField.svelte';
   import ColorField from '../Primitives/ColorField.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
@@ -1952,6 +1956,15 @@
             label="Noise"
             value={session.snapshot.paintNoise}
             onChange={(value) => session.setPaintNoise(value)}
+          />
+          <SliderField
+            label="Spacing"
+            value={session.snapshot.paintSpacing}
+            min={MIN_PAINT_SPACING}
+            max={MAX_PAINT_SPACING}
+            step={0.01}
+            percent
+            onChange={(value) => session.setPaintSpacing(value)}
           />
           {#if session.snapshot.paintTool === 'gradient'}
             <SelectField

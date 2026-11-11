@@ -99,6 +99,29 @@
       : { x: 0, y: 0 };
   }
 
+  /** Coalesced Pencil samples, with the final event included exactly once. */
+  function coalescedPointerEvents(event: PointerEvent): PointerEvent[] {
+    const events: PointerEvent[] = [];
+    if (
+      event.pointerType !== 'touch' &&
+      typeof event.getCoalescedEvents === 'function'
+    ) {
+      try {
+        for (const sample of event.getCoalescedEvents()) {
+          if (sample.pointerId === event.pointerId) {
+            events.push(sample);
+          }
+        }
+      } catch {
+        // Coalesced events are optional; the current event remains enough.
+      }
+    }
+    if (events[events.length - 1] !== event) {
+      events.push(event);
+    }
+    return events;
+  }
+
   function pointerDown(event: PointerEvent): void {
     if (event.pointerType === 'pen') {
       penActive = true;
@@ -196,19 +219,22 @@
       return;
     }
     event.preventDefault();
-    const point = localPoint(event);
-    const tilt = tiltOf(event);
-    brushX = point.x;
-    brushY = point.y;
-    session.updateTexturePaint(
-      point.x,
-      point.y,
-      width,
-      height,
-      pressureOf(event),
-      tilt.x,
-      tilt.y
-    );
+    const samples = coalescedPointerEvents(event);
+    for (const sample of samples) {
+      const point = localPoint(sample);
+      const tilt = tiltOf(sample);
+      brushX = point.x;
+      brushY = point.y;
+      session.updateTexturePaint(
+        point.x,
+        point.y,
+        width,
+        height,
+        pressureOf(sample),
+        tilt.x,
+        tilt.y
+      );
+    }
   }
 
   function windowPointerUp(event: PointerEvent): void {

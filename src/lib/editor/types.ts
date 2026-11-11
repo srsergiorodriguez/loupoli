@@ -300,6 +300,7 @@ export interface EditorSnapshot {
   readonly paintHardness: number;
   readonly paintSmoothing: number;
   readonly paintNoise: number;
+  readonly paintSpacing: number;
   readonly paintShapeFilled: boolean;
   readonly paintGradient: PaintGradient;
   readonly paintZoom: number;

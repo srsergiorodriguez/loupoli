@@ -1,4 +1,8 @@
-import type { PaintSettings } from './types';
+import {
+  MAX_PAINT_SPACING,
+  MIN_PAINT_SPACING,
+  type PaintSettings
+} from './types';
 
 type BrushContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -11,6 +15,11 @@ export interface BrushTilt {
 /** Clamp a value into a closed numeric range. */
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** Pressure response shared by stamp radius and stamp spacing. */
+function pressureRadiusScale(pressure: number): number {
+  return 0.35 + clamp(pressure, 0, 1) * 0.65;
 }
 
 /** Deterministic-enough per-stroke random source for grain jitter. */
@@ -40,7 +49,7 @@ export function drawStamp(
   erase = false,
   tilt?: BrushTilt
 ): { minX: number; minY: number; maxX: number; maxY: number } {
-  const pressureScale = 0.35 + clamp(pressure, 0, 1) * 0.65;
+  const pressureScale = pressureRadiusScale(pressure);
   const noise = clamp(settings.noise, 0, 1);
   const jitterX = (random() - 0.5) * radius * noise * 0.7;
   const jitterY = (random() - 0.5) * radius * noise * 0.7;
@@ -121,7 +130,14 @@ export function drawStampLine(
   tilt?: BrushTilt
 ): { minX: number; minY: number; maxX: number; maxY: number } {
   const length = Math.hypot(toX - fromX, toY - fromY);
-  const spacing = Math.max(1, radius * 2 * clamp(settings.spacing, 0.02, 1));
+  // Spacing follows the pressure-scaled stamp, not the nominal brush radius.
+  // Otherwise a light Pencil stroke shrinks the dabs while leaving the same
+  // full-size gaps between them.
+  const stampRadius = radius * pressureRadiusScale(pressure);
+  const spacing = Math.max(
+    1,
+    stampRadius * 2 * clamp(settings.spacing, MIN_PAINT_SPACING, MAX_PAINT_SPACING)
+  );
   const steps = Math.max(1, Math.ceil(length / spacing));
   let bounds = {
     minX: Infinity,

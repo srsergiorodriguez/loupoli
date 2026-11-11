@@ -1,7 +1,10 @@
 <script lang="ts">
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import { rgbaColor } from '../../paint/brush';
-  import type { PaintTool } from '../../paint/types';
+  import {
+    DEFAULT_PAINT_SPACING,
+    type PaintTool
+  } from '../../paint/types';
   import type { IconName } from '../Icons/types';
   import IconButton from '../Primitives/IconButton.svelte';
   import BrushPreview from './BrushPreview.svelte';
@@ -52,7 +55,7 @@
     hardness: session.snapshot.paintHardness,
     smoothing: session.snapshot.paintSmoothing,
     noise: session.snapshot.paintNoise,
-    spacing: 0.25,
+    spacing: session.snapshot.paintSpacing ?? DEFAULT_PAINT_SPACING,
     shapeFilled: session.snapshot.paintShapeFilled,
     gradient: session.snapshot.paintGradient
   });

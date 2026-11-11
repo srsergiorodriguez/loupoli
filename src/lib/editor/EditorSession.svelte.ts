@@ -64,6 +64,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   paintHardness: 0.7,
   paintSmoothing: 0.25,
   paintNoise: 0,
+  paintSpacing: 0.25,
   paintShapeFilled: true,
   paintGradient: 'linear',
   paintZoom: 1,
@@ -602,6 +603,10 @@ export class EditorSession {
 
   setPaintNoise(value: number): void {
     this.runtime?.setPaintNoise(value);
+  }
+
+  setPaintSpacing(value: number): void {
+    this.runtime?.setPaintSpacing(value);
   }
 
   setPaintShapeFilled(value: boolean): void {

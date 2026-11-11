@@ -309,11 +309,15 @@ export class InputRouter {
       if (this.activePenPointers === 0) {
         return;
       }
-      this.host.setPointerReading(sample);
       if (this.activePenLasso) {
+        this.host.setPointerReading(sample);
         this.host.moveLasso(sample.clientX, sample.clientY);
       } else {
-        this.host.moveToolPointer(sample);
+        const samples = this.coalescedSamples(event);
+        for (const next of samples) {
+          this.host.moveToolPointer(next);
+        }
+        this.host.setPointerReading(samples[samples.length - 1] ?? null);
       }
       return;
     }
@@ -335,7 +339,9 @@ export class InputRouter {
     }
 
     if (this.mouse.mode === 'tool' && this.mouse.pointerId === sample.pointerId) {
-      this.host.moveToolPointer(sample);
+      for (const next of this.coalescedSamples(event)) {
+        this.host.moveToolPointer(next);
+      }
       return;
     }
 
@@ -932,6 +938,36 @@ export class InputRouter {
     } catch {
       // Capture may already have been lost after a system gesture.
     }
+  }
+
+  /** Return the coalesced Pencil/mouse samples, including the final event. */
+  private coalescedSamples(event: PointerEvent): PointerSample[] {
+    const events: PointerEvent[] = [];
+    if (
+      event.pointerType !== 'touch' &&
+      typeof event.getCoalescedEvents === 'function'
+    ) {
+      try {
+        for (const sample of event.getCoalescedEvents()) {
+          if (sample.pointerId === event.pointerId) {
+            events.push(sample);
+          }
+        }
+      } catch {
+        // Coalesced events are optional; the current event remains enough.
+      }
+    }
+    if (events[events.length - 1] !== event) {
+      events.push(event);
+    }
+    const samples: PointerSample[] = [];
+    for (const sample of events) {
+      const normalized = this.toSample(sample);
+      if (normalized) {
+        samples.push(normalized);
+      }
+    }
+    return samples;
   }
 
   private toSample(event: PointerEvent): PointerSample | null {

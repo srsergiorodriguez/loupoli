@@ -89,7 +89,13 @@ import {
   drawTextureSurface,
   prepareTextureSurface
 } from '../texture/TextureSurface';
-import type { PaintGradient, PaintTool } from '../paint/types';
+import {
+  DEFAULT_PAINT_SPACING,
+  MAX_PAINT_SPACING,
+  MIN_PAINT_SPACING,
+  type PaintGradient,
+  type PaintTool
+} from '../paint/types';
 import type { ImageFitOptions } from '../texture/imageFit';
 import {
   appendNativeMp4,
@@ -621,6 +627,7 @@ export class EditorRuntime {
   private paintHardness = 0.7;
   private paintSmoothing = 0.25;
   private paintNoise = 0;
+  private paintSpacing = DEFAULT_PAINT_SPACING;
   private paintShapeFilled = true;
   private paintGradient: PaintGradient = 'linear';
   private paintZoom = 1;
@@ -930,6 +937,7 @@ export class EditorRuntime {
       paintHardness: this.paintHardness,
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
+      paintSpacing: this.paintSpacing,
       paintShapeFilled: this.paintShapeFilled,
       paintGradient: this.paintGradient,
       paintZoom: this.paintZoom,
@@ -2717,6 +2725,14 @@ export class EditorRuntime {
     this.publish();
   }
 
+  setPaintSpacing(value: number): void {
+    this.paintSpacing = Math.min(
+      MAX_PAINT_SPACING,
+      Math.max(MIN_PAINT_SPACING, value)
+    );
+    this.publish();
+  }
+
   setPaintShapeFilled(value: boolean): void {
     this.paintShapeFilled = value;
     this.publish();
@@ -3344,7 +3360,7 @@ export class EditorRuntime {
       hardness: this.paintHardness,
       smoothing: this.paintSmoothing,
       noise: this.paintNoise,
-      spacing: 0.25,
+      spacing: this.paintSpacing,
       shapeFilled: this.paintShapeFilled,
       gradient: this.paintGradient
     };
