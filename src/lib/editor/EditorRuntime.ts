@@ -794,7 +794,6 @@ export class EditorRuntime {
       beginToolPointer: (sample) => this.beginToolPointer(sample),
       hoverToolPointer: (sample) => this.hoverToolPointer(sample),
       moveToolPointer: (sample) => this.moveToolPointer(sample),
-      moveToolPointerBatch: (samples) => this.moveToolPointerBatch(samples),
       endToolPointer: (sample) => this.endToolPointer(sample),
       cancelToolPointer: () => this.cancelToolPointer(),
       undo: () => this.undo(),
@@ -2003,6 +2002,16 @@ export class EditorRuntime {
     } else {
       this.openUvView();
     }
+  }
+
+  /** Re-measure and repaint after the native window returns to the foreground. */
+  resumeFromBackground(): void {
+    this.renderer.refreshViewport();
+    this.renderer.refreshTexture();
+    this.uvRevision += 1;
+    this.renderPreviewRevision += 1;
+    this.syncScene();
+    this.publish();
   }
 
   /** Switch Model, Light, UV, and Paint without duplicating open/close logic. */
@@ -10706,28 +10715,6 @@ export class EditorRuntime {
     };
     this.publish();
     return true;
-  }
-
-  /**
-   * Handle one pointermove's coalesced samples without one publish per sample.
-   *
-   * Projected paint consumes every sample for continuity. Other tool gestures
-   * only need the final position; their overlays are updated once per frame.
-   */
-  private moveToolPointerBatch(
-    samples: readonly PointerSample[]
-  ): void {
-    if (samples.length === 0) {
-      return;
-    }
-    if (this.projectedPaint || this.projectedShape) {
-      this.updateProjectionPaintBatch(samples);
-      return;
-    }
-    const finalSample = samples[samples.length - 1];
-    if (finalSample) {
-      this.moveToolPointer(finalSample);
-    }
   }
 
   private moveToolPointer(sample: PointerSample): void {

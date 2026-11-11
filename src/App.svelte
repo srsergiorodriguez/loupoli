@@ -32,6 +32,8 @@
 
   let canvas: HTMLCanvasElement;
   let startupError = $state<string | null>(null);
+  let paneEpoch = $state(0);
+  let resumeTimer = 0;
   const toolRailVisible = $derived(
     session.snapshot.activeEditor !== 'paint' &&
       session.snapshot.workspace !== 'light' &&
@@ -118,7 +120,67 @@
     };
     const unregisterShortcuts = shortcutBus.register(onKeyDown);
 
+    let hiddenForResume = false;
+    let disposed = false;
+    const unlistenNative: Array<() => void> = [];
+    const resume = (): void => {
+      session.resumeFromBackground();
+      paneEpoch += 1;
+    };
+    const scheduleResume = (): void => {
+      if (resumeTimer !== 0) {
+        window.clearTimeout(resumeTimer);
+      }
+      resumeTimer = window.setTimeout(() => {
+        resumeTimer = 0;
+        resume();
+      }, 120);
+    };
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') {
+        hiddenForResume = true;
+      } else if (hiddenForResume) {
+        hiddenForResume = false;
+        scheduleResume();
+      }
+    };
+    const onPageShow = (): void => scheduleResume();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pageshow', onPageShow);
+    void (async () => {
+      if (!('__TAURI_INTERNALS__' in window)) {
+        return;
+      }
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const current = getCurrentWindow();
+        const offFocus = await current.onFocusChanged(({ payload }) => {
+          if (payload) {
+            scheduleResume();
+          }
+        });
+        const offResize = await current.onResized(() => scheduleResume());
+        if (disposed) {
+          offFocus();
+          offResize();
+        } else {
+          unlistenNative.push(offFocus, offResize);
+        }
+      } catch {
+        // Lifecycle listeners are best-effort; DOM events still cover browsers.
+      }
+    })();
     return () => {
+      disposed = true;
+      if (resumeTimer !== 0) {
+        window.clearTimeout(resumeTimer);
+        resumeTimer = 0;
+      }
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pageshow', onPageShow);
+      for (const off of unlistenNative) {
+        off();
+      }
       compactQuery.removeEventListener('change', syncCompact);
       pointerQuery.removeEventListener('change', syncDensity);
       unregisterShortcuts();
@@ -318,9 +380,10 @@
     {/if}
     </section>
 
-    {#if !startupError &&
-      (session.snapshot.uvOpen || session.snapshot.workspace === 'render')}
-      <PaneHost
+    {#key paneEpoch}
+      {#if !startupError &&
+        (session.snapshot.uvOpen || session.snapshot.workspace === 'render')}
+        <PaneHost
         label={session.snapshot.uvOpen
           ? session.snapshot.uvPaintMode
             ? 'Paint editor'
@@ -343,8 +406,9 @@
         {:else}
           <RenderPreviewPanel {session} />
         {/if}
-      </PaneHost>
-    {/if}
+        </PaneHost>
+      {/if}
+    {/key}
   </main>
 
   {#if session.snapshot.projectionPreview}

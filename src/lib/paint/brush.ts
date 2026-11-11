@@ -130,13 +130,12 @@ export function drawStampLine(
   tilt?: BrushTilt
 ): { minX: number; minY: number; maxX: number; maxY: number } {
   const length = Math.hypot(toX - fromX, toY - fromY);
-  // Spacing follows the pressure-scaled stamp, not the nominal brush radius.
-  // Otherwise a light Pencil stroke shrinks the dabs while leaving the same
-  // full-size gaps between them.
-  const stampRadius = radius * pressureRadiusScale(pressure);
+  // Keep spacing tied to the nominal brush diameter. Pressure still scales
+  // the stamp itself, but shrinking the step with pressure multiplied the
+  // number of radial-gradient stamps on every light Pencil stroke.
   const spacing = Math.max(
     1,
-    stampRadius * 2 * clamp(settings.spacing, MIN_PAINT_SPACING, MAX_PAINT_SPACING)
+    radius * 2 * clamp(settings.spacing, MIN_PAINT_SPACING, MAX_PAINT_SPACING)
   );
   const steps = Math.max(1, Math.ceil(length / spacing));
   let bounds = {

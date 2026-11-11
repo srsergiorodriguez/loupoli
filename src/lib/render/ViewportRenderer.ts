@@ -1760,6 +1760,11 @@ export class ViewportRenderer {
     }
   };
 
+  /** Re-measure after a native scene resumes or the window geometry changes. */
+  refreshViewport(): void {
+    this.resize();
+  }
+
   private resize(): void {
     const host = this.canvas.parentElement;
     const width = Math.max(

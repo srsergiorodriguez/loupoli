@@ -32,7 +32,6 @@ export interface InputRouterHost {
   beginToolPointer(sample: PointerSample): boolean;
   hoverToolPointer(sample: PointerSample | null): void;
   moveToolPointer(sample: PointerSample): void;
-  moveToolPointerBatch(samples: readonly PointerSample[]): void;
   endToolPointer(sample: PointerSample): void;
   cancelToolPointer(): void;
   undo(): void;
@@ -314,9 +313,8 @@ export class InputRouter {
         this.host.setPointerReading(sample);
         this.host.moveLasso(sample.clientX, sample.clientY);
       } else {
-        const samples = this.coalescedSamples(event);
-        this.host.moveToolPointerBatch(samples);
-        this.host.setPointerReading(samples[samples.length - 1] ?? null);
+        this.host.setPointerReading(sample);
+        this.host.moveToolPointer(sample);
       }
       return;
     }
@@ -338,7 +336,7 @@ export class InputRouter {
     }
 
     if (this.mouse.mode === 'tool' && this.mouse.pointerId === sample.pointerId) {
-      this.host.moveToolPointerBatch(this.coalescedSamples(event));
+      this.host.moveToolPointer(sample);
       return;
     }
 
@@ -935,36 +933,6 @@ export class InputRouter {
     } catch {
       // Capture may already have been lost after a system gesture.
     }
-  }
-
-  /** Return the coalesced Pencil/mouse samples, including the final event. */
-  private coalescedSamples(event: PointerEvent): PointerSample[] {
-    const events: PointerEvent[] = [];
-    if (
-      event.pointerType !== 'touch' &&
-      typeof event.getCoalescedEvents === 'function'
-    ) {
-      try {
-        for (const sample of event.getCoalescedEvents()) {
-          if (sample.pointerId === event.pointerId) {
-            events.push(sample);
-          }
-        }
-      } catch {
-        // Coalesced events are optional; the current event remains enough.
-      }
-    }
-    if (events[events.length - 1] !== event) {
-      events.push(event);
-    }
-    const samples: PointerSample[] = [];
-    for (const sample of events) {
-      const normalized = this.toSample(sample);
-      if (normalized) {
-        samples.push(normalized);
-      }
-    }
-    return samples;
   }
 
   private toSample(event: PointerEvent): PointerSample | null {

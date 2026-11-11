@@ -14,7 +14,7 @@ describe('paint color alpha', () => {
 });
 
 
-describe('pressure-aware stamp spacing', () => {
+describe('fixed stamp spacing', () => {
   function paintSettings(spacing: number): PaintSettings {
     return {
       tool: 'brush',
@@ -33,7 +33,7 @@ describe('pressure-aware stamp spacing', () => {
     };
   }
 
-  it('places light-pressure stamps closer together', () => {
+  it('scales stamp size without increasing stamp density', () => {
     let arcs = 0;
     const context = {
       save: () => {},
@@ -72,6 +72,6 @@ describe('pressure-aware stamp spacing', () => {
       () => 0.5
     );
     const full = arcs;
-    expect(light).toBeGreaterThan(full);
+    expect(light).toBe(full);
   });
 });

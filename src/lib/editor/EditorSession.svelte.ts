@@ -329,6 +329,11 @@ export class EditorSession {
     writePreference(PAINT_UV_OVERLAY_STORAGE_KEY, String(enabled));
   }
 
+  /** Re-measure panes and repaint after the app returns from the background. */
+  resumeFromBackground(): void {
+    this.runtime?.resumeFromBackground();
+  }
+
   setUvSplit(fraction: number): void {
     this.runtime?.setUvSplit(fraction);
   }
