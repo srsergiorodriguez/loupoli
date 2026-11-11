@@ -9,16 +9,17 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 3. [UI rules](./UI_RULES.md) — behavioral UI contracts and the new-control checklist.
 4. [UI map](./UI_MAP.md) — shell regions, subregions, and ownership.
 5. [Design system](./DESIGN_SYSTEM.md) — visual language, tokens, component inventory, visual QA.
-6. [Architecture](./ARCHITECTURE.md) — runtime boundaries, DCEL, rendering, input, and platform.
-7. [Persistence](./PERSISTENCE.md) — autosave journal and the `.lpoli` format.
-8. [Phase 4 texturing](./PHASE4_TEXTURING.md) — texture/UV implementation slices and gates.
-9. [Phase 4 exit audit](./PHASE4_AUDIT.md) — gate-by-gate result and deferrals.
-10. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
-11. [Render workspace and camera](./RENDER.md) — scene cameras, virtual resolution, and clean still rendering.
-12. [Animation workspace](./ANIMATION.md) — transform tracks, timeline, playback, and persistence.
-13. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, scoped OBJ bundles with optional PNG textures, simple materials, and coordinate conversion.
-14. [Shape keys](./SHAPE_KEYS.md) — morph targets, weights, persistence, and topology guards.
-15. [Root README](../README.md) — product overview, setup, and current capabilities.
+6. [Using loupoli](./USAGE.md) — web/native usage, controls, saving, and installation.
+7. [Architecture](./ARCHITECTURE.md) — runtime boundaries, DCEL, rendering, input, and platform.
+8. [Persistence](./PERSISTENCE.md) — autosave journal and the `.lpoli` format.
+9. [Phase 4 texturing](./PHASE4_TEXTURING.md) — texture/UV implementation slices and gates.
+10. [Phase 4 exit audit](./PHASE4_AUDIT.md) — gate-by-gate result and deferrals.
+11. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
+12. [Render workspace and camera](./RENDER.md) — scene cameras, virtual resolution, and clean still rendering.
+13. [Animation workspace](./ANIMATION.md) — transform tracks, timeline, playback, and persistence.
+14. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, scoped OBJ bundles with optional PNG textures, simple materials, and coordinate conversion.
+15. [Shape keys](./SHAPE_KEYS.md) — morph targets, weights, persistence, and topology guards.
+16. [Root README](../README.md) — product overview, setup, and current capabilities.
 
 ## Document ownership
 
@@ -29,6 +30,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [UI rules](./UI_RULES.md) | Action homes, selection contracts, shared row/naming/action/tooltip behavior, new-control checklist | Tokens, spacing values, component visuals |
 | [UI map](./UI_MAP.md) | Shell regions, subregions, Inspector section sets, active-editor rules | Interaction behavior |
 | [Design system](./DESIGN_SYSTEM.md) | Tokens, typography, surfaces, layout, component shapes, visual QA | A second copy of UI behavior rules |
+| [Using loupoli](./USAGE.md) | Web/native use, controls, saving, installation | Architecture or implementation detail |
 | [Architecture](./ARCHITECTURE.md) | Code boundaries, DCEL, commands, rendering, picking, platform | Product scope or visual styling |
 | [Persistence](./PERSISTENCE.md) | Autosave, journal patches, `.lpoli` format, filesystem boundary | UI behavior |
 | [Phase 4 texturing](./PHASE4_TEXTURING.md) | Texture/UV slices, data rules, format implications, memory/verification gates | General UI or document architecture |
