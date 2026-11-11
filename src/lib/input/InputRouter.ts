@@ -32,6 +32,7 @@ export interface InputRouterHost {
   beginToolPointer(sample: PointerSample): boolean;
   hoverToolPointer(sample: PointerSample | null): void;
   moveToolPointer(sample: PointerSample): void;
+  moveToolPointerBatch(samples: readonly PointerSample[]): void;
   endToolPointer(sample: PointerSample): void;
   cancelToolPointer(): void;
   undo(): void;
@@ -314,9 +315,7 @@ export class InputRouter {
         this.host.moveLasso(sample.clientX, sample.clientY);
       } else {
         const samples = this.coalescedSamples(event);
-        for (const next of samples) {
-          this.host.moveToolPointer(next);
-        }
+        this.host.moveToolPointerBatch(samples);
         this.host.setPointerReading(samples[samples.length - 1] ?? null);
       }
       return;
@@ -339,9 +338,7 @@ export class InputRouter {
     }
 
     if (this.mouse.mode === 'tool' && this.mouse.pointerId === sample.pointerId) {
-      for (const next of this.coalescedSamples(event)) {
-        this.host.moveToolPointer(next);
-      }
+      this.host.moveToolPointerBatch(this.coalescedSamples(event));
       return;
     }
 

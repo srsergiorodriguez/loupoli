@@ -44,7 +44,22 @@
       height = rect.height;
     });
     observer.observe(host);
-    return () => observer.disconnect();
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'visible') {
+        scheduleResumeRedraw();
+      }
+    };
+    const onPageShow = (): void => scheduleResumeRedraw();
+    const onFocus = (): void => scheduleResumeRedraw();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('focus', onFocus);
+    };
   });
 
   onDestroy(() => {
@@ -52,6 +67,24 @@
       window.clearTimeout(drawTimer);
     }
   });
+
+  function scheduleResumeRedraw(): void {
+    requestAnimationFrame(() => {
+      if (!host) {
+        return;
+      }
+      const rect = host.getBoundingClientRect();
+      if (rect.width > 0) {
+        width = rect.width;
+      }
+      if (rect.height > 0) {
+        height = rect.height;
+      }
+      if (width > 0 && height > 0) {
+        scheduleDraw();
+      }
+    });
+  }
 
   $effect(() => {
     // Publishing in the Render workspace increments this revision. The canvas

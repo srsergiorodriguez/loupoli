@@ -94,6 +94,7 @@ import {
   MAX_PAINT_SPACING,
   MIN_PAINT_SPACING,
   type PaintGradient,
+  type PaintSample,
   type PaintTool
 } from '../paint/types';
 import type { ImageFitOptions } from '../texture/imageFit';
@@ -793,6 +794,7 @@ export class EditorRuntime {
       beginToolPointer: (sample) => this.beginToolPointer(sample),
       hoverToolPointer: (sample) => this.hoverToolPointer(sample),
       moveToolPointer: (sample) => this.moveToolPointer(sample),
+      moveToolPointerBatch: (samples) => this.moveToolPointerBatch(samples),
       endToolPointer: (sample) => this.endToolPointer(sample),
       cancelToolPointer: () => this.cancelToolPointer(),
       undo: () => this.undo(),
@@ -3618,52 +3620,74 @@ export class EditorRuntime {
 
   /** Continue a latched projected stroke; misses simply add no samples. */
   private updateProjectionPaint(sample: PointerSample): void {
+    this.updateProjectionPaintBatch([sample]);
+  }
+
+  /**
+   * Apply all coalesced Pencil samples from one pointer frame.
+   *
+   * Surface picks still run per sample, but the texture upload and UI publish
+   * happen once for the batch.
+   */
+  private updateProjectionPaintBatch(
+    samples: readonly PointerSample[]
+  ): void {
+    const finalSample = samples[samples.length - 1];
+    if (!finalSample) {
+      return;
+    }
     const shape = this.projectedShape;
     if (shape) {
-      if (shape.pointerId !== sample.pointerId) {
+      if (shape.pointerId !== finalSample.pointerId) {
         return;
       }
-      shape.endX = sample.clientX;
-      shape.endY = sample.clientY;
+      shape.endX = finalSample.clientX;
+      shape.endY = finalSample.clientY;
       this.projectionPreview = this.shapePreview(shape);
       this.surfaceCursor = {
-        x: sample.clientX,
-        y: sample.clientY,
+        x: finalSample.clientX,
+        y: finalSample.clientY,
         size: this.uvBrushSize
       };
       this.publish();
       return;
     }
     const state = this.projectedPaint;
-    if (!state || state.pointerId !== sample.pointerId) {
+    if (!state || state.pointerId !== finalSample.pointerId) {
       return;
     }
-    const hit = this.renderer.pickSurface(sample.clientX, sample.clientY);
-    if (!hit || hit.nodeId !== state.nodeId) {
-      state.lastFace = null;
-      if (this.surfaceCursor !== null) {
-        this.surfaceCursor = null;
-        this.publish();
+    let updated = false;
+    let finalHit = false;
+    let lastClientX = finalSample.clientX;
+    let lastClientY = finalSample.clientY;
+    for (const sample of samples) {
+      const hit = this.renderer.pickSurface(sample.clientX, sample.clientY);
+      if (!hit || hit.nodeId !== state.nodeId) {
+        state.lastFace = null;
+        continue;
       }
-      return;
+      const point = {
+        x: hit.uv[0] * state.asset.width,
+        y: (1 - hit.uv[1]) * state.asset.height,
+        pressure: sample.pressure,
+        tiltX: sample.tiltX,
+        tiltY: sample.tiltY
+      };
+      const connect = state.lastFace !== null && state.lastFace === hit.face;
+      state.engine.updateProjected(point, connect);
+      state.lastFace = hit.face;
+      updated = true;
+      finalHit = true;
+      lastClientX = sample.clientX;
+      lastClientY = sample.clientY;
     }
-    const point = {
-      x: hit.uv[0] * state.asset.width,
-      y: (1 - hit.uv[1]) * state.asset.height,
-      pressure: sample.pressure,
-      tiltX: sample.tiltX,
-      tiltY: sample.tiltY
-    };
-    this.surfaceCursor = {
-      x: sample.clientX,
-      y: sample.clientY,
-      size: this.uvBrushSize
-    };
-    const connect = state.lastFace !== null && state.lastFace === hit.face;
-    state.engine.updateProjected(point, connect);
-    state.lastFace = hit.face;
-    this.uvRevision += 1;
-    this.renderer.refreshTexture();
+    this.surfaceCursor = finalHit
+      ? { x: lastClientX, y: lastClientY, size: this.uvBrushSize }
+      : null;
+    if (updated) {
+      this.uvRevision += 1;
+      this.renderer.refreshTexture();
+    }
     this.publish();
   }
 
@@ -3706,6 +3730,55 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /**
+   * Continue a texture-space paint stroke with all samples from one pointer
+   * frame.
+   *
+   * Coalesced Pencil events can contain several samples; applying them one at
+   * a time used to upload the whole texture and publish the UI snapshot per
+   * sample. Batch the raster work and refresh/publish once per animation frame.
+   */
+  updateTexturePaintBatch(
+    samples: readonly PaintSample[],
+    width: number,
+    height: number
+  ): void {
+    if (!this.paintEngine || samples.length === 0) {
+      return;
+    }
+    const asset = this.textureStack;
+    let updated = false;
+    for (const sample of samples) {
+      const point = paintPointToTexture(
+        sample.x,
+        sample.y,
+        width,
+        height,
+        asset.width,
+        asset.height,
+        24,
+        this.paintViewState()
+      );
+      if (!point) {
+        continue;
+      }
+      this.paintEngine.update({
+        x: point.x,
+        y: point.y,
+        pressure: sample.pressure,
+        tiltX: sample.tiltX ?? 0,
+        tiltY: sample.tiltY ?? 0
+      });
+      updated = true;
+    }
+    if (!updated) {
+      return;
+    }
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
   /** Continue a texture-space paint stroke. */
   updateTexturePaint(
     x: number,
@@ -3716,27 +3789,11 @@ export class EditorRuntime {
     tiltX = 0,
     tiltY = 0
   ): void {
-    if (!this.paintEngine) {
-      return;
-    }
-    const asset = this.textureStack;
-    const point = paintPointToTexture(
-      x,
-      y,
+    this.updateTexturePaintBatch(
+      [{ x, y, pressure, tiltX, tiltY }],
       width,
-      height,
-      asset.width,
-      asset.height,
-      24,
-      this.paintViewState()
+      height
     );
-    if (!point) {
-      return;
-    }
-    this.paintEngine.update({ x: point.x, y: point.y, pressure, tiltX, tiltY });
-    this.uvRevision += 1;
-    this.renderer.refreshTexture();
-    this.publish();
   }
 
   finishTexturePaint(): void {
@@ -10649,6 +10706,28 @@ export class EditorRuntime {
     };
     this.publish();
     return true;
+  }
+
+  /**
+   * Handle one pointermove's coalesced samples without one publish per sample.
+   *
+   * Projected paint consumes every sample for continuity. Other tool gestures
+   * only need the final position; their overlays are updated once per frame.
+   */
+  private moveToolPointerBatch(
+    samples: readonly PointerSample[]
+  ): void {
+    if (samples.length === 0) {
+      return;
+    }
+    if (this.projectedPaint || this.projectedShape) {
+      this.updateProjectionPaintBatch(samples);
+      return;
+    }
+    const finalSample = samples[samples.length - 1];
+    if (finalSample) {
+      this.moveToolPointer(finalSample);
+    }
   }
 
   private moveToolPointer(sample: PointerSample): void {

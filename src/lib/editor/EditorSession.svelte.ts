@@ -1,4 +1,5 @@
 import type { PrimitiveKind } from '../geometry/primitives';
+import type { PaintSample } from '../paint/types';
 import type { NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { EditorRuntime } from './EditorRuntime';
 import { workspaceCan, type WorkspaceCapability } from './workspaces';
@@ -433,6 +434,15 @@ export class EditorSession {
       tiltX,
       tiltY
     );
+  }
+
+  /** Apply a frame's coalesced Pencil samples with one texture refresh. */
+  updateTexturePaintBatch(
+    samples: readonly PaintSample[],
+    width: number,
+    height: number
+  ): void {
+    this.runtime?.updateTexturePaintBatch(samples, width, height);
   }
 
   finishTexturePaint(): void {

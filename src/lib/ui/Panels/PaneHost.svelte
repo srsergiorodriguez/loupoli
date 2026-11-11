@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, onMount } from 'svelte';
   import type { Snippet } from 'svelte';
   import { uvSideSplitForPointer } from '../../uv/uvView';
 
@@ -20,20 +21,29 @@
   }: Props = $props();
   let host: HTMLElement;
   let resizing = $state(false);
+  let resizePointerId: number | null = null;
 
   function startResize(event: PointerEvent): void {
     if (event.button !== 0) {
       return;
     }
     event.preventDefault();
+    event.stopPropagation();
     resizing = true;
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    resizePointerId = event.pointerId;
+    // Window listeners survive a lost pointer capture when iPadOS backgrounds
+    // the app mid-drag. The divider itself is too narrow to depend on capture.
+    window.addEventListener('pointermove', moveResize, { passive: false });
+    window.addEventListener('pointerup', endResize);
+    window.addEventListener('pointercancel', endResize);
+    window.addEventListener('blur', endResize);
   }
 
   function moveResize(event: PointerEvent): void {
-    if (!resizing) {
+    if (!resizing || event.pointerId !== resizePointerId) {
       return;
     }
+    event.preventDefault();
     const viewport = host.closest('.viewport')?.getBoundingClientRect();
     const pane = host.getBoundingClientRect();
     if (!viewport) {
@@ -59,16 +69,35 @@
     );
   }
 
-  function endResize(event: PointerEvent): void {
+  function endResize(event?: Event): void {
     if (!resizing) {
       return;
     }
-    resizing = false;
-    const target = event.currentTarget as HTMLElement;
-    if (target.hasPointerCapture(event.pointerId)) {
-      target.releasePointerCapture(event.pointerId);
+    if (event instanceof PointerEvent && event.pointerId !== resizePointerId) {
+      return;
     }
+    resizing = false;
+    resizePointerId = null;
+    window.removeEventListener('pointermove', moveResize);
+    window.removeEventListener('pointerup', endResize);
+    window.removeEventListener('pointercancel', endResize);
+    window.removeEventListener('blur', endResize);
   }
+
+  onMount(() => {
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') {
+        endResize();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      endResize();
+    };
+  });
+
+  onDestroy(endResize);
 
   function resizeKey(event: KeyboardEvent): void {
     const decrease =
@@ -104,9 +133,6 @@
     aria-valuemax="65"
     tabindex="0"
     onpointerdown={startResize}
-    onpointermove={moveResize}
-    onpointerup={endResize}
-    onpointercancel={endResize}
     onkeydown={resizeKey}
   ></div>
   <div class="pane-content">

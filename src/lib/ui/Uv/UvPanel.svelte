@@ -83,6 +83,19 @@
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
     const unregisterShortcuts = shortcutBus.register(windowKeyDown);
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') {
+        detachDragListeners();
+        detachKeyboardTransform(false);
+      } else {
+        scheduleResumeRedraw();
+      }
+    };
+    const onPageShow = (): void => scheduleResumeRedraw();
+    const onFocus = (): void => scheduleResumeRedraw();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('focus', onFocus);
     return () => {
       observer.disconnect();
       if (canvas) {
@@ -90,10 +103,35 @@
       }
       unregisterShortcuts();
       detachKeyboardTransform(false);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('focus', onFocus);
     };
   });
 
   onDestroy(detachDragListeners);
+
+  function measureAndDraw(): void {
+    if (!host || !canvas) {
+      return;
+    }
+    const rect = host.getBoundingClientRect();
+    if (rect.width > 0) {
+      width = rect.width;
+    }
+    if (rect.height > 0) {
+      height = rect.height;
+    }
+    if (width > 0 && height > 0) {
+      session.drawUvView(canvas, width, height);
+    }
+  }
+
+  function scheduleResumeRedraw(): void {
+    requestAnimationFrame(() => {
+      measureAndDraw();
+    });
+  }
 
   function detachDragListeners(): void {
     window.removeEventListener('pointermove', windowPointerMove);

@@ -4,6 +4,7 @@
   import PaneFrame from '../Panels/PaneFrame.svelte';
   import PaneHeader from '../Panels/PaneHeader.svelte';
   import PaintToolbar from './PaintToolbar.svelte';
+  import type { PaintSample } from '../../paint/types';
 
   /** Session projection for the dedicated texture-paint workspace. */
   interface Props {
@@ -32,6 +33,8 @@
   let lastPenUpAt = -Infinity;
   const touchPointers = new Map<number, { x: number; y: number }>();
   const PEN_TOUCH_COOLDOWN_MS = 350;
+  const pendingPaintSamples: PaintSample[] = [];
+  let paintFrame = 0;
 
   const textureAssets = $derived(session.snapshot.textureAssets);
   const activeAsset = $derived(
@@ -56,13 +59,108 @@
       height = rect.height;
     });
     observer.observe(host);
-    return () => observer.disconnect();
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState === 'hidden') {
+        settleForBackground();
+      } else {
+        scheduleResumeRedraw();
+      }
+    };
+    const onPageShow = (): void => scheduleResumeRedraw();
+    const onFocus = (): void => scheduleResumeRedraw();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('focus', onFocus);
+      discardPaintSamples();
+    };
   });
 
   onDestroy(() => {
+    discardPaintSamples();
     detachPointer();
     detachTouchTracking();
   });
+
+  function schedulePaintFrame(): void {
+    if (paintFrame !== 0) {
+      return;
+    }
+    paintFrame = requestAnimationFrame(() => {
+      paintFrame = 0;
+      flushPaintSamples();
+    });
+  }
+
+  /**
+   * Apply one frame of coalesced Pencil samples.
+   *
+   * The runtime refreshes the texture and publishes the editor snapshot once
+   * for the whole batch instead of once per Pencil sample.
+   */
+  function flushPaintSamples(): void {
+    if (paintFrame !== 0) {
+      cancelAnimationFrame(paintFrame);
+      paintFrame = 0;
+    }
+    if (pendingPaintSamples.length === 0 || !painting) {
+      return;
+    }
+    const samples = pendingPaintSamples.splice(0);
+    session.updateTexturePaintBatch(samples, width, height);
+  }
+
+  function discardPaintSamples(): void {
+    pendingPaintSamples.length = 0;
+    if (paintFrame !== 0) {
+      cancelAnimationFrame(paintFrame);
+      paintFrame = 0;
+    }
+  }
+
+  function measureAndDraw(): void {
+    if (!host || !canvas) {
+      return;
+    }
+    const rect = host.getBoundingClientRect();
+    if (rect.width > 0) {
+      width = rect.width;
+    }
+    if (rect.height > 0) {
+      height = rect.height;
+    }
+    if (width > 0 && height > 0) {
+      session.drawPaintView(canvas, width, height);
+    }
+  }
+
+  function scheduleResumeRedraw(): void {
+    requestAnimationFrame(() => {
+      measureAndDraw();
+    });
+  }
+
+  /** Close a stroke cleanly before iOS suspends the WebView. */
+  function settleForBackground(): void {
+    if (painting) {
+      endPointer(true);
+    } else {
+      discardPaintSamples();
+    }
+    if (panning) {
+      panning = false;
+      panPointerId = null;
+      window.removeEventListener('pointermove', windowPanMove);
+      window.removeEventListener('pointerup', windowPanUp);
+      window.removeEventListener('pointercancel', windowPanUp);
+    }
+    detachTouchTracking();
+    brushVisible = false;
+  }
 
   $effect(() => {
     session.snapshot.uvRevision;
@@ -225,16 +323,15 @@
       const tilt = tiltOf(sample);
       brushX = point.x;
       brushY = point.y;
-      session.updateTexturePaint(
-        point.x,
-        point.y,
-        width,
-        height,
-        pressureOf(sample),
-        tilt.x,
-        tilt.y
-      );
+      pendingPaintSamples.push({
+        x: point.x,
+        y: point.y,
+        pressure: pressureOf(sample),
+        tiltX: tilt.x,
+        tiltY: tilt.y
+      });
     }
+    schedulePaintFrame();
   }
 
   function windowPointerUp(event: PointerEvent): void {
@@ -265,6 +362,11 @@
 
   function endPointer(commit: boolean): void {
     const wasPainting = painting;
+    if (wasPainting && commit) {
+      flushPaintSamples();
+    } else {
+      discardPaintSamples();
+    }
     detachPointer();
     painting = false;
     if (wasPainting && commit) {
