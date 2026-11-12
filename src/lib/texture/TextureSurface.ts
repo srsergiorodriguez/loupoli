@@ -52,6 +52,41 @@ export function prepareTextureSurface(
   return { context, dpr, width, height };
 }
 
+const CHECKER_CELL = 10;
+let checkerTile: {
+  light: string;
+  dark: string;
+  canvas: HTMLCanvasElement;
+} | null = null;
+
+/** Build a 2×2-cell tile so the checker is one pattern fill, not a loop. */
+function checkerPatternTile(
+  light: string,
+  dark: string
+): HTMLCanvasElement {
+  if (checkerTile?.light === light && checkerTile.dark === dark) {
+    return checkerTile.canvas;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = CHECKER_CELL * 2;
+  canvas.height = CHECKER_CELL * 2;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.fillStyle = dark;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = light;
+    context.fillRect(0, 0, CHECKER_CELL, CHECKER_CELL);
+    context.fillRect(
+      CHECKER_CELL,
+      CHECKER_CELL,
+      CHECKER_CELL,
+      CHECKER_CELL
+    );
+  }
+  checkerTile = { light, dark, canvas };
+  return canvas;
+}
+
 /** Draw a neutral checker behind transparent texels in 2D previews. */
 export function drawTextureChecker(
   context: CanvasRenderingContext2D,
@@ -65,21 +100,15 @@ export function drawTextureChecker(
     styles.getPropertyValue('--bg-raised').trim() || '#202027';
   const dark =
     styles.getPropertyValue('--bg-input').trim() || '#09090c';
-  const cell = 10;
+  const tile = checkerPatternTile(light, dark);
+  const pattern = context.createPattern(tile, 'repeat');
   context.save();
   context.beginPath();
   context.rect(rect.x, rect.y, rect.width, rect.height);
   context.clip();
-  context.fillStyle = dark;
-  context.fillRect(rect.x, rect.y, rect.width, rect.height);
-  context.fillStyle = light;
-  for (let y = 0; y < rect.height; y += cell) {
-    for (let x = 0; x < rect.width; x += cell) {
-      if ((Math.floor(x / cell) + Math.floor(y / cell)) % 2 === 0) {
-        context.fillRect(rect.x + x, rect.y + y, cell, cell);
-      }
-    }
-  }
+  context.translate(rect.x, rect.y);
+  context.fillStyle = pattern ?? dark;
+  context.fillRect(0, 0, rect.width, rect.height);
   context.restore();
 }
 

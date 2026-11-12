@@ -636,6 +636,10 @@ export class EditorRuntime {
   private paintPanY = 0;
   private paintViewportWidth = 0;
   private paintViewportHeight = 0;
+  private paintWireCache: {
+    key: string;
+    canvas: HTMLCanvasElement;
+  } | null = null;
   private surfaceCursor: { x: number; y: number; size: number } | null = null;
   private projectionPreview: ProjectionPreview | null = null;
   private projectedShape: {
@@ -2018,6 +2022,7 @@ export class EditorRuntime {
   setWorkspace(
     workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'
   ): void {
+    this.paintWireCache = null;
     if (this.shapeEdit) {
       this.cancelShapeEdit();
     }
@@ -2133,6 +2138,7 @@ export class EditorRuntime {
   }
 
   private openUvView(): void {
+    this.paintWireCache = null;
     if (this.modalTransform) {
       this.cancelModalTransform();
     }
@@ -2164,6 +2170,7 @@ export class EditorRuntime {
   }
 
   private closeUvView(): void {
+    this.paintWireCache = null;
     this.cancelUvDrag();
     this.cancelTexturePaint();
     this.uvOpen = false;
@@ -3047,34 +3054,62 @@ export class EditorRuntime {
     drawTextureSurface(context, this.textureStack, textureRect);
     const node = this.getActiveNode();
     if (this.paintUvOverlay && node) {
-      context.save();
-      context.beginPath();
-      context.rect(bounds.x, bounds.y, bounds.width, bounds.height);
-      context.clip();
       const rootStyle = getComputedStyle(document.documentElement);
       const wire =
         rootStyle.getPropertyValue('--text-primary').trim() || '#f2efe6';
       const seam =
         rootStyle.getPropertyValue('--accent-warning').trim() || '#ffb45e';
-      context.shadowColor = 'rgba(0, 0, 0, 0.8)';
-      context.shadowBlur = 2;
-      drawUvWireframe(
-        context,
-        node.mesh,
-        (u, v) => [
-          bounds.x + u * bounds.width,
-          bounds.y + (1 - v) * bounds.height
-        ],
-        {
-          color: wire,
-          seamColor: seam,
-          lineWidth: 1,
-          seamWidth: 1.5,
-          alpha: 0.75,
-          seamAlpha: 0.95
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const key = [
+        node.id,
+        node.mesh.meshRevision,
+        canvas.width,
+        canvas.height,
+        dpr,
+        bounds.x,
+        bounds.y,
+        bounds.width,
+        bounds.height,
+        wire,
+        seam
+      ].join(':');
+      if (!this.paintWireCache || this.paintWireCache.key !== key) {
+        const overlay = document.createElement('canvas');
+        overlay.width = canvas.width;
+        overlay.height = canvas.height;
+        const overlayContext = overlay.getContext('2d');
+        if (overlayContext) {
+          overlayContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+          overlayContext.beginPath();
+          overlayContext.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+          overlayContext.clip();
+          overlayContext.shadowColor = 'rgba(0, 0, 0, 0.8)';
+          overlayContext.shadowBlur = 2;
+          drawUvWireframe(
+            overlayContext,
+            node.mesh,
+            (u, v) => [
+              bounds.x + u * bounds.width,
+              bounds.y + (1 - v) * bounds.height
+            ],
+            {
+              color: wire,
+              seamColor: seam,
+              lineWidth: 1,
+              seamWidth: 1.5,
+              alpha: 0.75,
+              seamAlpha: 0.95
+            }
+          );
         }
-      );
+        this.paintWireCache = { key, canvas: overlay };
+      }
+      context.save();
+      context.setTransform(1, 0, 0, 1, 0, 0);
+      context.drawImage(this.paintWireCache.canvas, 0, 0);
       context.restore();
+    } else {
+      this.paintWireCache = null;
     }
     context.strokeStyle =
       getComputedStyle(document.documentElement)
