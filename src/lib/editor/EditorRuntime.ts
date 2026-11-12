@@ -798,6 +798,7 @@ export class EditorRuntime {
       beginToolPointer: (sample) => this.beginToolPointer(sample),
       hoverToolPointer: (sample) => this.hoverToolPointer(sample),
       moveToolPointer: (sample) => this.moveToolPointer(sample),
+      moveToolPointerBatch: (samples) => this.moveToolPointerBatch(samples),
       endToolPointer: (sample) => this.endToolPointer(sample),
       cancelToolPointer: () => this.cancelToolPointer(),
       undo: () => this.undo(),
@@ -3791,7 +3792,7 @@ export class EditorRuntime {
       return;
     }
     const asset = this.textureStack;
-    let updated = false;
+    const textureSamples: PaintSample[] = [];
     for (const sample of samples) {
       const point = paintPointToTexture(
         sample.x,
@@ -3806,18 +3807,18 @@ export class EditorRuntime {
       if (!point) {
         continue;
       }
-      this.paintEngine.update({
+      textureSamples.push({
         x: point.x,
         y: point.y,
         pressure: sample.pressure,
         tiltX: sample.tiltX ?? 0,
         tiltY: sample.tiltY ?? 0
       });
-      updated = true;
     }
-    if (!updated) {
+    if (textureSamples.length === 0) {
       return;
     }
+    this.paintEngine.updateBatch(textureSamples);
     this.uvRevision += 1;
     this.renderer.refreshTexture();
     this.publish();
@@ -10750,6 +10751,23 @@ export class EditorRuntime {
     };
     this.publish();
     return true;
+  }
+
+  /** Handle one pointermove's coalesced samples for tool gestures. */
+  private moveToolPointerBatch(
+    samples: readonly PointerSample[]
+  ): void {
+    if (samples.length === 0) {
+      return;
+    }
+    if (this.projectedPaint || this.projectedShape) {
+      this.updateProjectionPaintBatch(samples);
+      return;
+    }
+    const finalSample = samples[samples.length - 1];
+    if (finalSample) {
+      this.moveToolPointer(finalSample);
+    }
   }
 
   private moveToolPointer(sample: PointerSample): void {

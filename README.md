@@ -124,7 +124,7 @@ See [docs/PWA.md](docs/PWA.md) for the full deployment and browser limitations.
 - **UV and paint:** seam charts, LSCM unwrap, pinned unwrap, shared atlases,
   layered textures, paint/eraser/shapes/gradient/fill, projection painting,
   pressure and tilt, adjustable hardness/smoothing/noise, and pressure-aware
-  stamp size and spacing with cached stamp sprites.
+  stamp size and spacing on a shared GPU coverage-mask stroke surface.
 - **Lighting:** directional and point lights, hard/soft shadows, per-corner AO
   preview, direct-light and AO texture baking, and bake-atlas preparation.
 - **Animation and render:** transform/shape-weight/texture/camera/light tracks,
@@ -224,6 +224,7 @@ under PolyForm. See [ASSETS.md](ASSETS.md) for attribution.
 | [Master plan](docs/PLAN.md) | Product scope, phases, risks, approved decisions |
 | [Architecture](docs/ARCHITECTURE.md) | Runtime boundaries, DCEL, rendering, platform |
 | [Persistence](docs/PERSISTENCE.md) | Autosave journal and `.lpoli` format |
+| [Paint engine](docs/PAINT_ENGINE.md) | Shared GPU stroke pipeline and paint invariants |
 | [PWA](docs/PWA.md) | Deployment, installation, and browser limitations |
 | [UI map](docs/UI_MAP.md) | Shell regions and workspace ownership |
 | [UI rules](docs/UI_RULES.md) | Behavioral UI contracts |

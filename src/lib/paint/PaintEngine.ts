@@ -1,5 +1,7 @@
 import type { TextureAsset } from '../texture/TextureAsset';
 import { drawStamp, drawStampLine, rgbaColor, strokeRandom } from './brush';
+import { getGpuStampSurface, type GpuStampSurface } from './GpuStampSurface';
+import { StrokeSampler, type StrokeDab } from './StrokeSampler';
 import type { PaintSample, PaintSettings } from './types';
 
 interface PaintBounds {
@@ -34,6 +36,8 @@ function include(
  */
 export class PaintEngine {
   private context: OffscreenCanvasRenderingContext2D | null = null;
+  private gpu: GpuStampSurface | null = null;
+  private sampler: StrokeSampler | null = null;
   private readonly random = strokeRandom(
     (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0
   );
@@ -66,6 +70,13 @@ export class PaintEngine {
     this.last = sample;
     this.filtered = sample;
     this.lastStamp = sample;
+    if (
+      (this.settings.tool === 'brush' || this.settings.tool === 'eraser') &&
+      this.beginGpu(sample)
+    ) {
+      this.asset.refreshPreview();
+      return true;
+    }
     if (this.settings.tool === 'fill') {
       this.changed = this.floodFill(sample);
     } else if (this.settings.tool === 'brush' || this.settings.tool === 'eraser') {
@@ -77,13 +88,38 @@ export class PaintEngine {
 
   /** Continue an active gesture. */
   update(sample: PaintSample): void {
-    if (!this.context || !this.start) {
+    this.updateBatch([sample]);
+  }
+
+  /**
+   * Apply all texture samples from one pointer frame in one GPU/preview pass.
+   *
+   * Coalesced Pencil samples must not each trigger a mask present, a region
+   * composite, or a UI publish. The runtime maps CSS points to texture pixels
+   * and calls this once per displayed frame.
+   */
+  updateBatch(samples: readonly PaintSample[]): void {
+    if (!this.context || !this.start || samples.length === 0) {
       return;
     }
-    this.last = sample;
+    const last = samples[samples.length - 1];
+    if (!last) {
+      return;
+    }
+    this.last = last;
     const tool = this.settings.tool;
     if (tool === 'brush' || tool === 'eraser') {
-      this.stamp(this.filtered ?? this.start, sample);
+      if (this.gpu && this.sampler) {
+        const dabs: StrokeDab[] = [];
+        for (const sample of samples) {
+          dabs.push(...this.sampler.add(sample));
+        }
+        this.applyGpuDabs(dabs);
+        return;
+      }
+      for (const sample of samples) {
+        this.stamp(this.filtered ?? this.start, sample);
+      }
       this.asset.refreshPreview();
       return;
     }
@@ -92,7 +128,7 @@ export class PaintEngine {
     }
     this.asset.restorePaintSnapshot();
     this.bounds = emptyBounds();
-    this.drawPreview(sample);
+    this.drawPreview(last);
     this.asset.refreshPreview();
   }
 
@@ -205,19 +241,49 @@ export class PaintEngine {
    * through unrelated UV-island space.
    */
   updateProjected(sample: PaintSample, connect: boolean): void {
-    if (!this.context || !this.start || this.manual) {
+    this.updateProjectedBatch([{ sample, connect }]);
+  }
+
+  /** Apply a frame of projected surface samples through the shared dab core. */
+  updateProjectedBatch(
+    updates: readonly { sample: PaintSample; connect: boolean }[]
+  ): void {
+    if (
+      !this.context ||
+      !this.start ||
+      this.manual ||
+      updates.length === 0
+    ) {
       return;
     }
-    this.last = sample;
+    const final = updates[updates.length - 1]?.sample;
+    if (!final) {
+      return;
+    }
+    this.last = final;
     if (this.settings.tool !== 'brush' && this.settings.tool !== 'eraser') {
       return;
     }
-    if (connect) {
-      this.stamp(this.filtered ?? this.start, sample);
-    } else {
-      this.filtered = sample;
-      this.lastStamp = sample;
-      this.stamp(sample, sample);
+    if (this.gpu && this.sampler) {
+      const dabs: StrokeDab[] = [];
+      for (const update of updates) {
+        dabs.push(
+          ...(update.connect
+            ? this.sampler.add(update.sample)
+            : this.sampler.reset(update.sample))
+        );
+      }
+      this.applyGpuDabs(dabs);
+      return;
+    }
+    for (const update of updates) {
+      if (update.connect) {
+        this.stamp(this.filtered ?? this.start, update.sample);
+      } else {
+        this.filtered = update.sample;
+        this.lastStamp = update.sample;
+        this.stamp(update.sample, update.sample);
+      }
     }
     this.asset.refreshPreview();
   }
@@ -230,6 +296,15 @@ export class PaintEngine {
     if (this.manual) {
       this.changed = this.changed || this.bounds.minX !== Infinity;
       this.asset.refreshPreview();
+      this.context = null;
+      return this.changed ? this.bounds : null;
+    }
+    if (this.gpu && this.sampler) {
+      this.applyGpuDabs(this.sampler.finish());
+      this.changed = this.changed || this.bounds.minX !== Infinity;
+      this.asset.refreshPreview();
+      this.gpu = null;
+      this.sampler = null;
       this.context = null;
       return this.changed ? this.bounds : null;
     }
@@ -252,9 +327,72 @@ export class PaintEngine {
 
   /** Discard the transaction and restore pre-stroke pixels. */
   cancel(): void {
+    this.gpu?.reset();
+    this.gpu = null;
+    this.sampler = null;
     this.context = null;
     this.manual = false;
     this.asset.cancelPaint();
+  }
+
+  /** Initialize the shared GPU dab rasterizer for brush and eraser strokes. */
+  private beginGpu(sample: PaintSample): boolean {
+    const gpu = getGpuStampSurface();
+    if (!gpu || !gpu.begin(this.asset.width, this.asset.height, this.settings)) {
+      return false;
+    }
+    this.gpu = gpu;
+    this.sampler = new StrokeSampler({
+      radius: this.settings.radius,
+      spacing: this.settings.spacing,
+      smoothing: this.settings.smoothing,
+      noise: this.settings.noise,
+      random: this.random
+    });
+    this.applyGpuDabs(this.sampler.begin(sample));
+    return true;
+  }
+
+  /**
+   * Rasterize a dab batch on the GPU, then rebuild only its dirty preview
+   * region from the committed layer plus the accumulated coverage mask.
+   */
+  private applyGpuDabs(dabs: readonly StrokeDab[]): void {
+    if (!this.gpu || dabs.length === 0) {
+      return;
+    }
+    const bounds = this.gpu.addDabs(dabs);
+    if (!bounds) {
+      return;
+    }
+    const left = Math.max(0, Math.floor(bounds.minX));
+    const top = Math.max(0, Math.floor(bounds.minY));
+    const right = Math.min(this.asset.width, Math.ceil(bounds.maxX));
+    const bottom = Math.min(this.asset.height, Math.ceil(bounds.maxY));
+    if (right <= left || bottom <= top) {
+      return;
+    }
+    this.asset.preparePaintRegion(left, top, right, bottom);
+    this.asset.resetPaintRegion(left, top, right, bottom);
+    const source = this.gpu.present(bounds);
+    if (source) {
+      this.asset.applyPaintOverlay(
+        left,
+        top,
+        right,
+        bottom,
+        source,
+        this.settings.tool === 'eraser'
+      );
+    }
+    this.bounds = include(this.bounds, {
+      minX: left,
+      minY: top,
+      maxX: right,
+      maxY: bottom
+    });
+    this.changed = true;
+    this.asset.refreshPreviewRegion(left, top, right, bottom);
   }
 
   private stamp(from: PaintSample, to: PaintSample): void {

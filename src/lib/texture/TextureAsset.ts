@@ -425,6 +425,38 @@ export class TextureAsset {
     this.compositeLayers(true);
   }
 
+  /**
+   * Refresh only one dirty rectangle of the live composite.
+   *
+   * Effect and lighting layers depend on the full accumulated image, so they
+   * fall back to a full composite. Plain raster stacks can be rebuilt locally.
+   */
+  refreshPreviewRegion(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ): void {
+    const left = Math.max(0, Math.floor(minX));
+    const top = Math.max(0, Math.floor(minY));
+    const right = Math.min(this.width, Math.ceil(maxX));
+    const bottom = Math.min(this.height, Math.ceil(maxY));
+    if (right <= left || bottom <= top) {
+      return;
+    }
+    const fullDependency = this.layers.some(
+      (layer) =>
+        layer.visible &&
+        (layer.kind === 'effect' ||
+          (layer.role === 'lighting' && layer.blendMode === 'multiply'))
+    );
+    if (fullDependency) {
+      this.refreshPreview();
+      return;
+    }
+    this.compositeLayers(true, { minX: left, minY: top, maxX: right, maxY: bottom });
+  }
+
   /** Scratch context used by paint tools; never the committed layer. */
   getPaintContext(layerId: string): OffscreenCanvasRenderingContext2D | null {
     if (this.paintLayerId !== layerId) {
@@ -464,6 +496,82 @@ export class TextureAsset {
           maxY: Math.max(bounds.maxY, bottom)
         }
       : { minX: left, minY: top, maxX: right, maxY: bottom };
+  }
+
+  /**
+   * Reset one scratch-preview rectangle from the committed layer.
+   *
+   * GPU strokes rebuild only the dirty region each frame, so previously
+   * composited stroke pixels in that region are replaced rather than doubled.
+   */
+  resetPaintRegion(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number
+  ): boolean {
+    const layer = this.layers.find((item) => item.id === this.paintLayerId);
+    if (!layer || !this.previewContext) {
+      return false;
+    }
+    const left = Math.max(0, Math.floor(minX));
+    const top = Math.max(0, Math.floor(minY));
+    const right = Math.min(this.width, Math.ceil(maxX));
+    const bottom = Math.min(this.height, Math.ceil(maxY));
+    if (right <= left || bottom <= top) {
+      return false;
+    }
+    this.previewContext.clearRect(left, top, right - left, bottom - top);
+    this.previewContext.drawImage(
+      layer.canvas,
+      left,
+      top,
+      right - left,
+      bottom - top,
+      left,
+      top,
+      right - left,
+      bottom - top
+    );
+    return true;
+  }
+
+  /** Composite a colorized GPU stroke source into the scratch preview region. */
+  applyPaintOverlay(
+    minX: number,
+    minY: number,
+    maxX: number,
+    maxY: number,
+    source: CanvasImageSource,
+    erase: boolean
+  ): boolean {
+    if (!this.previewContext) {
+      return false;
+    }
+    const left = Math.max(0, Math.floor(minX));
+    const top = Math.max(0, Math.floor(minY));
+    const right = Math.min(this.width, Math.ceil(maxX));
+    const bottom = Math.min(this.height, Math.ceil(maxY));
+    if (right <= left || bottom <= top) {
+      return false;
+    }
+    this.previewContext.save();
+    this.previewContext.globalCompositeOperation = erase
+      ? 'destination-out'
+      : 'source-over';
+    this.previewContext.drawImage(
+      source,
+      left,
+      top,
+      right - left,
+      bottom - top,
+      left,
+      top,
+      right - left,
+      bottom - top
+    );
+    this.previewContext.restore();
+    return true;
   }
 
   /** Reset the scratch layer from the committed layer for a shape preview. */
@@ -1159,8 +1267,26 @@ export class TextureAsset {
     this.compositeContext.putImageData(before, 0, 0);
   }
 
-  private compositeLayers(usePreview = false): void {
-    this.compositeContext.clearRect(0, 0, this.width, this.height);
+  private compositeLayers(
+    usePreview = false,
+    dirty?: { minX: number; minY: number; maxX: number; maxY: number }
+  ): void {
+    const left = dirty ? dirty.minX : 0;
+    const top = dirty ? dirty.minY : 0;
+    const right = dirty ? dirty.maxX : this.width;
+    const bottom = dirty ? dirty.maxY : this.height;
+    const width = right - left;
+    const height = bottom - top;
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    if (dirty) {
+      this.compositeContext.save();
+      this.compositeContext.beginPath();
+      this.compositeContext.rect(left, top, width, height);
+      this.compositeContext.clip();
+    }
+    this.compositeContext.clearRect(left, top, width, height);
     for (const layer of this.layers) {
       if (!layer.visible || layer.opacity <= 0) {
         continue;
@@ -1182,13 +1308,32 @@ export class TextureAsset {
           : layer.blendMode === 'screen'
             ? 'screen'
             : 'source-over';
-      this.compositeContext.drawImage(
-        usePreview && layer.id === this.paintLayerId && this.previewCanvas
-          ? this.previewCanvas
-          : layer.canvas,
-        0,
-        0
-      );
+      if (dirty) {
+        this.compositeContext.drawImage(
+          usePreview && layer.id === this.paintLayerId && this.previewCanvas
+            ? this.previewCanvas
+            : layer.canvas,
+          left,
+          top,
+          width,
+          height,
+          left,
+          top,
+          width,
+          height
+        );
+      } else {
+        this.compositeContext.drawImage(
+          usePreview && layer.id === this.paintLayerId && this.previewCanvas
+            ? this.previewCanvas
+            : layer.canvas,
+          0,
+          0
+        );
+      }
+    }
+    if (dirty) {
+      this.compositeContext.restore();
     }
     this.compositeContext.globalAlpha = 1;
     this.compositeContext.globalCompositeOperation = 'source-over';

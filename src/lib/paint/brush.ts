@@ -18,7 +18,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** Pressure response shared by stamp radius and stamp spacing. */
-function pressureRadiusScale(pressure: number): number {
+export function pressureRadiusScale(pressure: number): number {
   return 0.35 + clamp(pressure, 0, 1) * 0.65;
 }
 

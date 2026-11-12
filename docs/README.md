@@ -30,6 +30,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [UI rules](./UI_RULES.md) | Action homes, selection contracts, shared row/naming/action/tooltip behavior, new-control checklist | Tokens, spacing values, component visuals |
 | [UI map](./UI_MAP.md) | Shell regions, subregions, Inspector section sets, active-editor rules | Interaction behavior |
 | [Design system](./DESIGN_SYSTEM.md) | Tokens, typography, surfaces, layout, component shapes, visual QA | A second copy of UI behavior rules |
+| [Paint engine](./PAINT_ENGINE.md) | Shared stroke sampler, GPU coverage mask, dirty compositing, and paint invariants | UI styling or persistence format |
 | [Using loupoli](./USAGE.md) | Web/native use, controls, saving, installation | Architecture or implementation detail |
 | [Architecture](./ARCHITECTURE.md) | Code boundaries, DCEL, commands, rendering, picking, platform | Product scope or visual styling |
 | [Persistence](./PERSISTENCE.md) | Autosave, journal patches, `.lpoli` format, filesystem boundary | UI behavior |
