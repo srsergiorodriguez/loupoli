@@ -286,10 +286,12 @@ export class PaintEngine {
       filtered.y,
       this.settings.radius,
       this.settings,
-      to.pressure,
+      last.pressure,
       this.random,
       this.settings.tool === 'eraser',
-      { x: to.tiltX ?? 0, y: to.tiltY ?? 0 }
+      { x: last.tiltX ?? 0, y: last.tiltY ?? 0 },
+      filtered.pressure,
+      { x: filtered.tiltX ?? 0, y: filtered.tiltY ?? 0 }
     );
     this.lastStamp = filtered;
     this.filtered = filtered;

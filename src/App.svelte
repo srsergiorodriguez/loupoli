@@ -450,7 +450,9 @@
   {#if toolRailVisible}
     <ToolRail {session} onFocusViewport={focusViewport} />
   {/if}
-  <Inspector {session} />
+  {#key paneEpoch}
+    <Inspector {session} />
+  {/key}
   <StatusBar {session} />
   <JobProgress {session} />
   <ToastStack {session} />

@@ -200,18 +200,23 @@ export function drawStampLine(
   pressure: number,
   random: () => number,
   erase = false,
-  tilt?: BrushTilt
+  tilt?: BrushTilt,
+  pressureTo = pressure,
+  tiltTo?: BrushTilt
 ): { minX: number; minY: number; maxX: number; maxY: number } {
   const length = Math.hypot(toX - fromX, toY - fromY);
-  // Blend pressure-scaled spacing with the nominal diameter. Pure
-  // pressure-scaled spacing keeps light strokes dense but multiplied the
-  // number of radial-gradient stamps on every Pencil stroke. The blend closes
-  // the visual gaps while capping the density increase to about 1.4×.
+  // Space dabs by the pressure-adjusted diameter so the overlap ratio stays
+  // constant. Cached stamp sprites make these extra dabs inexpensive; using
+  // the nominal diameter here leaves visible bead edges on light strokes.
   const fraction = clamp(settings.spacing, MIN_PAINT_SPACING, MAX_PAINT_SPACING);
-  const stableSpacing = radius * 2 * fraction;
-  const pressureSpacing = radius * pressureRadiusScale(pressure) * 2 * fraction;
-  const spacing = Math.max(1, (stableSpacing + pressureSpacing) * 0.5);
+  const minPressure = Math.min(pressure, pressureTo);
+  const spacing = Math.max(
+    1,
+    radius * pressureRadiusScale(minPressure) * 2 * fraction
+  );
   const steps = Math.max(1, Math.ceil(length / spacing));
+  const fromTilt = tilt ?? { x: 0, y: 0 };
+  const endTilt = tiltTo ?? fromTilt;
   let bounds = {
     minX: Infinity,
     minY: Infinity,
@@ -220,16 +225,21 @@ export function drawStampLine(
   };
   for (let index = 0; index <= steps; index += 1) {
     const t = index / steps;
+    const stampPressure = pressure + (pressureTo - pressure) * t;
+    const stampTilt = {
+      x: fromTilt.x + (endTilt.x - fromTilt.x) * t,
+      y: fromTilt.y + (endTilt.y - fromTilt.y) * t
+    };
     const stamp = drawStamp(
       context,
       fromX + (toX - fromX) * t,
       fromY + (toY - fromY) * t,
       radius,
       settings,
-      pressure,
+      stampPressure,
       random,
       erase,
-      tilt
+      stampTilt
     );
     bounds = {
       minX: Math.min(bounds.minX, stamp.minX),

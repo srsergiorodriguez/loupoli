@@ -73,6 +73,5 @@ describe('pressure-aware stamp spacing', () => {
     );
     const full = arcs;
     expect(light).toBeGreaterThan(full);
-    expect(light).toBeLessThanOrEqual(Math.ceil(full * 1.6));
   });
 });
