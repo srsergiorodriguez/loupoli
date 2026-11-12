@@ -22,6 +22,73 @@ function pressureRadiusScale(pressure: number): number {
   return 0.35 + clamp(pressure, 0, 1) * 0.65;
 }
 
+/** Cached pre-rendered brush stamp; creating a radial gradient per dab is costly. */
+const STAMP_SPRITES = new Map<string, HTMLCanvasElement>();
+const MAX_STAMP_SPRITES = 6;
+
+/**
+ * Build or reuse an opaque colored stamp sprite.
+ *
+ * The sprite is rendered once per color/hardness/radius and then drawn with
+ * globalAlpha and pressure scaling. This removes createRadialGradient and path
+ * construction from the per-stamp Pencil hot path.
+ */
+function stampSprite(
+  settings: PaintSettings,
+  erase: boolean
+): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+  const radius = Math.max(1, Math.min(512, Math.ceil(settings.radius)));
+  const hardness = Math.min(1, Math.max(0.01, settings.hardness));
+  const key = `${erase ? 'e' : 'c'}:${settings.color}:${hardness}:${radius}`;
+  const cached = STAMP_SPRITES.get(key);
+  if (cached) {
+    return cached;
+  }
+  const canvas = document.createElement('canvas');
+  const size = radius * 2 + 2;
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return null;
+  }
+  const center = size / 2;
+  const rgb = erase ? '0,0,0' : hexRgb(settings.color);
+  context.clearRect(0, 0, size, size);
+  if (hardness >= 0.995) {
+    context.fillStyle = erase ? '#000000' : settings.color;
+    context.beginPath();
+    context.arc(center, center, radius, 0, Math.PI * 2);
+    context.fill();
+  } else {
+    const gradient = context.createRadialGradient(
+      center,
+      center,
+      radius * Math.max(0.01, hardness * 0.96),
+      center,
+      center,
+      radius
+    );
+    gradient.addColorStop(0, `rgba(${rgb},1)`);
+    gradient.addColorStop(1, `rgba(${rgb},0)`);
+    context.fillStyle = gradient;
+    context.beginPath();
+    context.arc(center, center, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+  if (STAMP_SPRITES.size >= MAX_STAMP_SPRITES) {
+    const oldest = STAMP_SPRITES.keys().next().value;
+    if (oldest !== undefined) {
+      STAMP_SPRITES.delete(oldest);
+    }
+  }
+  STAMP_SPRITES.set(key, canvas);
+  return canvas;
+}
+
 /** Deterministic-enough per-stroke random source for grain jitter. */
 export function strokeRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -76,34 +143,40 @@ export function drawStamp(
   context.save();
   context.globalCompositeOperation = erase ? 'destination-out' : 'source-over';
   context.globalAlpha = clamp(alpha, 0, 1);
-  if (tiltMagnitude > 0.01) {
-    context.translate(cx, cy);
-    context.rotate(tiltAngle);
-    context.scale(1, tiltAspect);
-  }
-  const stampX = tiltMagnitude > 0.01 ? 0 : cx;
-  const stampY = tiltMagnitude > 0.01 ? 0 : cy;
-  if (hardness >= 0.995) {
+  const sprite = stampSprite(settings, erase);
+  if (sprite) {
+    const nominalRadius = Math.max(1, Math.min(512, Math.ceil(settings.radius)));
+    const padding = r / nominalRadius;
+    const drawOffset = -r - padding;
+    const drawSize = r * 2 + padding * 2;
+    if (tiltMagnitude > 0.01) {
+      context.translate(cx, cy);
+      context.rotate(tiltAngle);
+      context.scale(1, tiltAspect);
+      context.drawImage(sprite, drawOffset, drawOffset, drawSize, drawSize);
+    } else {
+      context.drawImage(
+        sprite,
+        cx + drawOffset,
+        cy + drawOffset,
+        drawSize,
+        drawSize
+      );
+    }
+  } else if (hardness >= 0.995) {
     context.fillStyle = erase ? '#000000' : settings.color;
     context.beginPath();
-    context.arc(stampX, stampY, r, 0, Math.PI * 2);
+    context.arc(cx, cy, r, 0, Math.PI * 2);
     context.fill();
   } else {
-    const gradient = context.createRadialGradient(
-      stampX,
-      stampY,
-      inner,
-      stampX,
-      stampY,
-      r
-    );
+    const gradient = context.createRadialGradient(cx, cy, inner, cx, cy, r);
     const color = erase ? '0,0,0' : hexRgb(settings.color);
     gradient.addColorStop(0, `rgba(${color},${alpha})`);
     gradient.addColorStop(1, `rgba(${color},0)`);
     context.globalAlpha = 1;
     context.fillStyle = gradient;
     context.beginPath();
-    context.arc(stampX, stampY, r, 0, Math.PI * 2);
+    context.arc(cx, cy, r, 0, Math.PI * 2);
     context.fill();
   }
   context.restore();
