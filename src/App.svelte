@@ -124,8 +124,17 @@
     let disposed = false;
     const unlistenNative: Array<() => void> = [];
     const resume = (): void => {
+      syncCompact();
+      syncDensity();
       session.resumeFromBackground();
       paneEpoch += 1;
+      window.dispatchEvent(new Event('resize'));
+      // WKWebView can report its old viewport for a few frames after returning.
+      window.setTimeout(() => session.resumeFromBackground(), 250);
+      window.setTimeout(() => {
+        session.resumeFromBackground();
+        window.dispatchEvent(new Event('resize'));
+      }, 850);
     };
     const scheduleResume = (): void => {
       if (resumeTimer !== 0) {
@@ -152,7 +161,10 @@
         return;
       }
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const [{ getCurrentWindow }, { listen }] = await Promise.all([
+          import('@tauri-apps/api/window'),
+          import('@tauri-apps/api/event')
+        ]);
         const current = getCurrentWindow();
         const offFocus = await current.onFocusChanged(({ payload }) => {
           if (payload) {
@@ -160,11 +172,18 @@
           }
         });
         const offResize = await current.onResized(() => scheduleResume());
+        // Tauri's mobile runtime emits `tauri://resumed` when iOS scenes become
+        // active again. Window focus is not guaranteed to fire for a locked and
+        // re-opened iPad app.
+        const offResumed = await listen('tauri://resumed', () => {
+          scheduleResume();
+        });
         if (disposed) {
           offFocus();
           offResize();
+          offResumed();
         } else {
-          unlistenNative.push(offFocus, offResize);
+          unlistenNative.push(offFocus, offResize, offResumed);
         }
       } catch {
         // Lifecycle listeners are best-effort; DOM events still cover browsers.

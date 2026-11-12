@@ -2006,7 +2006,7 @@ export class EditorRuntime {
 
   /** Re-measure and repaint after the native window returns to the foreground. */
   resumeFromBackground(): void {
-    this.renderer.refreshViewport();
+    this.renderer.recoverContext();
     this.renderer.refreshTexture();
     this.uvRevision += 1;
     this.renderPreviewRevision += 1;

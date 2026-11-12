@@ -124,7 +124,7 @@ See [docs/PWA.md](docs/PWA.md) for the full deployment and browser limitations.
 - **UV and paint:** seam charts, LSCM unwrap, pinned unwrap, shared atlases,
   layered textures, paint/eraser/shapes/gradient/fill, projection painting,
   pressure and tilt, adjustable hardness/smoothing/noise, and pressure-aware
-  stamp size with stable stamp spacing.
+  stamp size with bounded stamp spacing.
 - **Lighting:** directional and point lights, hard/soft shadows, per-corner AO
   preview, direct-light and AO texture baking, and bake-atlas preparation.
 - **Animation and render:** transform/shape-weight/texture/camera/light tracks,

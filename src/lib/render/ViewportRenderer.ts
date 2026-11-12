@@ -145,6 +145,14 @@ export class ViewportRenderer {
   private readonly handleWindowResize = (): void => {
     this.resize();
   };
+  private readonly handleContextLost = (event: Event): void => {
+    // Allow WKWebView/WebKit to restore the context after app backgrounding.
+    event.preventDefault();
+  };
+  private readonly handleContextRestored = (): void => {
+    this.resize();
+    this.schedule();
+  };
 
   private currentMode: ShadingMode = 'texture-wire';
   private ambientOcclusion: AmbientOcclusionSettings = {
@@ -322,6 +330,8 @@ export class ViewportRenderer {
     // canvas CSS height while the full-viewport parent keeps its size.
     this.resizeObserver.observe(canvas);
     window.addEventListener('resize', this.handleWindowResize);
+    canvas.addEventListener('webglcontextlost', this.handleContextLost);
+    canvas.addEventListener('webglcontextrestored', this.handleContextRestored);
 
     this.resize();
     this.applyShadingMode('texture-wire');
@@ -1439,6 +1449,8 @@ export class ViewportRenderer {
     }
 
     window.removeEventListener('resize', this.handleWindowResize);
+    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
+    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
     if (this.aoTimer !== 0) {
       window.clearTimeout(this.aoTimer);
       this.aoTimer = 0;
@@ -1763,6 +1775,25 @@ export class ViewportRenderer {
   /** Re-measure after a native scene resumes or the window geometry changes. */
   refreshViewport(): void {
     this.resize();
+  }
+
+  /**
+   * Recover a WebGL context that WKWebView dropped while the app was suspended.
+   *
+   * Three.js restores its own GL state, but the app still has to request the
+   * restore and render a fresh frame after the WebView becomes visible again.
+   */
+  recoverContext(): void {
+    const context = this.renderer.getContext();
+    if (context.isContextLost()) {
+      this.renderer.forceContextRestore();
+      requestAnimationFrame(() => {
+        this.resize();
+        this.schedule();
+      });
+      return;
+    }
+    this.refreshViewport();
   }
 
   private resize(): void {
