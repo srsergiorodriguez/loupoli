@@ -253,6 +253,8 @@ export class ViewportRenderer {
     this.selectedEdgeMaterial = new MeshBasicMaterial({
       name: 'loupoli-selected-edge',
       color: theme.accent.color,
+      transparent: true,
+      opacity: 1,
       depthTest: true,
       depthWrite: false,
       polygonOffset: true,
@@ -263,6 +265,8 @@ export class ViewportRenderer {
     this.selectedOutlineMaterial = new LineBasicMaterial({
       name: 'loupoli-selected-outline',
       color: theme.accent.color,
+      transparent: true,
+      opacity: 1,
       depthTest: true,
       depthWrite: false,
       polygonOffset: true,
