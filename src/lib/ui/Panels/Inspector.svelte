@@ -1931,7 +1931,7 @@
             label="Size"
             value={session.snapshot.uvBrushSize}
             min={2}
-            max={128}
+            max={512}
             step={1}
             precision={0}
             onChange={(value) => session.setUvBrushSize(value)}
@@ -1941,6 +1941,12 @@
             value={session.snapshot.uvBrushOpacity}
             percent
             onChange={(value) => session.setUvBrushOpacity(value)}
+          />
+          <Switch
+            label="Pressure affects opacity"
+            description="Off keeps a 100% brush opaque at every pressure; size and tilt still respond."
+            checked={session.snapshot.paintPressureOpacity}
+            onChange={(value) => session.setPaintPressureOpacity(value)}
           />
           <SliderField
             label="Hardness"

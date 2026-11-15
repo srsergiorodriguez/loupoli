@@ -177,7 +177,7 @@ export class PaintEngine {
     this.context.save();
     this.context.globalAlpha = Math.max(
       0,
-      Math.min(1, this.settings.opacity * this.settings.colorAlpha)
+      Math.min(1, this.settings.colorAlpha)
     );
     this.context.fillStyle = this.settings.color;
     this.context.fill(path, 'nonzero');
@@ -347,6 +347,7 @@ export class PaintEngine {
       spacing: this.settings.spacing,
       smoothing: this.settings.smoothing,
       noise: this.settings.noise,
+      pressureOpacity: this.settings.pressureOpacity,
       random: this.random
     });
     this.applyGpuDabs(this.sampler.begin(sample));
@@ -620,7 +621,7 @@ export class PaintEngine {
     const target = [data[start], data[start + 1], data[start + 2], data[start + 3]];
     const fill = this.hexColor(
       this.settings.color,
-      this.settings.opacity * this.settings.colorAlpha
+      this.settings.colorAlpha
     );
     if (
       target[0] === fill[0] &&

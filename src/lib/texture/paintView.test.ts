@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   paintBounds,
-  paintPointToTexture,
-  paintTextureRadius
+  paintPointToTexture
 } from './paintView';
 
 describe('paint view math', () => {
@@ -15,14 +14,6 @@ describe('paint view math', () => {
     expect(paintPointToTexture(10, 10, 400, 300, 1024, 1024)).toBeNull();
   });
 
-  it('scales the brush from screen pixels to texture pixels', () => {
-    expect(paintTextureRadius(36, 400, 400, 1024)).toBeCloseTo(
-      (18 * 1024) / 352
-    );
-    expect(paintTextureRadius(10, 400, 400, 1024)).toBeCloseTo(
-      (5 * 1024) / 352
-    );
-  });
 });
 
 

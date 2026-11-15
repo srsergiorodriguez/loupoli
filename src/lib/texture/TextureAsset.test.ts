@@ -67,6 +67,7 @@ describe('TextureAsset', () => {
     expect(stack.addLayer()).toBe(true);
     expect(stack.layerCount).toBe(2);
     expect(stack.activeLayerId).toBe(stack.summaries()[1].id);
+    expect(stack.summaries()[1].opacity).toBe(1);
     stack.dispose();
   });
 

@@ -122,10 +122,13 @@ export function drawStamp(
   const jitterY = (random() - 0.5) * radius * noise * 0.7;
   const sizeJitter = 1 + (random() - 0.5) * noise * 0.45;
   const colorAlpha = erase ? 1 : clamp(settings.colorAlpha ?? 1, 0, 1);
+  const pressureAlpha = settings.pressureOpacity
+    ? 0.35 + clamp(pressure, 0, 1) * 0.65
+    : 1;
   const alpha =
     clamp(settings.opacity, 0, 1) *
     colorAlpha *
-    (0.35 + clamp(pressure, 0, 1) * 0.65) *
+    pressureAlpha *
     (1 - random() * noise * 0.35);
   const r = Math.max(0.5, radius * pressureScale * sizeJitter);
   const cx = x + jitterX;

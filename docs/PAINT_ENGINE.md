@@ -19,13 +19,18 @@ Projection:   screen ray -> surface UV -> texture point
              pane canvas + 3D texture
 ```
 
+### Brush size
+
+Brush Size is a **texture-space diameter in texels**, shared by the Paint pane and projected painting. Zoom and surface orientation change the on-screen outline, not the resulting texture dab size.
+
 ### `StrokeSampler`
 
 `StrokeSampler` owns:
 
 - Arc-length dab spacing.
 - Pressure and tilt interpolation along a segment.
-- Pressure-adjusted radius and capped dab density.
+- Pressure-adjusted radius and spacing.
+- Optional pressure-opacity modulation (off by default).
 - Jitter and noise.
 - Continuity resets at UV/face boundaries.
 
@@ -46,6 +51,13 @@ The mask is presented only in the dirty rectangle. The preview layer is rebuilt 
 ### Layer compositing
 
 `TextureAsset.refreshPreviewRegion()` rebuilds only the dirty rectangle for normal raster stacks. Effect and lighting layers that depend on the full accumulated image fall back to a full composite.
+
+### Opacity policy
+
+- Color alpha and Brush Opacity are separate.
+- New layers start at 100% opacity.
+- Bucket fill uses color alpha only; it does not inherit Brush Opacity.
+- Layer opacity is the final transparency control.
 
 ### Commit and undo
 

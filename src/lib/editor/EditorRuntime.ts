@@ -113,8 +113,7 @@ import {
 import { brushTextureRadius, uvCanvasToTexture } from '../uv/uvPaint';
 import {
   paintBounds,
-  paintPointToTexture,
-  paintTextureRadius
+  paintPointToTexture
 } from '../texture/paintView';
 import {
   buildUvTopology,
@@ -609,6 +608,8 @@ export class EditorRuntime {
   private readonly uvPins = new Set<number>();
   private uvPaint: UvPaintStroke | null = null;
   private paintEngine: PaintEngine | null = null;
+  private projectedPending: PointerSample[] = [];
+  private projectedFrame = 0;
   private projectedPaint: {
     engine: PaintEngine;
     asset: TextureAsset;
@@ -621,13 +622,14 @@ export class EditorRuntime {
   private uvBrushColor = '#f2ffe0';
   private uvBrushColorAlpha = 1;
   private uvBrushSize = 36;
-  private uvBrushOpacity = 0.9;
+  private uvBrushOpacity = 1;
   private paintTool: PaintTool = 'brush';
   private paintSecondaryColor = '#1a1a1f';
   private paintSecondaryColorAlpha = 1;
   private paintHardness = 0.7;
   private paintSmoothing = 0.25;
   private paintNoise = 0;
+  private paintPressureOpacity = false;
   private paintSpacing = DEFAULT_PAINT_SPACING;
   private paintShapeFilled = true;
   private paintGradient: PaintGradient = 'linear';
@@ -943,6 +945,7 @@ export class EditorRuntime {
       paintHardness: this.paintHardness,
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
+      paintPressureOpacity: this.paintPressureOpacity,
       paintSpacing: this.paintSpacing,
       paintShapeFilled: this.paintShapeFilled,
       paintGradient: this.paintGradient,
@@ -2705,7 +2708,7 @@ export class EditorRuntime {
   }
 
   setUvBrushSize(size: number): void {
-    this.uvBrushSize = Math.min(128, Math.max(2, size));
+    this.uvBrushSize = Math.min(512, Math.max(2, size));
     this.publish();
   }
 
@@ -2741,6 +2744,11 @@ export class EditorRuntime {
 
   setPaintNoise(value: number): void {
     this.paintNoise = Math.min(1, Math.max(0, value));
+    this.publish();
+  }
+
+  setPaintPressureOpacity(value: boolean): void {
+    this.paintPressureOpacity = value;
     this.publish();
   }
 
@@ -3155,7 +3163,7 @@ export class EditorRuntime {
       ? {
           x: sample.clientX,
           y: sample.clientY,
-          size: this.uvBrushSize
+          size: this.brushScreenDiameter(hit, this.textureStack)
         }
       : null;
     const current = this.surfaceCursor;
@@ -3216,7 +3224,7 @@ export class EditorRuntime {
       engine.stampProjected(
         hit.uv[0] * asset.width,
         (1 - hit.uv[1]) * asset.height,
-        this.projectionRadius(hit, asset),
+        this.projectionRadius(),
         pressure,
         color,
         colorAlpha
@@ -3407,6 +3415,7 @@ export class EditorRuntime {
       hardness: this.paintHardness,
       smoothing: this.paintSmoothing,
       noise: this.paintNoise,
+      pressureOpacity: this.paintPressureOpacity,
       spacing: this.paintSpacing,
       shapeFilled: this.paintShapeFilled,
       gradient: this.paintGradient
@@ -3444,16 +3453,11 @@ export class EditorRuntime {
     if (!layerId || !point) {
       return false;
     }
-    const radius = paintTextureRadius(
-      this.uvBrushSize,
-      width,
-      height,
-      asset.width,
-      asset.height,
-      24,
-      this.paintViewState()
+    const engine = new PaintEngine(
+      asset,
+      layerId,
+      this.paintSettings(this.brushTextureRadius())
     );
-    const engine = new PaintEngine(asset, layerId, this.paintSettings(radius));
     if (!engine.begin({ x: point.x, y: point.y, pressure, tiltX, tiltY })) {
       return false;
     }
@@ -3500,7 +3504,7 @@ export class EditorRuntime {
     this.surfaceCursor = {
       x: sample.clientX,
       y: sample.clientY,
-      size: this.uvBrushSize
+      size: this.brushScreenDiameter(hit, asset)
     };
     if (this.paintTool === 'fill') {
       const fill = this.projectedUvIsland(node, hit.face, asset);
@@ -3553,7 +3557,7 @@ export class EditorRuntime {
       this.publish();
       return true;
     }
-    const radius = this.projectionRadius(hit, asset);
+    const radius = this.projectionRadius();
     const engine = new PaintEngine(
       asset,
       asset.activeLayerId,
@@ -3653,19 +3657,54 @@ export class EditorRuntime {
     };
   }
 
-  private projectionRadius(
+  /** Brush radius in texture texels, shared by pane and projection. */
+  private brushTextureRadius(): number {
+    return Math.max(0.5, Math.min(512, this.uvBrushSize / 2));
+  }
+
+  private projectionRadius(): number {
+    return this.brushTextureRadius();
+  }
+
+  /** Convert the texture-space brush diameter into a projected screen size. */
+  private brushScreenDiameter(
     hit: { uvPerCssPixel: number },
     asset: TextureAsset
   ): number {
-    return Math.max(
-      0.5,
-      Math.min(512, (this.uvBrushSize / 2) * hit.uvPerCssPixel * asset.width)
-    );
+    const texelsPerCss = Math.max(1e-6, hit.uvPerCssPixel * asset.width);
+    return Math.max(2, Math.min(320, this.uvBrushSize / texelsPerCss));
   }
 
-  /** Continue a latched projected stroke; misses simply add no samples. */
-  private updateProjectionPaint(sample: PointerSample): void {
-    this.updateProjectionPaintBatch([sample]);
+  /** Schedule one projected paint pass for the next displayed frame. */
+  private scheduleProjectedFrame(): void {
+    if (this.projectedFrame !== 0) {
+      return;
+    }
+    this.projectedFrame = requestAnimationFrame(() => {
+      this.projectedFrame = 0;
+      this.flushProjectedFrame();
+    });
+  }
+
+  /** Apply all projected samples accumulated since the previous frame. */
+  private flushProjectedFrame(): void {
+    if (this.projectedFrame !== 0) {
+      cancelAnimationFrame(this.projectedFrame);
+      this.projectedFrame = 0;
+    }
+    if (this.projectedPending.length === 0) {
+      return;
+    }
+    const samples = this.projectedPending.splice(0);
+    this.updateProjectionPaintBatch(samples);
+  }
+
+  private discardProjectedFrame(): void {
+    this.projectedPending.length = 0;
+    if (this.projectedFrame !== 0) {
+      cancelAnimationFrame(this.projectedFrame);
+      this.projectedFrame = 0;
+    }
   }
 
   /**
@@ -3692,7 +3731,7 @@ export class EditorRuntime {
       this.surfaceCursor = {
         x: finalSample.clientX,
         y: finalSample.clientY,
-        size: this.uvBrushSize
+        size: this.surfaceCursor?.size ?? 2
       };
       this.publish();
       return;
@@ -3705,6 +3744,11 @@ export class EditorRuntime {
     let finalHit = false;
     let lastClientX = finalSample.clientX;
     let lastClientY = finalSample.clientY;
+    let lastScreenSize = this.surfaceCursor?.size ?? 2;
+    const updates: {
+      sample: PaintSample;
+      connect: boolean;
+    }[] = [];
     for (const sample of samples) {
       const hit = this.renderer.pickSurface(sample.clientX, sample.clientY);
       if (!hit || hit.nodeId !== state.nodeId) {
@@ -3719,15 +3763,19 @@ export class EditorRuntime {
         tiltY: sample.tiltY
       };
       const connect = state.lastFace !== null && state.lastFace === hit.face;
-      state.engine.updateProjected(point, connect);
+      updates.push({ sample: point, connect });
       state.lastFace = hit.face;
       updated = true;
       finalHit = true;
       lastClientX = sample.clientX;
       lastClientY = sample.clientY;
+      lastScreenSize = this.brushScreenDiameter(hit, state.asset);
+    }
+    if (updates.length > 0) {
+      state.engine.updateProjectedBatch(updates);
     }
     this.surfaceCursor = finalHit
-      ? { x: lastClientX, y: lastClientY, size: this.uvBrushSize }
+      ? { x: lastClientX, y: lastClientY, size: lastScreenSize }
       : null;
     if (updated) {
       this.uvRevision += 1;
@@ -3737,6 +3785,7 @@ export class EditorRuntime {
   }
 
   private finishProjectionPaint(): void {
+    this.flushProjectedFrame();
     if (this.projectedShape) {
       this.commitProjectedShape();
       return;
@@ -3757,6 +3806,7 @@ export class EditorRuntime {
   }
 
   private cancelProjectionPaint(): void {
+    this.discardProjectedFrame();
     if (this.projectedShape) {
       this.projectedShape = null;
       this.projectionPreview = null;
@@ -10761,7 +10811,11 @@ export class EditorRuntime {
       return;
     }
     if (this.projectedPaint || this.projectedShape) {
-      this.updateProjectionPaintBatch(samples);
+      this.projectedPending.push(...samples);
+      if (this.projectedPending.length > 512) {
+        this.projectedPending.splice(0, this.projectedPending.length - 512);
+      }
+      this.scheduleProjectedFrame();
       return;
     }
     const finalSample = samples[samples.length - 1];
@@ -10795,7 +10849,8 @@ export class EditorRuntime {
       return;
     }
     if (this.projectedPaint || this.projectedShape) {
-      this.updateProjectionPaint(sample);
+      this.projectedPending.push(sample);
+      this.scheduleProjectedFrame();
       return;
     }
     if (this.actionDrag) {
@@ -10957,6 +11012,7 @@ export class EditorRuntime {
       return;
     }
     if (this.projectedPaint || this.projectedShape) {
+      this.flushProjectedFrame();
       this.finishProjectionPaint();
       return;
     }
@@ -11039,6 +11095,7 @@ export class EditorRuntime {
       return;
     }
     if (this.projectedPaint || this.projectedShape) {
+      this.discardProjectedFrame();
       this.cancelProjectionPaint();
       return;
     }

@@ -17,6 +17,7 @@ export interface StrokeSamplerSettings {
   readonly spacing: number;
   readonly smoothing: number;
   readonly noise: number;
+  readonly pressureOpacity: boolean;
   readonly random: () => number;
 }
 
@@ -139,7 +140,7 @@ export class StrokeSampler {
     const tiltY = point.tiltY ?? from.tiltY ?? 0;
     const tiltMagnitude = Math.min(1, Math.hypot(tiltX, tiltY) / 90);
     const flow =
-      (0.35 + pressure * 0.65) *
+      (this.settings.pressureOpacity ? 0.35 + pressure * 0.65 : 1) *
       (1 - this.settings.random() * noise * 0.35);
     return {
       x: point.x + jitterX,

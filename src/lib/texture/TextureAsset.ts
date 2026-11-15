@@ -913,7 +913,7 @@ export class TextureAsset {
       name ?? `Layer ${this.layers.length + 1}`,
       pattern,
       '#8f8ff8',
-      pattern === 'transparent' ? 1 : 0.55
+      1
     );
     this.layers.push(layer);
     this.activeId = layer.id;

@@ -79,24 +79,3 @@ export function paintPointToTexture(
     y: ((y - bounds.y) / bounds.height) * textureHeight
   };
 }
-
-/** Convert a screen-space brush diameter into texture-space radius. */
-export function paintTextureRadius(
-  screenDiameter: number,
-  width: number,
-  height: number,
-  textureWidth: number,
-  textureHeight = textureWidth,
-  padding = 24,
-  view?: PaintViewState
-): number {
-  const bounds = paintBounds(
-    width,
-    height,
-    textureWidth,
-    textureHeight,
-    padding,
-    view
-  );
-  return Math.max(0.5, (screenDiameter / 2) * (textureWidth / bounds.width));
-}

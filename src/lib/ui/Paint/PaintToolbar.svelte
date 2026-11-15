@@ -55,6 +55,7 @@
     hardness: session.snapshot.paintHardness,
     smoothing: session.snapshot.paintSmoothing,
     noise: session.snapshot.paintNoise,
+    pressureOpacity: session.snapshot.paintPressureOpacity,
     spacing: session.snapshot.paintSpacing ?? DEFAULT_PAINT_SPACING,
     shapeFilled: session.snapshot.paintShapeFilled,
     gradient: session.snapshot.paintGradient
@@ -100,7 +101,7 @@
   {#if session.snapshot.paintTool !== 'gradient'}
     <BrushPreview {settings} />
   {/if}
-  <span class="paint-size">{session.snapshot.uvBrushSize} px</span>
+  <span class="paint-size">{session.snapshot.uvBrushSize} texels</span>
   <span class="paint-divider" aria-hidden="true"></span>
   <IconButton
     label={session.snapshot.paintUvOverlay ? 'Hide UV overlay' : 'Show UV overlay'}

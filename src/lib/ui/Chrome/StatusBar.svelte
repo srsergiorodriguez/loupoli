@@ -48,7 +48,7 @@
     }
     if (session.snapshot.uvOpen) {
       if (session.snapshot.uvPaintMode) {
-        return `Paint · active layer · ${session.snapshot.uvBrushSize}px brush`;
+        return `Paint · active layer · ${session.snapshot.uvBrushSize} texel brush`;
       }
       const count = session.snapshot.uvSelectedCorners.length;
       const mode =

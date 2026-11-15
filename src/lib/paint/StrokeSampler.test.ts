@@ -7,6 +7,7 @@ function sampler(): StrokeSampler {
     spacing: 0.25,
     smoothing: 0,
     noise: 0,
+    pressureOpacity: false,
     random: () => 0.5
   });
 }

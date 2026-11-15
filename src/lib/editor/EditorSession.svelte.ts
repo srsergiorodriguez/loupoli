@@ -58,13 +58,14 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvBrushColor: '#f2ffe0',
   uvBrushColorAlpha: 1,
   uvBrushSize: 36,
-  uvBrushOpacity: 0.9,
+  uvBrushOpacity: 1,
   paintTool: 'brush',
   paintSecondaryColor: '#1a1a1f',
   paintSecondaryColorAlpha: 1,
   paintHardness: 0.7,
   paintSmoothing: 0.25,
   paintNoise: 0,
+  paintPressureOpacity: false,
   paintSpacing: 0.25,
   paintShapeFilled: true,
   paintGradient: 'linear',
@@ -618,6 +619,10 @@ export class EditorSession {
 
   setPaintNoise(value: number): void {
     this.runtime?.setPaintNoise(value);
+  }
+
+  setPaintPressureOpacity(value: boolean): void {
+    this.runtime?.setPaintPressureOpacity(value);
   }
 
   setPaintSpacing(value: number): void {

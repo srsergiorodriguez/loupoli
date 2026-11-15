@@ -32,6 +32,8 @@ export interface PaintSettings {
   readonly hardness: number;
   readonly smoothing: number;
   readonly noise: number;
+  /** Whether Pencil pressure also modulates per-dab opacity. */
+  readonly pressureOpacity: boolean;
   /** Distance between stamps as a fraction of the pressure-adjusted diameter. */
   readonly spacing: number;
   readonly shapeFilled: boolean;

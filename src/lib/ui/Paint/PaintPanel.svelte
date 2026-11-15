@@ -5,6 +5,7 @@
   import PaneHeader from '../Panels/PaneHeader.svelte';
   import PaintToolbar from './PaintToolbar.svelte';
   import type { PaintSample } from '../../paint/types';
+  import { paintBounds } from '../../texture/paintView';
 
   /** Session projection for the dedicated texture-paint workspace. */
   interface Props {
@@ -40,7 +41,27 @@
   const activeAsset = $derived(
     textureAssets.find((asset) => asset.id === session.snapshot.textureAssetId) ?? null
   );
-  const brushSize = $derived(session.snapshot.uvBrushSize);
+  const brushSize = $derived.by(() => {
+    if (!activeAsset || width <= 0 || height <= 0) {
+      return 2;
+    }
+    const bounds = paintBounds(
+      width,
+      height,
+      activeAsset.width,
+      activeAsset.height,
+      24,
+      {
+        zoom: session.snapshot.paintZoom,
+        panX: session.snapshot.paintPanX,
+        panY: session.snapshot.paintPanY
+      }
+    );
+    return Math.max(
+      2,
+      (session.snapshot.uvBrushSize / activeAsset.width) * bounds.width
+    );
+  });
   const activeLayer = $derived(
     session.snapshot.textureLayers.find(
       (layer) => layer.id === session.snapshot.textureActiveId
