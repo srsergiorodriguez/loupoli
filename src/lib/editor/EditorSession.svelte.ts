@@ -186,6 +186,7 @@ const SIDEBAR_STORAGE_KEY = 'loupoli:sidebar:open';
 const UV_LAYOUT_STORAGE_KEY = 'loupoli:uv-layout';
 const PAINT_UV_OVERLAY_STORAGE_KEY = 'loupoli:paint-uv-overlay';
 const RENDER_PREVIEW_SPLIT_STORAGE_KEY = 'loupoli:render-preview-split';
+const PENCIL_MODE_STORAGE_KEY = 'loupoli:pencil-mode';
 
 function readPreference(key: string, fallback: string): string {
   if (typeof localStorage === 'undefined') {
@@ -228,12 +229,14 @@ export class EditorSession {
   inspectorOpen = $state(false);
   sidebarOpen = $state(readSidebarPreference());
   compactLayout = $state(false);
+  pencilMode = $state(readPreference(PENCIL_MODE_STORAGE_KEY, 'true') === 'true');
 
   private runtime: EditorRuntime | null = null;
 
   /** Connect the mounted runtime and immediately sync its first snapshot. */
   attach(runtime: EditorRuntime): void {
     this.runtime = runtime;
+    runtime.setPencilMode(this.pencilMode);
     const layout = readPreference(UV_LAYOUT_STORAGE_KEY, 'bottom');
     runtime.setUvLayout(layout === 'side' ? 'side' : 'bottom');
     runtime.setPaintUvOverlay(readPreference(PAINT_UV_OVERLAY_STORAGE_KEY, 'true') === 'true');
@@ -1411,6 +1414,16 @@ export class EditorSession {
 
   setCompactLayout(compact: boolean): void {
     this.compactLayout = compact;
+  }
+
+  /** Pencil mode routes touch to navigation; touch mode behaves like a mouse. */
+  setPencilMode(enabled: boolean): void {
+    if (this.pencilMode === enabled) {
+      return;
+    }
+    this.pencilMode = enabled;
+    writePreference(PENCIL_MODE_STORAGE_KEY, String(enabled));
+    this.runtime?.setPencilMode(enabled);
   }
 
   get sidebarVisible(): boolean {

@@ -172,13 +172,7 @@
     } else {
       discardPaintSamples();
     }
-    if (panning) {
-      panning = false;
-      panPointerId = null;
-      window.removeEventListener('pointermove', windowPanMove);
-      window.removeEventListener('pointerup', windowPanUp);
-      window.removeEventListener('pointercancel', windowPanUp);
-    }
+    stopPaintPan();
     detachTouchTracking();
     brushVisible = false;
   }
@@ -268,9 +262,15 @@
         if (painting) {
           endPointer(false);
         }
+        stopPaintPan();
         beginPinch();
         return;
       } else {
+        return;
+      }
+      if (session.pencilMode) {
+        event.preventDefault();
+        beginPaintPan(event);
         return;
       }
     }
@@ -518,8 +518,8 @@
     panLastY = event.clientY;
   }
 
-  function windowPanUp(event: PointerEvent): void {
-    if (event.pointerId !== panPointerId) {
+  function stopPaintPan(): void {
+    if (!panning) {
       return;
     }
     panning = false;
@@ -527,6 +527,13 @@
     window.removeEventListener('pointermove', windowPanMove);
     window.removeEventListener('pointerup', windowPanUp);
     window.removeEventListener('pointercancel', windowPanUp);
+  }
+
+  function windowPanUp(event: PointerEvent): void {
+    if (event.pointerId !== panPointerId) {
+      return;
+    }
+    stopPaintPan();
   }
 
   function wheel(event: WheelEvent): void {

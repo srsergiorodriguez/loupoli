@@ -606,6 +606,7 @@ export class EditorRuntime {
   private readonly uvSelection = new Set<number>();
   private lassoSelectionBefore: SelectionSnapshot | null = null;
   private readonly uvPins = new Set<number>();
+  private pencilMode = true;
   private uvPaint: UvPaintStroke | null = null;
   private paintEngine: PaintEngine | null = null;
   private projectedPending: PointerSample[] = [];
@@ -785,6 +786,8 @@ export class EditorRuntime {
       activateEditor: (editor) => this.setActiveEditor(editor),
       isUvActive: () => this.activeEditor !== '3d',
       isAnnotationMode: () => this.annotationMode,
+      isPencilMode: () => this.pencilMode,
+      finishPenClick: () => this.finishPenClick(),
       orbit: (dx, dy) => {
         this.renderer.orbit(dx, dy);
         this.leaveCameraView();
@@ -809,7 +812,8 @@ export class EditorRuntime {
       deleteSelection: () => this.deleteSelection(),
       toggleAxisLock: (axis) => this.toggleAxisLock(axis),
       tapSelect: (x, y, additive) => this.tapSelect(x, y, additive),
-      finishOrbitClick: (moved, additive) => this.finishOrbitClick(moved, additive),
+      finishOrbitClick: (moved, additive, selectOnClick, clientX, clientY) =>
+        this.finishOrbitClick(moved, additive, selectOnClick, clientX, clientY),
       setPointerReading: (sample) => this.setPointerReading(sample),
       isModalTransformActive: () => this.modalTransform !== null,
       beginModalTransform: (kind, clientX, clientY) =>
@@ -1891,6 +1895,12 @@ export class EditorRuntime {
     this.uvActiveChart = null;
     this.lastUvSourceSignature = this.uvSourceSignature();
     this.syncScene();
+    this.publish();
+  }
+
+  /** Switch between Pencil-first navigation and mouse-like finger editing. */
+  setPencilMode(enabled: boolean): void {
+    this.pencilMode = enabled;
     this.publish();
   }
 
@@ -10065,12 +10075,30 @@ export class EditorRuntime {
     this.recordSelection(before, 'Select element');
   }
 
-  /** Resolve a mouse/release gesture that fell back to orbit/pan. */
-  finishOrbitClick(moved: boolean, additive: boolean): void {
-    if (moved || additive || this.pointerSelectionHit) {
+  /**
+   * Resolve a Pencil tap after its editing gesture ends.
+   *
+   * Pencil immediately selects handles, so only a tap that did not hit
+   * anything may clear the selection. Paint, annotate, light, and render
+   * workspaces are never selection gestures.
+   */
+  private finishPenClick(): void {
+    if (this.pointerSelectionHit) {
+      this.pointerSelectionHit = false;
       return;
     }
-    if (this.selectionCombineMode !== 'replace' || this.selection.count === 0) {
+    if (
+      this.workspace === 'paint' ||
+      this.workspace === 'light' ||
+      this.workspace === 'render' ||
+      this.annotationMode ||
+      this.selectionCombineMode !== 'replace' ||
+      this.selection.count === 0
+    ) {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node) {
       return;
     }
     const before = this.captureSelection();
@@ -10078,6 +10106,26 @@ export class EditorRuntime {
     this.syncScene();
     this.publish();
     this.recordSelection(before, 'Clear selection');
+  }
+
+  /**
+   * Resolve a camera release that did not move.
+   *
+   * Edge/face picks are deferred until release so an orbit cannot change the
+   * selection. Only a deliberate empty LMB/touch click may clear; MMB, Alt, and
+   * touch navigation never reach this path with selectOnClick enabled.
+   */
+  finishOrbitClick(
+    moved: boolean,
+    additive: boolean,
+    selectOnClick: boolean,
+    clientX: number,
+    clientY: number
+  ): void {
+    if (moved || !selectOnClick) {
+      return;
+    }
+    this.tapSelect(clientX, clientY, additive);
   }
 
   private selectEvaluatedElementAt(
@@ -10709,6 +10757,11 @@ export class EditorRuntime {
           }
         }
       }
+      if (sample.pointerType !== 'pen' && this.selection.mode !== 'vertex') {
+        // Edge/face selection waits for release so an orbit drag that starts
+        // over geometry cannot mutate the existing selection.
+        return false;
+      }
       this.selectEvaluatedElementAt(
         sample.clientX,
         sample.clientY,
@@ -10724,6 +10777,9 @@ export class EditorRuntime {
       if (edge === null) {
         return false;
       }
+      if (sample.pointerType !== 'pen') {
+        return false;
+      }
       this.pointerSelectionHit = true;
       const edges = this.loopSelect
         ? collectEdgeLoop(node.mesh, edge).edges
@@ -10737,6 +10793,9 @@ export class EditorRuntime {
     if (this.selection.mode === 'face') {
       const face = this.renderer.pickFace(sample.clientX, sample.clientY);
       if (face === null) {
+        return false;
+      }
+      if (sample.pointerType !== 'pen') {
         return false;
       }
       this.pointerSelectionHit = true;

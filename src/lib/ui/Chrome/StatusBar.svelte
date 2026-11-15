@@ -95,7 +95,11 @@
       <span>{dynamicHint}</span>
     {:else}
       <span class="hint-desktop">Drag orbit · Move/Rotate/Scale gizmo · E/I/L actions · Add/Shift-click select · F frame</span>
-      <span class="hint-touch">Tap select · Pencil gizmo/actions · 1-finger orbit · 2-finger pan/zoom · 2/3-finger undo/redo</span>
+      <span class="hint-touch">
+        {session.pencilMode
+          ? 'Pencil edits · 1-finger orbit · 2-finger pan/zoom · 2/3-finger undo/redo'
+          : 'Tap select · 1-finger edit · 2-finger pan/zoom · 2/3-finger undo/redo'}
+      </span>
     {/if}
   </div>
 
@@ -109,7 +113,20 @@
     <span>{counts.triangles} T</span>
   </div>
 
-  <div class="status-cell status-state" aria-label="Snapping">
+  <div class="status-cell status-state" aria-label="Input and snapping">
+    <button
+      type="button"
+      class="mode-status"
+      class:is-active={session.pencilMode}
+      aria-pressed={session.pencilMode}
+      title={session.pencilMode
+        ? 'Pencil mode: Pencil edits, finger navigates'
+        : 'Touch mode: finger edits like a mouse'}
+      onclick={() => session.setPencilMode(!session.pencilMode)}
+    >
+      <span class="mode-icon" aria-hidden="true">✎</span>
+      Pencil
+    </button>
     <button
       bind:this={snapButton}
       type="button"
@@ -207,25 +224,34 @@
     cursor: pointer;
   }
 
+  .mode-status::before,
   .snap-status::before {
     content: '';
     position: absolute;
     inset: calc((var(--hit-min) - var(--status-h)) / -2) 0;
   }
 
+  .mode-status:focus-visible,
   .snap-status:focus-visible {
     outline: var(--focus-ring-width) solid var(--border-focus);
     outline-offset: -1px;
   }
 
+  .mode-status:hover,
   .snap-status:hover {
     border-color: var(--border-subtle);
     background: var(--bg-hover);
     color: var(--text-primary);
   }
 
+  .mode-status.is-active,
   .snap-status.is-active {
     color: var(--accent-primary);
+  }
+
+  .mode-icon {
+    font-size: 13px;
+    line-height: 1;
   }
 
   .snap-dot {

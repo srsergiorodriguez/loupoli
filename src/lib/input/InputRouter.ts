@@ -29,6 +29,8 @@ export interface InputRouterHost {
   activateEditor(editor: '3d' | 'uv'): void;
   isUvActive(): boolean;
   isAnnotationMode(): boolean;
+  isPencilMode(): boolean;
+  finishPenClick(): void;
   beginToolPointer(sample: PointerSample): boolean;
   hoverToolPointer(sample: PointerSample | null): void;
   moveToolPointer(sample: PointerSample): void;
@@ -41,7 +43,13 @@ export interface InputRouterHost {
   deleteSelection(): void;
   toggleAxisLock(axis: 'x' | 'y' | 'z'): void;
   tapSelect(clientX: number, clientY: number, additive?: boolean): void;
-  finishOrbitClick(moved: boolean, additive: boolean): void;
+  finishOrbitClick(
+    moved: boolean,
+    additive: boolean,
+    selectOnClick: boolean,
+    clientX: number,
+    clientY: number
+  ): void;
   setPointerReading(sample: PointerSample | null): void;
   isModalTransformActive(): boolean;
   beginModalTransform(
@@ -92,6 +100,7 @@ interface MouseGesture {
   startX: number;
   startY: number;
   moved: boolean;
+  selectOnClick: boolean;
 }
 
 /** Centroid and spread of the active touch pointers. */
@@ -135,6 +144,10 @@ export class InputRouter {
 
   private activePenPointers = 0;
   private activePenLasso = false;
+  private penStartX = 0;
+  private penStartY = 0;
+  private penMoved = false;
+  private penHadTool = false;
   private touchLasso = false;
   private lastPenUpAt = -Infinity;
   private lastTouchUpAt = -Infinity;
@@ -146,7 +159,8 @@ export class InputRouter {
     lastY: 0,
     startX: 0,
     startY: 0,
-    moved: false
+    moved: false,
+    selectOnClick: false
   };
   private lastMouseX = 0;
   private lastMouseY = 0;
@@ -206,16 +220,20 @@ export class InputRouter {
       }
       this.activePenPointers = 1;
       this.activePenLasso = false;
+      this.penStartX = sample.clientX;
+      this.penStartY = sample.clientY;
+      this.penMoved = false;
+      this.penHadTool = false;
       this.invalidateActiveTouchGesture();
       this.host.setPointerReading(sample);
       this.activePenLasso = this.host.isLassoMode();
       if (this.activePenLasso) {
         if (!this.host.beginLasso(sample.clientX, sample.clientY)) {
           this.activePenLasso = false;
-          this.host.beginToolPointer(sample);
+          this.penHadTool = this.host.beginToolPointer(sample);
         }
       } else {
-        this.host.beginToolPointer(sample);
+        this.penHadTool = this.host.beginToolPointer(sample);
       }
       return;
     }
@@ -244,6 +262,7 @@ export class InputRouter {
       this.mouse.pointerId = sample.pointerId;
       this.mouse.lastX = sample.clientX;
       this.mouse.lastY = sample.clientY;
+      this.mouse.selectOnClick = false;
       return;
     }
 
@@ -265,11 +284,13 @@ export class InputRouter {
       // This keeps camera navigation usable on a MacBook trackpad or any
       // one-button mouse, while direct vertex manipulation stays primary.
       this.mouse.mode = captured ? 'tool' : 'orbit';
+      this.mouse.selectOnClick = !captured;
     } else if (event.button === 1) {
       this.mouse.mode = sample.shiftKey ? 'pan' : 'orbit';
       this.mouse.pointerId = sample.pointerId;
       this.mouse.lastX = sample.clientX;
       this.mouse.lastY = sample.clientY;
+      this.mouse.selectOnClick = false;
     } else if (event.button === 2) {
       // Right-drag is the dedicated pan gesture. Shift is therefore free for
       // additive selection and for orbiting while adding elements.
@@ -277,6 +298,7 @@ export class InputRouter {
       this.mouse.pointerId = sample.pointerId;
       this.mouse.lastX = sample.clientX;
       this.mouse.lastY = sample.clientY;
+      this.mouse.selectOnClick = false;
     }
   };
 
@@ -309,6 +331,11 @@ export class InputRouter {
       // iPadOS versions, which otherwise leaves the paint gesture open.
       if (this.activePenPointers === 0) {
         return;
+      }
+      if (
+        Math.hypot(sample.clientX - this.penStartX, sample.clientY - this.penStartY) > 4
+      ) {
+        this.penMoved = true;
       }
       if (this.activePenLasso) {
         this.host.setPointerReading(sample);
@@ -390,6 +417,9 @@ export class InputRouter {
           this.host.endLasso(sample.clientX, sample.clientY);
         } else {
           this.host.endToolPointer(sample);
+          if (!this.penMoved && !this.penHadTool) {
+            this.host.finishPenClick();
+          }
         }
         this.activePenLasso = false;
         this.host.setPointerReading(null);
@@ -422,7 +452,10 @@ export class InputRouter {
     ) {
       this.host.finishOrbitClick(
         this.mouse.moved,
-        sample.shiftKey || sample.metaKey || sample.ctrlKey
+        sample.shiftKey || sample.metaKey || sample.ctrlKey,
+        this.mouse.selectOnClick,
+        sample.clientX,
+        sample.clientY
       );
     }
     this.resetMouseGesture(sample.pointerId);
@@ -667,16 +700,21 @@ export class InputRouter {
     });
     this.touchMaxPointers = Math.max(this.touchMaxPointers, this.touches.size);
 
-    if (this.touches.size === 1 && this.host.isLassoMode()) {
+    const pencilMode = this.host.isPencilMode();
+    if (this.touches.size === 1 && !pencilMode && this.host.isLassoMode()) {
       this.touchMode = 'lasso';
       this.touchLasso = true;
       this.host.beginLasso(sample.clientX, sample.clientY);
       return;
     }
 
-    if (this.touches.size === 1 && !this.host.isAnnotationMode()) {
-      // Touch may grab a vertex handle, gizmo, action, light, or camera
-      // handle. A miss remains camera orbit.
+    if (
+      this.touches.size === 1 &&
+      !pencilMode &&
+      !this.host.isAnnotationMode()
+    ) {
+      // Touch mode may grab a vertex handle, gizmo, action, light, or camera
+      // handle. In Pencil mode the finger is navigation-only.
       if (this.host.beginToolPointer(sample)) {
         this.touchMode = 'tool';
         return;
@@ -872,10 +910,9 @@ export class InputRouter {
       this.touchMaxTravel <= TAP_MAX_TRAVEL_CSS;
 
     if (isValidTap && this.touchMaxPointers === 1) {
-      // A deliberate one-finger tap selects; a drag remains orbit. The sticky
-      // Add mode supplies the additive behavior because touch has no modifier
-      // keys. Annotation mode is Pencil/mouse only.
-      if (!this.host.isAnnotationMode()) {
+      // In Pencil mode the canvas finger is navigation-only. In Touch mode a
+      // deliberate one-finger tap selects; a drag remains orbit.
+      if (!this.host.isPencilMode() && !this.host.isAnnotationMode()) {
         this.host.tapSelect(x, y);
       }
     } else if (isValidTap && this.touchMaxPointers === 2) {
@@ -924,6 +961,7 @@ export class InputRouter {
     if (this.mouse.pointerId === pointerId) {
       this.mouse.mode = 'none';
       this.mouse.pointerId = null;
+      this.mouse.selectOnClick = false;
     }
   }
 

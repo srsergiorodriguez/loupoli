@@ -28,8 +28,14 @@ The native and web builds use the same editor and `.lpoli` format. Move work bet
 
 ## Input model
 
-- **Pen** selects and edits. It never moves the camera. Pressure and tilt affect painting.
-- **Touch** taps to select. One-finger drag orbits on empty space and drags a grabbed handle or gizmo. Two-finger drag pans and pinches, two-finger tap undoes, and three-finger tap redoes.
+The footer **Pencil** toggle selects the input policy:
+
+- **Pencil mode (default, persisted):** the Pencil selects, edits, and paints. The finger is navigation-only on the canvas: one-finger drag orbits in 3D or pans the Paint texture, and two fingers pan/pinch. Canvas taps do not select.
+- **Touch mode:** the finger behaves like the mouse primary button. Tap selects, handles and gizmos edit, empty drag orbits, and one finger paints in the Paint pane. Two fingers still pan/pinch.
+- **Pencil:** selects and edits in either mode. It never moves the camera. Pressure and tilt affect painting.
+- Two-finger tap undoes and three-finger tap redoes in both modes.
+
+The Pencil toggle sits before Snap in the status bar and is stored in `localStorage`.
 - **Mouse** uses the DCC mappings below. LMB on a topology handle edits; LMB on empty space or a face away from a handle orbits.
 - Shift/Cmd/Ctrl adds to a selection. The sticky **Add** control provides additive selection for touch and pen.
 - A plain tap on empty viewport space clears the selection.

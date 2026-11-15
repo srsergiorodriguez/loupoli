@@ -62,9 +62,10 @@ from Xcode with a development certificate.
 
 | Input | Behavior |
 |---|---|
-| Pencil | Selects and edits; never orbits. Pressure and tilt affect painting. |
-| Touch tap | Selects the current vertex, edge, or face. |
-| Touch drag on empty space | Orbits. On a handle or gizmo, edits instead. |
+| Pencil | Selects, edits, and paints; never orbits. |
+| Pencil mode | Persisted footer toggle; finger navigates, Pencil edits. |
+| Touch mode | Finger behaves like mouse LMB: tap selects, handles edit, empty drag orbits. |
+| Touch drag on empty space | Orbits in either mode. |
 | Two fingers | Pan and pinch zoom. |
 | Two-finger tap / three-finger tap | Undo / redo. |
 | Mouse | LMB edits handles; LMB on empty space orbits; RMB pans; wheel zooms. |
