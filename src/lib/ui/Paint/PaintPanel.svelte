@@ -269,8 +269,9 @@
         return;
       }
       if (session.pencilMode) {
+        // Navigation is two-finger only in both panes. A single finger in
+        // Pencil mode neither paints nor pans.
         event.preventDefault();
-        beginPaintPan(event);
         return;
       }
     }

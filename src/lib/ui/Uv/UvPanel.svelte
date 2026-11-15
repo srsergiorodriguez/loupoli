@@ -45,6 +45,13 @@
   let angle = $state(0);
   let scaleFactor = $state(1);
   let activePointerId: number | null = null;
+  let penActive = false;
+  let lastPenUpAt = -Infinity;
+  const touchPointers = new Map<number, { x: number; y: number }>();
+  let pinchActive = false;
+  let pinchLastCenter = { x: 0, y: 0 };
+  let pinchLastDistance = 0;
+  const PEN_TOUCH_COOLDOWN_MS = 350;
 
   const selectedCount = $derived(session.snapshot.uvSelectedCorners.length);
   const axisLock = $derived(session.snapshot.uvAxisLock);
@@ -86,6 +93,7 @@
     const onVisibilityChange = (): void => {
       if (document.visibilityState === 'hidden') {
         detachDragListeners();
+        detachTouchTracking();
         detachKeyboardTransform(false);
       } else {
         scheduleResumeRedraw();
@@ -109,7 +117,10 @@
     };
   });
 
-  onDestroy(detachDragListeners);
+  onDestroy(() => {
+    detachDragListeners();
+    detachTouchTracking();
+  });
 
   function measureAndDraw(): void {
     if (!host || !canvas) {
@@ -322,6 +333,121 @@
     }
   }
 
+  function touchPoints(): [{ x: number; y: number }, { x: number; y: number }] | null {
+    const points = [...touchPointers.values()];
+    return points.length >= 2 ? [points[0], points[1]] : null;
+  }
+
+  function attachTouchTracking(): void {
+    window.addEventListener('pointermove', windowTouchMove);
+    window.addEventListener('pointerup', windowTouchUp);
+    window.addEventListener('pointercancel', windowTouchUp);
+  }
+
+  function detachTouchTracking(): void {
+    window.removeEventListener('pointermove', windowTouchMove);
+    window.removeEventListener('pointerup', windowTouchUp);
+    window.removeEventListener('pointercancel', windowTouchUp);
+    touchPointers.clear();
+    pinchActive = false;
+  }
+
+  function beginPinch(): void {
+    const points = touchPoints();
+    if (!points) {
+      return;
+    }
+    pinchActive = true;
+    pinchLastCenter = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+    pinchLastDistance = Math.hypot(
+      points[1].x - points[0].x,
+      points[1].y - points[0].y
+    );
+  }
+
+  function windowTouchMove(event: PointerEvent): void {
+    if (event.pointerType !== 'touch' || !touchPointers.has(event.pointerId)) {
+      return;
+    }
+    touchPointers.set(event.pointerId, localPoint(event));
+    const points = touchPoints();
+    if (!points || !pinchActive) {
+      return;
+    }
+    event.preventDefault();
+    const center = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+    const distance = Math.hypot(
+      points[1].x - points[0].x,
+      points[1].y - points[0].y
+    );
+    if (pinchLastDistance > 0) {
+      session.zoomUv(
+        distance / pinchLastDistance,
+        width,
+        height,
+        center.x,
+        center.y
+      );
+    }
+    session.panUv(
+      center.x - pinchLastCenter.x,
+      center.y - pinchLastCenter.y
+    );
+    pinchLastCenter = center;
+    pinchLastDistance = distance;
+  }
+
+  function windowTouchUp(event: PointerEvent): void {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    touchPointers.delete(event.pointerId);
+    if (touchPointers.size < 2) {
+      pinchActive = false;
+    }
+    if (touchPointers.size === 0) {
+      detachTouchTracking();
+    }
+  }
+
+  function stopPan(): void {
+    if (!uvPanning) {
+      return;
+    }
+    uvPanning = false;
+    panMoved = false;
+    panCanClear = false;
+    window.removeEventListener('pointermove', windowPointerMove);
+    window.removeEventListener('pointerup', windowPointerUp);
+    window.removeEventListener('pointercancel', windowPointerCancel);
+    activePointerId = null;
+  }
+
+  function cancelForPinch(): void {
+    if (uvPanning) {
+      stopPan();
+      return;
+    }
+    if (lassoing) {
+      lassoing = false;
+      uvLassoPath = [];
+      detachDragListeners();
+      return;
+    }
+    if (dragging) {
+      dragging = false;
+      dragMoved = false;
+      detachDragListeners();
+      session.cancelUvDrag();
+    }
+  }
+
   function beginPan(event: PointerEvent, clearOnClick = false): void {
     uvPanning = true;
     panCanClear = clearOnClick;
@@ -342,6 +468,39 @@
       finishKeyboardTransform();
       event.preventDefault();
       return;
+    }
+    if (event.pointerType === 'pen') {
+      penActive = true;
+      if (touchPointers.size > 0) {
+        detachTouchTracking();
+      }
+    } else if (event.pointerType === 'touch') {
+      if (
+        penActive ||
+        performance.now() - lastPenUpAt < PEN_TOUCH_COOLDOWN_MS
+      ) {
+        return;
+      }
+      const point = localPoint(event);
+      touchPointers.set(event.pointerId, point);
+      if (touchPointers.size === 1) {
+        attachTouchTracking();
+      } else if (touchPointers.size === 2) {
+        event.preventDefault();
+        cancelForPinch();
+        session.setActiveEditor('uv');
+        beginPinch();
+        return;
+      } else {
+        return;
+      }
+      if (session.pencilMode) {
+        // Navigation is two-finger only in both panes. A single finger in
+        // Pencil mode does not select or pan.
+        event.preventDefault();
+        session.setActiveEditor('uv');
+        return;
+      }
     }
     if (event.button === 1 || event.button === 2) {
       event.preventDefault();
@@ -428,6 +587,10 @@
     if (event.pointerId !== activePointerId) {
       return;
     }
+    if (event.pointerType === 'pen') {
+      penActive = false;
+      lastPenUpAt = performance.now();
+    }
     detachDragListeners();
     if (uvPanning) {
       uvPanning = false;
@@ -492,6 +655,10 @@
   function windowPointerCancel(event: PointerEvent): void {
     if (event.pointerId !== activePointerId) {
       return;
+    }
+    if (event.pointerType === 'pen') {
+      penActive = false;
+      lastPenUpAt = performance.now();
     }
     detachDragListeners();
     if (uvPanning) {
@@ -716,7 +883,7 @@
         · {keyboardNumeric ? `${keyboardKind === 'move' ? (session.snapshot.uvAxisLock === 'v' ? 'ΔV' : 'ΔU') : keyboardKind === 'rotate' ? 'Angle' : 'Factor'} ${keyboardNumeric}` : 'move pointer or type a number'}
         · U/V axis · Enter {keyboardNumeric ? 'apply' : 'commit'} · Esc cancel
       {:else}
-        16 px pick · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap UV ${session.snapshot.uvSnapStep}` : 'snap off'}
+        16 px pick · 2-finger pinch/pan · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap UV ${session.snapshot.uvSnapStep}` : 'snap off'}
       {/if}
     </span>
   </div>

@@ -253,13 +253,21 @@ export class ViewportRenderer {
     this.selectedEdgeMaterial = new MeshBasicMaterial({
       name: 'loupoli-selected-edge',
       color: theme.accent.color,
-      depthTest: false,
+      depthTest: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
       toneMapped: false
     });
     this.selectedOutlineMaterial = new LineBasicMaterial({
       name: 'loupoli-selected-outline',
       color: theme.accent.color,
-      depthTest: false,
+      depthTest: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
       toneMapped: false
     });
     this.previewLineMaterial = new LineBasicMaterial({

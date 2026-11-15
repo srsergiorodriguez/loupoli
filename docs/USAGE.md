@@ -69,7 +69,8 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Lasso / touch drag | Lasso works with mouse, Pencil, and one-finger touch when the Lasso tool is active. |
 | Mouse wheel | Zoom. |
 | One-finger touch | Orbit on empty space; drag handles and gizmos edit. |
-| Two-finger touch | Pinch to zoom; drag to pan. |
+| Two-finger touch | Pinch to zoom; drag to pan in the viewport, UV pane, and Paint pane. |
+| Pencil-mode one-finger touch in UV/Paint | No canvas action; use two fingers to pan/zoom. Pencil edits/selects/paints. |
 | Two-finger tap | Undo. |
 | Three-finger tap | Redo. |
 | Cmd/Ctrl+Z | Undo. |
