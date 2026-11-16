@@ -11,9 +11,10 @@
     alpha: number;
     onColor: (color: string) => void;
     onAlpha: (alpha: number) => void;
+    onEyedropper: () => void;
   }
 
-  let { label, color, alpha, onColor, onAlpha }: Props = $props();
+  let { label, color, alpha, onColor, onAlpha, onEyedropper }: Props = $props();
   let trigger: HTMLButtonElement;
   let open = $state(false);
   let picker: Record<string, unknown> | null = null;
@@ -58,6 +59,7 @@
         anchor: trigger,
         onChangeColor: onColor,
         onChangeAlpha: onAlpha,
+        onEyedropper,
         onClose: close
       }
     }) as unknown as Record<string, unknown>;

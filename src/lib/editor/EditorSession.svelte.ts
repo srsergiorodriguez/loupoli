@@ -63,6 +63,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   paintSecondaryColor: '#1a1a1f',
   paintSecondaryColorAlpha: 1,
   paintHardness: 0.7,
+  paintEyedropper: false,
   paintSmoothing: 0.25,
   paintNoise: 0,
   paintPressureOpacity: false,
@@ -597,6 +598,23 @@ export class EditorSession {
 
   setUvBrushColorAlpha(alpha: number): void {
     this.runtime?.setUvBrushColorAlpha(alpha);
+  }
+
+  beginPaintEyedropper(target: 'primary' | 'secondary' = 'primary'): void {
+    this.runtime?.beginPaintEyedropper(target);
+  }
+
+  cancelPaintEyedropper(): void {
+    this.runtime?.cancelPaintEyedropper();
+  }
+
+  samplePaintColorAt(
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): boolean {
+    return this.runtime?.samplePaintColorAt(x, y, width, height) ?? false;
   }
 
   setUvBrushSize(size: number): void {

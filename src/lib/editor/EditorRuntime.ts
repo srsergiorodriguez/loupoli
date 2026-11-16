@@ -86,6 +86,7 @@ import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
 import { PaintEngine } from '../paint/PaintEngine';
 import { paintPressure } from '../paint/types';
+import { rgbToHex } from '../paint/color';
 import { brushPreset, type BrushPresetId } from '../paint/presets';
 import {
   drawTextureChecker,
@@ -668,6 +669,8 @@ export class EditorRuntime {
   private paintSecondaryColor = '#1a1a1f';
   private paintSecondaryColorAlpha = 1;
   private paintHardness = 0.7;
+  private paintEyedropper = false;
+  private paintEyedropperTarget: 'primary' | 'secondary' = 'primary';
   private paintSmoothing = 0.25;
   private paintNoise = 0;
   private paintPressureOpacity = false;
@@ -999,6 +1002,7 @@ export class EditorRuntime {
       paintSecondaryColor: this.paintSecondaryColor,
       paintSecondaryColorAlpha: this.paintSecondaryColorAlpha,
       paintHardness: this.paintHardness,
+      paintEyedropper: this.paintEyedropper,
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
       paintPressureOpacity: this.paintPressureOpacity,
@@ -1241,6 +1245,7 @@ export class EditorRuntime {
       this.setWorkspace('paint');
     }
     this.cancelImagePlacement();
+    this.paintEyedropper = false;
     let bitmap: ImageBitmap;
     try {
       bitmap = await createImageBitmap(blob);
@@ -2350,8 +2355,11 @@ export class EditorRuntime {
   setWorkspace(
     workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'
   ): void {
-    if (workspace !== 'paint' && this.imagePlacement) {
-      this.cancelImagePlacement();
+    if (workspace !== 'paint') {
+      this.paintEyedropper = false;
+      if (this.imagePlacement) {
+        this.cancelImagePlacement();
+      }
     }
     this.paintWireCache = null;
     if (this.shapeEdit) {
@@ -3039,6 +3047,67 @@ export class EditorRuntime {
   setUvBrushColorAlpha(alpha: number): void {
     this.uvBrushColorAlpha = Math.min(1, Math.max(0, alpha));
     this.publish();
+  }
+
+  /** Arm one-shot color sampling from the paint texture. */
+  beginPaintEyedropper(target: 'primary' | 'secondary' = 'primary'): void {
+    if (this.imagePlacement) {
+      this.cancelImagePlacement();
+    }
+    this.paintEyedropperTarget = target;
+    this.paintEyedropper = true;
+    this.publish();
+  }
+
+  /** Cancel color sampling without changing the current color. */
+  cancelPaintEyedropper(): void {
+    if (!this.paintEyedropper) {
+      return;
+    }
+    this.paintEyedropper = false;
+    this.publish();
+  }
+
+  /**
+   * Sample the composited texture at a canvas point and apply it to the armed
+   * color slot. Returns false outside the texture or on a transparent texel.
+   */
+  samplePaintColorAt(
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): boolean {
+    const point = paintPointToTexture(
+      x,
+      y,
+      width,
+      height,
+      this.textureStack.width,
+      this.textureStack.height,
+      24,
+      {
+        zoom: this.paintZoom,
+        panX: this.paintPanX,
+        panY: this.paintPanY
+      }
+    );
+    if (!point) {
+      return false;
+    }
+    const sample = this.textureStack.sampleComposite(point.x, point.y);
+    if (!sample || sample.a < 0.02) {
+      return false;
+    }
+    const color = rgbToHex(sample.r, sample.g, sample.b);
+    if (this.paintEyedropperTarget === 'secondary') {
+      this.paintSecondaryColor = color;
+    } else {
+      this.uvBrushColor = color;
+    }
+    this.paintEyedropper = false;
+    this.publish();
+    return true;
   }
 
   setUvBrushSize(size: number): void {

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { rgbaColor } from '../../paint/brush';
   import { hexToHsv, hsvToHex, normalizeHexColor, type HsvColor } from '../../paint/color';
+  import Icon from '../Icons/Icon.svelte';
 
   /** Body-mounted HSV and alpha color picker for one Paint color slot. */
   interface Props {
@@ -14,6 +15,7 @@
     onChangeColor: (color: string) => void;
     onChangeAlpha: (alpha: number) => void;
     onClose: () => void;
+    onEyedropper: () => void;
   }
 
   let {
@@ -25,7 +27,8 @@
     anchor,
     onChangeColor,
     onChangeAlpha,
-    onClose
+    onClose,
+    onEyedropper
   }: Props = $props();
 
   // Mounted fresh for each picker session, so the initial props are intentional.
@@ -135,7 +138,22 @@
 >
   <header>
     <span>{label}</span>
-    <button type="button" aria-label="Close color picker" onclick={onClose}>×</button>
+    <div class="header-actions">
+      <button
+        type="button"
+        class="pick"
+        aria-label={`Pick ${label} color from texture`}
+        title="Pick color from texture"
+        onclick={() => {
+          onEyedropper();
+          onClose();
+        }}
+      >
+        <Icon name="eyedropper" size={14} />
+        <span>Pick</span>
+      </button>
+      <button type="button" aria-label="Close color picker" onclick={onClose}>×</button>
+    </div>
   </header>
 
   <button
@@ -239,6 +257,12 @@
     font-size: var(--text-xs);
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
   header button {
     display: grid;
     place-items: center;
@@ -252,6 +276,23 @@
   header button:hover {
     color: var(--text-primary);
     background: var(--bg-hover);
+  }
+
+  .pick {
+    display: flex;
+    grid-auto-flow: column;
+    align-items: center;
+    gap: var(--space-1);
+    width: auto;
+    padding: 0 var(--space-1);
+    color: var(--text-secondary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+  }
+
+  .pick:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: -2px;
   }
 
   .sv-field {

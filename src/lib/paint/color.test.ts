@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hexToHsv, hsvToHex, normalizeHexColor } from './color';
+import { hexToHsv, hsvToHex, normalizeHexColor, rgbToHex } from './color';
 
 describe('paint color conversion', () => {
   it('normalizes hex colors', () => {
@@ -14,5 +14,9 @@ describe('paint color conversion', () => {
 
   it('round-trips a non-primary color', () => {
     expect(hsvToHex(hexToHsv('#3a7bd5'))).toBe('#3a7bd5');
+  });
+
+  it('converts RGB channels to hex', () => {
+    expect(rgbToHex(255, 128, 0)).toBe('#ff8000');
   });
 });

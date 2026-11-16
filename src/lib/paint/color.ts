@@ -56,3 +56,12 @@ export function hsvToHex(hsv: HsvColor): string {
       .padStart(2, '0');
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
+
+/** Convert 0–255 RGB channels into a six-digit lowercase hex color. */
+export function rgbToHex(r: number, g: number, b: number): string {
+  const channel = (value: number): string =>
+    Math.min(255, Math.max(0, Math.round(value)))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${channel(r)}${channel(g)}${channel(b)}`;
+}

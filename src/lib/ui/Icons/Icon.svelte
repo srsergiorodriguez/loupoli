@@ -174,6 +174,9 @@
   {:else if name === 'fill'}
     <path d="m7 4 9 9-5 5-7-7 3-7Z" />
     <path d="M13.5 19.5c2.3 0 3.5-1.2 3.5-2.8 0-1.2-1.1-2.6-1.7-3.2l-1.8 1.7c-.8 1-1.5 2.3-1.5 3.2 0 1.6 1.2 2.1 1.5 1.1Z" />
+  {:else if name === 'eyedropper'}
+    <path d="m14.5 4.5 5 5M13 6l5 5M4 20l3.2-.8 8.3-8.3-2.4-2.4L4.8 16.8 4 20Z" />
+    <path d="m11.1 7.5 5.4 5.4" />
   {:else if name === 'more'}
     <circle cx="5" cy="12" r="1.6" fill="currentColor" />
     <circle cx="12" cy="12" r="1.6" fill="currentColor" />

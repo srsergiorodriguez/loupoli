@@ -315,6 +315,7 @@ export interface EditorSnapshot {
   readonly paintSecondaryColor: string;
   readonly paintSecondaryColorAlpha: number;
   readonly paintHardness: number;
+  readonly paintEyedropper: boolean;
   readonly paintSmoothing: number;
   readonly paintNoise: number;
   readonly paintPressureOpacity: boolean;

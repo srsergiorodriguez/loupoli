@@ -74,6 +74,7 @@
   );
   const activeEditor = $derived(session.snapshot.activeEditor);
   const imagePlacement = $derived(session.snapshot.imagePlacement);
+  const eyedropper = $derived(session.snapshot.paintEyedropper);
   const canReplaceLayer = $derived(activeLayer?.kind === 'raster');
   const placementAngle = $derived(
     imagePlacement ? (imagePlacement.rotation * 180) / Math.PI : 0
@@ -271,6 +272,13 @@
   $effect(() => {
     if (!imagePlacement) {
       cancelPlacementGestures();
+    }
+  });
+
+  $effect(() => {
+    if (eyedropper) {
+      brushVisible = false;
+      canvas?.focus({ preventScroll: true });
     }
   });
 
@@ -672,6 +680,14 @@
   }
 
   function pointerDown(event: PointerEvent): void {
+    if (eyedropper) {
+      event.preventDefault();
+      session.setActiveEditor('paint');
+      canvas.focus({ preventScroll: true });
+      const point = localPoint(event);
+      session.samplePaintColorAt(point.x, point.y, width, height);
+      return;
+    }
     if (imagePlacement) {
       if (event.pointerType === 'touch') {
         placementTouchDown(event);
@@ -999,6 +1015,14 @@
     if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
+    if (eyedropper) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        session.cancelPaintEyedropper();
+        return;
+      }
+      session.cancelPaintEyedropper();
+    }
     if (imagePlacement) {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -1114,7 +1138,9 @@
       </div>
     {:else}
       <span class="paint-hint">
-        {#if !activeLayer}
+        {#if eyedropper}
+          Click the texture to sample a color · Esc cancels
+        {:else if !activeLayer}
           Add a texture layer in the Inspector
         {:else}
           Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
@@ -1145,6 +1171,7 @@
       bind:this={canvas}
       class="paint-canvas"
       class:placing={imagePlacement !== null}
+      class:picking-color={eyedropper}
       tabindex="0"
       aria-label="Texture paint surface"
       onpointerdown={pointerDown}
@@ -1246,6 +1273,10 @@
 
   .paint-canvas.placing {
     cursor: default;
+  }
+
+  .paint-canvas.picking-color {
+    cursor: crosshair;
   }
 
   .image-placement-frame {

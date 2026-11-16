@@ -15,6 +15,9 @@ class FakeContext {
   translate(): void {}
   rotate(): void {}
   drawImage(): void {}
+  getImageData(): ImageData {
+    return { data: new Uint8ClampedArray([12, 34, 56, 255]) } as ImageData;
+  }
 }
 
 class FakeCanvas {
@@ -197,6 +200,25 @@ describe('TextureAsset', () => {
     expect(stack.summaries().at(-1)?.pattern).toBe('transparent');
     expect(stack.setAlphaMode('cutout')).toBe(true);
     expect(stack.textureAlphaMode).toBe('cutout');
+    stack.dispose();
+  });
+
+  it('samples a composited texture pixel', () => {
+    const stack = new TextureAsset({
+      id: 'sample-test',
+      name: 'Sample',
+      width: 32,
+      height: 32,
+      checkerA: '#000000',
+      checkerB: '#000000'
+    });
+    expect(stack.sampleComposite(0, 0)).toEqual({
+      r: 12,
+      g: 34,
+      b: 56,
+      a: 1
+    });
+    expect(stack.sampleComposite(-1, 0)).toBeNull();
     stack.dispose();
   });
 });

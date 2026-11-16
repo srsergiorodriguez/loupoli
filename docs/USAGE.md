@@ -33,6 +33,7 @@ The footer **Pencil** toggle selects the input policy:
 - **Pencil mode (default, persisted):** the Pencil selects, edits, and paints. The finger is navigation-only on the canvas: one-finger drag orbits in 3D or pans the Paint texture, and two fingers pan/pinch. Canvas taps do not select.
 - **Touch mode:** the finger behaves like the mouse primary button. Tap selects, handles and gizmos edit, empty drag orbits, and one finger paints in the Paint pane. Two fingers still pan/pinch.
 - **Pencil:** selects and edits in either mode. It never moves the camera. Pressure and tilt affect painting. Hovering the Pencil previews the brush in the Paint pane and on the projected surface; tilt rotates and flattens the cursor footprint.
+- **Eyedropper:** open a Paint color swatch and choose **Pick**, then click the texture to sample its composited color. Esc cancels the pick.
 - Two-finger tap undoes and three-finger tap redoes in both modes.
 
 The Pencil toggle sits before Snap in the status bar and is stored in `localStorage`.

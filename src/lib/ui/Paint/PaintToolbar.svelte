@@ -88,6 +88,7 @@
       alpha={session.snapshot.uvBrushColorAlpha}
       onColor={(color) => session.setUvBrushColor(color)}
       onAlpha={(alpha) => session.setUvBrushColorAlpha(alpha)}
+      onEyedropper={() => session.beginPaintEyedropper('primary')}
     />
     {#if session.snapshot.paintTool === 'gradient'}
       <span class="paint-gradient-preview" aria-hidden="true">
@@ -99,6 +100,7 @@
         alpha={session.snapshot.paintSecondaryColorAlpha}
         onColor={(color) => session.setPaintSecondaryColor(color)}
         onAlpha={(alpha) => session.setPaintSecondaryColorAlpha(alpha)}
+        onEyedropper={() => session.beginPaintEyedropper('secondary')}
       />
     {/if}
   </div>

@@ -48,6 +48,7 @@ export type IconName =
   | 'ellipse'
   | 'gradient'
   | 'fill'
+  | 'eyedropper'
   | 'more'
   | 'pin'
   | 'unwrap'

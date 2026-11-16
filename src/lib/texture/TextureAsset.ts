@@ -330,6 +330,25 @@ export class TextureAsset {
     };
   }
 
+  /** Read one composited texture pixel in sRGB bytes. */
+  sampleComposite(
+    x: number,
+    y: number
+  ): { r: number; g: number; b: number; a: number } | null {
+    const px = Math.floor(x);
+    const py = Math.floor(y);
+    if (px < 0 || py < 0 || px >= this.width || py >= this.height) {
+      return null;
+    }
+    const data = this.compositeContext.getImageData(px, py, 1, 1).data;
+    return {
+      r: data[0] ?? 0,
+      g: data[1] ?? 0,
+      b: data[2] ?? 0,
+      a: (data[3] ?? 0) / 255
+    };
+  }
+
   /** Summaries for the reactive Inspector projection. */
   summaries(): readonly TextureLayerSummary[] {
     return this.layers.map((layer) => ({

@@ -60,6 +60,10 @@ The mask is presented only in the dirty rectangle. The preview layer is rebuilt 
 
 Apple Pencil hover updates the brush footprint before contact. The Paint pane and projected 3D cursor use the same tilt aspect and angle as the stamp. Pencil pressure and tilt remain shared by pane and projected painting. Hardness is the only edge control: low values shrink the solid core and broaden the feather into an airbrush-like falloff, while soft brushes automatically tighten dab overlap so spacing does not appear to widen.
 
+### Eyedropper
+
+The Paint color popover has a one-shot Pick action for the primary and gradient secondary colors. It samples the composited texture at the clicked texel, ignores transparent texels, and leaves the color alpha unchanged. Esc or leaving the workspace cancels the armed pick.
+
 ### Image placement
 
 Image import is previewed with an initial Contain/Cover/Stretch/Native fit, then placed directly in the Paint pane. Placement supports drag-to-move, uniform corner scaling, top-handle or two-finger rotation, two-finger pinch/translation, exact angle/opacity fields, and new-layer or raster-layer replacement. Fit is chosen in the import modal; blend is changed in the Inspector after commit. Commit is one undoable operation; cancel discards the bitmap preview.
