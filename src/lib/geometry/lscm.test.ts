@@ -129,7 +129,9 @@ describe('LSCM unwrap', () => {
     const sphere = createQuadSphereMesh(1.5, 2);
     const charts = extractUvCharts(sphere);
     expect(charts[0].boundaryHalfEdges).toHaveLength(0);
-    expect(() => unwrapUvCharts(sphere, charts)).toThrow(LscmError);
+    expect(() => unwrapUvCharts(sphere, charts)).toThrow(
+      /Mark seams that cut it open/
+    );
     expect(() => unwrapUvCharts(sphere, [])).toThrow(LscmError);
   });
 });

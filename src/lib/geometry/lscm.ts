@@ -57,7 +57,7 @@ function unwrapChart(
   }
   if (chart.boundaryHalfEdges.length === 0) {
     throw new LscmError(
-      'A closed UV chart has no boundary. Mark a closed seam loop before unwrapping.'
+      'This UV chart has no boundary. Mark seams that cut it open before unwrapping.'
     );
   }
 
