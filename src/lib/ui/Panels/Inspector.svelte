@@ -254,9 +254,13 @@
   const transformMeta = $derived(
     activeNodeId === null
       ? 'Local'
-      : transformOrientation === 'local'
-        ? 'Local'
-        : 'Global'
+      : session.snapshot.workspace === 'animation'
+        ? transformOrientation === 'local'
+          ? 'Local (keyed)'
+          : 'Global (world)'
+        : transformOrientation === 'local'
+          ? 'Local'
+          : 'Global'
   );
   const modifiersMeta = $derived(
     activeNodeId === null
@@ -2054,7 +2058,14 @@
               onCommit={commitScale}
             />
           </div>
-          {#if useGlobalOrientation}
+          {#if session.snapshot.workspace === 'animation'}
+            <p class="hint">
+              Transform tracks store local values relative to the parent.
+              {transformOrientation === 'local'
+                ? 'These are the values written by transform keys.'
+                : 'World edits are converted to local when keyed.'}
+            </p>
+          {:else if useGlobalOrientation}
             <p class="hint">
               Position and rotation are world-space. Scale remains object-local.
             </p>

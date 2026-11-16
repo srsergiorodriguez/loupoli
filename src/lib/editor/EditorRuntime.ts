@@ -563,6 +563,18 @@ export class EditorRuntime {
   private workspaceShading: Record<Workspace, ShadingMode> = {
     ...DEFAULT_WORKSPACE_SHADING
   };
+  /** Global placement remains the default outside Animation. */
+  private workspaceTransformOrientation: Record<
+    Workspace,
+    TransformOrientation
+  > = {
+    model: 'global',
+    uv: 'global',
+    paint: 'global',
+    light: 'global',
+    animation: 'local',
+    render: 'global'
+  };
   private transformMode: TransformMode = 'select';
   private lassoMode = false;
   private lassoPath: [number, number][] = [];
@@ -1703,6 +1715,7 @@ export class EditorRuntime {
   }
 
   setTransformOrientation(orientation: TransformOrientation): void {
+    this.workspaceTransformOrientation[this.workspace] = orientation;
     if (this.transformOrientation === orientation) {
       return;
     }
@@ -2078,6 +2091,7 @@ export class EditorRuntime {
       }
     }
     this.workspace = workspace;
+    this.applyWorkspaceTransformOrientation(workspace);
     if (workspace !== 'animation') {
       this.pauseAnimation();
     }
@@ -2129,6 +2143,7 @@ export class EditorRuntime {
       this.openUvView();
     }
     this.workspace = workspace;
+    this.applyWorkspaceTransformOrientation(workspace);
     this.applyWorkspaceShading(workspace);
     const paint = workspace === 'paint';
     if (!paint && this.uvPaintMode) {
@@ -2156,6 +2171,15 @@ export class EditorRuntime {
     }
     this.shading = shading;
     this.renderer.setShadingMode(shading);
+  }
+
+  /** Restore the transform value/orientation choice for one workspace. */
+  private applyWorkspaceTransformOrientation(workspace: Workspace): void {
+    const orientation = this.workspaceTransformOrientation[workspace];
+    if (this.transformOrientation === orientation) {
+      return;
+    }
+    this.transformOrientation = orientation;
   }
 
   private openUvView(): void {
@@ -6737,7 +6761,7 @@ export class EditorRuntime {
     );
     track.setKey(
       keyFrame,
-      target.transform,
+      this.animationPose.get(target.id) ?? target.transform,
       this.animationInterpolation
     );
     const after = this.document.animation.snapshot();
