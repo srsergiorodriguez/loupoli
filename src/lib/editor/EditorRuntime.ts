@@ -668,6 +668,7 @@ export class EditorRuntime {
   private paintSecondaryColor = '#1a1a1f';
   private paintSecondaryColorAlpha = 1;
   private paintHardness = 0.7;
+  private paintSoftness = 0;
   private paintSmoothing = 0.25;
   private paintNoise = 0;
   private paintPressureOpacity = false;
@@ -688,7 +689,13 @@ export class EditorRuntime {
     key: string;
     canvas: HTMLCanvasElement;
   } | null = null;
-  private surfaceCursor: { x: number; y: number; size: number } | null = null;
+  private surfaceCursor: {
+    x: number;
+    y: number;
+    size: number;
+    aspect: number;
+    angle: number;
+  } | null = null;
   private imagePlacement: ImagePlacementState | null = null;
   private projectionPreview: ProjectionPreview | null = null;
   private projectedShape: {
@@ -993,6 +1000,7 @@ export class EditorRuntime {
       paintSecondaryColor: this.paintSecondaryColor,
       paintSecondaryColorAlpha: this.paintSecondaryColorAlpha,
       paintHardness: this.paintHardness,
+      paintSoftness: this.paintSoftness,
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
       paintPressureOpacity: this.paintPressureOpacity,
@@ -3062,7 +3070,13 @@ export class EditorRuntime {
   }
 
   setPaintHardness(value: number): void {
-    this.paintHardness = Math.min(1, Math.max(0.01, value));
+    this.paintHardness = Math.min(1, Math.max(0, value));
+    this.paintPreset = null;
+    this.publish();
+  }
+
+  setPaintSoftness(value: number): void {
+    this.paintSoftness = Math.min(1, Math.max(0, value));
     this.paintPreset = null;
     this.publish();
   }
@@ -3114,6 +3128,7 @@ export class EditorRuntime {
     const preset = brushPreset(id);
     this.paintTool = preset.tool;
     this.paintHardness = preset.hardness;
+    this.paintSoftness = preset.softness;
     this.paintSmoothing = preset.smoothing;
     this.paintSpacing = preset.spacing;
     this.paintNoise = preset.noise;
@@ -3537,9 +3552,28 @@ export class EditorRuntime {
     context.strokeRect(bounds.x, bounds.y, bounds.width, bounds.height);
   }
 
+  /** Screen-space footprint of the current brush tilt. */
+  private paintCursorTilt(tiltX: number, tiltY: number): {
+    aspect: number;
+    angle: number;
+  } {
+    if (!this.paintTiltEnabled) {
+      return { aspect: 1, angle: 0 };
+    }
+    const magnitude = Math.min(1, Math.hypot(tiltX, tiltY) / 90);
+    return {
+      aspect: 1 - magnitude * 0.55,
+      angle: Math.atan2(tiltY, tiltX)
+    };
+  }
+
   /** Update the 3D surface brush cursor during hover. */
   private hoverToolPointer(sample: PointerSample | null): void {
-    if (this.workspace !== 'paint' || !sample || sample.pointerType !== 'mouse') {
+    if (
+      this.workspace !== 'paint' ||
+      !sample ||
+      (sample.pointerType !== 'mouse' && sample.pointerType !== 'pen')
+    ) {
       if (this.surfaceCursor !== null) {
         this.surfaceCursor = null;
         this.publish();
@@ -3568,18 +3602,22 @@ export class EditorRuntime {
       supported && hasTexture
         ? this.renderer.pickSurface(sample.clientX, sample.clientY)
         : null;
+    const tilt = this.paintCursorTilt(sample.tiltX, sample.tiltY);
     const next = hit
       ? {
           x: sample.clientX,
           y: sample.clientY,
-          size: this.brushScreenDiameter(hit, this.textureStack)
+          size: this.brushScreenDiameter(hit, this.textureStack),
+          ...tilt
         }
       : null;
     const current = this.surfaceCursor;
     if (
       current?.x === next?.x &&
       current?.y === next?.y &&
-      current?.size === next?.size
+      current?.size === next?.size &&
+      current?.aspect === next?.aspect &&
+      current?.angle === next?.angle
     ) {
       return;
     }
@@ -3826,6 +3864,7 @@ export class EditorRuntime {
       radius,
       opacity: this.uvBrushOpacity,
       hardness: this.paintHardness,
+      softness: this.paintSoftness,
       smoothing: this.paintSmoothing,
       noise: this.paintNoise,
       pressureOpacity: this.paintPressureOpacity,
@@ -3925,7 +3964,8 @@ export class EditorRuntime {
     this.surfaceCursor = {
       x: sample.clientX,
       y: sample.clientY,
-      size: this.brushScreenDiameter(hit, asset)
+      size: this.brushScreenDiameter(hit, asset),
+      ...this.paintCursorTilt(sample.tiltX, sample.tiltY)
     };
     if (this.paintTool === 'fill') {
       const fill = this.projectedUvIsland(node, hit.face, asset);
@@ -4152,7 +4192,8 @@ export class EditorRuntime {
       this.surfaceCursor = {
         x: finalSample.clientX,
         y: finalSample.clientY,
-        size: this.surfaceCursor?.size ?? 2
+        size: this.surfaceCursor?.size ?? 2,
+        ...this.paintCursorTilt(finalSample.tiltX, finalSample.tiltY)
       };
       this.publish();
       return;
@@ -4166,6 +4207,8 @@ export class EditorRuntime {
     let lastClientX = finalSample.clientX;
     let lastClientY = finalSample.clientY;
     let lastScreenSize = this.surfaceCursor?.size ?? 2;
+    let lastTiltX = finalSample.tiltX;
+    let lastTiltY = finalSample.tiltY;
     const updates: {
       sample: PaintSample;
       connect: boolean;
@@ -4191,12 +4234,19 @@ export class EditorRuntime {
       lastClientX = sample.clientX;
       lastClientY = sample.clientY;
       lastScreenSize = this.brushScreenDiameter(hit, state.asset);
+      lastTiltX = sample.tiltX;
+      lastTiltY = sample.tiltY;
     }
     if (updates.length > 0) {
       state.engine.updateProjectedBatch(updates);
     }
     this.surfaceCursor = finalHit
-      ? { x: lastClientX, y: lastClientY, size: lastScreenSize }
+      ? {
+          x: lastClientX,
+          y: lastClientY,
+          size: lastScreenSize,
+          ...this.paintCursorTilt(lastTiltX, lastTiltY)
+        }
       : null;
     if (updated) {
       this.uvRevision += 1;

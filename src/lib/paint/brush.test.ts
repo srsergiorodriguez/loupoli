@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drawStampLine, rgbaColor } from './brush';
+import { drawStampLine, rgbaColor, stampFalloff } from './brush';
 import type { PaintSettings } from './types';
 
 describe('paint color alpha', () => {
@@ -28,6 +28,7 @@ describe('pressure-aware stamp spacing', () => {
       smoothing: 0,
       noise: 0,
       pressureOpacity: false,
+      softness: 0,
       pressureCurve: 1,
       pressureMin: 0.35,
       tiltEnabled: true,
@@ -78,5 +79,14 @@ describe('pressure-aware stamp spacing', () => {
     );
     const full = arcs;
     expect(light).toBeGreaterThan(full);
+  });
+
+  it('extends hardness with a steeper softness falloff', () => {
+    expect(stampFalloff(0.5, 0, 0)).toBeGreaterThan(
+      stampFalloff(0.5, 0, 1)
+    );
+    expect(stampFalloff(1, 0, 0)).toBe(0);
+    expect(stampFalloff(1, 0, 1)).toBe(0);
+    expect(stampFalloff(0, 0, 1)).toBe(1);
   });
 });

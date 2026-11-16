@@ -315,6 +315,7 @@ export interface EditorSnapshot {
   readonly paintSecondaryColor: string;
   readonly paintSecondaryColorAlpha: number;
   readonly paintHardness: number;
+  readonly paintSoftness: number;
   readonly paintSmoothing: number;
   readonly paintNoise: number;
   readonly paintPressureOpacity: boolean;
@@ -329,7 +330,13 @@ export interface EditorSnapshot {
   readonly paintZoom: number;
   readonly paintPanX: number;
   readonly paintPanY: number;
-  readonly surfaceCursor: { readonly x: number; readonly y: number; readonly size: number } | null;
+  readonly surfaceCursor: {
+    readonly x: number;
+    readonly y: number;
+    readonly size: number;
+    readonly aspect: number;
+    readonly angle: number;
+  } | null;
   readonly imagePlacement: ImagePlacementSnapshot | null;
   readonly projectionPreview: ProjectionPreview | null;
   readonly uvRevision: number;

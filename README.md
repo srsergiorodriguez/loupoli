@@ -124,8 +124,10 @@ See [docs/PWA.md](docs/PWA.md) for the full deployment and browser limitations.
   quads, selection, transforms, topology tools, groups, and modifiers.
 - **UV and paint:** seam charts, LSCM unwrap, pinned unwrap, shared atlases,
   layered textures, paint/eraser/shapes/gradient/fill, projection painting,
-  pressure and tilt, adjustable hardness/smoothing/noise, and pressure-aware
-  stamp size and spacing on a shared GPU coverage-mask stroke surface.
+  brush presets, pressure and tilt, extended softness falloff, Pencil hover
+  and tilt-oriented cursors, adjustable hardness/smoothing/noise, and
+  pressure-aware stamp size and spacing on a shared GPU coverage-mask stroke
+  surface.
 - **Lighting:** directional and point lights, hard/soft shadows, per-corner AO
   preview, direct-light and AO texture baking, and bake-atlas preparation.
 - **Animation and render:** transform/shape-weight/texture/camera/light tracks,

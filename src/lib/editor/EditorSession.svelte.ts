@@ -63,6 +63,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   paintSecondaryColor: '#1a1a1f',
   paintSecondaryColorAlpha: 1,
   paintHardness: 0.7,
+  paintSoftness: 0,
   paintSmoothing: 0.25,
   paintNoise: 0,
   paintPressureOpacity: false,
@@ -621,6 +622,10 @@ export class EditorSession {
 
   setPaintHardness(value: number): void {
     this.runtime?.setPaintHardness(value);
+  }
+
+  setPaintSoftness(value: number): void {
+    this.runtime?.setPaintSoftness(value);
   }
 
   setPaintSmoothing(value: number): void {

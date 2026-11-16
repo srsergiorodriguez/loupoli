@@ -29,6 +29,24 @@ export function pressureResponse(
   return floor + (1 - floor) * normalized ** responseCurve;
 }
 
+/** Normalized radial falloff shared by the CPU stamp and preview. */
+export function stampFalloff(
+  distance: number,
+  hardness: number,
+  softness: number
+): number {
+  const d = clamp(distance, 0, 1);
+  const h = clamp(hardness, 0, 0.999);
+  const t = clamp((d - h) / Math.max(0.001, 1 - h), 0, 1);
+  const smooth = t * t * (3 - 2 * t);
+  return Math.max(0, 1 - smooth) ** (1 + clamp(softness, 0, 1) * 3);
+}
+
+/** Softness expands the feather even when hardness is at its maximum. */
+export function effectiveHardness(hardness: number, softness: number): number {
+  return clamp(hardness, 0, 1) * (1 - clamp(softness, 0, 1) * 0.85);
+}
+
 /** Default pressure response retained for callers without custom dynamics. */
 export function pressureRadiusScale(pressure: number): number {
   return pressureResponse(pressure, 1, 0.35);
@@ -53,8 +71,10 @@ function stampSprite(
     return null;
   }
   const radius = Math.max(1, Math.min(512, Math.ceil(settings.radius)));
-  const hardness = Math.min(1, Math.max(0.01, settings.hardness));
-  const key = `${erase ? 'e' : 'c'}:${settings.color}:${hardness}:${radius}`;
+  const hardness = Math.min(1, Math.max(0, settings.hardness));
+  const softness = Math.min(1, Math.max(0, settings.softness));
+  const edgeHardness = effectiveHardness(hardness, softness);
+  const key = `${erase ? 'e' : 'c'}:${settings.color}:${hardness}:${softness}:${radius}`;
   const cached = STAMP_SPRITES.get(key);
   if (cached) {
     return cached;
@@ -70,22 +90,30 @@ function stampSprite(
   const center = size / 2;
   const rgb = erase ? '0,0,0' : hexRgb(settings.color);
   context.clearRect(0, 0, size, size);
-  if (hardness >= 0.995) {
+  if (hardness >= 0.995 && softness <= 0.01) {
     context.fillStyle = erase ? '#000000' : settings.color;
     context.beginPath();
     context.arc(center, center, radius, 0, Math.PI * 2);
     context.fill();
   } else {
+    const inner = radius * Math.max(0, edgeHardness * 0.96);
     const gradient = context.createRadialGradient(
       center,
       center,
-      radius * Math.max(0.01, hardness * 0.96),
+      inner,
       center,
       center,
       radius
     );
-    gradient.addColorStop(0, `rgba(${rgb},1)`);
-    gradient.addColorStop(1, `rgba(${rgb},0)`);
+    for (let step = 0; step <= 12; step += 1) {
+      const t = step / 12;
+      const alpha = stampFalloff(
+        edgeHardness + (1 - edgeHardness) * t,
+        edgeHardness,
+        softness
+      );
+      gradient.addColorStop(t, `rgba(${rgb},${alpha})`);
+    }
     context.fillStyle = gradient;
     context.beginPath();
     context.arc(center, center, radius, 0, Math.PI * 2);
@@ -147,8 +175,10 @@ export function drawStamp(
   const r = Math.max(0.5, radius * pressureScale * sizeJitter);
   const cx = x + jitterX;
   const cy = y + jitterY;
-  const hardness = clamp(settings.hardness, 0.01, 1);
-  const inner = r * Math.max(0.01, hardness * 0.96);
+  const hardness = clamp(settings.hardness, 0, 1);
+  const softness = clamp(settings.softness, 0, 1);
+  const edgeHardness = effectiveHardness(hardness, softness);
+  const inner = r * Math.max(0, edgeHardness * 0.96);
   const tiltMagnitude = settings.tiltEnabled
     ? clamp(Math.hypot(tilt?.x ?? 0, tilt?.y ?? 0) / 90, 0, 1)
     : 0;
@@ -178,7 +208,7 @@ export function drawStamp(
         drawSize
       );
     }
-  } else if (hardness >= 0.995) {
+  } else if (hardness >= 0.995 && softness <= 0.01) {
     context.fillStyle = erase ? '#000000' : settings.color;
     context.beginPath();
     context.arc(cx, cy, r, 0, Math.PI * 2);
@@ -186,8 +216,17 @@ export function drawStamp(
   } else {
     const gradient = context.createRadialGradient(cx, cy, inner, cx, cy, r);
     const color = erase ? '0,0,0' : hexRgb(settings.color);
-    gradient.addColorStop(0, `rgba(${color},${alpha})`);
-    gradient.addColorStop(1, `rgba(${color},0)`);
+    for (let step = 0; step <= 12; step += 1) {
+      const t = step / 12;
+      gradient.addColorStop(
+        t,
+        `rgba(${color},${stampFalloff(
+          edgeHardness + (1 - edgeHardness) * t,
+          edgeHardness,
+          softness
+        )})`
+      );
+    }
     context.globalAlpha = 1;
     context.fillStyle = gradient;
     context.beginPath();

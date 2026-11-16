@@ -330,6 +330,9 @@ export class InputRouter {
       // WKWebView can report a different ID on the terminal event in some
       // iPadOS versions, which otherwise leaves the paint gesture open.
       if (this.activePenPointers === 0) {
+        if (event.buttons === 0) {
+          this.host.hoverToolPointer(sample);
+        }
         return;
       }
       if (

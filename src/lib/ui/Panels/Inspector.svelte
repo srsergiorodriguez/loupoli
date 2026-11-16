@@ -1984,6 +1984,11 @@
               onChange={(value) => session.setPaintHardness(value)}
             />
             <SliderField
+              label="Softness"
+              value={session.snapshot.paintSoftness}
+              onChange={(value) => session.setPaintSoftness(value)}
+            />
+            <SliderField
               label="Spacing"
               value={session.snapshot.paintSpacing}
               min={MIN_PAINT_SPACING}

@@ -441,6 +441,7 @@
       style:top={`${session.snapshot.surfaceCursor.y}px`}
       style:width={`${session.snapshot.surfaceCursor.size}px`}
       style:height={`${session.snapshot.surfaceCursor.size}px`}
+      style:transform={`translate(-50%, -50%) rotate(${session.snapshot.surfaceCursor.angle}rad) scaleY(${session.snapshot.surfaceCursor.aspect})`}
       aria-hidden="true"
     ></div>
   {/if}

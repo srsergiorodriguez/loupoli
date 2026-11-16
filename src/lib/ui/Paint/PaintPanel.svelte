@@ -25,6 +25,8 @@
   let brushX = $state(0);
   let brushY = $state(0);
   let brushVisible = $state(false);
+  let brushAspect = $state(1);
+  let brushAngle = $state(0);
   let panning = false;
   let panPointerId: number | null = null;
   let panLastX = 0;
@@ -657,6 +659,18 @@
     placementDrag = null;
   }
 
+  function updateBrushTilt(event: PointerEvent): void {
+    if (!session.snapshot.paintTiltEnabled) {
+      brushAspect = 1;
+      brushAngle = 0;
+      return;
+    }
+    const tilt = tiltOf(event);
+    const magnitude = Math.min(1, Math.hypot(tilt.x, tilt.y) / 90);
+    brushAspect = 1 - magnitude * 0.55;
+    brushAngle = Math.atan2(tilt.y, tilt.x);
+  }
+
   function pointerDown(event: PointerEvent): void {
     if (imagePlacement) {
       if (event.pointerType === 'touch') {
@@ -720,6 +734,7 @@
     const tilt = tiltOf(event);
     brushX = point.x;
     brushY = point.y;
+    updateBrushTilt(event);
     brushVisible = true;
     if (
       !session.beginTexturePaint(
@@ -752,9 +767,14 @@
   }
 
   function pointerTrack(event: PointerEvent): void {
+    if (event.pointerType === 'touch' && session.pencilMode && !painting) {
+      brushVisible = false;
+      return;
+    }
     const point = localPoint(event);
     brushX = point.x;
     brushY = point.y;
+    updateBrushTilt(event);
     brushVisible = true;
   }
 
@@ -775,6 +795,7 @@
       const tilt = tiltOf(sample);
       brushX = point.x;
       brushY = point.y;
+      updateBrushTilt(sample);
       pendingPaintSamples.push({
         x: point.x,
         y: point.y,
@@ -1162,7 +1183,7 @@
     {#if brushVisible && !imagePlacement}
       <span
         class="brush-cursor"
-        style={`left:${brushX}px;top:${brushY}px;width:${brushSize}px;height:${brushSize}px`}
+        style={`left:${brushX}px;top:${brushY}px;width:${brushSize}px;height:${brushSize}px;transform:translate(-50%,-50%) rotate(${brushAngle}rad) scaleY(${brushAspect})`}
         aria-hidden="true"
       ></span>
     {/if}
