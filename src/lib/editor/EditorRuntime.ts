@@ -79,6 +79,7 @@ import {
   TextureAssetCommand,
   textureAssetStatesEqual,
   type TextureAlphaMode,
+  type TextureBlendMode,
   type TextureLayerPattern
 } from '../texture/TextureAsset';
 import { TextureLibrary } from '../texture/TextureLibrary';
@@ -504,6 +505,9 @@ interface ImagePlacementState {
   width: number;
   height: number;
   rotation: number;
+  opacity: number;
+  blendMode: TextureBlendMode;
+  replaceActive: boolean;
 }
 
 /** A live raster paint stroke over the active texture layer. */
@@ -1205,7 +1209,10 @@ export class EditorRuntime {
       y: placement.y,
       width: placement.width,
       height: placement.height,
-      rotation: placement.rotation
+      rotation: placement.rotation,
+      opacity: placement.opacity,
+      blendMode: placement.blendMode,
+      replaceActive: placement.replaceActive
     };
   }
 
@@ -1255,7 +1262,10 @@ export class EditorRuntime {
       y: rect.y + rect.height / 2,
       width: rect.width,
       height: rect.height,
-      rotation: 0
+      rotation: 0,
+      opacity: 1,
+      blendMode: 'normal',
+      replaceActive: false
     };
     this.uvRevision += 1;
     this.publish();
@@ -1264,7 +1274,10 @@ export class EditorRuntime {
   /** Update the live image placement in texture-pixel coordinates. */
   updateImagePlacement(
     patch: Partial<
-      Pick<ImagePlacementState, 'x' | 'y' | 'width' | 'height' | 'rotation'>
+      Pick<
+        ImagePlacementState,
+        'x' | 'y' | 'width' | 'height' | 'rotation' | 'opacity' | 'blendMode' | 'replaceActive'
+      >
     >
   ): void {
     const placement = this.imagePlacement;
@@ -1281,6 +1294,15 @@ export class EditorRuntime {
     }
     if (Number.isFinite(patch.rotation)) {
       placement.rotation = patch.rotation as number;
+    }
+    if (Number.isFinite(patch.opacity)) {
+      placement.opacity = Math.min(1, Math.max(0, patch.opacity as number));
+    }
+    if (patch.blendMode) {
+      placement.blendMode = patch.blendMode;
+    }
+    if (patch.replaceActive !== undefined) {
+      placement.replaceActive = patch.replaceActive;
     }
     this.uvRevision += 1;
     this.publish();
@@ -1315,29 +1337,81 @@ export class EditorRuntime {
       return;
     }
     const asset = placement.asset;
-    const before = asset.snapshot();
-    const imported = asset.importBitmapLayer(
-      placement.bitmap,
-      placement.name,
-      {
-        x: placement.x,
-        y: placement.y,
-        width: placement.width,
-        height: placement.height,
-        rotation: placement.rotation
+    if (placement.replaceActive) {
+      const layerId = asset.activeLayerId;
+      const layer = asset
+        .summaries()
+        .find((item) => item.id === layerId);
+      if (!layerId || !layer || layer.kind !== 'raster') {
+        this.notify(
+          'warning',
+          'Cannot replace layer',
+          'Select a raster texture layer first.'
+        );
+        return;
       }
-    );
-    if (!imported) {
-      this.notify('error', 'Image import failed', 'The placement is invalid.');
-      return;
+      if (!asset.beginPaint(layerId)) {
+        this.notify('error', 'Image import failed', 'The layer could not be painted.');
+        return;
+      }
+      const context = asset.getPaintContext(layerId);
+      if (!context) {
+        asset.cancelPaint();
+        return;
+      }
+      context.clearRect(0, 0, asset.width, asset.height);
+      context.imageSmoothingEnabled = asset.textureFilter === 'linear';
+      context.globalAlpha = placement.opacity;
+      context.save();
+      context.translate(placement.x, placement.y);
+      context.rotate(placement.rotation);
+      context.drawImage(
+        placement.bitmap,
+        -placement.width / 2,
+        -placement.height / 2,
+        placement.width,
+        placement.height
+      );
+      context.restore();
+      asset.preparePaintRegion(0, 0, asset.width, asset.height);
+      asset.refreshPreview();
+      const patch = asset.endPaint();
+      placement.bitmap.close();
+      this.imagePlacement = null;
+      if (patch) {
+        this.history.execute(
+          new PaintTextureCommand(asset, patch, 'Replace image layer')
+        );
+      }
+    } else {
+      const before = asset.snapshot();
+      const imported = asset.importBitmapLayer(
+        placement.bitmap,
+        placement.name,
+        {
+          x: placement.x,
+          y: placement.y,
+          width: placement.width,
+          height: placement.height,
+          rotation: placement.rotation
+        },
+        {
+          opacity: placement.opacity,
+          blendMode: placement.blendMode
+        }
+      );
+      if (!imported) {
+        this.notify('error', 'Image import failed', 'The placement is invalid.');
+        return;
+      }
+      const after = asset.snapshot();
+      placement.bitmap.close();
+      this.imagePlacement = null;
+      this.textureLibrary.setActive(asset.id);
+      this.history.execute(
+        new TextureAssetCommand(asset, before, after, 'Import image layer')
+      );
     }
-    const after = asset.snapshot();
-    placement.bitmap.close();
-    this.imagePlacement = null;
-    this.textureLibrary.setActive(asset.id);
-    this.history.execute(
-      new TextureAssetCommand(asset, before, after, 'Import image layer')
-    );
     this.autosave.markTextureDirty();
     this.uvRevision += 1;
     this.renderer.refreshTexture();
@@ -1656,6 +1730,7 @@ export class EditorRuntime {
 
   /** Activate a texture layer without adding an undo step. */
   setActiveTextureLayer(id: string): void {
+    this.cancelImagePlacement();
     this.textureStack.setActive(id);
     this.publish();
   }
@@ -3350,6 +3425,11 @@ export class EditorRuntime {
     );
     context.rotate(placement.rotation);
     context.imageSmoothingEnabled = placement.asset.textureFilter === 'linear';
+    context.globalAlpha = placement.opacity;
+    context.globalCompositeOperation =
+      placement.replaceActive || placement.blendMode === 'normal'
+        ? 'source-over'
+        : placement.blendMode;
     context.drawImage(
       placement.bitmap,
       (-placement.width / 2) * scaleX,

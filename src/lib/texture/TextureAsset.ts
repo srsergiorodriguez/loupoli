@@ -743,7 +743,11 @@ export class TextureAsset {
   importBitmapLayer(
     bitmap: ImageBitmap,
     name: string,
-    placement: ImagePlacementTransform
+    placement: ImagePlacementTransform,
+    options: {
+      opacity?: number;
+      blendMode?: 'normal' | 'multiply' | 'screen';
+    } = {}
   ): boolean {
     if (
       !Number.isFinite(placement.x) ||
@@ -760,9 +764,9 @@ export class TextureAsset {
       name.trim() || 'Imported image',
       'solid',
       '#ffffff',
-      1,
+      Math.min(1, Math.max(0, options.opacity ?? 1)),
       layerId(),
-      'normal',
+      options.blendMode ?? 'normal',
       'raster'
     );
     const context = layer.context;

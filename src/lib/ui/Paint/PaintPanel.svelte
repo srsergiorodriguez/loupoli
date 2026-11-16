@@ -79,6 +79,12 @@
     stretch: 'Stretch',
     native: 'Native'
   };
+  const blendLabels: Record<'normal' | 'multiply' | 'screen', string> = {
+    normal: 'Normal',
+    multiply: 'Multiply',
+    screen: 'Screen'
+  };
+  const canReplaceLayer = $derived(activeLayer?.kind === 'raster');
   const placementAngle = $derived(
     imagePlacement ? (imagePlacement.rotation * 180) / Math.PI : 0
   );
@@ -145,6 +151,23 @@
     startAngle: number;
   };
   let placementDrag = $state<PlacementDrag | null>(null);
+  const placementTouches = new Map<number, { x: number; y: number }>();
+  let placementPinch = $state<{
+    ids: [number, number];
+    startCenter: { x: number; y: number };
+    startDistance: number;
+    startAngle: number;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    startRotation: number;
+    boundsWidth: number;
+    boundsHeight: number;
+    textureWidth: number;
+    textureHeight: number;
+  } | null>(null);
+  let dragActive = $state(false);
 
 
   onMount(() => {
@@ -157,6 +180,7 @@
       height = rect.height;
     });
     observer.observe(host);
+    window.addEventListener('paste', pasteImage);
     const onVisibilityChange = (): void => {
       if (document.visibilityState === 'hidden') {
         settleForBackground();
@@ -255,6 +279,17 @@
   }
 
   $effect(() => {
+    if (!imagePlacement) {
+      cancelPlacementGestures();
+    }
+  });
+
+  onDestroy(() => {
+    cancelPlacementGestures();
+    window.removeEventListener('paste', pasteImage);
+  });
+
+  $effect(() => {
     session.snapshot.uvRevision;
     session.snapshot.textureAssetId;
     session.snapshot.textureActiveId;
@@ -332,6 +367,183 @@
       x: ((point.x - frame.bounds.x) / frame.bounds.width) * placement.textureWidth,
       y: ((point.y - frame.bounds.y) / frame.bounds.height) * placement.textureHeight
     };
+  }
+
+  function cancelPlacementGestures(): void {
+    if (placementDrag) {
+      window.removeEventListener('pointermove', placementMove);
+      window.removeEventListener('pointerup', placementUp);
+      window.removeEventListener('pointercancel', placementUp);
+      try {
+        if (canvas?.hasPointerCapture(placementDrag.pointerId)) {
+          canvas.releasePointerCapture(placementDrag.pointerId);
+        }
+      } catch {
+        // Capture may already be released.
+      }
+    }
+    placementDrag = null;
+    window.removeEventListener('pointermove', placementTouchMove);
+    window.removeEventListener('pointerup', placementTouchUp);
+    window.removeEventListener('pointercancel', placementTouchUp);
+    placementPinch = null;
+    placementTouches.clear();
+  }
+
+  function placementTouchDown(event: PointerEvent): void {
+    const point = localPoint(event);
+    placementTouches.set(event.pointerId, point);
+    if (placementTouches.size === 1) {
+      beginPlacementPointer(event);
+      return;
+    }
+    if (placementTouches.size !== 2) {
+      return;
+    }
+    event.preventDefault();
+    if (placementDrag) {
+      window.removeEventListener('pointermove', placementMove);
+      window.removeEventListener('pointerup', placementUp);
+      window.removeEventListener('pointercancel', placementUp);
+      placementDrag = null;
+    }
+    const points = [...placementTouches.values()];
+    const frame = placementFrame;
+    const placement = imagePlacement;
+    if (!frame || !placement || points.length < 2) {
+      return;
+    }
+    const center = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+    placementPinch = {
+      ids: [...placementTouches.keys()] as [number, number],
+      startCenter: center,
+      startDistance: Math.max(
+        1,
+        Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y)
+      ),
+      startAngle: Math.atan2(
+        points[1].y - points[0].y,
+        points[1].x - points[0].x
+      ),
+      startX: placement.x,
+      startY: placement.y,
+      startWidth: placement.width,
+      startHeight: placement.height,
+      startRotation: placement.rotation,
+      boundsWidth: frame.bounds.width,
+      boundsHeight: frame.bounds.height,
+      textureWidth: placement.textureWidth,
+      textureHeight: placement.textureHeight
+    };
+    window.addEventListener('pointermove', placementTouchMove);
+    window.addEventListener('pointerup', placementTouchUp);
+    window.addEventListener('pointercancel', placementTouchUp);
+  }
+
+  function placementTouchMove(event: PointerEvent): void {
+    if (event.pointerType !== 'touch' || !placementTouches.has(event.pointerId)) {
+      return;
+    }
+    placementTouches.set(event.pointerId, localPoint(event));
+    const pinch = placementPinch;
+    if (!pinch || placementTouches.size < 2) {
+      return;
+    }
+    event.preventDefault();
+    const points = [...placementTouches.values()];
+    if (points.length < 2) {
+      return;
+    }
+    const center = {
+      x: (points[0].x + points[1].x) / 2,
+      y: (points[0].y + points[1].y) / 2
+    };
+    const distance = Math.max(
+      1,
+      Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y)
+    );
+    const angle = Math.atan2(
+      points[1].y - points[0].y,
+      points[1].x - points[0].x
+    );
+    let deltaAngle = angle - pinch.startAngle;
+    while (deltaAngle > Math.PI) deltaAngle -= Math.PI * 2;
+    while (deltaAngle < -Math.PI) deltaAngle += Math.PI * 2;
+    const scale = distance / pinch.startDistance;
+    session.updateImagePlacement({
+      x:
+        pinch.startX +
+        ((center.x - pinch.startCenter.x) / pinch.boundsWidth) *
+          pinch.textureWidth,
+      y:
+        pinch.startY +
+        ((center.y - pinch.startCenter.y) / pinch.boundsHeight) *
+          pinch.textureHeight,
+      width: pinch.startWidth * scale,
+      height: pinch.startHeight * scale,
+      rotation: pinch.startRotation + deltaAngle
+    });
+  }
+
+  function placementTouchUp(event: PointerEvent): void {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    placementTouches.delete(event.pointerId);
+    if (placementPinch && placementTouches.size < 2) {
+      window.removeEventListener('pointermove', placementTouchMove);
+      window.removeEventListener('pointerup', placementTouchUp);
+      window.removeEventListener('pointercancel', placementTouchUp);
+      placementPinch = null;
+    }
+    if (placementTouches.size === 0) {
+      placementTouches.clear();
+    }
+  }
+
+  function imageDrop(event: DragEvent): void {
+    event.preventDefault();
+    dragActive = false;
+    const file = [...(event.dataTransfer?.files ?? [])].find((item) =>
+      item.type.startsWith('image/')
+    );
+    if (!file) {
+      return;
+    }
+    void session.beginImagePlacement(file, file.name.replace(/\.[^.]+$/, ''), {
+      mode: 'contain'
+    });
+  }
+
+  function imageDragOver(event: DragEvent): void {
+    if (!event.dataTransfer?.types.includes('Files')) {
+      return;
+    }
+    event.preventDefault();
+    dragActive = true;
+  }
+
+  function pasteImage(event: ClipboardEvent): void {
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLInputElement ||
+      active instanceof HTMLTextAreaElement ||
+      active?.getAttribute('contenteditable') === 'true'
+    ) {
+      return;
+    }
+    const file = [...(event.clipboardData?.files ?? [])].find((item) =>
+      item.type.startsWith('image/')
+    );
+    if (!file) {
+      return;
+    }
+    event.preventDefault();
+    canvas?.focus({ preventScroll: true });
+    void session.beginImagePlacement(file, 'Pasted image', { mode: 'contain' });
   }
 
   function beginPlacementPointer(event: PointerEvent): boolean {
@@ -459,7 +671,11 @@
 
   function pointerDown(event: PointerEvent): void {
     if (imagePlacement) {
-      beginPlacementPointer(event);
+      if (event.pointerType === 'touch') {
+        placementTouchDown(event);
+      } else {
+        beginPlacementPointer(event);
+      }
       return;
     }
     if (event.pointerType === 'pen') {
@@ -857,6 +1073,47 @@
             session.updateImagePlacement({ rotation: (degrees * Math.PI) / 180 })}
         />
       </label>
+      <label class="placement-opacity">
+        <span>Opacity</span>
+        <NumberField
+          label="Image opacity"
+          value={imagePlacement.opacity * 100}
+          min={0}
+          max={100}
+          step={1}
+          precision={0}
+          unit="%"
+          onCommit={(percent) =>
+            session.updateImagePlacement({ opacity: percent / 100 })}
+        />
+      </label>
+      <ActionMenu
+        label={`Blend: ${blendLabels[imagePlacement.blendMode]}`}
+        icon="stack"
+        menuTitle="Image blend mode"
+        disabled={imagePlacement.replaceActive}
+        options={[
+          { label: 'Normal', onSelect: () => session.updateImagePlacement({ blendMode: 'normal' }) },
+          { label: 'Multiply', onSelect: () => session.updateImagePlacement({ blendMode: 'multiply' }) },
+          { label: 'Screen', onSelect: () => session.updateImagePlacement({ blendMode: 'screen' }) }
+        ]}
+      />
+      <ActionMenu
+        label={`Layer: ${imagePlacement.replaceActive ? 'Replace' : 'New'}`}
+        icon="image"
+        menuTitle="Placement layer"
+        options={[
+          {
+            label: 'New layer',
+            onSelect: () => session.updateImagePlacement({ replaceActive: false })
+          },
+          {
+            label: 'Replace active raster',
+            disabled: !canReplaceLayer,
+            onSelect: () => session.updateImagePlacement({ replaceActive: true })
+          }
+        ]}
+      />
       <div class="placement-actions">
         <ActionButton
           label="Cancel"
@@ -889,7 +1146,16 @@
   footer={paintFooter}
 >
 
-  <div class="paint-stage" bind:this={host}>
+  <div
+    class="paint-stage"
+    class:drag-active={dragActive}
+    role="group"
+    aria-label="Texture paint area"
+    bind:this={host}
+    ondragover={imageDragOver}
+    ondragleave={() => (dragActive = false)}
+    ondrop={imageDrop}
+  >
     <canvas
       bind:this={canvas}
       class="paint-canvas"
@@ -953,6 +1219,22 @@
   .paint-stage {
     position: absolute;
     inset: 0;
+  }
+
+  .paint-stage.drag-active::after {
+    content: 'Drop image to place';
+    position: absolute;
+    z-index: 3;
+    inset: 12px;
+    display: grid;
+    place-items: center;
+    border: 2px dashed var(--accent-primary);
+    border-radius: var(--radius-md);
+    background: rgba(18, 18, 20, 0.72);
+    color: var(--accent-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    pointer-events: none;
   }
 
   .paint-canvas {
@@ -1024,7 +1306,8 @@
     flex: 0 0 auto;
   }
 
-  .placement-angle {
+  .placement-angle,
+  .placement-opacity {
     display: flex;
     flex: 0 0 108px;
     align-items: center;
@@ -1035,7 +1318,8 @@
     font-size: var(--text-xs);
   }
 
-  .placement-angle :global(.number-field) {
+  .placement-angle :global(.number-field),
+  .placement-opacity :global(.number-field) {
     min-width: 0;
   }
 

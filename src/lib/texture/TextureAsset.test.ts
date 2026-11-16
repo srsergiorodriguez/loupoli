@@ -92,11 +92,13 @@ describe('TextureAsset', () => {
         width: 20,
         height: 10,
         rotation: 0.25
-      })
+      }, { opacity: 0.55, blendMode: 'screen' })
     ).toBe(true);
     expect(stack.layerCount).toBe(2);
     expect(stack.summaries()[1].kind).toBe('raster');
     expect(stack.summaries()[1].name).toBe('Placed image');
+    expect(stack.summaries()[1].opacity).toBe(0.55);
+    expect(stack.summaries()[1].blendMode).toBe('screen');
     stack.dispose();
   });
 

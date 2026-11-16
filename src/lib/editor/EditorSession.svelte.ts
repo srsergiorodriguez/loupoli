@@ -758,6 +758,9 @@ export class EditorSession {
       width: number;
       height: number;
       rotation: number;
+      opacity: number;
+      blendMode: 'normal' | 'multiply' | 'screen';
+      replaceActive: boolean;
     }>
   ): void {
     this.runtime?.updateImagePlacement(patch);

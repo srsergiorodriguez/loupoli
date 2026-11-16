@@ -56,6 +56,10 @@ The mask is presented only in the dirty rectangle. The preview layer is rebuilt 
 
 `TextureAsset.refreshPreviewRegion()` rebuilds only the dirty rectangle for normal raster stacks. Effect and lighting layers that depend on the full accumulated image fall back to a full composite.
 
+### Image placement
+
+Image import is previewed with an initial Contain/Cover/Stretch/Native fit, then placed directly in the Paint pane. Placement supports drag-to-move, uniform corner scaling, top-handle or two-finger rotation, two-finger pinch/translation, exact angle/opacity fields, blend selection, and new-layer or raster-layer replacement. Commit is one undoable operation; cancel discards the bitmap preview.
+
 ### Input parity
 
 Pane and projected painting share one pressure policy: pen pressure is clamped to 0.1–1 with a 0.5 fallback for a zero-pressure contact, while mouse and touch always use 1. Both paths feed the same texture-space `PaintEngine` and `StrokeSampler`.

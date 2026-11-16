@@ -46,6 +46,9 @@ export interface ImagePlacementSnapshot {
   readonly width: number;
   readonly height: number;
   readonly rotation: number;
+  readonly opacity: number;
+  readonly blendMode: 'normal' | 'multiply' | 'screen';
+  readonly replaceActive: boolean;
 }
 
 /** Small UI projection of the active modal transform. */
