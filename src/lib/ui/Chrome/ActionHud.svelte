@@ -18,6 +18,14 @@
           : 'Loop Slide'
   );
 
+  const prompt = $derived(
+    state?.kind === 'loop-cut'
+      ? 'Drag along the selected edge'
+      : state?.kind === 'loop-slide'
+        ? 'Drag either way to slide'
+        : 'Drag up or right'
+  );
+
   const value = $derived.by(() => {
     if (!state) {
       return '';
@@ -38,7 +46,7 @@
   >
     <span class="label">{label}</span>
     {#if state.phase === 'armed'}
-      <span class="prompt">Drag up or right, or type an exact amount</span>
+      <span class="prompt">{prompt}, or type an exact amount</span>
     {:else if state.phase === 'adjusting'}
       <span class="value">{value}</span>
       <span class="prompt">Enter to apply</span>

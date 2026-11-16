@@ -54,7 +54,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | ActionDock | Tap/click Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. |
 | E / I | Arm Extrude / Inset for the current face selection. |
-| L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the selected edge loop. |
+| L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the selected edge loop. Loop Cut follows the selected edge; Loop Slide moves either way from its starting position. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | Shift, Cmd, or Ctrl + click | Add or remove an element from the current selection. |
 | Right-drag | Pan the view. |

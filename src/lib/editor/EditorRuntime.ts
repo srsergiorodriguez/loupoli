@@ -473,6 +473,9 @@ interface ActionDrag {
   readonly startValue: number;
   readonly faceIndex: number | null;
   readonly edgeIndex: number | null;
+  readonly dragX: number;
+  readonly dragY: number;
+  readonly dragLength: number;
   readonly slide: LoopSlideDrag | null;
   numeric: string;
   value: number;
@@ -481,6 +484,10 @@ interface ActionDrag {
 interface LoopSlideDrag {
   readonly plan: EdgeLoopSlidePlan;
   targets: Map<number, number> | null;
+  directionX: number;
+  directionY: number;
+  length: number;
+  sign: number;
 }
 
 /** A live raster paint stroke over the active texture layer. */
@@ -9283,10 +9290,21 @@ export class EditorRuntime {
         return false;
       }
       selection = this.selection.values();
-      slide = { plan, targets: null };
+      slide = {
+        plan,
+        targets: null,
+        directionX: 0,
+        directionY: 0,
+        length: 0,
+        sign: 0
+      };
       value = 0;
     }
 
+    const direction =
+      edgeIndex !== null
+        ? this.screenEdgeDirection(node, node.mesh, edgeIndex)
+        : { x: 0, y: -1, length: 200 };
     const drag: ActionDrag = {
       kind,
       node,
@@ -9299,6 +9317,9 @@ export class EditorRuntime {
       startValue: value,
       faceIndex,
       edgeIndex,
+      dragX: direction.x,
+      dragY: direction.y,
+      dragLength: direction.length,
       slide,
       numeric: '',
       value
@@ -9374,24 +9395,56 @@ export class EditorRuntime {
     throw new Error('Loop action requires one edge.');
   }
 
+  /** Screen-space direction and length of one mesh edge. */
+  private screenEdgeDirection(
+    node: MeshNode,
+    mesh: HalfEdgeMesh,
+    edge: number
+  ): { x: number; y: number; length: number } {
+    const [from, to] = mesh.getEdgeVertices(edge);
+    const parent = this.document.getGroup(node.parentId);
+    const matrix = transformMatrix(
+      worldTransformForNode(node.transform, parent?.transform ?? null)
+    );
+    const fromPoint = this.renderer.worldToClient(
+      new Vector3(
+        mesh.positions[from * 3],
+        mesh.positions[from * 3 + 1],
+        mesh.positions[from * 3 + 2]
+      ).applyMatrix4(matrix)
+    );
+    const toPoint = this.renderer.worldToClient(
+      new Vector3(
+        mesh.positions[to * 3],
+        mesh.positions[to * 3 + 1],
+        mesh.positions[to * 3 + 2]
+      ).applyMatrix4(matrix)
+    );
+    if (!fromPoint || !toPoint) {
+      return { x: 0, y: -1, length: 200 };
+    }
+    const dx = toPoint.x - fromPoint.x;
+    const dy = toPoint.y - fromPoint.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 8) {
+      return { x: 0, y: -1, length: 200 };
+    }
+    return { x: dx / length, y: dy / length, length };
+  }
+
   private updateActionPointer(sample: PointerSample): void {
     const drag = this.actionDrag;
     if (!drag || drag.pointerId !== sample.pointerId) {
       return;
     }
     if (drag.kind === 'loop-slide') {
-      if (drag.slide?.targets === null || drag.slide?.targets === undefined) {
-        this.pickLoopSlideTargets(drag, sample);
-      }
-      if (!drag.slide?.targets) {
-        return;
-      }
-      const distance = Math.hypot(
-        sample.clientX - drag.startX,
-        sample.clientY - drag.startY
-      );
-      const value = Math.min(0.95, Math.max(0.05, 0.05 + distance * 0.004));
-      if (Math.abs(value - drag.value) < 1e-6) {
+      const previousSign = drag.slide?.sign ?? 0;
+      const value = this.updateLoopSlideValue(drag, sample);
+      if (
+        value === null ||
+        (Math.abs(value - drag.value) < 1e-6 &&
+          previousSign === (drag.slide?.sign ?? 0))
+      ) {
         return;
       }
       try {
@@ -9408,17 +9461,28 @@ export class EditorRuntime {
       }
       return;
     }
-    const travel =
-      drag.startY -
-      sample.clientY +
-      (sample.clientX - drag.startX) * 0.5;
     let value: number;
-    if (drag.kind === 'extrude') {
-      value = Math.min(8, Math.max(0.001, drag.startValue + travel * 0.005));
-    } else if (drag.kind === 'inset') {
-      value = Math.min(0.9, Math.max(0.01, drag.startValue + travel * 0.002));
+    if (drag.kind === 'loop-cut') {
+      const projection =
+        (sample.clientX - drag.startX) * drag.dragX +
+        (sample.clientY - drag.startY) * drag.dragY;
+      value = Math.min(
+        0.95,
+        Math.max(
+          0.05,
+          drag.startValue + projection / Math.max(16, drag.dragLength)
+        )
+      );
     } else {
-      value = Math.min(0.95, Math.max(0.05, drag.startValue + travel * 0.002));
+      const travel =
+        drag.startY -
+        sample.clientY +
+        (sample.clientX - drag.startX) * 0.5;
+      if (drag.kind === 'extrude') {
+        value = Math.min(8, Math.max(0.001, drag.startValue + travel * 0.005));
+      } else {
+        value = Math.min(0.9, Math.max(0.01, drag.startValue + travel * 0.002));
+      }
     }
     if (Math.abs(value - drag.value) < 1e-6) {
       return;
@@ -9437,13 +9501,19 @@ export class EditorRuntime {
     }
   }
 
-  /** Pick a consistent slide side from the initial screen-space drag. */
-  private pickLoopSlideTargets(
+  /**
+   * Bind a stable screen-space slide axis from the initial drag.
+   *
+   * The axis is derived from neighboring vertex candidates, so the loop
+   * follows the geometry rather than a generic screen direction. Once bound,
+   * signed projection along this axis decides which side of the loop slides.
+   */
+  private bindLoopSlideAxis(
     drag: ActionDrag,
     sample: PointerSample
   ): void {
     const slide = drag.slide;
-    if (!slide) {
+    if (!slide || slide.length > 0) {
       return;
     }
     const dx = sample.clientX - drag.startX;
@@ -9451,6 +9521,106 @@ export class EditorRuntime {
     if (Math.hypot(dx, dy) < 3) {
       return;
     }
+    const node = drag.node;
+    const parent = this.document.getGroup(node.parentId);
+    const matrix = transformMatrix(
+      worldTransformForNode(node.transform, parent?.transform ?? null)
+    );
+    let sumX = 0;
+    let sumY = 0;
+    let sumLength = 0;
+    let sampled = 0;
+    for (const vertex of slide.plan.vertices) {
+      const base = new Vector3(
+        drag.before.positions[vertex * 3],
+        drag.before.positions[vertex * 3 + 1],
+        drag.before.positions[vertex * 3 + 2]
+      ).applyMatrix4(matrix);
+      const baseScreen = this.renderer.worldToClient(base);
+      if (!baseScreen) {
+        continue;
+      }
+      const candidates = slide.plan.candidates.get(vertex) ?? [];
+      let bestX = 0;
+      let bestY = 0;
+      let bestScore = -Infinity;
+      for (const candidate of candidates) {
+        const screen = this.renderer.worldToClient(
+          new Vector3(
+            drag.before.positions[candidate * 3],
+            drag.before.positions[candidate * 3 + 1],
+            drag.before.positions[candidate * 3 + 2]
+          ).applyMatrix4(matrix)
+        );
+        if (!screen) {
+          continue;
+        }
+        const vx = screen.x - baseScreen.x;
+        const vy = screen.y - baseScreen.y;
+        const length = Math.hypot(vx, vy);
+        if (length < 1e-4) {
+          continue;
+        }
+        const score = (vx * dx + vy * dy) / length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestX = vx;
+          bestY = vy;
+        }
+      }
+      if (bestScore !== -Infinity) {
+        sumX += bestX;
+        sumY += bestY;
+        sumLength += Math.hypot(bestX, bestY);
+        sampled += 1;
+      }
+    }
+    const axisLength = Math.hypot(sumX, sumY);
+    if (axisLength > 1e-4) {
+      slide.directionX = sumX / axisLength;
+      slide.directionY = sumY / axisLength;
+    } else if (Math.hypot(dx, dy) > 1e-4) {
+      slide.directionX = dx / Math.hypot(dx, dy);
+      slide.directionY = dy / Math.hypot(dx, dy);
+    }
+    slide.length = sampled > 0 ? Math.max(24, sumLength / sampled) : 120;
+  }
+
+  /**
+   * Choose the candidate side for the current signed pointer projection.
+   *
+   * A negative projection selects the opposite side of the loop and returns
+   * the loop toward its original position, allowing a bidirectional slide.
+   */
+  private updateLoopSlideValue(
+    drag: ActionDrag,
+    sample: PointerSample
+  ): number | null {
+    const slide = drag.slide;
+    if (!slide) {
+      return null;
+    }
+    this.bindLoopSlideAxis(drag, sample);
+    if (slide.length <= 0) {
+      return null;
+    }
+    const dx = sample.clientX - drag.startX;
+    const dy = sample.clientY - drag.startY;
+    const projection =
+      dx * slide.directionX + dy * slide.directionY;
+    const amount = Math.min(
+      0.95,
+      Math.max(0, Math.abs(projection) / Math.max(24, slide.length))
+    );
+    if (amount <= 0.001) {
+      slide.targets = null;
+      slide.sign = 0;
+      return 0;
+    }
+
+    const sign = projection >= 0 ? 1 : -1;
+    const axisX = slide.directionX * sign;
+    const axisY = slide.directionY * sign;
     const node = drag.node;
     const parent = this.document.getGroup(node.parentId);
     const matrix = transformMatrix(
@@ -9464,30 +9634,30 @@ export class EditorRuntime {
         drag.before.positions[vertex * 3 + 2]
       ).applyMatrix4(matrix);
       const baseScreen = this.renderer.worldToClient(base);
+      if (!baseScreen) {
+        continue;
+      }
       const candidates = slide.plan.candidates.get(vertex) ?? [];
-      let best: number | null = candidates[0] ?? null;
+      let best: number | null = null;
       let bestScore = -Infinity;
       for (const candidate of candidates) {
-        const point = new Vector3(
-          drag.before.positions[candidate * 3],
-          drag.before.positions[candidate * 3 + 1],
-          drag.before.positions[candidate * 3 + 2]
-        ).applyMatrix4(matrix);
-        const screen = this.renderer.worldToClient(point);
-        if (!baseScreen || !screen) {
+        const screen = this.renderer.worldToClient(
+          new Vector3(
+            drag.before.positions[candidate * 3],
+            drag.before.positions[candidate * 3 + 1],
+            drag.before.positions[candidate * 3 + 2]
+          ).applyMatrix4(matrix)
+        );
+        if (!screen) {
           continue;
         }
-        const length = Math.hypot(
-          screen.x - baseScreen.x,
-          screen.y - baseScreen.y
-        );
+        const vx = screen.x - baseScreen.x;
+        const vy = screen.y - baseScreen.y;
+        const length = Math.hypot(vx, vy);
         if (length < 1e-4) {
           continue;
         }
-        const score =
-          ((screen.x - baseScreen.x) * dx +
-            (screen.y - baseScreen.y) * dy) /
-          length;
+        const score = (vx * axisX + vy * axisY) / length;
         if (score > bestScore || (score === bestScore && candidate < (best ?? Infinity))) {
           best = candidate;
           bestScore = score;
@@ -9497,9 +9667,13 @@ export class EditorRuntime {
         targets.set(vertex, best);
       }
     }
-    if (targets.size === slide.plan.vertices.length) {
-      slide.targets = targets;
+    if (targets.size !== slide.plan.vertices.length) {
+      slide.targets = null;
+      return 0;
     }
+    slide.targets = targets;
+    slide.sign = sign;
+    return amount;
   }
 
   private updateActionPreviewLine(
