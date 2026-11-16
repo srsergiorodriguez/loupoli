@@ -377,6 +377,20 @@ describe('.lpoli', () => {
     expect(restored?.keyframes[1].interpolation).toBe('linear');
   });
 
+  it('round-trips an explicit default Mesh Motion key', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    const track = document.animation.ensureMeshTrack(node.id);
+    expect(
+      track.setPoseKey(0, node.mesh.positions, node.mesh.positions, 'linear')
+    ).toBe(true);
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
+    const restored = decoded.animation.getMeshTrack(node.id);
+    expect(restored?.keyframes).toHaveLength(1);
+    expect(restored?.vertexIndices).toEqual([]);
+    expect([...(restored?.evaluate(0) ?? [])]).toEqual([]);
+  });
+
   it('round-trips camera and light animation tracks', () => {
     const document = makeDocument();
     const camera = document.cameras[0];

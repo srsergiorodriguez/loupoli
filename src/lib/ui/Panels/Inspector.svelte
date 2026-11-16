@@ -1075,7 +1075,8 @@
             <p class="hint">
               Move selected vertices, edges, or faces at the playhead, then
               Finish pose to store a Mesh Motion key without changing the base
-              mesh.
+              mesh. Finish creates a key even when the pose is unchanged;
+              Cancel discards it.
             </p>
             {#if activeMeshTrack && activeMeshTrack.keyframes.length > 0}
               <p class="hint">

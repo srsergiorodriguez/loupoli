@@ -637,9 +637,6 @@ export class MeshMotionTrack {
         moved.push(vertex);
       }
     }
-    if (this.frames.length === 0 && moved.length === 0) {
-      return false;
-    }
     this.includeVertices(moved);
     const packed = new Float32Array(this.indices.length * 3);
     this.indices.forEach((vertex, position) => {
@@ -668,9 +665,6 @@ export class MeshMotionTrack {
     deltas: ReadonlyMap<number, readonly [number, number, number]>,
     interpolation: AnimationInterpolation = 'linear'
   ): boolean {
-    if (this.frames.length === 0 && deltas.size === 0) {
-      return false;
-    }
     this.includeVertices(deltas.keys());
     const values = new Float32Array(this.indices.length * 3);
     this.indices.forEach((vertex, position) => {

@@ -37,6 +37,25 @@ describe('SceneAnimation', () => {
     }
   });
 
+  it('keeps an explicit default mesh pose and expands it when vertices move', () => {
+    const animation = new SceneAnimation();
+    const track = animation.ensureMeshTrack('node-1');
+    const base = new Float32Array(9);
+    const posed = base.slice();
+    expect(track.setPoseKey(0, base, posed, 'linear')).toBe(true);
+    expect(track.keyframes).toHaveLength(1);
+    expect(track.keyframes[0].values).toHaveLength(0);
+    expect(track.vertexIndices).toEqual([]);
+
+    posed[0] = 1;
+    expect(track.setPoseKey(12, base, posed, 'linear')).toBe(true);
+    expect(track.vertexIndices).toEqual([0]);
+    expect(track.keyframes[0].values).toHaveLength(3);
+    expect([...track.keyframes[0].values]).toEqual([0, 0, 0]);
+    expect([...track.evaluate(0) ?? []]).toEqual([0, 0, 0]);
+    expect([...track.evaluate(12) ?? []]).toEqual([1, 0, 0]);
+  });
+
   it('evaluates and snapshots shape-weight tracks with linear and step keys', () => {
     const animation = new SceneAnimation();
     const track = animation.ensureWeightTrack('node-1', 'shape-1');
