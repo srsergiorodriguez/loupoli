@@ -4,6 +4,7 @@
   import IconButton from '../Primitives/IconButton.svelte';
   import Switch from '../Primitives/Switch.svelte';
   import Vector3Field from '../Primitives/Vector3Field.svelte';
+  import SegmentedControl from '../Primitives/SegmentedControl.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
   import SliderField from '../Primitives/SliderField.svelte';
   import {
@@ -305,6 +306,15 @@
   type SectionKey = InspectorSectionId;
 
   const SECTION_DEFAULTS: Record<SectionKey, boolean> = defaultInspectorOpen();
+
+  const valueSpaceOptions = [
+    { id: 'local', label: 'Local', title: 'Edit parent-local transform values' },
+    { id: 'global', label: 'World', title: 'Edit world-space transform values' }
+  ] as const;
+  const gizmoOrientationOptions = [
+    { id: 'global', label: 'World', title: 'Align gizmo axes to the world' },
+    { id: 'local', label: 'Local', title: 'Align gizmo axes to the object' }
+  ] as const;
 
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
@@ -2014,44 +2024,28 @@
     >
       <div id="transform-body" class="module-body">
         {#if activeNodeId !== null}
-          <div class="transform-orientation">
-            <span class="space-label">Values</span>
-            <div class="orientation-toggle" role="group" aria-label="Transform values space">
-              <button
-                type="button"
-                class:active={transformValueSpace === 'local'}
-                aria-pressed={transformValueSpace === 'local'}
-                onclick={() => session.setTransformValueSpace('local')}
-              >
-                Local
-              </button>
-              <button
-                type="button"
-                class:active={transformValueSpace === 'global'}
-                aria-pressed={transformValueSpace === 'global'}
-                onclick={() => session.setTransformValueSpace('global')}
-              >
-                World
-              </button>
+          <div class="transform-spaces">
+            <div class="space-row">
+              <span class="space-label">Values</span>
+              <SegmentedControl
+                label="Transform values space"
+                options={valueSpaceOptions}
+                value={transformValueSpace}
+                variant="workspace"
+                onSelect={(id) =>
+                  session.setTransformValueSpace(id === 'global' ? 'global' : 'local')}
+              />
             </div>
-            <span class="space-label">Gizmo</span>
-            <div class="orientation-toggle" role="group" aria-label="Gizmo axis orientation">
-              <button
-                type="button"
-                class:active={gizmoOrientation === 'global'}
-                aria-pressed={gizmoOrientation === 'global'}
-                onclick={() => session.setTransformOrientation('global')}
-              >
-                World
-              </button>
-              <button
-                type="button"
-                class:active={gizmoOrientation === 'local'}
-                aria-pressed={gizmoOrientation === 'local'}
-                onclick={() => session.setTransformOrientation('local')}
-              >
-                Local
-              </button>
+            <div class="space-row">
+              <span class="space-label">Gizmo</span>
+              <SegmentedControl
+                label="Gizmo axis orientation"
+                options={gizmoOrientationOptions}
+                value={gizmoOrientation}
+                variant="workspace"
+                onSelect={(id) =>
+                  session.setTransformOrientation(id === 'local' ? 'local' : 'global')}
+              />
             </div>
           </div>
         {/if}
@@ -3138,43 +3132,21 @@
     color: var(--text-primary);
   }
 
-  .orientation-toggle {
-    display: inline-flex;
-    flex: 0 0 auto;
-    gap: 2px;
-    padding: 2px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    background: var(--bg-input);
-  }
-
-  .orientation-toggle button {
-    min-height: var(--control-h-sm);
-    padding: 0 var(--space-2);
-    border-radius: var(--radius-xs);
-    color: var(--text-tertiary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-  }
-
-  .orientation-toggle button.active {
-    color: var(--accent-primary);
-    background: var(--bg-selected);
-  }
-
-  :global(:root[data-density='touch']) .orientation-toggle button {
-    min-width: var(--hit-min);
-    min-height: var(--hit-min);
-    padding: 0 var(--space-2);
-  }
-
-  .transform-orientation {
+  .transform-spaces {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-end;
+    flex-direction: column;
     gap: var(--space-2);
+  }
+
+  .space-row {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .space-row :global(.segmented) {
+    justify-self: end;
   }
 
   .space-label {
@@ -3182,7 +3154,10 @@
     font-family: var(--font-ui);
     font-size: var(--text-2xs);
     letter-spacing: var(--tracking-label);
+    line-height: 1;
+    text-align: right;
     text-transform: uppercase;
+    white-space: nowrap;
   }
 
   .axis-lock {

@@ -503,7 +503,7 @@ Implemented component files and local patterns:
 | Scene outliner rows | 2 | Drag handle, object select, visibility eye | Pointer/touch reorder; control-height eye (44px touch); hidden rows dimmed |
 | Group tree | 3 | Folder rows and indented children | Group active state; bake-on-ungroup |
 | Modifier stack | 3 | Ordered cards with enable/order/remove/parameters | Explicit evaluated state and error panel |
-| Transform orientation toggle | 3 | Local/Global transform space | Two-button control; 44px touch width/height |
+| Transform space controls | 3 | Local/World values and World/Local gizmo | Two aligned rows of shared SegmentedControl; 44px touch targets; labels stay on the control row |
 | `Selection gizmo` / `ObjectGizmo` | 3 | Move/Rotate/Scale axes | Median placement for elements; screen-constant size; enlarged Pencil hit volumes |
 | Grid snap / axis chips | 3 | Snap toggle/step and X/Y/Z locks | 44px chips, accent state, axis colors |
 | PS1 look | 3 | Collapsed render-effect module | Native details/summary; off by default |
