@@ -1,4 +1,4 @@
-import { pressureResponse } from './brush';
+import { hardnessSpacingScale, pressureResponse } from './brush';
 import type { PaintSample } from './types';
 
 /** One GPU-ready dab in texture pixels. */
@@ -14,6 +14,7 @@ export interface StrokeDab {
 /** Sampling inputs shared by texture-pane and projected strokes. */
 export interface StrokeSamplerSettings {
   readonly radius: number;
+  readonly hardness: number;
   readonly spacing: number;
   readonly smoothing: number;
   readonly noise: number;
@@ -143,6 +144,7 @@ export class StrokeSampler {
     return Math.max(
       1,
       this.settings.radius *
+        hardnessSpacingScale(this.settings.hardness) *
         pressureResponse(
           pressure,
           this.settings.pressureCurve,

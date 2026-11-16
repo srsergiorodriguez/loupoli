@@ -38,13 +38,14 @@ precision highp float;
 in vec2 vCorner;
 in float vFlow;
 uniform float uHardness;
-uniform float uSoftness;
 out vec4 outColor;
 void main() {
   float d = length(vCorner);
   if (d > 1.0) discard;
-  float edge = smoothstep(uHardness, 1.0, d);
-  float alpha = pow(max(0.0, 1.0 - edge), 1.0 + uSoftness * 3.0) * vFlow;
+  float core = min(uHardness * uHardness, 0.999);
+  float exponent = 1.0 + (1.0 - uHardness) * 2.0;
+  float edge = smoothstep(core, 1.0, d);
+  float alpha = (uHardness >= 0.995 ? 1.0 : pow(max(0.0, 1.0 - edge), exponent)) * vFlow;
   outColor = vec4(alpha, 0.0, 0.0, alpha);
 }`;
 
@@ -174,7 +175,6 @@ export class GpuStampSurface {
   private color: [number, number, number] = [1, 1, 1];
   private opacity = 1;
   private hardness = 0.7;
-  private softness = 0;
   private lost = false;
 
   constructor() {
@@ -269,11 +269,7 @@ export class GpuStampSurface {
     }
     this.color = colorRgb(settings.color);
     this.opacity = Math.min(1, Math.max(0, settings.opacity * settings.colorAlpha));
-    this.softness = Math.min(1, Math.max(0, settings.softness));
-    this.hardness = Math.min(
-      0.999,
-      Math.max(0, settings.hardness * (1 - this.softness * 0.85))
-    );
+    this.hardness = Math.min(1, Math.max(0, settings.hardness));
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
     gl.viewport(0, 0, w, h);
     gl.clearColor(0, 0, 0, 0);
@@ -327,10 +323,6 @@ export class GpuStampSurface {
     gl.uniform1f(
       gl.getUniformLocation(this.maskProgram, 'uHardness'),
       this.hardness
-    );
-    gl.uniform1f(
-      gl.getUniformLocation(this.maskProgram, 'uSoftness'),
-      this.softness
     );
     gl.enable(gl.BLEND);
     gl.blendEquation(gl.FUNC_ADD);

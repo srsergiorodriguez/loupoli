@@ -6,6 +6,7 @@ function sampler(
 ): StrokeSampler {
   return new StrokeSampler({
     radius: 10,
+    hardness: 1,
     spacing: 0.25,
     smoothing: 0,
     noise: 0,
@@ -56,7 +57,6 @@ describe('StrokeSampler', () => {
     expect(reset[0]?.x).toBe(200);
     expect(reset[0]?.y).toBe(200);
   });
-});
 
   it('responds to the pressure curve and minimum size', () => {
     const soft = sampler({ pressureCurve: 2, pressureMin: 0.2 });
@@ -81,3 +81,14 @@ describe('StrokeSampler', () => {
     expect(first.radius).toBeLessThan(4);
     expect(later[later.length - 1]?.radius).toBeGreaterThan(9);
   });
+
+  it('tightens soft-brush spacing instead of spreading it apart', () => {
+    const hard = sampler({ hardness: 1 });
+    const soft = sampler({ hardness: 0.2 });
+    hard.begin({ x: 0, y: 0, pressure: 1 });
+    soft.begin({ x: 0, y: 0, pressure: 1 });
+    const hardDabs = hard.add({ x: 100, y: 0, pressure: 1 });
+    const softDabs = soft.add({ x: 100, y: 0, pressure: 1 });
+    expect(softDabs.length).toBeGreaterThan(hardDabs.length);
+  });
+});

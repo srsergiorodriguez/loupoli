@@ -29,22 +29,33 @@ export function pressureResponse(
   return floor + (1 - floor) * normalized ** responseCurve;
 }
 
-/** Normalized radial falloff shared by the CPU stamp and preview. */
-export function stampFalloff(
-  distance: number,
-  hardness: number,
-  softness: number
-): number {
-  const d = clamp(distance, 0, 1);
-  const h = clamp(hardness, 0, 0.999);
-  const t = clamp((d - h) / Math.max(0.001, 1 - h), 0, 1);
-  const smooth = t * t * (3 - 2 * t);
-  return Math.max(0, 1 - smooth) ** (1 + clamp(softness, 0, 1) * 3);
+/** Solid-core radius fraction for a hard-to-soft brush. */
+export function hardnessCore(hardness: number): number {
+  const h = clamp(hardness, 0, 1);
+  return h * h;
 }
 
-/** Softness expands the feather even when hardness is at its maximum. */
-export function effectiveHardness(hardness: number, softness: number): number {
-  return clamp(hardness, 0, 1) * (1 - clamp(softness, 0, 1) * 0.85);
+/** Edge feather exponent; lower hardness produces a broader airbrush falloff. */
+export function hardnessExponent(hardness: number): number {
+  return 1 + (1 - clamp(hardness, 0, 1)) * 2;
+}
+
+/** Normalized radial alpha for one hardness value. */
+export function stampFalloff(distance: number, hardness: number): number {
+  const h = clamp(hardness, 0, 1);
+  const d = clamp(distance, 0, 1);
+  if (h >= 0.999) {
+    return d >= 1 ? 0 : 1;
+  }
+  const core = hardnessCore(h);
+  const t = clamp((d - core) / Math.max(0.001, 1 - core), 0, 1);
+  const smooth = t * t * (3 - 2 * t);
+  return Math.max(0, 1 - smooth) ** hardnessExponent(h);
+}
+
+/** Tighten dab overlap as the brush gets softer so feathering does not bead. */
+export function hardnessSpacingScale(hardness: number): number {
+  return 0.6 + 0.4 * Math.sqrt(clamp(hardness, 0, 1));
 }
 
 /** Default pressure response retained for callers without custom dynamics. */
@@ -72,9 +83,8 @@ function stampSprite(
   }
   const radius = Math.max(1, Math.min(512, Math.ceil(settings.radius)));
   const hardness = Math.min(1, Math.max(0, settings.hardness));
-  const softness = Math.min(1, Math.max(0, settings.softness));
-  const edgeHardness = effectiveHardness(hardness, softness);
-  const key = `${erase ? 'e' : 'c'}:${settings.color}:${hardness}:${softness}:${radius}`;
+  const core = hardnessCore(hardness);
+  const key = `${erase ? 'e' : 'c'}:${settings.color}:${hardness}:${radius}`;
   const cached = STAMP_SPRITES.get(key);
   if (cached) {
     return cached;
@@ -90,13 +100,13 @@ function stampSprite(
   const center = size / 2;
   const rgb = erase ? '0,0,0' : hexRgb(settings.color);
   context.clearRect(0, 0, size, size);
-  if (hardness >= 0.995 && softness <= 0.01) {
+  if (hardness >= 0.995) {
     context.fillStyle = erase ? '#000000' : settings.color;
     context.beginPath();
     context.arc(center, center, radius, 0, Math.PI * 2);
     context.fill();
   } else {
-    const inner = radius * Math.max(0, edgeHardness * 0.96);
+    const inner = radius * Math.max(0, core * 0.96);
     const gradient = context.createRadialGradient(
       center,
       center,
@@ -107,11 +117,7 @@ function stampSprite(
     );
     for (let step = 0; step <= 12; step += 1) {
       const t = step / 12;
-      const alpha = stampFalloff(
-        edgeHardness + (1 - edgeHardness) * t,
-        edgeHardness,
-        softness
-      );
+      const alpha = stampFalloff(core + (1 - core) * t, hardness);
       gradient.addColorStop(t, `rgba(${rgb},${alpha})`);
     }
     context.fillStyle = gradient;
@@ -176,9 +182,8 @@ export function drawStamp(
   const cx = x + jitterX;
   const cy = y + jitterY;
   const hardness = clamp(settings.hardness, 0, 1);
-  const softness = clamp(settings.softness, 0, 1);
-  const edgeHardness = effectiveHardness(hardness, softness);
-  const inner = r * Math.max(0, edgeHardness * 0.96);
+  const core = hardnessCore(hardness);
+  const inner = r * Math.max(0, core * 0.96);
   const tiltMagnitude = settings.tiltEnabled
     ? clamp(Math.hypot(tilt?.x ?? 0, tilt?.y ?? 0) / 90, 0, 1)
     : 0;
@@ -208,7 +213,7 @@ export function drawStamp(
         drawSize
       );
     }
-  } else if (hardness >= 0.995 && softness <= 0.01) {
+  } else if (hardness >= 0.995) {
     context.fillStyle = erase ? '#000000' : settings.color;
     context.beginPath();
     context.arc(cx, cy, r, 0, Math.PI * 2);
@@ -220,11 +225,7 @@ export function drawStamp(
       const t = step / 12;
       gradient.addColorStop(
         t,
-        `rgba(${color},${stampFalloff(
-          edgeHardness + (1 - edgeHardness) * t,
-          edgeHardness,
-          softness
-        )})`
+        `rgba(${color},${stampFalloff(core + (1 - core) * t, hardness)})`
       );
     }
     context.globalAlpha = 1;
@@ -269,7 +270,8 @@ export function drawStampLine(
     radius *
       pressureResponse(minPressure, settings.pressureCurve, settings.pressureMin) *
       2 *
-      fraction
+      fraction *
+      hardnessSpacingScale(settings.hardness)
   );
   const steps = Math.max(1, Math.ceil(length / spacing));
   const fromTilt = tilt ?? { x: 0, y: 0 };

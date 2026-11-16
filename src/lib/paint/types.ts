@@ -30,8 +30,6 @@ export interface PaintSettings {
   readonly radius: number;
   readonly opacity: number;
   readonly hardness: number;
-  /** Additional edge feather beyond hardness; 0 keeps the legacy falloff. */
-  readonly softness: number;
   readonly smoothing: number;
   readonly noise: number;
   /** Whether Pencil pressure also modulates per-dab opacity. */

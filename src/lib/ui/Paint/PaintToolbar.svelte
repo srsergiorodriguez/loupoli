@@ -53,7 +53,6 @@
     radius: session.snapshot.uvBrushSize / 2,
     opacity: session.snapshot.uvBrushOpacity,
     hardness: session.snapshot.paintHardness,
-    softness: session.snapshot.paintSoftness,
     smoothing: session.snapshot.paintSmoothing,
     noise: session.snapshot.paintNoise,
     pressureOpacity: session.snapshot.paintPressureOpacity,

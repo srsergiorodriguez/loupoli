@@ -58,7 +58,7 @@ The mask is presented only in the dirty rectangle. The preview layer is rebuilt 
 
 ### Pencil interaction
 
-Apple Pencil hover updates the brush footprint before contact. The Paint pane and projected 3D cursor use the same tilt aspect and angle as the stamp. Pencil pressure and tilt remain shared by pane and projected painting. Hardness controls the solid core; Softness adds an extra falloff exponent for airbrush-like edges.
+Apple Pencil hover updates the brush footprint before contact. The Paint pane and projected 3D cursor use the same tilt aspect and angle as the stamp. Pencil pressure and tilt remain shared by pane and projected painting. Hardness is the only edge control: low values shrink the solid core and broaden the feather into an airbrush-like falloff, while soft brushes automatically tighten dab overlap so spacing does not appear to widen.
 
 ### Image placement
 

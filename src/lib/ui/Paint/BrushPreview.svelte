@@ -16,7 +16,6 @@
     settings.color;
     settings.radius;
     settings.hardness;
-    settings.softness;
     settings.noise;
     settings.tool;
     draw();

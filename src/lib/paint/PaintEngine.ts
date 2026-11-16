@@ -344,6 +344,7 @@ export class PaintEngine {
     this.gpu = gpu;
     this.sampler = new StrokeSampler({
       radius: this.settings.radius,
+      hardness: this.settings.hardness,
       spacing: this.settings.spacing,
       smoothing: this.settings.smoothing,
       noise: this.settings.noise,

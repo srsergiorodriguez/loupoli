@@ -28,7 +28,6 @@ describe('pressure-aware stamp spacing', () => {
       smoothing: 0,
       noise: 0,
       pressureOpacity: false,
-      softness: 0,
       pressureCurve: 1,
       pressureMin: 0.35,
       tiltEnabled: true,
@@ -81,12 +80,10 @@ describe('pressure-aware stamp spacing', () => {
     expect(light).toBeGreaterThan(full);
   });
 
-  it('extends hardness with a steeper softness falloff', () => {
-    expect(stampFalloff(0.5, 0, 0)).toBeGreaterThan(
-      stampFalloff(0.5, 0, 1)
-    );
-    expect(stampFalloff(1, 0, 0)).toBe(0);
-    expect(stampFalloff(1, 0, 1)).toBe(0);
-    expect(stampFalloff(0, 0, 1)).toBe(1);
+  it('maps low hardness to a broad soft falloff', () => {
+    expect(stampFalloff(0.5, 0)).toBeLessThan(stampFalloff(0.5, 1));
+    expect(stampFalloff(1, 0)).toBe(0);
+    expect(stampFalloff(1, 1)).toBe(0);
+    expect(stampFalloff(0, 0)).toBe(1);
   });
 });

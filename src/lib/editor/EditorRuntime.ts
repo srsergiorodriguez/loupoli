@@ -668,7 +668,6 @@ export class EditorRuntime {
   private paintSecondaryColor = '#1a1a1f';
   private paintSecondaryColorAlpha = 1;
   private paintHardness = 0.7;
-  private paintSoftness = 0;
   private paintSmoothing = 0.25;
   private paintNoise = 0;
   private paintPressureOpacity = false;
@@ -1000,7 +999,6 @@ export class EditorRuntime {
       paintSecondaryColor: this.paintSecondaryColor,
       paintSecondaryColorAlpha: this.paintSecondaryColorAlpha,
       paintHardness: this.paintHardness,
-      paintSoftness: this.paintSoftness,
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
       paintPressureOpacity: this.paintPressureOpacity,
@@ -3075,12 +3073,6 @@ export class EditorRuntime {
     this.publish();
   }
 
-  setPaintSoftness(value: number): void {
-    this.paintSoftness = Math.min(1, Math.max(0, value));
-    this.paintPreset = null;
-    this.publish();
-  }
-
   setPaintSmoothing(value: number): void {
     this.paintSmoothing = Math.min(1, Math.max(0, value));
     this.paintPreset = null;
@@ -3128,7 +3120,6 @@ export class EditorRuntime {
     const preset = brushPreset(id);
     this.paintTool = preset.tool;
     this.paintHardness = preset.hardness;
-    this.paintSoftness = preset.softness;
     this.paintSmoothing = preset.smoothing;
     this.paintSpacing = preset.spacing;
     this.paintNoise = preset.noise;
@@ -3864,7 +3855,6 @@ export class EditorRuntime {
       radius,
       opacity: this.uvBrushOpacity,
       hardness: this.paintHardness,
-      softness: this.paintSoftness,
       smoothing: this.paintSmoothing,
       noise: this.paintNoise,
       pressureOpacity: this.paintPressureOpacity,

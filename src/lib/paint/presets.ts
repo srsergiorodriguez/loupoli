@@ -15,7 +15,6 @@ export interface BrushPreset {
   readonly label: string;
   readonly tool: PaintTool;
   readonly hardness: number;
-  readonly softness: number;
   readonly smoothing: number;
   readonly spacing: number;
   readonly noise: number;
@@ -33,7 +32,6 @@ export const BRUSH_PRESETS: readonly BrushPreset[] = [
     label: 'Ink',
     tool: 'brush',
     hardness: 1,
-    softness: 0.08,
     smoothing: 0.08,
     spacing: 0.12,
     noise: 0,
@@ -48,7 +46,6 @@ export const BRUSH_PRESETS: readonly BrushPreset[] = [
     label: 'Soft',
     tool: 'brush',
     hardness: 0.2,
-    softness: 0.85,
     smoothing: 0.3,
     spacing: 0.2,
     noise: 0,
@@ -63,7 +60,6 @@ export const BRUSH_PRESETS: readonly BrushPreset[] = [
     label: 'Hard',
     tool: 'brush',
     hardness: 1,
-    softness: 0,
     smoothing: 0,
     spacing: 0.1,
     noise: 0,
@@ -78,7 +74,6 @@ export const BRUSH_PRESETS: readonly BrushPreset[] = [
     label: 'Tilt',
     tool: 'brush',
     hardness: 0.7,
-    softness: 0.25,
     smoothing: 0.18,
     spacing: 0.15,
     noise: 0.05,
@@ -93,7 +88,6 @@ export const BRUSH_PRESETS: readonly BrushPreset[] = [
     label: 'Grain',
     tool: 'brush',
     hardness: 0.55,
-    softness: 0.4,
     smoothing: 0.12,
     spacing: 0.18,
     noise: 0.4,
@@ -108,7 +102,6 @@ export const BRUSH_PRESETS: readonly BrushPreset[] = [
     label: 'Eraser',
     tool: 'eraser',
     hardness: 0.75,
-    softness: 0.2,
     smoothing: 0.15,
     spacing: 0.15,
     noise: 0,
