@@ -48,3 +48,14 @@ export interface PaintSample {
   readonly tiltX?: number;
   readonly tiltY?: number;
 }
+
+/** Normalize pointer pressure into the range used by every paint surface. */
+export function paintPressure(pointerType: string, pressure: number): number {
+  if (pointerType !== 'pen') {
+    return 1;
+  }
+  if (!Number.isFinite(pressure) || pressure <= 0) {
+    return 0.5;
+  }
+  return Math.min(1, Math.max(0.1, pressure));
+}

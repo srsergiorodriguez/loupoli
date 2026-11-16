@@ -4,7 +4,7 @@
   import PaneFrame from '../Panels/PaneFrame.svelte';
   import PaneHeader from '../Panels/PaneHeader.svelte';
   import PaintToolbar from './PaintToolbar.svelte';
-  import type { PaintSample } from '../../paint/types';
+  import { paintPressure, type PaintSample } from '../../paint/types';
   import { paintBounds } from '../../texture/paintView';
 
   /** Session projection for the dedicated texture-paint workspace. */
@@ -201,9 +201,7 @@
   }
 
   function pressureOf(event: PointerEvent): number {
-    return event.pointerType === 'pen'
-      ? Math.min(1, Math.max(0.1, event.pressure || 0.5))
-      : 1;
+    return paintPressure(event.pointerType, event.pressure);
   }
 
   function tiltOf(event: PointerEvent): { x: number; y: number } {

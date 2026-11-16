@@ -52,6 +52,10 @@ The mask is presented only in the dirty rectangle. The preview layer is rebuilt 
 
 `TextureAsset.refreshPreviewRegion()` rebuilds only the dirty rectangle for normal raster stacks. Effect and lighting layers that depend on the full accumulated image fall back to a full composite.
 
+### Input parity
+
+Pane and projected painting share one pressure policy: pen pressure is clamped to 0.1–1 with a 0.5 fallback for a zero-pressure contact, while mouse and touch always use 1. Both paths feed the same texture-space `PaintEngine` and `StrokeSampler`.
+
 ### Opacity policy
 
 - Color alpha and Brush Opacity are separate.

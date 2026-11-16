@@ -84,6 +84,7 @@ import {
 import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
 import { PaintEngine } from '../paint/PaintEngine';
+import { paintPressure } from '../paint/types';
 import {
   drawTextureChecker,
   drawTextureSurface,
@@ -3242,8 +3243,7 @@ export class EditorRuntime {
       this.publish();
       return;
     }
-    const strokePressure =
-      shape.pointerType === 'pen' ? shape.pressure : 1;
+    const strokePressure = paintPressure(shape.pointerType, shape.pressure);
     const engine = new PaintEngine(
       asset,
       asset.activeLayerId,
@@ -3451,6 +3451,11 @@ export class EditorRuntime {
     return `#${mix(0)}${mix(1)}${mix(2)}`;
   }
 
+  /** Normalize a projected pointer sample through the shared paint policy. */
+  private projectionPressure(sample: PointerSample): number {
+    return paintPressure(sample.pointerType, sample.pressure);
+  }
+
   /** Shared paint settings for texture-space and projected strokes. */
   private paintSettings(radius: number) {
     return {
@@ -3525,7 +3530,10 @@ export class EditorRuntime {
    * InputRouter falls through to camera orbit.
    */
   private beginProjectionPaint(sample: PointerSample): boolean {
-    if (this.workspace !== 'paint' || sample.pointerType === 'touch') {
+    if (
+      this.workspace !== 'paint' ||
+      (sample.pointerType === 'touch' && this.pencilMode)
+    ) {
       return false;
     }
     const node = this.getActiveNode();
@@ -3570,7 +3578,7 @@ export class EditorRuntime {
       if (!engine.beginProjected({
         x: hit.uv[0] * asset.width,
         y: (1 - hit.uv[1]) * asset.height,
-        pressure: sample.pressure
+        pressure: this.projectionPressure(sample)
       })) {
         return false;
       }
@@ -3598,7 +3606,7 @@ export class EditorRuntime {
         startY: sample.clientY,
         endX: sample.clientX,
         endY: sample.clientY,
-        pressure: sample.pressure,
+        pressure: this.projectionPressure(sample),
         pointerType: sample.pointerType
       };
       this.projectedShape = shape;
@@ -3615,7 +3623,7 @@ export class EditorRuntime {
     const point = {
       x: hit.uv[0] * asset.width,
       y: (1 - hit.uv[1]) * asset.height,
-      pressure: sample.pressure,
+      pressure: this.projectionPressure(sample),
       tiltX: sample.tiltX,
       tiltY: sample.tiltY
     };
@@ -3807,7 +3815,7 @@ export class EditorRuntime {
       const point = {
         x: hit.uv[0] * state.asset.width,
         y: (1 - hit.uv[1]) * state.asset.height,
-        pressure: sample.pressure,
+        pressure: this.projectionPressure(sample),
         tiltX: sample.tiltX,
         tiltY: sample.tiltY
       };
