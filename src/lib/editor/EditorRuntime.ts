@@ -563,18 +563,19 @@ export class EditorRuntime {
   private workspaceShading: Record<Workspace, ShadingMode> = {
     ...DEFAULT_WORKSPACE_SHADING
   };
-  /** Global placement remains the default outside Animation. */
-  private workspaceTransformOrientation: Record<
+  /** Value space defaults to local everywhere; the gizmo stays independent. */
+  private workspaceTransformValueSpace: Record<
     Workspace,
     TransformOrientation
   > = {
-    model: 'global',
-    uv: 'global',
-    paint: 'global',
-    light: 'global',
+    model: 'local',
+    uv: 'local',
+    paint: 'local',
+    light: 'local',
     animation: 'local',
-    render: 'global'
+    render: 'local'
   };
+  private transformValueSpace: TransformOrientation = 'local';
   private transformMode: TransformMode = 'select';
   private lassoMode = false;
   private lassoPath: [number, number][] = [];
@@ -1004,6 +1005,7 @@ export class EditorRuntime {
       activeTransform: activeTransformValue,
       globalTransform,
       transformOrientation: this.transformOrientation,
+      transformValueSpace: this.transformValueSpace,
       modalTransform: this.modalSnapshot(),
       actionState: this.actionSnapshot(),
       loopSlideAvailable: this.activeLoopSlidePlan() !== null,
@@ -1714,13 +1716,23 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Set the gizmo axis orientation without changing the value space. */
   setTransformOrientation(orientation: TransformOrientation): void {
-    this.workspaceTransformOrientation[this.workspace] = orientation;
     if (this.transformOrientation === orientation) {
       return;
     }
     this.transformOrientation = orientation;
     this.syncScene();
+    this.publish();
+  }
+
+  /** Set whether the Inspector edits parent-local or world values. */
+  setTransformValueSpace(space: TransformOrientation): void {
+    this.workspaceTransformValueSpace[this.workspace] = space;
+    if (this.transformValueSpace === space) {
+      return;
+    }
+    this.transformValueSpace = space;
     this.publish();
   }
 
@@ -2091,7 +2103,7 @@ export class EditorRuntime {
       }
     }
     this.workspace = workspace;
-    this.applyWorkspaceTransformOrientation(workspace);
+    this.applyWorkspaceTransformValueSpace(workspace);
     if (workspace !== 'animation') {
       this.pauseAnimation();
     }
@@ -2143,7 +2155,7 @@ export class EditorRuntime {
       this.openUvView();
     }
     this.workspace = workspace;
-    this.applyWorkspaceTransformOrientation(workspace);
+    this.applyWorkspaceTransformValueSpace(workspace);
     this.applyWorkspaceShading(workspace);
     const paint = workspace === 'paint';
     if (!paint && this.uvPaintMode) {
@@ -2173,13 +2185,9 @@ export class EditorRuntime {
     this.renderer.setShadingMode(shading);
   }
 
-  /** Restore the transform value/orientation choice for one workspace. */
-  private applyWorkspaceTransformOrientation(workspace: Workspace): void {
-    const orientation = this.workspaceTransformOrientation[workspace];
-    if (this.transformOrientation === orientation) {
-      return;
-    }
-    this.transformOrientation = orientation;
+  /** Restore the transform value-space choice for one workspace. */
+  private applyWorkspaceTransformValueSpace(workspace: Workspace): void {
+    this.transformValueSpace = this.workspaceTransformValueSpace[workspace];
   }
 
   private openUvView(): void {

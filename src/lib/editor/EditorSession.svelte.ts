@@ -86,6 +86,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   activeTransform: null,
   globalTransform: null,
   transformOrientation: 'global',
+  transformValueSpace: 'local',
   modalTransform: null,
   actionState: null,
   loopSlideAvailable: false,
@@ -874,6 +875,10 @@ export class EditorSession {
 
   setTransformOrientation(orientation: TransformOrientation): void {
     this.runtime?.setTransformOrientation(orientation);
+  }
+
+  setTransformValueSpace(space: TransformOrientation): void {
+    this.runtime?.setTransformValueSpace(space);
   }
 
   orbitView(dx: number, dy: number): void {

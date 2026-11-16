@@ -69,11 +69,14 @@
   const selectedPosition = $derived(session.snapshot.selectedPosition);
   const activeTransform = $derived(session.snapshot.activeTransform);
   const globalTransform = $derived(session.snapshot.globalTransform);
-  const transformOrientation = $derived(
+  const transformValueSpace = $derived(
+    session.snapshot.transformValueSpace
+  );
+  const gizmoOrientation = $derived(
     session.snapshot.transformOrientation
   );
   const useGlobalOrientation = $derived(
-    transformOrientation === 'global' && session.snapshot.activeGroupId === null
+    transformValueSpace === 'global' && session.snapshot.activeGroupId === null
   );
   const displayTransform = $derived(
     useGlobalOrientation ? (globalTransform ?? activeTransform) : activeTransform
@@ -255,12 +258,12 @@
     activeNodeId === null
       ? 'Local'
       : session.snapshot.workspace === 'animation'
-        ? transformOrientation === 'local'
+        ? transformValueSpace === 'local'
           ? 'Local (keyed)'
-          : 'Global (world)'
-        : transformOrientation === 'local'
+          : 'World (keyed)'
+        : transformValueSpace === 'local'
           ? 'Local'
-          : 'Global'
+          : 'World'
   );
   const modifiersMeta = $derived(
     activeNodeId === null
@@ -2012,22 +2015,42 @@
       <div id="transform-body" class="module-body">
         {#if activeNodeId !== null}
           <div class="transform-orientation">
-            <div class="orientation-toggle" role="group" aria-label="Transform orientation">
+            <span class="space-label">Values</span>
+            <div class="orientation-toggle" role="group" aria-label="Transform values space">
               <button
                 type="button"
-                class:active={transformOrientation === 'local'}
-                aria-pressed={transformOrientation === 'local'}
-                onclick={() => session.setTransformOrientation('local')}
+                class:active={transformValueSpace === 'local'}
+                aria-pressed={transformValueSpace === 'local'}
+                onclick={() => session.setTransformValueSpace('local')}
               >
                 Local
               </button>
               <button
                 type="button"
-                class:active={transformOrientation === 'global'}
-                aria-pressed={transformOrientation === 'global'}
+                class:active={transformValueSpace === 'global'}
+                aria-pressed={transformValueSpace === 'global'}
+                onclick={() => session.setTransformValueSpace('global')}
+              >
+                World
+              </button>
+            </div>
+            <span class="space-label">Gizmo</span>
+            <div class="orientation-toggle" role="group" aria-label="Gizmo axis orientation">
+              <button
+                type="button"
+                class:active={gizmoOrientation === 'global'}
+                aria-pressed={gizmoOrientation === 'global'}
                 onclick={() => session.setTransformOrientation('global')}
               >
-                Global
+                World
+              </button>
+              <button
+                type="button"
+                class:active={gizmoOrientation === 'local'}
+                aria-pressed={gizmoOrientation === 'local'}
+                onclick={() => session.setTransformOrientation('local')}
+              >
+                Local
               </button>
             </div>
           </div>
@@ -2061,7 +2084,7 @@
           {#if session.snapshot.workspace === 'animation'}
             <p class="hint">
               Transform tracks store local values relative to the parent.
-              {transformOrientation === 'local'
+              {transformValueSpace === 'local'
                 ? 'These are the values written by transform keys.'
                 : 'World edits are converted to local when keyed.'}
             </p>
@@ -3148,7 +3171,18 @@
 
   .transform-orientation {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     justify-content: flex-end;
+    gap: var(--space-2);
+  }
+
+  .space-label {
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
   }
 
   .axis-lock {

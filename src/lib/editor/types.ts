@@ -321,6 +321,7 @@ export interface EditorSnapshot {
   readonly activeTransform: NodeTransform | null;
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;
+  readonly transformValueSpace: TransformOrientation;
   readonly modalTransform: ModalTransformSnapshot | null;
   readonly actionState: MeshActionSnapshot | null;
   readonly loopSlideAvailable: boolean;
