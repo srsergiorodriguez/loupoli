@@ -56,6 +56,10 @@
     smoothing: session.snapshot.paintSmoothing,
     noise: session.snapshot.paintNoise,
     pressureOpacity: session.snapshot.paintPressureOpacity,
+    pressureCurve: session.snapshot.paintPressureCurve,
+    pressureMin: session.snapshot.paintPressureMin,
+    tiltEnabled: session.snapshot.paintTiltEnabled,
+    taperIn: session.snapshot.paintTaperIn,
     spacing: session.snapshot.paintSpacing ?? DEFAULT_PAINT_SPACING,
     shapeFilled: session.snapshot.paintShapeFilled,
     gradient: session.snapshot.paintGradient

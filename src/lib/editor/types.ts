@@ -315,6 +315,11 @@ export interface EditorSnapshot {
   readonly paintSmoothing: number;
   readonly paintNoise: number;
   readonly paintPressureOpacity: boolean;
+  readonly paintPressureCurve: number;
+  readonly paintPressureMin: number;
+  readonly paintTiltEnabled: boolean;
+  readonly paintTaperIn: number;
+  readonly paintPreset: string | null;
   readonly paintSpacing: number;
   readonly paintShapeFilled: boolean;
   readonly paintGradient: PaintGradient;

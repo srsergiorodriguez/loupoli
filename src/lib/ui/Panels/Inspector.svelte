@@ -3,6 +3,7 @@
   import Icon from '../Icons/Icon.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
   import Switch from '../Primitives/Switch.svelte';
+  import { BRUSH_PRESETS } from '../../paint/presets';
   import Vector3Field from '../Primitives/Vector3Field.svelte';
   import SegmentedControl from '../Primitives/SegmentedControl.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
@@ -1944,52 +1945,112 @@
         open={sections.brush}
         onToggle={(open) => setSection('brush', open)}
       >
-        <div class="module-body">
-          <SliderField
-            label="Size"
-            value={session.snapshot.uvBrushSize}
-            min={2}
-            max={512}
-            step={1}
-            precision={0}
-            onChange={(value) => session.setUvBrushSize(value)}
-          />
-          <SliderField
-            label="Opacity"
-            value={session.snapshot.uvBrushOpacity}
-            percent
-            onChange={(value) => session.setUvBrushOpacity(value)}
-          />
-          <Switch
-            label="Pressure affects opacity"
-            description="Off keeps a 100% brush opaque at every pressure; size and tilt still respond."
-            checked={session.snapshot.paintPressureOpacity}
-            onChange={(value) => session.setPaintPressureOpacity(value)}
-          />
-          <SliderField
-            label="Hardness"
-            value={session.snapshot.paintHardness}
-            onChange={(value) => session.setPaintHardness(value)}
-          />
-          <SliderField
-            label="Smoothing"
-            value={session.snapshot.paintSmoothing}
-            onChange={(value) => session.setPaintSmoothing(value)}
-          />
-          <SliderField
-            label="Noise"
-            value={session.snapshot.paintNoise}
-            onChange={(value) => session.setPaintNoise(value)}
-          />
-          <SliderField
-            label="Spacing"
-            value={session.snapshot.paintSpacing}
-            min={MIN_PAINT_SPACING}
-            max={MAX_PAINT_SPACING}
-            step={0.01}
-            percent
-            onChange={(value) => session.setPaintSpacing(value)}
-          />
+        <div class="module-body brush-body">
+          {#if session.snapshot.paintTool === 'brush' || session.snapshot.paintTool === 'eraser'}
+            <div class="brush-group">
+              <span class="brush-group-title">Presets</span>
+              <div class="brush-presets" role="group" aria-label="Brush presets">
+                {#each BRUSH_PRESETS as preset (preset.id)}
+                  <ActionButton
+                    label={preset.label}
+                    active={session.snapshot.paintPreset === preset.id}
+                    onActivate={() => session.applyBrushPreset(preset.id)}
+                  />
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <div class="brush-group">
+            <span class="brush-group-title">Tip</span>
+            <SliderField
+              label="Size"
+              value={session.snapshot.uvBrushSize}
+              min={2}
+              max={512}
+              step={1}
+              precision={0}
+              onChange={(value) => session.setUvBrushSize(value)}
+            />
+            <SliderField
+              label="Opacity"
+              value={session.snapshot.uvBrushOpacity}
+              percent
+              onChange={(value) => session.setUvBrushOpacity(value)}
+            />
+            <SliderField
+              label="Hardness"
+              value={session.snapshot.paintHardness}
+              onChange={(value) => session.setPaintHardness(value)}
+            />
+            <SliderField
+              label="Spacing"
+              value={session.snapshot.paintSpacing}
+              min={MIN_PAINT_SPACING}
+              max={MAX_PAINT_SPACING}
+              step={0.01}
+              percent
+              onChange={(value) => session.setPaintSpacing(value)}
+            />
+          </div>
+
+          <div class="brush-group">
+            <span class="brush-group-title">Dynamics</span>
+            <SliderField
+              label="Pressure curve"
+              value={session.snapshot.paintPressureCurve}
+              min={0.2}
+              max={4}
+              step={0.05}
+              precision={2}
+              onChange={(value) => session.setPaintPressureCurve(value)}
+            />
+            <SliderField
+              label="Min size"
+              value={session.snapshot.paintPressureMin}
+              min={0}
+              max={0.95}
+              step={0.01}
+              percent
+              onChange={(value) => session.setPaintPressureMin(value)}
+            />
+            <Switch
+              label="Pressure affects opacity"
+              description="Off keeps a 100% brush opaque at every pressure; size and tilt still respond."
+              checked={session.snapshot.paintPressureOpacity}
+              onChange={(value) => session.setPaintPressureOpacity(value)}
+            />
+            <Switch
+              label="Tilt shapes stamp"
+              description="Use Pencil tilt to flatten the brush into an ellipse."
+              checked={session.snapshot.paintTiltEnabled}
+              onChange={(value) => session.setPaintTiltEnabled(value)}
+            />
+          </div>
+
+          <div class="brush-group">
+            <span class="brush-group-title">Stroke</span>
+            <SliderField
+              label="Smoothing"
+              value={session.snapshot.paintSmoothing}
+              onChange={(value) => session.setPaintSmoothing(value)}
+            />
+            <SliderField
+              label="Noise"
+              value={session.snapshot.paintNoise}
+              onChange={(value) => session.setPaintNoise(value)}
+            />
+            <SliderField
+              label="Taper in (px)"
+              value={session.snapshot.paintTaperIn}
+              min={0}
+              max={256}
+              step={1}
+              precision={0}
+              onChange={(value) => session.setPaintTaperIn(value)}
+            />
+          </div>
+
           {#if session.snapshot.paintTool === 'gradient'}
             <SelectField
               label="Type"
@@ -2014,7 +2075,6 @@
         </div>
       </InspectorSection>
 {/snippet}
-    
 
     {#snippet transformSection()}
 <InspectorSection
@@ -3148,6 +3208,40 @@
 
   .space-row :global(.segmented) {
     justify-self: end;
+  }
+
+  .brush-body {
+    gap: var(--inspector-row-gap);
+  }
+
+  .brush-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .brush-group + .brush-group {
+    padding-top: var(--space-2);
+    border-top: var(--hairline) solid var(--border-subtle);
+  }
+
+  .brush-group-title {
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+
+  .brush-presets {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+  }
+
+  .brush-presets :global(.action-button) {
+    width: 100%;
+    padding: 0 var(--space-1);
   }
 
   .space-label {

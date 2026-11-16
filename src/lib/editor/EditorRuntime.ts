@@ -85,6 +85,7 @@ import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
 import { PaintEngine } from '../paint/PaintEngine';
 import { paintPressure } from '../paint/types';
+import { brushPreset, type BrushPresetId } from '../paint/presets';
 import {
   drawTextureChecker,
   drawTextureSurface,
@@ -666,6 +667,11 @@ export class EditorRuntime {
   private paintSmoothing = 0.25;
   private paintNoise = 0;
   private paintPressureOpacity = false;
+  private paintPressureCurve = 1;
+  private paintPressureMin = 0.35;
+  private paintTiltEnabled = true;
+  private paintTaperIn = 0;
+  private paintPreset: BrushPresetId | null = null;
   private paintSpacing = DEFAULT_PAINT_SPACING;
   private paintShapeFilled = true;
   private paintGradient: PaintGradient = 'linear';
@@ -986,6 +992,11 @@ export class EditorRuntime {
       paintSmoothing: this.paintSmoothing,
       paintNoise: this.paintNoise,
       paintPressureOpacity: this.paintPressureOpacity,
+      paintPressureCurve: this.paintPressureCurve,
+      paintPressureMin: this.paintPressureMin,
+      paintTiltEnabled: this.paintTiltEnabled,
+      paintTaperIn: this.paintTaperIn,
+      paintPreset: this.paintPreset,
       paintSpacing: this.paintSpacing,
       paintShapeFilled: this.paintShapeFilled,
       paintGradient: this.paintGradient,
@@ -2961,6 +2972,7 @@ export class EditorRuntime {
 
   setPaintTool(tool: PaintTool): void {
     this.paintTool = tool;
+    this.paintPreset = null;
     this.publish();
   }
 
@@ -2976,21 +2988,66 @@ export class EditorRuntime {
 
   setPaintHardness(value: number): void {
     this.paintHardness = Math.min(1, Math.max(0.01, value));
+    this.paintPreset = null;
     this.publish();
   }
 
   setPaintSmoothing(value: number): void {
     this.paintSmoothing = Math.min(1, Math.max(0, value));
+    this.paintPreset = null;
     this.publish();
   }
 
   setPaintNoise(value: number): void {
     this.paintNoise = Math.min(1, Math.max(0, value));
+    this.paintPreset = null;
     this.publish();
   }
 
   setPaintPressureOpacity(value: boolean): void {
     this.paintPressureOpacity = value;
+    this.paintPreset = null;
+    this.publish();
+  }
+
+  setPaintPressureCurve(value: number): void {
+    this.paintPressureCurve = Math.min(4, Math.max(0.2, value));
+    this.paintPreset = null;
+    this.publish();
+  }
+
+  setPaintPressureMin(value: number): void {
+    this.paintPressureMin = Math.min(0.95, Math.max(0, value));
+    this.paintPreset = null;
+    this.publish();
+  }
+
+  setPaintTiltEnabled(value: boolean): void {
+    this.paintTiltEnabled = value;
+    this.paintPreset = null;
+    this.publish();
+  }
+
+  setPaintTaperIn(value: number): void {
+    this.paintTaperIn = Math.min(256, Math.max(0, value));
+    this.paintPreset = null;
+    this.publish();
+  }
+
+  /** Apply one bundled brush preset. */
+  applyBrushPreset(id: BrushPresetId): void {
+    const preset = brushPreset(id);
+    this.paintTool = preset.tool;
+    this.paintHardness = preset.hardness;
+    this.paintSmoothing = preset.smoothing;
+    this.paintSpacing = preset.spacing;
+    this.paintNoise = preset.noise;
+    this.paintPressureCurve = preset.pressureCurve;
+    this.paintPressureMin = preset.pressureMin;
+    this.paintPressureOpacity = preset.pressureOpacity;
+    this.paintTiltEnabled = preset.tiltEnabled;
+    this.paintTaperIn = preset.taperIn;
+    this.paintPreset = id;
     this.publish();
   }
 
@@ -2999,6 +3056,7 @@ export class EditorRuntime {
       MAX_PAINT_SPACING,
       Math.max(MIN_PAINT_SPACING, value)
     );
+    this.paintPreset = null;
     this.publish();
   }
 
@@ -3691,6 +3749,10 @@ export class EditorRuntime {
       smoothing: this.paintSmoothing,
       noise: this.paintNoise,
       pressureOpacity: this.paintPressureOpacity,
+      pressureCurve: this.paintPressureCurve,
+      pressureMin: this.paintPressureMin,
+      tiltEnabled: this.paintTiltEnabled,
+      taperIn: this.paintTaperIn,
       spacing: this.paintSpacing,
       shapeFilled: this.paintShapeFilled,
       gradient: this.paintGradient

@@ -17,9 +17,21 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-/** Pressure response shared by stamp radius and stamp spacing. */
+/** Pressure response shared by stamp radius, spacing, and optional opacity. */
+export function pressureResponse(
+  pressure: number,
+  curve = 1,
+  minimum = 0.35
+): number {
+  const normalized = clamp(pressure, 0, 1);
+  const responseCurve = clamp(curve, 0.2, 4);
+  const floor = clamp(minimum, 0, 0.95);
+  return floor + (1 - floor) * normalized ** responseCurve;
+}
+
+/** Default pressure response retained for callers without custom dynamics. */
 export function pressureRadiusScale(pressure: number): number {
-  return 0.35 + clamp(pressure, 0, 1) * 0.65;
+  return pressureResponse(pressure, 1, 0.35);
 }
 
 /** Cached pre-rendered brush stamp; creating a radial gradient per dab is costly. */
@@ -116,15 +128,17 @@ export function drawStamp(
   erase = false,
   tilt?: BrushTilt
 ): { minX: number; minY: number; maxX: number; maxY: number } {
-  const pressureScale = pressureRadiusScale(pressure);
+  const pressureScale = pressureResponse(
+    pressure,
+    settings.pressureCurve,
+    settings.pressureMin
+  );
   const noise = clamp(settings.noise, 0, 1);
   const jitterX = (random() - 0.5) * radius * noise * 0.7;
   const jitterY = (random() - 0.5) * radius * noise * 0.7;
   const sizeJitter = 1 + (random() - 0.5) * noise * 0.45;
   const colorAlpha = erase ? 1 : clamp(settings.colorAlpha ?? 1, 0, 1);
-  const pressureAlpha = settings.pressureOpacity
-    ? 0.35 + clamp(pressure, 0, 1) * 0.65
-    : 1;
+  const pressureAlpha = settings.pressureOpacity ? pressureScale : 1;
   const alpha =
     clamp(settings.opacity, 0, 1) *
     colorAlpha *
@@ -135,11 +149,9 @@ export function drawStamp(
   const cy = y + jitterY;
   const hardness = clamp(settings.hardness, 0.01, 1);
   const inner = r * Math.max(0.01, hardness * 0.96);
-  const tiltMagnitude = clamp(
-    Math.hypot(tilt?.x ?? 0, tilt?.y ?? 0) / 90,
-    0,
-    1
-  );
+  const tiltMagnitude = settings.tiltEnabled
+    ? clamp(Math.hypot(tilt?.x ?? 0, tilt?.y ?? 0) / 90, 0, 1)
+    : 0;
   const tiltAspect = 1 - tiltMagnitude * 0.55;
   const tiltAngle = Math.atan2(tilt?.y ?? 0, tilt?.x ?? 0);
 
@@ -215,7 +227,10 @@ export function drawStampLine(
   const minPressure = Math.min(pressure, pressureTo);
   const spacing = Math.max(
     1,
-    radius * pressureRadiusScale(minPressure) * 2 * fraction
+    radius *
+      pressureResponse(minPressure, settings.pressureCurve, settings.pressureMin) *
+      2 *
+      fraction
   );
   const steps = Math.max(1, Math.ceil(length / spacing));
   const fromTilt = tilt ?? { x: 0, y: 0 };

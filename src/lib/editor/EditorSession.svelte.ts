@@ -66,6 +66,11 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   paintSmoothing: 0.25,
   paintNoise: 0,
   paintPressureOpacity: false,
+  paintPressureCurve: 1,
+  paintPressureMin: 0.35,
+  paintTiltEnabled: true,
+  paintTaperIn: 0,
+  paintPreset: null,
   paintSpacing: 0.25,
   paintShapeFilled: true,
   paintGradient: 'linear',
@@ -628,6 +633,26 @@ export class EditorSession {
 
   setPaintPressureOpacity(value: boolean): void {
     this.runtime?.setPaintPressureOpacity(value);
+  }
+
+  setPaintPressureCurve(value: number): void {
+    this.runtime?.setPaintPressureCurve(value);
+  }
+
+  setPaintPressureMin(value: number): void {
+    this.runtime?.setPaintPressureMin(value);
+  }
+
+  setPaintTiltEnabled(value: boolean): void {
+    this.runtime?.setPaintTiltEnabled(value);
+  }
+
+  setPaintTaperIn(value: number): void {
+    this.runtime?.setPaintTaperIn(value);
+  }
+
+  applyBrushPreset(id: import('../paint/presets').BrushPresetId): void {
+    this.runtime?.applyBrushPreset(id);
   }
 
   setPaintSpacing(value: number): void {

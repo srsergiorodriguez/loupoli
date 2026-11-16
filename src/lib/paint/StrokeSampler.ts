@@ -1,4 +1,4 @@
-import { pressureRadiusScale } from './brush';
+import { pressureResponse } from './brush';
 import type { PaintSample } from './types';
 
 /** One GPU-ready dab in texture pixels. */
@@ -18,6 +18,10 @@ export interface StrokeSamplerSettings {
   readonly smoothing: number;
   readonly noise: number;
   readonly pressureOpacity: boolean;
+  readonly pressureCurve: number;
+  readonly pressureMin: number;
+  readonly tiltEnabled: boolean;
+  readonly taperIn: number;
   readonly random: () => number;
 }
 
@@ -34,6 +38,7 @@ export class StrokeSampler {
   private last: PaintSample | null = null;
   private filtered: PaintSample | null = null;
   private carry = 0;
+  private distance = 0;
 
   constructor(private readonly settings: StrokeSamplerSettings) {}
 
@@ -42,7 +47,8 @@ export class StrokeSampler {
     this.last = sample;
     this.filtered = sample;
     this.carry = 0;
-    return [this.makeDab(sample, sample)];
+    this.distance = 0;
+    return [this.makeDab(sample, sample, 0)];
   }
 
   /** Add one texture-space sample and return the dabs for the new segment. */
@@ -61,7 +67,8 @@ export class StrokeSampler {
       tiltX: sample.tiltX,
       tiltY: sample.tiltY
     };
-    const dabs = this.walk(this.last, next);
+    const dabs = this.walk(this.last, next, this.distance);
+    this.distance += Math.hypot(next.x - this.last.x, next.y - this.last.y);
     this.last = next;
     this.filtered = next;
     return dabs;
@@ -78,7 +85,8 @@ export class StrokeSampler {
     this.last = sample;
     this.filtered = sample;
     this.carry = 0;
-    return [this.makeDab(sample, sample)];
+    this.distance = 0;
+    return [this.makeDab(sample, sample, 0)];
   }
 
   /** Emit a final dab at the current filtered endpoint. */
@@ -86,10 +94,14 @@ export class StrokeSampler {
     if (!this.last) {
       return [];
     }
-    return [this.makeDab(this.last, this.last)];
+    return [this.makeDab(this.last, this.last, this.distance)];
   }
 
-  private walk(from: PaintSample, to: PaintSample): StrokeDab[] {
+  private walk(
+    from: PaintSample,
+    to: PaintSample,
+    startDistance: number
+  ): StrokeDab[] {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const length = Math.hypot(dx, dy);
@@ -111,24 +123,41 @@ export class StrokeSampler {
         tiltY:
           (from.tiltY ?? 0) + ((to.tiltY ?? 0) - (from.tiltY ?? 0)) * t
       };
-      dabs.push(this.makeDab(point, from));
+      dabs.push(this.makeDab(point, from, startDistance + traveled));
       traveled += this.spacingFor(point.pressure);
     }
     this.carry = Math.max(0, traveled - length);
     return dabs;
   }
 
+  private taper(distance: number): number {
+    const length = Math.max(0, this.settings.taperIn);
+    if (length <= 0) {
+      return 1;
+    }
+    const t = Math.min(1, distance / length);
+    return 0.2 + 0.8 * t;
+  }
+
   private spacingFor(pressure: number): number {
     return Math.max(
       1,
       this.settings.radius *
-        pressureRadiusScale(pressure) *
+        pressureResponse(
+          pressure,
+          this.settings.pressureCurve,
+          this.settings.pressureMin
+        ) *
         2 *
         Math.min(2, Math.max(0.02, this.settings.spacing))
     );
   }
 
-  private makeDab(point: PaintSample, from: PaintSample): StrokeDab {
+  private makeDab(
+    point: PaintSample,
+    from: PaintSample,
+    distance: number
+  ): StrokeDab {
     const noise = Math.min(1, Math.max(0, this.settings.noise));
     const jitterX =
       (this.settings.random() - 0.5) * this.settings.radius * noise * 0.7;
@@ -136,18 +165,27 @@ export class StrokeSampler {
       (this.settings.random() - 0.5) * this.settings.radius * noise * 0.7;
     const sizeJitter = 1 + (this.settings.random() - 0.5) * noise * 0.45;
     const pressure = Math.min(1, Math.max(0, point.pressure));
+    const response = pressureResponse(
+      pressure,
+      this.settings.pressureCurve,
+      this.settings.pressureMin
+    );
+    const taper = this.taper(distance);
     const tiltX = point.tiltX ?? from.tiltX ?? 0;
     const tiltY = point.tiltY ?? from.tiltY ?? 0;
-    const tiltMagnitude = Math.min(1, Math.hypot(tiltX, tiltY) / 90);
+    const tiltMagnitude = this.settings.tiltEnabled
+      ? Math.min(1, Math.hypot(tiltX, tiltY) / 90)
+      : 0;
     const flow =
-      (this.settings.pressureOpacity ? 0.35 + pressure * 0.65 : 1) *
+      (this.settings.pressureOpacity ? response : 1) *
+      taper *
       (1 - this.settings.random() * noise * 0.35);
     return {
       x: point.x + jitterX,
       y: point.y + jitterY,
       radius: Math.max(
         0.5,
-        this.settings.radius * pressureRadiusScale(pressure) * sizeJitter
+        this.settings.radius * response * taper * sizeJitter
       ),
       aspect: 1 - tiltMagnitude * 0.55,
       angle: Math.atan2(tiltY, tiltX),

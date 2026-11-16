@@ -348,6 +348,10 @@ export class PaintEngine {
       smoothing: this.settings.smoothing,
       noise: this.settings.noise,
       pressureOpacity: this.settings.pressureOpacity,
+      pressureCurve: this.settings.pressureCurve,
+      pressureMin: this.settings.pressureMin,
+      tiltEnabled: this.settings.tiltEnabled,
+      taperIn: this.settings.taperIn,
       random: this.random
     });
     this.applyGpuDabs(this.sampler.begin(sample));

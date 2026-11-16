@@ -34,6 +34,14 @@ export interface PaintSettings {
   readonly noise: number;
   /** Whether Pencil pressure also modulates per-dab opacity. */
   readonly pressureOpacity: boolean;
+  /** Pressure response exponent for size and optional opacity. */
+  readonly pressureCurve: number;
+  /** Minimum size/opacity response at zero pressure. */
+  readonly pressureMin: number;
+  /** Whether Pencil tilt shapes the stamp. */
+  readonly tiltEnabled: boolean;
+  /** Start taper distance in texture pixels; zero disables it. */
+  readonly taperIn: number;
   /** Distance between stamps as a fraction of the pressure-adjusted diameter. */
   readonly spacing: number;
   readonly shapeFilled: boolean;

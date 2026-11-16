@@ -28,6 +28,10 @@ describe('pressure-aware stamp spacing', () => {
       smoothing: 0,
       noise: 0,
       pressureOpacity: false,
+      pressureCurve: 1,
+      pressureMin: 0.35,
+      tiltEnabled: true,
+      taperIn: 0,
       spacing,
       shapeFilled: true,
       gradient: 'linear'

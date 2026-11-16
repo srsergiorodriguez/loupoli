@@ -19,6 +19,10 @@ Projection:   screen ray -> surface UV -> texture point
              pane canvas + 3D texture
 ```
 
+### Brush presets and dynamics
+
+Bundled presets set brush hardness, smoothing, spacing, noise, pressure response, tilt shaping, taper-in, and eraser/brush tool state. Pressure response is shared by radius, spacing, and optional opacity; minimum size floors the pressure response. Tilt shaping is an explicit toggle. Taper-in applies over a texture-pixel distance from the start of the stroke and is shared by pane and projection sampling.
+
 ### Brush size
 
 Brush Size is a **texture-space diameter in texels**, shared by the Paint pane and projected painting. Zoom and surface orientation change the on-screen outline, not the resulting texture dab size.
