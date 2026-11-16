@@ -7,7 +7,6 @@
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
-  import type { ImageFitMode } from '../../texture/imageFit';
   import { paintPressure, type PaintSample } from '../../paint/types';
   import { paintBounds } from '../../texture/paintView';
 
@@ -73,17 +72,6 @@
   );
   const activeEditor = $derived(session.snapshot.activeEditor);
   const imagePlacement = $derived(session.snapshot.imagePlacement);
-  const fitLabels: Record<ImageFitMode, string> = {
-    contain: 'Contain',
-    cover: 'Cover',
-    stretch: 'Stretch',
-    native: 'Native'
-  };
-  const blendLabels: Record<'normal' | 'multiply' | 'screen', string> = {
-    normal: 'Normal',
-    multiply: 'Multiply',
-    screen: 'Screen'
-  };
   const canReplaceLayer = $derived(activeLayer?.kind === 'raster');
   const placementAngle = $derived(
     imagePlacement ? (imagePlacement.rotation * 180) / Math.PI : 0
@@ -1048,19 +1036,6 @@
       <span class="paint-hint">
         Drag the image to move · corner handles scale · top handle rotates · Enter commits · Esc cancels
       </span>
-      <div class="placement-fit">
-        <ActionMenu
-          label={`Fit: ${fitLabels[imagePlacement.fit]}`}
-          icon="frame"
-          menuTitle="Image fit"
-          options={[
-            { label: 'Contain', onSelect: () => session.setImagePlacementFit('contain') },
-            { label: 'Cover', onSelect: () => session.setImagePlacementFit('cover') },
-            { label: 'Stretch', onSelect: () => session.setImagePlacementFit('stretch') },
-            { label: 'Native', onSelect: () => session.setImagePlacementFit('native') }
-          ]}
-        />
-      </div>
       <label class="placement-angle">
         <span>Angle</span>
         <NumberField
@@ -1087,17 +1062,6 @@
             session.updateImagePlacement({ opacity: percent / 100 })}
         />
       </label>
-      <ActionMenu
-        label={`Blend: ${blendLabels[imagePlacement.blendMode]}`}
-        icon="stack"
-        menuTitle="Image blend mode"
-        disabled={imagePlacement.replaceActive}
-        options={[
-          { label: 'Normal', onSelect: () => session.updateImagePlacement({ blendMode: 'normal' }) },
-          { label: 'Multiply', onSelect: () => session.updateImagePlacement({ blendMode: 'multiply' }) },
-          { label: 'Screen', onSelect: () => session.updateImagePlacement({ blendMode: 'screen' }) }
-        ]}
-      />
       <ActionMenu
         label={`Layer: ${imagePlacement.replaceActive ? 'Replace' : 'New'}`}
         icon="image"
@@ -1300,10 +1264,6 @@
     border-radius: 50%;
     background: var(--bg-panel-strong);
     transform: translate(-50%, -50%);
-  }
-
-  .placement-fit {
-    flex: 0 0 auto;
   }
 
   .placement-angle,

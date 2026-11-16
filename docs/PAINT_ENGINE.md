@@ -58,7 +58,7 @@ The mask is presented only in the dirty rectangle. The preview layer is rebuilt 
 
 ### Image placement
 
-Image import is previewed with an initial Contain/Cover/Stretch/Native fit, then placed directly in the Paint pane. Placement supports drag-to-move, uniform corner scaling, top-handle or two-finger rotation, two-finger pinch/translation, exact angle/opacity fields, blend selection, and new-layer or raster-layer replacement. Commit is one undoable operation; cancel discards the bitmap preview.
+Image import is previewed with an initial Contain/Cover/Stretch/Native fit, then placed directly in the Paint pane. Placement supports drag-to-move, uniform corner scaling, top-handle or two-finger rotation, two-finger pinch/translation, exact angle/opacity fields, and new-layer or raster-layer replacement. Fit is chosen in the import modal; blend is changed in the Inspector after commit. Commit is one undoable operation; cancel discards the bitmap preview.
 
 ### Input parity
 
