@@ -10,6 +10,10 @@ class FakeContext {
   fillStyle = '';
   clearRect(): void {}
   fillRect(): void {}
+  save(): void {}
+  restore(): void {}
+  translate(): void {}
+  rotate(): void {}
   drawImage(): void {}
 }
 
@@ -68,6 +72,31 @@ describe('TextureAsset', () => {
     expect(stack.layerCount).toBe(2);
     expect(stack.activeLayerId).toBe(stack.summaries()[1].id);
     expect(stack.summaries()[1].opacity).toBe(1);
+    stack.dispose();
+  });
+
+  it('rasterizes a placed bitmap transform as one raster layer', () => {
+    const stack = new TextureAsset({
+      id: 'placement-test',
+      name: 'Placement',
+      width: 64,
+      height: 64,
+      checkerA: '#000000',
+      checkerB: '#000000'
+    });
+    const bitmap = { width: 20, height: 10 } as ImageBitmap;
+    expect(
+      stack.importBitmapLayer(bitmap, 'Placed image', {
+        x: 32,
+        y: 30,
+        width: 20,
+        height: 10,
+        rotation: 0.25
+      })
+    ).toBe(true);
+    expect(stack.layerCount).toBe(2);
+    expect(stack.summaries()[1].kind).toBe('raster');
+    expect(stack.summaries()[1].name).toBe('Placed image');
     stack.dispose();
   });
 

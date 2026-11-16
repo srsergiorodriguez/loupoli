@@ -98,7 +98,7 @@ import {
   type PaintSample,
   type PaintTool
 } from '../paint/types';
-import type { ImageFitOptions } from '../texture/imageFit';
+import { imageFitRect, type ImageFitMode, type ImageFitOptions } from '../texture/imageFit';
 import {
   appendNativeMp4,
   beginNativeMp4,
@@ -290,7 +290,8 @@ import {
   type ToastMessage,
   type AnimationKeyReference,
   type ObjFrameExportOptions,
-  type ActiveJobSnapshot
+  type ActiveJobSnapshot,
+  type ImagePlacementSnapshot
 } from './types';
 
 /** Cancellation sentinel for cooperative export/bake jobs. */
@@ -491,6 +492,19 @@ interface LoopSlideDrag {
   sign: number;
 }
 
+/** A decoded image awaiting placement as a new texture layer. */
+interface ImagePlacementState {
+  readonly bitmap: ImageBitmap;
+  readonly asset: TextureAsset;
+  readonly name: string;
+  fit: ImageFitMode;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
 /** A live raster paint stroke over the active texture layer. */
 interface UvPaintStroke {
   readonly layerId: string;
@@ -665,6 +679,7 @@ export class EditorRuntime {
     canvas: HTMLCanvasElement;
   } | null = null;
   private surfaceCursor: { x: number; y: number; size: number } | null = null;
+  private imagePlacement: ImagePlacementState | null = null;
   private projectionPreview: ProjectionPreview | null = null;
   private projectedShape: {
     tool: 'line' | 'rectangle' | 'ellipse' | 'gradient';
@@ -978,6 +993,7 @@ export class EditorRuntime {
       paintPanX: this.paintPanX,
       paintPanY: this.paintPanY,
       surfaceCursor: this.surfaceCursor,
+      imagePlacement: this.imagePlacementSnapshot(),
       projectionPreview: this.projectionPreview,
       uvRevision: this.uvRevision,
       uvError: this.uvError,
@@ -1123,6 +1139,10 @@ export class EditorRuntime {
 
   /** Select the active texture asset for the inspector and paint tools. */
   setActiveTextureAsset(id: string): void {
+    if (this.textureLibrary.activeAssetId === id) {
+      return;
+    }
+    this.cancelImagePlacement();
     if (!this.textureLibrary.setActive(id)) {
       return;
     }
@@ -1156,6 +1176,172 @@ export class EditorRuntime {
       new TextureAssetCommand(asset, before, after, 'Import image layer')
     );
     this.autosave.markTextureDirty();
+    this.publish();
+  }
+
+  /** Project the live placement state into a small UI snapshot. */
+  private imagePlacementSnapshot(): ImagePlacementSnapshot | null {
+    const placement = this.imagePlacement;
+    if (!placement) {
+      return null;
+    }
+    return {
+      name: placement.name,
+      fit: placement.fit,
+      textureWidth: placement.asset.width,
+      textureHeight: placement.asset.height,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+      height: placement.height,
+      rotation: placement.rotation
+    };
+  }
+
+  /**
+   * Decode an image and begin an interactive placement before rasterizing it.
+   *
+   * The image remains an editor-only preview until commit; commit creates one
+   * raster layer and one undoable texture command.
+   */
+  async beginImagePlacement(
+    blob: Blob,
+    name: string,
+    fit: ImageFitOptions = { mode: 'contain' }
+  ): Promise<void> {
+    const asset = this.textureLibrary.active;
+    if (!asset) {
+      return;
+    }
+    if (this.workspace !== 'paint') {
+      this.setWorkspace('paint');
+    }
+    this.cancelImagePlacement();
+    let bitmap: ImageBitmap;
+    try {
+      bitmap = await createImageBitmap(blob);
+    } catch {
+      this.notify('error', 'Image import failed', 'The image could not be decoded.');
+      return;
+    }
+    if (this.disposed) {
+      bitmap.close();
+      return;
+    }
+    const rect = imageFitRect(
+      bitmap.width,
+      bitmap.height,
+      asset.width,
+      asset.height,
+      fit
+    );
+    this.imagePlacement = {
+      bitmap,
+      asset,
+      name: name.trim() || 'Imported image',
+      fit: fit.mode,
+      x: rect.x + rect.width / 2,
+      y: rect.y + rect.height / 2,
+      width: rect.width,
+      height: rect.height,
+      rotation: 0
+    };
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Update the live image placement in texture-pixel coordinates. */
+  updateImagePlacement(
+    patch: Partial<
+      Pick<ImagePlacementState, 'x' | 'y' | 'width' | 'height' | 'rotation'>
+    >
+  ): void {
+    const placement = this.imagePlacement;
+    if (!placement) {
+      return;
+    }
+    if (Number.isFinite(patch.x)) placement.x = patch.x as number;
+    if (Number.isFinite(patch.y)) placement.y = patch.y as number;
+    if (Number.isFinite(patch.width)) {
+      placement.width = Math.max(1, patch.width as number);
+    }
+    if (Number.isFinite(patch.height)) {
+      placement.height = Math.max(1, patch.height as number);
+    }
+    if (Number.isFinite(patch.rotation)) {
+      placement.rotation = patch.rotation as number;
+    }
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Reset the live image placement to one of the import fit presets. */
+  setImagePlacementFit(fit: ImageFitMode): void {
+    const placement = this.imagePlacement;
+    if (!placement) {
+      return;
+    }
+    const rect = imageFitRect(
+      placement.bitmap.width,
+      placement.bitmap.height,
+      placement.asset.width,
+      placement.asset.height,
+      { mode: fit }
+    );
+    placement.fit = fit;
+    placement.x = rect.x + rect.width / 2;
+    placement.y = rect.y + rect.height / 2;
+    placement.width = rect.width;
+    placement.height = rect.height;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Rasterize the placed image into the active texture as one undoable layer. */
+  commitImagePlacement(): void {
+    const placement = this.imagePlacement;
+    if (!placement) {
+      return;
+    }
+    const asset = placement.asset;
+    const before = asset.snapshot();
+    const imported = asset.importBitmapLayer(
+      placement.bitmap,
+      placement.name,
+      {
+        x: placement.x,
+        y: placement.y,
+        width: placement.width,
+        height: placement.height,
+        rotation: placement.rotation
+      }
+    );
+    if (!imported) {
+      this.notify('error', 'Image import failed', 'The placement is invalid.');
+      return;
+    }
+    const after = asset.snapshot();
+    placement.bitmap.close();
+    this.imagePlacement = null;
+    this.textureLibrary.setActive(asset.id);
+    this.history.execute(
+      new TextureAssetCommand(asset, before, after, 'Import image layer')
+    );
+    this.autosave.markTextureDirty();
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
+  /** Discard the live placement preview without changing the texture. */
+  cancelImagePlacement(): void {
+    const placement = this.imagePlacement;
+    if (!placement) {
+      return;
+    }
+    this.imagePlacement = null;
+    placement.bitmap.close();
+    this.uvRevision += 1;
     this.publish();
   }
 
@@ -1954,6 +2140,9 @@ export class EditorRuntime {
     if (this.fileBusy) {
       return;
     }
+    if (this.imagePlacement) {
+      this.cancelImagePlacement();
+    }
     if (this.shapeEdit) {
       this.cancelShapeEdit();
     }
@@ -2069,6 +2258,9 @@ export class EditorRuntime {
   setWorkspace(
     workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'
   ): void {
+    if (workspace !== 'paint' && this.imagePlacement) {
+      this.cancelImagePlacement();
+    }
     this.paintWireCache = null;
     if (this.shapeEdit) {
       this.cancelShapeEdit();
@@ -3082,6 +3274,34 @@ export class EditorRuntime {
     );
   }
 
+  /** Draw the pending image placement above the texture, before commit. */
+  private drawImagePlacement(
+    context: CanvasRenderingContext2D,
+    textureRect: { x: number; y: number; width: number; height: number }
+  ): void {
+    const placement = this.imagePlacement;
+    if (!placement) {
+      return;
+    }
+    const scaleX = textureRect.width / placement.asset.width;
+    const scaleY = textureRect.height / placement.asset.height;
+    context.save();
+    context.translate(
+      textureRect.x + placement.x * scaleX,
+      textureRect.y + placement.y * scaleY
+    );
+    context.rotate(placement.rotation);
+    context.imageSmoothingEnabled = placement.asset.textureFilter === 'linear';
+    context.drawImage(
+      placement.bitmap,
+      (-placement.width / 2) * scaleX,
+      (-placement.height / 2) * scaleY,
+      placement.width * scaleX,
+      placement.height * scaleY
+    );
+    context.restore();
+  }
+
   /** Draw the composited texture as the Paint workspace surface. */
   drawPaintView(
     canvas: HTMLCanvasElement,
@@ -3111,6 +3331,7 @@ export class EditorRuntime {
     };
     drawTextureChecker(context, textureRect);
     drawTextureSurface(context, this.textureStack, textureRect);
+    this.drawImagePlacement(context, textureRect);
     const node = this.getActiveNode();
     if (this.paintUvOverlay && node) {
       const rootStyle = getComputedStyle(document.documentElement);
@@ -3486,7 +3707,7 @@ export class EditorRuntime {
     tiltX = 0,
     tiltY = 0
   ): boolean {
-    if (!this.uvOpen || !this.uvPaintMode) {
+    if (!this.uvOpen || !this.uvPaintMode || this.imagePlacement) {
       return false;
     }
     if (this.paintEngine) {
@@ -3532,6 +3753,7 @@ export class EditorRuntime {
   private beginProjectionPaint(sample: PointerSample): boolean {
     if (
       this.workspace !== 'paint' ||
+      this.imagePlacement !== null ||
       (sample.pointerType === 'touch' && this.pencilMode)
     ) {
       return false;
@@ -10232,6 +10454,10 @@ export class EditorRuntime {
       return;
     }
     this.disposed = true;
+    if (this.imagePlacement) {
+      this.imagePlacement.bitmap.close();
+      this.imagePlacement = null;
+    }
     this.unsubscribeHistory();
     for (const timer of this.toastTimers.values()) {
       window.clearTimeout(timer);

@@ -17,6 +17,7 @@ import type { AutosaveStatus } from '../project/AutosaveService';
 import type { TextureLayerSummary } from '../texture/TextureAsset';
 import type { TextureAssetSummary } from '../texture/TextureLibrary';
 import type { PaintGradient, PaintTool } from '../paint/types';
+import type { ImageFitMode } from '../texture/imageFit';
 
 /** The object transform tools exposed by the toolbar. */
 export const TRANSFORM_MODES = ['select', 'translate', 'rotate', 'scale'] as const;
@@ -33,6 +34,19 @@ export type TransformOrientation =
 
 /** The transient modal operation started by desktop G, R, or S. */
 export type ModalTransformKind = 'translate' | 'rotate' | 'scale';
+
+/** Live image-placement transform in texture-pixel coordinates. */
+export interface ImagePlacementSnapshot {
+  readonly name: string;
+  readonly fit: ImageFitMode;
+  readonly textureWidth: number;
+  readonly textureHeight: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly rotation: number;
+}
 
 /** Small UI projection of the active modal transform. */
 export interface ModalTransformSnapshot {
@@ -308,6 +322,7 @@ export interface EditorSnapshot {
   readonly paintPanX: number;
   readonly paintPanY: number;
   readonly surfaceCursor: { readonly x: number; readonly y: number; readonly size: number } | null;
+  readonly imagePlacement: ImagePlacementSnapshot | null;
   readonly projectionPreview: ProjectionPreview | null;
   readonly uvRevision: number;
   readonly uvError: string | null;

@@ -73,6 +73,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   paintPanX: 0,
   paintPanY: 0,
   surfaceCursor: null,
+  imagePlacement: null,
   projectionPreview: null,
   uvRevision: 0,
   uvError: null,
@@ -715,6 +716,38 @@ export class EditorSession {
     return (
       this.runtime?.importTextureImage(blob, name, fit) ?? Promise.resolve()
     );
+  }
+
+  beginImagePlacement(
+    blob: Blob,
+    name: string,
+    fit?: import('../texture/imageFit').ImageFitOptions
+  ): Promise<void> {
+    return this.runtime?.beginImagePlacement(blob, name, fit) ?? Promise.resolve();
+  }
+
+  updateImagePlacement(
+    patch: Partial<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      rotation: number;
+    }>
+  ): void {
+    this.runtime?.updateImagePlacement(patch);
+  }
+
+  setImagePlacementFit(fit: import('../texture/imageFit').ImageFitMode): void {
+    this.runtime?.setImagePlacementFit(fit);
+  }
+
+  commitImagePlacement(): void {
+    this.runtime?.commitImagePlacement();
+  }
+
+  cancelImagePlacement(): void {
+    this.runtime?.cancelImagePlacement();
   }
 
   addReferenceImage(file: File): Promise<void> {

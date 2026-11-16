@@ -2642,7 +2642,7 @@
                   onSelect: () => session.addTextureLayer('transparent')
                 },
                 {
-                  label: 'Import image layer',
+                  label: 'Place image layer',
                   icon: 'image',
                   separatorBefore: true,
                   onSelect: () => textureImportInput?.click()
@@ -2919,7 +2919,7 @@
         const file = pendingTextureFile;
         pendingTextureFile = null;
         if (file) {
-          void session.importTextureImage(
+          void session.beginImagePlacement(
             file,
             file.name.replace(/\.[^.]+$/, ''),
             fit

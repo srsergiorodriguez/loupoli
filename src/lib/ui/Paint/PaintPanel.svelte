@@ -4,6 +4,10 @@
   import PaneFrame from '../Panels/PaneFrame.svelte';
   import PaneHeader from '../Panels/PaneHeader.svelte';
   import PaintToolbar from './PaintToolbar.svelte';
+  import ActionButton from '../Primitives/ActionButton.svelte';
+  import ActionMenu from '../Primitives/ActionMenu.svelte';
+  import NumberField from '../Primitives/NumberField.svelte';
+  import type { ImageFitMode } from '../../texture/imageFit';
   import { paintPressure, type PaintSample } from '../../paint/types';
   import { paintBounds } from '../../texture/paintView';
 
@@ -68,6 +72,79 @@
     ) ?? null
   );
   const activeEditor = $derived(session.snapshot.activeEditor);
+  const imagePlacement = $derived(session.snapshot.imagePlacement);
+  const fitLabels: Record<ImageFitMode, string> = {
+    contain: 'Contain',
+    cover: 'Cover',
+    stretch: 'Stretch',
+    native: 'Native'
+  };
+  const placementAngle = $derived(
+    imagePlacement ? (imagePlacement.rotation * 180) / Math.PI : 0
+  );
+
+  const placementFrame = $derived.by(() => {
+    const placement = imagePlacement;
+    if (!placement || width <= 0 || height <= 0) {
+      return null;
+    }
+    const bounds = paintBounds(
+      width,
+      height,
+      placement.textureWidth,
+      placement.textureHeight,
+      24,
+      {
+        zoom: session.snapshot.paintZoom,
+        panX: session.snapshot.paintPanX,
+        panY: session.snapshot.paintPanY
+      }
+    );
+    const scaleX = bounds.width / Math.max(1, placement.textureWidth);
+    const scaleY = bounds.height / Math.max(1, placement.textureHeight);
+    const centerX = bounds.x + placement.x * scaleX;
+    const centerY = bounds.y + placement.y * scaleY;
+    const halfWidth = Math.max(1, (placement.width * scaleX) / 2);
+    const halfHeight = Math.max(1, (placement.height * scaleY) / 2);
+    const rotate = (x: number, y: number): { x: number; y: number } => {
+      const cos = Math.cos(placement.rotation);
+      const sin = Math.sin(placement.rotation);
+      return {
+        x: centerX + x * cos - y * sin,
+        y: centerY + x * sin + y * cos
+      };
+    };
+    return {
+      bounds,
+      centerX,
+      centerY,
+      halfWidth,
+      halfHeight,
+      rotation: placement.rotation,
+      corners: [
+        rotate(-halfWidth, -halfHeight),
+        rotate(halfWidth, -halfHeight),
+        rotate(halfWidth, halfHeight),
+        rotate(-halfWidth, halfHeight)
+      ],
+      rotationHandle: rotate(0, -halfHeight - 30)
+    };
+  });
+
+  type PlacementDrag = {
+    mode: 'move' | 'scale' | 'rotate';
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    startRotation: number;
+    startDistance: number;
+    startAngle: number;
+  };
+  let placementDrag = $state<PlacementDrag | null>(null);
 
 
   onMount(() => {
@@ -233,7 +310,158 @@
     return events;
   }
 
+  function placementHit(
+    x: number,
+    y: number,
+    point: { x: number; y: number },
+    radius = 24
+  ): boolean {
+    return Math.hypot(point.x - x, point.y - y) <= radius;
+  }
+
+  function placementTexturePoint(point: { x: number; y: number }): {
+    x: number;
+    y: number;
+  } | null {
+    const frame = placementFrame;
+    const placement = imagePlacement;
+    if (!frame || !placement) {
+      return null;
+    }
+    return {
+      x: ((point.x - frame.bounds.x) / frame.bounds.width) * placement.textureWidth,
+      y: ((point.y - frame.bounds.y) / frame.bounds.height) * placement.textureHeight
+    };
+  }
+
+  function beginPlacementPointer(event: PointerEvent): boolean {
+    const frame = placementFrame;
+    const placement = imagePlacement;
+    if (!frame || !placement || placementDrag) {
+      return false;
+    }
+    const point = localPoint(event);
+    const dx = point.x - frame.centerX;
+    const dy = point.y - frame.centerY;
+    const cos = Math.cos(frame.rotation);
+    const sin = Math.sin(frame.rotation);
+    const localX = dx * cos + dy * sin;
+    const localY = -dx * sin + dy * cos;
+    const onRotation = placementHit(
+      frame.rotationHandle.x,
+      frame.rotationHandle.y,
+      point
+    );
+    const onCorner = frame.corners.some((corner) =>
+      placementHit(corner.x, corner.y, point)
+    );
+    const inside =
+      Math.abs(localX) <= frame.halfWidth + 4 &&
+      Math.abs(localY) <= frame.halfHeight + 4;
+    if (!onRotation && !onCorner && !inside) {
+      return false;
+    }
+    event.preventDefault();
+    session.setActiveEditor('paint');
+    canvas.focus({ preventScroll: true });
+    const texturePoint = placementTexturePoint(point) ?? {
+      x: placement.x,
+      y: placement.y
+    };
+    const startDistance = Math.max(1, Math.hypot(dx, dy));
+    placementDrag = {
+      mode: onRotation ? 'rotate' : onCorner ? 'scale' : 'move',
+      pointerId: event.pointerId,
+      startClientX: point.x,
+      startClientY: point.y,
+      startX: texturePoint.x,
+      startY: texturePoint.y,
+      startWidth: placement.width,
+      startHeight: placement.height,
+      startRotation: placement.rotation,
+      startDistance,
+      startAngle: Math.atan2(dy, dx)
+    };
+    try {
+      canvas.setPointerCapture(event.pointerId);
+    } catch {
+      // Best effort; window listeners still receive the gesture.
+    }
+    window.addEventListener('pointermove', placementMove);
+    window.addEventListener('pointerup', placementUp);
+    window.addEventListener('pointercancel', placementUp);
+    return true;
+  }
+
+  function placementMove(event: PointerEvent): void {
+    const drag = placementDrag;
+    const placement = imagePlacement;
+    if (!drag || !placement || event.pointerId !== drag.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    const point = localPoint(event);
+    if (drag.mode === 'move') {
+      const current = placementTexturePoint(point);
+      if (!current) {
+        return;
+      }
+      session.updateImagePlacement({
+        x: placement.x + current.x - drag.startX,
+        y: placement.y + current.y - drag.startY
+      });
+      drag.startX = current.x;
+      drag.startY = current.y;
+      return;
+    }
+    const frame = placementFrame;
+    if (!frame) {
+      return;
+    }
+    const dx = point.x - frame.centerX;
+    const dy = point.y - frame.centerY;
+    if (drag.mode === 'scale') {
+      const factor = Math.max(
+        0.05,
+        Math.hypot(dx, dy) / drag.startDistance
+      );
+      session.updateImagePlacement({
+        width: drag.startWidth * factor,
+        height: drag.startHeight * factor
+      });
+      return;
+    }
+    const angle = Math.atan2(dy, dx);
+    let delta = angle - drag.startAngle;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    session.updateImagePlacement({
+      rotation: drag.startRotation + delta
+    });
+  }
+
+  function placementUp(event: PointerEvent): void {
+    if (!placementDrag || event.pointerId !== placementDrag.pointerId) {
+      return;
+    }
+    window.removeEventListener('pointermove', placementMove);
+    window.removeEventListener('pointerup', placementUp);
+    window.removeEventListener('pointercancel', placementUp);
+    try {
+      if (canvas?.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // Capture may already be released.
+    }
+    placementDrag = null;
+  }
+
   function pointerDown(event: PointerEvent): void {
+    if (imagePlacement) {
+      beginPlacementPointer(event);
+      return;
+    }
     if (event.pointerType === 'pen') {
       penActive = true;
       // A missed pointerup from a previous pencil stroke must be committed
@@ -546,6 +774,16 @@
     if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
+    if (imagePlacement) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        session.cancelImagePlacement();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        session.commitImagePlacement();
+      }
+      return;
+    }
     const paintKey: Record<string, 'brush' | 'eraser' | 'line' | 'rectangle' | 'ellipse' | 'gradient' | 'fill'> = {
       b: 'brush',
       e: 'eraser',
@@ -590,13 +828,57 @@
 
 {#snippet paintFooter()}
   <div class="paint-foot">
-    <span class="paint-hint">
-      {#if !activeLayer}
-        Add a texture layer in the Inspector
-      {:else}
-        Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
-      {/if}
-    </span>
+    {#if imagePlacement}
+      <span class="paint-hint">
+        Drag the image to move · corner handles scale · top handle rotates · Enter commits · Esc cancels
+      </span>
+      <div class="placement-fit">
+        <ActionMenu
+          label={`Fit: ${fitLabels[imagePlacement.fit]}`}
+          icon="frame"
+          menuTitle="Image fit"
+          options={[
+            { label: 'Contain', onSelect: () => session.setImagePlacementFit('contain') },
+            { label: 'Cover', onSelect: () => session.setImagePlacementFit('cover') },
+            { label: 'Stretch', onSelect: () => session.setImagePlacementFit('stretch') },
+            { label: 'Native', onSelect: () => session.setImagePlacementFit('native') }
+          ]}
+        />
+      </div>
+      <label class="placement-angle">
+        <span>Angle</span>
+        <NumberField
+          label="Image rotation"
+          value={placementAngle}
+          step={1}
+          precision={1}
+          unit="°"
+          onCommit={(degrees) =>
+            session.updateImagePlacement({ rotation: (degrees * Math.PI) / 180 })}
+        />
+      </label>
+      <div class="placement-actions">
+        <ActionButton
+          label="Cancel"
+          icon="close"
+          onActivate={() => session.cancelImagePlacement()}
+        />
+        <ActionButton
+          label="Place image"
+          icon="checker"
+          variant="primary"
+          onActivate={() => session.commitImagePlacement()}
+        />
+      </div>
+    {:else}
+      <span class="paint-hint">
+        {#if !activeLayer}
+          Add a texture layer in the Inspector
+        {:else}
+          Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
+        {/if}
+      </span>
+    {/if}
   </div>
 {/snippet}
 
@@ -611,6 +893,7 @@
     <canvas
       bind:this={canvas}
       class="paint-canvas"
+      class:placing={imagePlacement !== null}
       tabindex="0"
       aria-label="Texture paint surface"
       onpointerdown={pointerDown}
@@ -627,7 +910,26 @@
       onwheel={wheel}
       oncontextmenu={(event) => event.preventDefault()}
     ></canvas>
-    {#if brushVisible}
+    {#if imagePlacement && placementFrame}
+      <div
+        class="image-placement-frame"
+        style={`left:${placementFrame.centerX}px;top:${placementFrame.centerY}px;width:${placementFrame.halfWidth * 2}px;height:${placementFrame.halfHeight * 2}px;transform:translate(-50%, -50%) rotate(${placementFrame.rotation}rad)`}
+        aria-hidden="true"
+      >
+        {#each [0, 1, 2, 3] as index (index)}
+          <span
+            class="image-placement-handle"
+            style={`left:${index === 0 || index === 3 ? '0' : '100%'};top:${index < 2 ? '0' : '100%'}`}
+          ></span>
+        {/each}
+        <span class="image-placement-rotate-stem"></span>
+        <span
+          class="image-placement-rotate-handle"
+          style={`left:50%;top:-30px`}
+        ></span>
+      </div>
+    {/if}
+    {#if brushVisible && !imagePlacement}
       <span
         class="brush-cursor"
         style={`left:${brushX}px;top:${brushY}px;width:${brushSize}px;height:${brushSize}px`}
@@ -675,6 +977,76 @@
     transform: translate(-50%, -50%);
   }
 
+  .paint-canvas.placing {
+    cursor: default;
+  }
+
+  .image-placement-frame {
+    position: absolute;
+    z-index: 2;
+    border: var(--hairline) solid var(--accent-primary);
+    outline: var(--hairline) solid rgba(0, 0, 0, 0.65);
+    outline-offset: 1px;
+    pointer-events: none;
+  }
+
+  .image-placement-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: var(--hairline) solid var(--accent-primary);
+    border-radius: 2px;
+    background: var(--bg-panel-strong);
+    transform: translate(-50%, -50%);
+  }
+
+  .image-placement-rotate-stem {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    width: var(--hairline);
+    height: 30px;
+    background: var(--accent-primary);
+    transform: translateX(-50%);
+  }
+
+  .image-placement-rotate-handle {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: var(--hairline) solid var(--accent-primary);
+    border-radius: 50%;
+    background: var(--bg-panel-strong);
+    transform: translate(-50%, -50%);
+  }
+
+  .placement-fit {
+    flex: 0 0 auto;
+  }
+
+  .placement-angle {
+    display: flex;
+    flex: 0 0 108px;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+  }
+
+  .placement-angle :global(.number-field) {
+    min-width: 0;
+  }
+
+  .placement-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--space-2);
+    margin-left: auto;
+  }
+
 
 
 
@@ -682,10 +1054,12 @@
 
 
   .paint-foot {
+    display: flex;
     align-items: center;
     flex-wrap: wrap;
+    gap: var(--space-2);
     min-height: var(--status-h);
-    padding: 0 var(--space-3);
+    padding: var(--space-2) var(--space-3);
   }
 
 

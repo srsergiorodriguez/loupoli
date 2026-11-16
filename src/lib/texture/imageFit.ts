@@ -64,3 +64,12 @@ export function imageFitRect(
     height
   };
 }
+
+/** A placed image transform in texture-pixel coordinates. */
+export interface ImagePlacementTransform {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly rotation: number;
+}

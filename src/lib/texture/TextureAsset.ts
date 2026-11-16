@@ -1,6 +1,7 @@
 import {
   imageFitRect,
-  type ImageFitOptions
+  type ImageFitOptions,
+  type ImagePlacementTransform
 } from './imageFit';
 import {
   applyTextureEffect,
@@ -732,6 +733,52 @@ export class TextureAsset {
       rect.height
     );
     bitmap.close();
+    this.layers.push(layer);
+    this.activeId = layer.id;
+    this.compositeLayers();
+    return true;
+  }
+
+  /** Add a raster layer from a pre-transformed bitmap placement. */
+  importBitmapLayer(
+    bitmap: ImageBitmap,
+    name: string,
+    placement: ImagePlacementTransform
+  ): boolean {
+    if (
+      !Number.isFinite(placement.x) ||
+      !Number.isFinite(placement.y) ||
+      !Number.isFinite(placement.width) ||
+      !Number.isFinite(placement.height) ||
+      !Number.isFinite(placement.rotation) ||
+      placement.width <= 0 ||
+      placement.height <= 0
+    ) {
+      return false;
+    }
+    const layer = this.createLayer(
+      name.trim() || 'Imported image',
+      'solid',
+      '#ffffff',
+      1,
+      layerId(),
+      'normal',
+      'raster'
+    );
+    const context = layer.context;
+    context.clearRect(0, 0, this.width, this.height);
+    context.imageSmoothingEnabled = this.filter === 'linear';
+    context.save();
+    context.translate(placement.x, placement.y);
+    context.rotate(placement.rotation);
+    context.drawImage(
+      bitmap,
+      -placement.width / 2,
+      -placement.height / 2,
+      placement.width,
+      placement.height
+    );
+    context.restore();
     this.layers.push(layer);
     this.activeId = layer.id;
     this.compositeLayers();

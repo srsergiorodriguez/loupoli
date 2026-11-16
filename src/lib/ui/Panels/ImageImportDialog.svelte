@@ -141,7 +141,7 @@
     ]}
     onChange={(value) => (mode = value as ImageFitMode)}
   />
-  <p class="hint">{modeHint} The image becomes a new raster layer.</p>
+  <p class="hint">{modeHint} Continue to place the image on the texture before it becomes a new raster layer.</p>
   {#if loadError}
     <p class="error">{loadError}</p>
   {/if}
@@ -150,7 +150,7 @@
     <ActionRow align="end">
       <ActionButton label="Cancel" onActivate={onCancel} />
       <ActionButton
-        label="Import image"
+        label="Place image"
         icon="image"
         disabled={bitmap === null}
         onActivate={() => onImport({ mode })}
