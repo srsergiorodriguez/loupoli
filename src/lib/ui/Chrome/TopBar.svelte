@@ -113,15 +113,7 @@
       label="New project"
       icon="new-file"
       disabled={session.snapshot.fileBusy}
-      onActivate={() => {
-        if (
-          session.snapshot.canUndo &&
-          !window.confirm('Start a new project? Unsaved changes will be discarded.')
-        ) {
-          return;
-        }
-        session.newProject();
-      }}
+      onActivate={() => session.requestNewProject()}
       tooltip="New project"
       shortcut={shortcut('newProject').display}
     />

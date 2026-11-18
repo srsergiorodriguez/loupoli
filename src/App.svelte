@@ -22,6 +22,7 @@
   import AnimationTimeline from './lib/ui/Animation/AnimationTimeline.svelte';
   import RenderPreviewPanel from './lib/ui/Render/RenderPreviewPanel.svelte';
   import BakeAtlasDialog from './lib/ui/Light/BakeAtlasDialog.svelte';
+  import NewProjectDialog from './lib/ui/Panels/NewProjectDialog.svelte';
   import ToastStack from './lib/ui/Chrome/ToastStack.svelte';
   import { shortcutBus } from './lib/input/ShortcutBus';
   import { commandForKeyboardEvent } from './lib/input/commands';
@@ -103,13 +104,7 @@
       const matched = commandForKeyboardEvent(event);
       if (matched === 'file.new') {
         event.preventDefault();
-        if (
-          session.snapshot.canUndo &&
-          !window.confirm('Start a new project? Unsaved changes will be discarded.')
-        ) {
-          return;
-        }
-        session.newProject();
+        session.requestNewProject();
       } else if (matched === 'file.save') {
         event.preventDefault();
         void session.saveProject();
@@ -459,6 +454,10 @@
   <ToastStack {session} />
   {#if session.snapshot.bakeAtlasPrompt}
     <BakeAtlasDialog {session} />
+  {/if}
+
+  {#if session.newProjectConfirmOpen}
+    <NewProjectDialog {session} />
   {/if}
   <TooltipLayer />
 </div>

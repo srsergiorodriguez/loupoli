@@ -236,6 +236,7 @@ export class EditorSession {
   snapshot = $state<EditorSnapshot>(INITIAL_SNAPSHOT);
   inspectorOpen = $state(false);
   sidebarOpen = $state(readSidebarPreference());
+  newProjectConfirmOpen = $state(false);
   compactLayout = $state(false);
   pencilMode = $state(readPreference(PENCIL_MODE_STORAGE_KEY, 'true') === 'true');
 
@@ -1440,7 +1441,31 @@ export class EditorSession {
     this.runtime?.armAction(kind);
   }
 
+  /** Ask before replacing a document with undoable unsaved work. */
+  requestNewProject(): void {
+    if (this.snapshot.fileBusy) {
+      return;
+    }
+    if (!this.snapshot.canUndo) {
+      this.newProject();
+      return;
+    }
+    this.newProjectConfirmOpen = true;
+  }
+
+  /** Confirm and replace the current project. */
+  confirmNewProject(): void {
+    this.newProjectConfirmOpen = false;
+    this.newProject();
+  }
+
+  /** Dismiss the new-project confirmation without changing the document. */
+  cancelNewProject(): void {
+    this.newProjectConfirmOpen = false;
+  }
+
   newProject(): void {
+    this.newProjectConfirmOpen = false;
     this.runtime?.newProject();
   }
 
