@@ -19,7 +19,8 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 13. [Animation workspace](./ANIMATION.md) — transform tracks, timeline, playback, and persistence.
 14. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, scoped OBJ bundles with optional PNG textures, simple materials, and coordinate conversion.
 15. [Shape keys](./SHAPE_KEYS.md) — morph targets, weights, persistence, and topology guards.
-16. [Root README](../README.md) — product overview, setup, and current capabilities.
+16. [iOS CI](./CI.md) — manual signed iPad builds on GitHub Actions.
+17. [Root README](../README.md) — product overview, setup, and current capabilities.
 
 ## Document ownership
 
@@ -42,6 +43,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [UI rules](./UI_RULES.md) | Application bar, modals, toasts, and complete field-row rhythm | Internal help content |
 | [Interchange](./INTERCHANGE.md) | OBJ/GLB import/export, evaluated geometry, simple materials, embedded GLB textures, Y-up conversion | Texture import, skins |
 | [Shape keys](./SHAPE_KEYS.md) | Morph targets, weights, persistence, topology guard | Weight animation and GLB morph export |
+| [iOS CI](./CI.md) | Manual signed IPA workflow, signing secrets, artifact install | Local build instructions |
 | [Root README](../README.md) | Product overview and quick start | Canonical rules or format specifications |
 
 ## Canonical cross-links

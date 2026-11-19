@@ -174,7 +174,7 @@ Key boundaries:
 Current checks:
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **272 tests across 58 files**.
+- `npm test`: **286 tests across 60 files**.
 - `npm run build`: passes.
 - `cargo test` in `src-tauri`: **7 passing tests**.
 - Signed iPad release installed and launched on an iPad Air with iPadOS 26.6.1.
@@ -229,6 +229,7 @@ under PolyForm. See [ASSETS.md](ASSETS.md) for attribution.
 | [Persistence](docs/PERSISTENCE.md) | Autosave journal and `.lpoli` format |
 | [Paint engine](docs/PAINT_ENGINE.md) | Shared GPU stroke pipeline and paint invariants |
 | [PWA](docs/PWA.md) | Deployment, installation, and browser limitations |
+| [iOS CI](docs/CI.md) | Manual signed iPad builds on GitHub Actions |
 | [UI map](docs/UI_MAP.md) | Shell regions and workspace ownership |
 | [UI rules](docs/UI_RULES.md) | Behavioral UI contracts |
 | [Design system](docs/DESIGN_SYSTEM.md) | Tokens, typography, components, visual QA |

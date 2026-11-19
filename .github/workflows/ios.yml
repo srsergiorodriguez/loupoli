@@ -1,0 +1,145 @@
+name: Build loupoli iPad
+
+on:
+  workflow_dispatch:
+    inputs:
+      export_method:
+        description: Xcode export method
+        required: true
+        type: choice
+        default: debugging
+        options:
+          - debugging
+          - release-testing
+          - app-store-connect
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Signed IPA
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Import Apple signing identity
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in \
+            APPLE_CERTIFICATE \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_PROVISIONING_PROFILE \
+            KEYCHAIN_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing repository secret: $name"
+              exit 1
+            fi
+          done
+          if [ -z "${APPLE_DEVELOPMENT_TEAM:-}" ]; then
+            echo "::error::Missing repository secret: APPLE_TEAM_ID"
+            exit 1
+          fi
+
+          CERT_PATH="$RUNNER_TEMP/loupoli-certificate.p12"
+          PROFILE_PATH="$RUNNER_TEMP/loupoli.mobileprovision"
+          KEYCHAIN_PATH="$RUNNER_TEMP/loupoli-build.keychain-db"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$APPLE_PROVISIONING_PROFILE" | base64 --decode > "$PROFILE_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning
+
+          security cms -D -i "$PROFILE_PATH" > "$RUNNER_TEMP/profile.plist"
+          PROFILE_UUID=$(/usr/libexec/PlistBuddy -c 'Print UUID' "$RUNNER_TEMP/profile.plist")
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c 'Print Name' "$RUNNER_TEMP/profile.plist")
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PROFILE_PATH" \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          echo "Installed provisioning profile: $PROFILE_NAME ($PROFILE_UUID)"
+
+          if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+            echo "APPLE_SIGNING_IDENTITY=$APPLE_SIGNING_IDENTITY" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Check and test web app
+        run: |
+          npm run check
+          npm test
+
+      - name: Install CocoaPods
+        shell: bash
+        run: |
+          if ! command -v pod >/dev/null 2>&1; then
+            brew install cocoapods
+          fi
+          pod --version
+
+      - name: Initialize iOS project
+        shell: bash
+        run: npm run tauri ios init -- --ci --skip-targets-install
+
+      - name: Build signed app
+        shell: bash
+        env:
+          EXPORT_METHOD: ${{ inputs.export_method }}
+        run: |
+          xcodebuild -version
+          npm run tauri ios build -- \
+            --target aarch64 \
+            --export-method "$EXPORT_METHOD" \
+            --ci
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: loupoli-${{ inputs.export_method }}-ipa
+          path: src-tauri/gen/apple/build/arm64/loupoli.ipa
+          if-no-files-found: error
+          retention-days: 14
