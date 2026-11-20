@@ -599,7 +599,6 @@ function buildTextureManifest(
     throw new Error('Texture asset count is outside the supported limits.');
   }
   const assetIds = new Set<string>();
-  const layerIds = new Set<string>();
   let totalPngBytes = 0;
   const manifests: TextureAssetManifest[] = assets.map((asset) => {
     if (
@@ -625,6 +624,7 @@ function buildTextureManifest(
       throw new Error('Texture asset metadata is invalid.');
     }
     assetIds.add(asset.id);
+    const layerIds = new Set<string>();
     const layers: TextureLayerManifest[] = asset.layers.map((layer) => {
       if (
         typeof layer.id !== 'string' ||
@@ -1550,7 +1550,6 @@ function validateTextureManifest(value: unknown): TextureManifest {
     throw new Error('The .lpoli texture asset count is invalid.');
   }
   const assetIds = new Set<string>();
-  const layerIds = new Set<string>();
   const assets: TextureAssetManifest[] = texture.assets.map((rawAsset) => {
     if (typeof rawAsset !== 'object' || rawAsset === null) {
       throw new Error('The .lpoli contains an invalid texture asset.');
@@ -1579,6 +1578,7 @@ function validateTextureManifest(value: unknown): TextureManifest {
       throw new Error('The .lpoli texture asset metadata is invalid.');
     }
     assetIds.add(asset.id);
+    const layerIds = new Set<string>();
     const layers: TextureLayerManifest[] = asset.layers.map((raw) => {
       if (typeof raw !== 'object' || raw === null) {
         throw new Error('The .lpoli contains an invalid texture layer.');

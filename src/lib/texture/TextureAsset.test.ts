@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   TextureAsset,
   TextureAssetCommand,
-  textureAssetStatesEqual
+  textureAssetStatesEqual,
+  withFreshTextureLayerIds
 } from './TextureAsset';
 
 class FakeContext {
@@ -222,3 +223,29 @@ describe('TextureAsset', () => {
     stack.dispose();
   });
 });
+  it('remaps layer ids when cloning texture data', () => {
+    const data = {
+      width: 8,
+      height: 8,
+      activeId: 'texlayer-source',
+      layers: [
+        {
+          id: 'texlayer-source',
+          name: 'Base',
+          visible: true,
+          opacity: 1,
+          color: '#ffffff',
+          pattern: 'solid' as const,
+          blendMode: 'normal' as const,
+          kind: 'fill' as const,
+          role: 'color' as const,
+          effect: null,
+          png: new Uint8Array([1, 2, 3])
+        }
+      ]
+    };
+    const copy = withFreshTextureLayerIds(data);
+    expect(copy.layers[0].id).not.toBe(data.layers[0].id);
+    expect(copy.activeId).toBe(copy.layers[0].id);
+    expect(copy.layers[0].png).toBe(data.layers[0].png);
+  });

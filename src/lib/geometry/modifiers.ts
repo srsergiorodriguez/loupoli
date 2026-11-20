@@ -387,6 +387,37 @@ function buildEvaluated(faces: readonly ProvenanceFace[]): EvaluatedModifierMesh
   };
 }
 
+/**
+ * Remove consecutive and wrap-around duplicate corners.
+ *
+ * Clipping and plane snapping can leave two corners at the same position. If
+ * that reaches the DCEL builder it becomes a zero-length directed edge, which
+ * is rejected as non-manifold. A face with fewer than three distinct corners
+ * has no area and is dropped by the caller.
+ */
+function removeDuplicateCorners(
+  corners: readonly ProvenanceCorner[]
+): ProvenanceCorner[] {
+  const output: ProvenanceCorner[] = [];
+  for (const corner of corners) {
+    const previous = output[output.length - 1];
+    if (
+      !previous ||
+      positionKey(previous.position) !== positionKey(corner.position)
+    ) {
+      output.push(corner);
+    }
+  }
+  while (
+    output.length > 1 &&
+    positionKey(output[0].position) ===
+      positionKey(output[output.length - 1].position)
+  ) {
+    output.pop();
+  }
+  return output;
+}
+
 function clipProvenanceFace(
   face: ProvenanceFace,
   axis: ModifierAxis,
@@ -430,18 +461,14 @@ function clipProvenanceFace(
     }
   }
 
-  if (
-    output.length > 1 &&
-    positionKey(output[0].position) ===
-      positionKey(output[output.length - 1].position)
-  ) {
-    output.pop();
-  }
-  const unique = new Set(output.map((corner) => positionKey(corner.position)));
-  if (output.length < 3 || unique.size < 3) {
+  const cleaned = removeDuplicateCorners(output);
+  const unique = new Set(
+    cleaned.map((corner) => positionKey(corner.position))
+  );
+  if (cleaned.length < 3 || unique.size < 3) {
     return null;
   }
-  return { corners: output, material: face.material, baseFace: face.baseFace };
+  return { corners: cleaned, material: face.material, baseFace: face.baseFace };
 }
 
 function faceOnPlane(face: ProvenanceFace, axis: ModifierAxis): boolean {
@@ -501,12 +528,22 @@ function mirrorEvaluated(
   const axis = modifier.axis;
   const sign: 1 | -1 = modifier.flip ? -1 : 1;
   const threshold = modifier.merge ? modifier.mergeThreshold : 1e-6;
+  // Keep equality inclusive after floating-point transcription of the
+  // pointer delta; otherwise a vertex exactly on the threshold clips first
+  // and collapses into a hole.
+  const snapThreshold = threshold + 1e-9;
 
   const faces: ProvenanceFace[] = [];
-  for (const face of collectProvenanceFaces(mesh, provenance)) {
-    let kept: ProvenanceFace | null = face;
+  const sourceFaces = collectProvenanceFaces(mesh, provenance);
+  // Snap before clipping as well as after. Otherwise a plane vertex moved by
+  // less than the merge threshold clips into a sliver and collapses later.
+  if (modifier.merge) {
+    mergeMirrorPlane(sourceFaces, axis, snapThreshold);
+  }
+  for (const sourceFace of sourceFaces) {
+    let kept: ProvenanceFace | null = sourceFace;
     if (modifier.clip) {
-      kept = clipProvenanceFace(face, axis, sign);
+      kept = clipProvenanceFace(sourceFace, axis, sign);
     }
     if (!kept) {
       continue;
@@ -514,10 +551,15 @@ function mirrorEvaluated(
     if (modifier.merge) {
       const index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
       for (const corner of kept.corners) {
-        if (Math.abs(corner.position[index]) <= threshold) {
+        if (Math.abs(corner.position[index]) <= snapThreshold) {
           corner.position[index] = 0;
         }
       }
+      const cleaned = removeDuplicateCorners(kept.corners);
+      if (cleaned.length < 3) {
+        continue;
+      }
+      kept = { ...kept, corners: cleaned };
     }
     faces.push(kept);
     if (!faceOnPlane(kept, axis)) {
@@ -527,7 +569,7 @@ function mirrorEvaluated(
     }
   }
   if (modifier.merge) {
-    mergeMirrorPlane(faces, axis, threshold);
+    mergeMirrorPlane(faces, axis, snapThreshold);
   }
   if (faces.length === 0) {
     throw new Error('Mirror clipping removed every face.');

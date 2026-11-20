@@ -67,6 +67,7 @@ import {
   type TransformPivotMode
 } from './transformPivot';
 import { screenScaleFactor } from './modalScale';
+import { exceedsVertexDragThreshold } from './dragThreshold';
 import {
   applyUvView,
   fitUvProjection,
@@ -87,6 +88,7 @@ import {
   TextureAsset,
   TextureAssetCommand,
   textureAssetStatesEqual,
+  withFreshTextureLayerIds,
   type TextureAlphaMode,
   type TextureBlendMode,
   type TextureLayerPattern
@@ -339,6 +341,7 @@ interface VertexDrag {
   readonly startClientY: number;
   readonly plane: Plane;
   readonly offset: Vector3;
+  moved: boolean;
 }
 
 /** Active drag of a camera body in the Render workspace. */
@@ -1742,7 +1745,7 @@ export class EditorRuntime {
       `${source.name} Copy`,
       source.textureFilter
     );
-    await copy.importData(await source.exportData());
+    await copy.importData(withFreshTextureLayerIds(await source.exportData()));
     this.history.execute(new CreateTextureAssetCommand(this.textureLibrary, copy));
     this.autosave.markTextureDirty();
     this.publish();
@@ -8706,7 +8709,7 @@ export class EditorRuntime {
         `${source.name} Bake`.slice(0, 64),
         source.textureFilter
       );
-      await asset.importData(resampled);
+      await asset.importData(withFreshTextureLayerIds(resampled));
       this.throwIfJobCancelled();
       asset.setAlphaMode(source.textureAlphaMode);
 
@@ -8875,7 +8878,9 @@ export class EditorRuntime {
           `${source.name} Baked`,
           source.textureFilter
         );
-        await copy.importData(await source.exportData());
+        await copy.importData(
+          withFreshTextureLayerIds(await source.exportData())
+        );
         copy.setFilter(source.textureFilter);
         copy.setAlphaMode(source.textureAlphaMode);
         if (copy.layerCount >= 8 && copy.lightingLayerId() === null) {
@@ -11668,7 +11673,8 @@ export class EditorRuntime {
       startClientX: sample.clientX,
       startClientY: sample.clientY,
       plane,
-      offset
+      offset,
+      moved: false
     };
     this.publish();
     return true;
@@ -11745,6 +11751,18 @@ export class EditorRuntime {
     if (!this.drag || this.drag.pointerId !== sample.pointerId) {
       return;
     }
+    if (
+      !this.drag.moved &&
+      !exceedsVertexDragThreshold(
+        sample.clientX,
+        sample.clientY,
+        this.drag.startClientX,
+        this.drag.startClientY
+      )
+    ) {
+      return;
+    }
+    this.drag.moved = true;
 
     if (this.drag.inverseLinear) {
       const hit = this.renderer.intersectPointerPlane(
@@ -11911,6 +11929,10 @@ export class EditorRuntime {
 
     const drag = this.drag;
     this.drag = null;
+    if (!drag.moved) {
+      this.publish();
+      return;
+    }
     const after = drag.node.mesh.getVertexPosition(drag.vertex);
     const changed =
       Math.abs(after[0] - drag.original[0]) > 1e-7 ||
@@ -12063,7 +12085,8 @@ export class EditorRuntime {
       startClientX: sample.clientX,
       startClientY: sample.clientY,
       plane,
-      offset
+      offset,
+      moved: false
     };
     this.publish();
     return true;

@@ -65,6 +65,31 @@ describe('modifier evaluation', () => {
     expect(negativeMin).toBeLessThan(0);
   });
 
+  it('keeps a closed manifold when one mirror-seam vertex moves', () => {
+    const probe = createQuadSphereMesh(1.25, 2);
+    const seamVertices: number[] = [];
+    for (let vertex = 0; vertex < probe.vertexCount; vertex += 1) {
+      if (Math.abs(probe.getVertexPosition(vertex)[0]) < 1e-4) {
+        seamVertices.push(vertex);
+      }
+    }
+    expect(seamVertices.length).toBeGreaterThan(0);
+    const mirror = createModifier('mirror') as MirrorModifier;
+    for (const delta of [
+      -0.2, -0.01, -0.002, -0.001, -0.0005,
+      0.0005, 0.001, 0.002, 0.01, 0.2
+    ]) {
+      for (const vertex of seamVertices) {
+        const mesh = createQuadSphereMesh(1.25, 2);
+        const position = mesh.getVertexPosition(vertex);
+        mesh.setVertexPosition(vertex, [position[0] + delta, position[1], position[2]]);
+        const result = evaluateModifiers(mesh, [mirror]);
+        expect(() => result.validate()).not.toThrow();
+        expect(result.boundaryEdgeCount, `delta ${delta} vertex ${vertex}`).toBe(0);
+      }
+    }
+  });
+
   it('can mirror without clipping and closes a merged seam', () => {
     const sphere = createQuadSphereMesh(1.25, 2);
     for (let vertex = 0; vertex < sphere.vertexCount; vertex += 1) {

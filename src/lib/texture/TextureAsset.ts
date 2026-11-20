@@ -105,6 +105,30 @@ function layerId(): string {
   return id;
 }
 
+/**
+ * Clone texture data with fresh layer IDs.
+ *
+ * Copies must not share layer identifiers with their source: the project
+ * validator keeps layer IDs unique per asset, and paint/selection state refers
+ * to them by ID.
+ */
+export function withFreshTextureLayerIds(
+  data: TextureAssetData
+): TextureAssetData {
+  const remap = new Map<string, string>();
+  const layers = data.layers.map((layer) => {
+    const id = layerId();
+    remap.set(layer.id, id);
+    return { ...layer, id };
+  });
+  return {
+    ...data,
+    activeId:
+      data.activeId === null ? null : (remap.get(data.activeId) ?? null),
+    layers
+  };
+}
+
 /** sRGB byte to linear-light lookup for composite math. */
 const SRGB_TO_LINEAR = (() => {
   const table = new Float32Array(256);

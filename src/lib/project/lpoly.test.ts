@@ -700,6 +700,49 @@ describe('.lpoli', () => {
     expect(decoded.document.nodes[1].textureId).toBe('texasset-2');
   });
 
+  it('saves different assets that reuse a layer id', () => {
+    const document = makeDocument();
+    const png = new Uint8Array([1, 2, 3, 4]);
+    const makeLayer = () => ({
+      id: 'texlayer-shared',
+      name: 'Base',
+      visible: true,
+      opacity: 1,
+      color: '#ffffff',
+      pattern: 'solid' as const,
+      blendMode: 'normal' as const,
+      kind: 'fill' as const,
+      role: 'color' as const,
+      png
+    });
+    const bytes = encodeLpoly(document, SETTINGS, [
+      {
+        id: 'texasset-a',
+        name: 'A',
+        width: 16,
+        height: 16,
+        filter: 'nearest',
+        alphaMode: 'opaque',
+        activeId: 'texlayer-shared',
+        layers: [makeLayer()]
+      },
+      {
+        id: 'texasset-b',
+        name: 'B',
+        width: 16,
+        height: 16,
+        filter: 'nearest',
+        alphaMode: 'opaque',
+        activeId: 'texlayer-shared',
+        layers: [makeLayer()]
+      }
+    ]);
+    const decoded = decodeLpoly(bytes);
+    expect(decoded.textures).toHaveLength(2);
+    expect(decoded.textures?.[0].activeId).toBe('texlayer-shared');
+    expect(decoded.textures?.[1].activeId).toBe('texlayer-shared');
+  });
+
   it('round-trips an empty scene', () => {
     const empty = new SceneDocument();
     const bytes = encodeLpoly(empty, SETTINGS);
