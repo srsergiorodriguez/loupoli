@@ -59,7 +59,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Bevel | With one edge selected, set an exact amount in the Selection Inspector and choose Bevel. One edge per operation. |
 | L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the selected edge loop. Loop Cut follows the selected edge; Loop Slide moves either way from its starting position. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
-| 1 / 2 / 3 | Switch vertex, edge, or face selection mode. |
+| V / E / F buttons | Switch vertex, edge, or face selection mode; 1 / 2 / 3 are the keyboard shortcuts. |
 | Shift+Tab | Toggle grid snapping. |
 | Cmd/Ctrl+D | Duplicate the active mesh object in place. |
 | Shift, Cmd, or Ctrl + click | Toggle an element in the current selection. |

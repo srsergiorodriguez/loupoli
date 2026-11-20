@@ -20,19 +20,19 @@
   }>>([
     {
       id: 'vertex',
-      short: '1',
+      short: 'V',
       label: command('selection.vertex').label,
       command: 'selection.vertex'
     },
     {
       id: 'edge',
-      short: '2',
+      short: 'E',
       label: command('selection.edge').label,
       command: 'selection.edge'
     },
     {
       id: 'face',
-      short: '3',
+      short: 'F',
       label: command('selection.face').label,
       command: 'selection.face'
     },

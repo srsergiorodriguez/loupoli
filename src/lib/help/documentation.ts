@@ -29,11 +29,12 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Selection',
         paragraphs: [
-          'The 1, 2, and 3 buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Toggle, Shift, Cmd, or Ctrl toggles subsequent picks; clicking a selected element removes it. Changing mode clears the element set, while object selection remains in the Scene outliner.',
+          'The V, E, and F buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Toggle, Shift, Cmd, or Ctrl toggles subsequent picks; clicking a selected element removes it. Changing mode clears the element set, while object selection remains in the Scene outliner.',
           'The Loop toggle is available in Edge mode. Enabling it expands the current edge selection; it walks through connected quad edges, follows an open boundary, and stops at a pole or a non-quad junction. The same Edge mode supports marking seams for UV work.'
         ],
         controls: [
-          '1 / 2 / 3: vertex, edge, or face mode',
+          'V / E / F buttons: vertex, edge, or face mode',
+          '1 / 2 / 3: keyboard selection-mode shortcuts',
           'Toggle, Shift, Cmd, Ctrl: toggle selection',
           'Shift+Tab: toggle grid snapping',
           'X / Y / Z: lock a transform to a world axis'
@@ -80,7 +81,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The 3D and UV selections are linked. Selecting a face in the viewport highlights its UV corners, and selecting UV corners updates the viewport selection. Switch to Island mode to work with one connected chart at a time.'
         ],
         controls: [
-          '1 / 2 / 3 / Island: UV selection mode',
+          'V / E / F / Island: UV selection mode; 1 / 2 / 3 are the keyboard shortcuts',
           'Seam: mark or clear a chart boundary',
           'Unwrap: build charts from the selected faces and seams',
           'Pin / Unpin: hold one or two UV corners during unwrap'
