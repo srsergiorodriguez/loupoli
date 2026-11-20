@@ -10,6 +10,7 @@
     disabled?: boolean;
     active?: boolean;
     pressed?: boolean;
+    variant?: 'default' | 'danger';
     tooltip?: string;
     shortcut?: string;
     tooltipPlacement?: 'bottom' | 'right';
@@ -22,6 +23,7 @@
     disabled = false,
     active = false,
     pressed = undefined,
+    variant = 'default',
     tooltip,
     shortcut = '',
     tooltipPlacement = 'bottom'
@@ -30,7 +32,7 @@
 
 <button
   type="button"
-  class="icon-button"
+  class="icon-button icon-button--{variant}"
   class:active
   aria-label={label}
   aria-pressed={pressed}
@@ -68,6 +70,11 @@
   .icon-button:hover:not(:disabled) {
     color: var(--text-primary);
     background: var(--bg-hover);
+  }
+
+  .icon-button--danger:hover:not(:disabled) {
+    color: var(--accent-danger);
+    background: color-mix(in srgb, var(--accent-danger) 8%, transparent);
   }
 
   .icon-button:active:not(:disabled) {

@@ -16,6 +16,7 @@
   import ColorField from '../Primitives/ColorField.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
+  import InspectorActionGroup from '../Primitives/InspectorActionGroup.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import ExportObjDialog from './ExportObjDialog.svelte';
   import ExportObjFramesDialog from './ExportObjFramesDialog.svelte';
@@ -973,7 +974,7 @@
         </div>
       {/if}
 
-      <ActionRow>
+      <InspectorActionGroup label="Scene assets">
         <ActionMenu
           label="Import / Export"
           icon="open"
@@ -1023,7 +1024,7 @@
           disabled={session.snapshot.fileBusy}
           onActivate={() => referenceImportInput.click()}
         />
-      </ActionRow>
+      </InspectorActionGroup>
       <p class="hint">
         OBJ and GLB use Y-up at the file boundary; geometry and UVs are
         preserved. GLB includes object, shape-key, and Mesh Motion clips;
@@ -1031,7 +1032,7 @@
       </p>
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
-        <div class="scene-action-row">
+        <InspectorActionGroup label="Object selection">
           <ActionButton
             label="Multi"
             icon="plus"
@@ -1041,6 +1042,8 @@
                 !session.snapshot.additiveNodeSelection
               )}
           />
+        </InspectorActionGroup>
+        <InspectorActionGroup label="Objects">
           {#if selectedNodeIds.length > 0 && activeGroupId === null}
             <ActionButton
               label="Group"
@@ -1067,20 +1070,23 @@
               onActivate={() => session.ungroupActiveGroup()}
             />
           {:else if activeNodeId !== null}
-            <span class="scene-action-spacer"></span>
             <ActionButton
               label="Duplicate"
               icon="copy"
               onActivate={() => session.duplicateActiveNode()}
             />
+          {/if}
+        </InspectorActionGroup>
+        {#if activeGroupId === null && activeNodeId !== null}
+          <InspectorActionGroup label="Remove" danger>
             <ActionButton
               label="Delete object"
               icon="trash"
               variant="danger"
               onActivate={deleteObject}
             />
-          {/if}
-        </div>
+          </InspectorActionGroup>
+        {/if}
       {/if}
     </InspectorSection>
 {/snippet}
@@ -1360,14 +1366,14 @@
               onActivate={() => session.toggleCameraView()}
             />
           </ActionRow>
-          <ActionRow align="end">
+          <InspectorActionGroup label="Remove" danger align="end">
             <ActionButton
               label="Delete camera"
               icon="trash"
               variant="danger"
               onActivate={() => session.deleteActiveCamera()}
             />
-          </ActionRow>
+          </InspectorActionGroup>
         {/if}
       </div>
     </InspectorSection>
@@ -1666,14 +1672,14 @@
                 session.updateActiveLight({ shadowSoftness: value })}
             />
           {/if}
-          <ActionRow align="end">
+          <InspectorActionGroup label="Remove" danger align="end">
             <ActionButton
               label="Delete light"
               icon="trash"
               variant="danger"
               onActivate={() => session.deleteActiveLight()}
             />
-          </ActionRow>
+          </InspectorActionGroup>
         {/if}
         <div class="light-divider"></div>
         <div class="light-subhead">
@@ -1909,135 +1915,95 @@
         {#if canEdit3d &&
           ((session.snapshot.selectionMode === 'vertex' && selectionCount >= 2) ||
             (session.snapshot.selectionMode === 'face' && selectionCount > 0))}
-          <div class="selection-group">
-            <span class="selection-group-label">
-              {session.snapshot.selectionMode === 'vertex' ? 'Vertices' : 'Faces'}
-            </span>
-            <div class="selection-actions">
-              {#if session.snapshot.selectionMode === 'vertex'}
-                <button
-                  type="button"
-                  class="topology-action"
-                  aria-label="Merge selected vertices"
-                  onclick={() => session.mergeSelectedVertices()}
-                >
-                  <Icon name="merge" size={14} />
-                  <span>Merge</span>
-                </button>
-              {:else}
-                <button
-                  type="button"
-                  class="topology-action"
-                  aria-label="Extrude selected faces"
-                  onclick={() => session.extrudeSelectedFaces()}
-                >
-                  <Icon name="extrude" size={14} />
-                  <span>Extrude</span>
-                </button>
-                {#if selectionCount === 1}
-                  <button
-                    type="button"
-                    class="topology-action"
-                    aria-label="Inset selected face"
-                    onclick={() => session.insetSelectedFace()}
-                  >
-                    <Icon name="inset" size={14} />
-                    <span>Inset</span>
-                  </button>
-                {/if}
+          <InspectorActionGroup
+            label={session.snapshot.selectionMode === 'vertex'
+              ? 'Vertices'
+              : 'Faces'}
+          >
+            {#if session.snapshot.selectionMode === 'vertex'}
+              <ActionButton
+                label="Merge"
+                icon="merge"
+                onActivate={() => session.mergeSelectedVertices()}
+              />
+            {:else}
+              <ActionButton
+                label="Extrude"
+                icon="extrude"
+                onActivate={() => session.extrudeSelectedFaces()}
+              />
+              {#if selectionCount === 1}
+                <ActionButton
+                  label="Inset"
+                  icon="inset"
+                  onActivate={() => session.insetSelectedFace()}
+                />
               {/if}
-            </div>
-          </div>
+            {/if}
+          </InspectorActionGroup>
         {/if}
 
         {#if canEdit3d && session.snapshot.selectionMode === 'edge'}
-          <div class="selection-group">
-            <span class="selection-group-label">Edges</span>
-            <div class="selection-actions">
-              {#if selectionCount === 1}
-                <button
-                  type="button"
-                  class="topology-action"
-                  aria-label="Loop cut selected edge"
-                  onclick={() => session.loopCut()}
-                >
-                  <Icon name="loop-cut" size={14} />
-                  <span>Loop cut</span>
-                </button>
-              {:else}
-                <button
-                  type="button"
-                  class="topology-action"
-                  aria-label="Bridge selected edges"
-                  onclick={() => session.bridgeSelectedEdges()}
-                >
-                  <Icon name="bridge" size={14} />
-                  <span>Bridge</span>
-                </button>
-              {/if}
-            </div>
-            <p class="hint">
-              {selectionCount === 1
-                ? session.snapshot.workspace === 'model'
-                  ? 'Bevel is in the Action Dock; drag or type an exact width.'
-                  : 'Bevel is available in the Model workspace.'
-                : 'Bevel one edge at a time. Loop Slide and Bridge use multi-edge selections.'}
-            </p>
-          </div>
+          <InspectorActionGroup label="Edges">
+            {#if selectionCount === 1}
+              <ActionButton
+                label="Loop cut"
+                icon="loop-cut"
+                onActivate={() => session.loopCut()}
+              />
+            {:else}
+              <ActionButton
+                label="Bridge"
+                icon="bridge"
+                onActivate={() => session.bridgeSelectedEdges()}
+              />
+            {/if}
+          </InspectorActionGroup>
+          <p class="hint">
+            {selectionCount === 1
+              ? session.snapshot.workspace === 'model'
+                ? 'Bevel is in the Action Dock; drag or type an exact width.'
+                : 'Bevel is available in the Model workspace.'
+              : 'Bevel one edge at a time. Loop Slide and Bridge use multi-edge selections.'}
+          </p>
         {/if}
 
         {#if canSeam &&
           activeNodeId !== null &&
           ((session.snapshot.selectionMode === 'edge' && selectionCount > 0) ||
             session.snapshot.seamCount > 0)}
-          <div class="selection-group">
-            <span class="selection-group-label">UV seams</span>
-            <div class="selection-actions">
-              {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
-                <button
-                  type="button"
-                  class="topology-action"
-                  aria-label="Toggle UV seam on selected edges"
-                  onclick={() => session.toggleSelectedSeams()}
-                >
-                  <Icon name="seam" size={14} />
-                  <span>Toggle seam</span>
-                </button>
-              {/if}
-              {#if session.snapshot.seamCount > 0}
-                <button
-                  type="button"
-                  class="topology-action"
-                  aria-label="Remove all UV seams from the active mesh"
-                  title={`Clear ${session.snapshot.seamCount} UV seam${session.snapshot.seamCount === 1 ? '' : 's'}`}
-                  onclick={() => session.clearAllSeams()}
-                >
-                  <Icon name="seam" size={14} />
-                  <span>Clear seams</span>
-                </button>
-              {/if}
-            </div>
-            {#if session.snapshot.seamCount > 0}
-              <p class="hint">
-                {session.snapshot.seamCount} seam{session.snapshot.seamCount === 1 ? '' : 's'} on this mesh.
-              </p>
+          <InspectorActionGroup label="UV seams">
+            {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
+              <ActionButton
+                label="Toggle seam"
+                icon="seam"
+                onActivate={() => session.toggleSelectedSeams()}
+              />
             {/if}
-          </div>
+            {#if session.snapshot.seamCount > 0}
+              <ActionButton
+                label="Clear seams"
+                icon="seam"
+                onActivate={() => session.clearAllSeams()}
+              />
+            {/if}
+          </InspectorActionGroup>
+          {#if session.snapshot.seamCount > 0}
+            <p class="hint">
+              {session.snapshot.seamCount} seam{session.snapshot.seamCount === 1 ? '' : 's'} on this mesh.
+            </p>
+          {/if}
         {/if}
 
         {#if canEdit3d}
-          <div class="selection-group selection-group--danger">
-            <span class="selection-group-label">Remove</span>
-            <button
-              type="button"
-              class="delete-selection"
-              aria-label="Delete selected {selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}"
-              onclick={() => session.deleteSelection()}
-            >
-              <Icon name="trash" size={14} />
-              <span>Delete {selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}</span>
-            </button>
-          </div>
+          <InspectorActionGroup label="Remove" danger>
+            <ActionButton
+              label={`Delete ${selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}`}
+              icon="trash"
+              variant="danger"
+              onActivate={() => session.deleteSelection()}
+            />
+          </InspectorActionGroup>
         {/if}
       {/if}
     </InspectorSection>
@@ -2387,14 +2353,14 @@
                       />
                     </div>
                   </ActionRow>
-                  <div class="shape-danger-row">
+                  <InspectorActionGroup label="Remove" danger>
                     <ActionButton
                       label="Delete shape key"
                       icon="trash"
                       variant="danger"
                       onActivate={() => session.removeShapeKey(activeShapeKey.id)}
                     />
-                  </div>
+                  </InspectorActionGroup>
                   <p class="hint">
                     Use the key button on this shape's timeline track to add a
                     weight key. Shape weights use the same Linear/Step
@@ -2422,7 +2388,7 @@
         {#if activeNodeId === null}
           <p class="empty-state">Select a mesh object to edit its stack.</p>
         {:else}
-          <div class="modifier-add-row">
+          <InspectorActionGroup label="Add modifier">
             <select
               class="modifier-select"
               bind:value={modifierKind}
@@ -2437,7 +2403,7 @@
               icon="plus"
               onActivate={() => session.addModifier(modifierKind)}
             />
-          </div>
+          </InspectorActionGroup>
 
           {#if modifierError}
             <p class="modifier-error">{modifierError}</p>
@@ -2486,16 +2452,13 @@
                         disabled={index === modifiers.length - 1}
                         onActivate={() => session.moveModifier(modifier.id, 1)}
                       />
-                      <button
-                        type="button"
-                        class="modifier-remove"
-                        aria-label="Remove modifier"
-                        title="Remove modifier"
-                        onclick={() => session.removeModifier(modifier.id)}
-                      >
-                        <Icon name="trash" size={13} />
-                        <span>Remove</span>
-                      </button>
+                      <IconButton
+                        label="Remove modifier"
+                        icon="trash"
+                        variant="danger"
+                        tooltip="Remove modifier"
+                        onActivate={() => session.removeModifier(modifier.id)}
+                      />
                     </span>
                   </div>
 
@@ -2657,14 +2620,14 @@
           {/if}
 
           {#if modifiers.length > 0}
-            <ActionRow align="end">
+            <InspectorActionGroup label="Stack" align="end">
               <ActionButton
                 label="Apply modifiers"
                 icon="merge"
                 disabled={!session.snapshot.canApplyModifiers}
                 onActivate={() => session.applyModifierStack()}
               />
-            </ActionRow>
+            </InspectorActionGroup>
             {#if session.snapshot.modifierApplyBlockedReason}
               <p class="hint">{session.snapshot.modifierApplyBlockedReason}</p>
             {:else}
@@ -2786,7 +2749,7 @@
                 )}
             />
           </div>
-          <ActionRow align="end">
+          <InspectorActionGroup label="Remove" danger align="end">
             <ActionButton
               label="Delete texture"
               icon="trash"
@@ -2794,7 +2757,7 @@
               disabled={textureUsage > 0 || textureAssets.length <= 1}
               onActivate={() => session.deleteActiveTextureAsset()}
             />
-          </ActionRow>
+          </InspectorActionGroup>
         </div>
 
         <div class="texture-block">
@@ -2879,7 +2842,7 @@
               </OutlinerRow>
             {/each}
           </div>
-          <ActionRow align="end">
+          <InspectorActionGroup label="Remove" danger align="end">
             <ActionButton
               label="Delete layer"
               icon="trash"
@@ -2887,7 +2850,7 @@
               disabled={textureLayers.length <= 1}
               onActivate={() => session.removeTextureLayer(activeTextureLayer?.id ?? '')}
             />
-          </ActionRow>
+          </InspectorActionGroup>
         </div>
 
         {#if activeTextureLayer}
@@ -3222,17 +3185,6 @@
     padding: 0 var(--space-2);
   }
 
-  .scene-action-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-1);
-  }
-
-  .scene-action-spacer {
-    flex: 1;
-  }
-
   .primitive-select:hover {
     background: var(--bg-hover);
   }
@@ -3411,12 +3363,6 @@
     box-shadow: inset 0 0 0 1px currentColor;
   }
 
-  .modifier-add-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-1);
-  }
-
   .modifier-select,
   .modifier-field select {
     min-height: var(--control-h);
@@ -3430,6 +3376,7 @@
   }
 
   .modifier-select {
+    flex: 1;
     padding: 0 var(--space-2);
   }
 
@@ -3518,26 +3465,6 @@
     height: var(--control-h);
   }
 
-  .modifier-remove {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: var(--control-h);
-    padding: 0 var(--space-1);
-    border: 0;
-    border-radius: var(--radius-xs);
-    background: transparent;
-    color: var(--text-tertiary);
-    font-family: var(--font-ui);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-  }
-
-  .modifier-remove:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
   .modifier-controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3598,20 +3525,10 @@
     line-height: var(--leading-tight);
   }
 
-  .selection-block,
-  .selection-group {
+  .selection-block {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .selection-block {
     gap: var(--inspector-row-gap);
-  }
-
-  .selection-group {
-    padding-top: var(--space-2);
-    border-top: var(--hairline) solid var(--border-subtle);
   }
 
   .selection-group-label {
@@ -3621,40 +3538,6 @@
     font-weight: var(--weight-medium);
     letter-spacing: var(--tracking-label);
     text-transform: uppercase;
-  }
-
-  .selection-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-    gap: var(--space-1);
-  }
-
-  .topology-action,
-  .delete-selection {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: var(--control-h);
-    padding: 0 var(--space-2);
-    gap: 5px;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    color: var(--text-tertiary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-    cursor: pointer;
-  }
-
-  .topology-action:hover {
-    color: var(--accent-primary);
-    background: var(--bg-hover);
-  }
-
-  .delete-selection:hover {
-    color: var(--accent-danger);
-    background: var(--bg-hover);
   }
 
   .empty-state,
@@ -3879,10 +3762,7 @@
     gap: var(--space-1);
   }
 
-  .shape-danger-row {
-    display: flex;
-    justify-content: flex-end;
-  }
+
 
   .shape-edit-banner {
     display: flex;

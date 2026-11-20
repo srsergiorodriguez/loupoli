@@ -67,6 +67,7 @@
   .action-button--danger:hover:not(:disabled) {
     border-color: var(--accent-danger);
     color: var(--accent-danger);
+    background: color-mix(in srgb, var(--accent-danger) 8%, transparent);
   }
 
   .action-button:disabled {

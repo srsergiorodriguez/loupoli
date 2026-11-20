@@ -42,7 +42,7 @@ Do not add a duplicate button to a pane because it is convenient. Shared primiti
 
 ## 3. Selection combination is one model
 
-Replace / Add / Sub are mutually exclusive, sticky modes in the Selection Bar (UI labels: Add and Sub). Neither Add nor Subtract active means Replace. They apply to clicks and lasso in both editors. Shift/Cmd remains a temporary Add modifier. UV must not own a second Add/Subtract pair.
+Replace / Multi are mutually exclusive, sticky modes in the Selection Bar. Replace replaces the current set; Multi adds or removes on each pick and works with Shift/Cmd as a temporary toggle. They apply to clicks and lasso in both editors. UV must not own a second combination control.
 
 ## 4. One disclosure
 
@@ -62,7 +62,8 @@ Inspector field rows share one compact rhythm:
 - A vector field is one row. Its label-to-control gap is `--field-label-gap` (4 px), matching a field label above its control.
 - Labels use the shared UI label style; numeric prefixes and values remain monospace.
 - Nested outliner/track lists keep their own 2 px row gap. Grouped cards may keep internal gaps but must not add outer margins.
-- Actions use `ActionRow` with a 4 px internal gap; they never create a second field-row style.
+- Actions use `InspectorActionGroup` (a labeled `ActionRow`) for clustered commands, and `ActionRow` directly only for a compact unlabeled primary row. Every Inspector section puts its destructive action in a separate `InspectorActionGroup` labeled Remove, last in the section.
+- `ActionButton` handles icon+text actions and `IconButton` handles icon-only actions. Do not create per-section button styles; `variant="danger"` is neutral at rest and red on hover/focus.
 
 ![Inspector field rhythm](media/inspector-spacing.png)
 
