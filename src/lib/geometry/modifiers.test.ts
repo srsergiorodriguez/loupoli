@@ -6,13 +6,17 @@ import {
 } from './primitives';
 import {
   applyLinearTransform,
+  MODIFIER_DEFINITIONS,
+  MODIFIER_KINDS,
   createModifier,
   evaluateModifiers,
   evaluateModifiersWithProvenance,
   invertLinearTransform,
   type GridArrayModifier,
   type MirrorModifier,
-  type RadialArrayModifier
+  type OutlineModifier,
+  type RadialArrayModifier,
+  validateModifier
 } from './modifiers';
 
 describe('modifier evaluation', () => {
@@ -266,5 +270,51 @@ describe('modifier evaluation', () => {
     const result = evaluateModifiers(grid, [radial]);
     expect(result.faceCount).toBe(grid.faceCount * 4);
     expect(() => result.validate()).not.toThrow();
+  });
+});
+
+describe('modifier registry', () => {
+  it('has one complete definition for every exposed kind', () => {
+    expect(Object.keys(MODIFIER_DEFINITIONS).sort()).toEqual(
+      [...MODIFIER_KINDS].sort()
+    );
+    for (const kind of MODIFIER_KINDS) {
+      const definition = MODIFIER_DEFINITIONS[kind];
+      expect(definition.kind).toBe(kind);
+      expect(definition.category).toBe(
+        kind === 'outline' ? 'render' : 'geometry'
+      );
+      const created = definition.create();
+      expect(created.type).toBe(kind);
+      expect(validateModifier(created)).toEqual(created);
+    }
+  });
+
+  it('validates and evaluates the render-only outline effect', () => {
+    const cube = createCubeMesh(2);
+    const outline = createModifier('outline') as OutlineModifier;
+    expect(outline.thickness).toBeGreaterThan(0);
+    const normalized = validateModifier({
+      ...outline,
+      thickness: 4,
+      color: 'not-a-color'
+    }) as OutlineModifier;
+    expect(normalized.thickness).toBe(1);
+    expect(normalized.color).toBe('#e07a5f');
+    const result = evaluateModifiers(cube, [outline]);
+    expect(result.faceCount).toBe(cube.faceCount);
+    expect(result.boundaryEdgeCount).toBe(0);
+  });
+
+  it('rejects unknown modifier kinds and malformed metadata', () => {
+    expect(() =>
+      validateModifier({ id: 'm1', type: 'unknown', enabled: true })
+    ).toThrow(/metadata/);
+    expect(() =>
+      validateModifier({ id: '', type: 'mirror', enabled: true })
+    ).toThrow(/metadata/);
+    expect(() =>
+      validateModifier({ id: 'm1', type: 'mirror', enabled: true, axis: 'w' })
+    ).toThrow(/axis/);
   });
 });

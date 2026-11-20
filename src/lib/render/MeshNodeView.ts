@@ -1,7 +1,9 @@
 import {
+  BackSide,
   Box3,
   BufferAttribute,
   BufferGeometry,
+  Color,
   CylinderGeometry,
   DoubleSide,
   DynamicDrawUsage,
@@ -16,12 +18,14 @@ import {
   PointsMaterial,
   Quaternion,
   Raycaster,
+  ShaderMaterial,
   Vector2,
   Vector3,
   type Camera,
   type Material
 } from 'three';
 import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
+import type { OutlineModifier } from '../geometry/modifiers';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import type { ShadingMode } from '../editor/types';
 import type { ViewportMaterials } from './materials';
@@ -153,6 +157,9 @@ export class MeshNodeView {
   private selectedVertexGeometry = new BufferGeometry();
 
   private readonly triangleMesh: Mesh;
+  private readonly outlineMaterial: ShaderMaterial;
+  private readonly outlineMesh: Mesh;
+  private outlineSettings: OutlineModifier | null = null;
   private readonly wireSegments: LineSegments;
   private readonly seamSegments: LineSegments;
   private seamEdgeMesh: InstancedMesh;
@@ -261,6 +268,36 @@ export class MeshNodeView {
     this.triangleMesh.castShadow = true;
     this.triangleMesh.receiveShadow = true;
 
+    this.outlineMaterial = new ShaderMaterial({
+      uniforms: {
+        uThickness: { value: 0.03 },
+        uColor: { value: new Color('#121214') }
+      },
+      vertexShader: `
+        uniform float uThickness;
+        void main() {
+          vec3 expanded = position + normalize(normal) * uThickness;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(expanded, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        void main() {
+          gl_FragColor = vec4(uColor, 1.0);
+        }
+      `,
+      side: BackSide,
+      depthTest: true,
+      depthWrite: true
+    });
+    this.outlineMesh = new Mesh(this.triangleGeometry, this.outlineMaterial);
+    this.outlineMesh.name = 'loupoli-outline';
+    this.outlineMesh.frustumCulled = false;
+    this.outlineMesh.renderOrder = -1;
+    this.outlineMesh.castShadow = false;
+    this.outlineMesh.receiveShadow = false;
+    this.outlineMesh.visible = false;
+
     this.wireSegments = new LineSegments(
       this.wireGeometry,
       surfaceMaterials.wire
@@ -354,6 +391,7 @@ export class MeshNodeView {
     this.pickingMesh.visible = false;
 
     this.group.add(
+      this.outlineMesh,
       this.triangleMesh,
       this.wireSegments,
       this.wireTubeMesh,
@@ -397,6 +435,7 @@ export class MeshNodeView {
   /** Swap in a reference-image material and suppress editor overlays. */
   setReferenceMaterial(material: MeshBasicMaterial | null): void {
     this.referenceMaterial = material;
+    this.updateOutlineVisibility();
     if (material) {
       material.side = DoubleSide;
       this.triangleMesh.castShadow = false;
@@ -515,6 +554,25 @@ export class MeshNodeView {
       this.triangleMesh.material = this.surfaceMaterial(this.surfaceMaterials.ps1);
     }
     this.refreshMaterialColors();
+    this.updateOutlineVisibility();
+  }
+
+  /** Apply or clear the render-only inverted-hull outline effect. */
+  setOutline(settings: OutlineModifier | null): void {
+    this.outlineSettings = settings;
+    if (settings) {
+      this.outlineMaterial.uniforms.uThickness.value = settings.thickness;
+      (this.outlineMaterial.uniforms.uColor.value as Color).set(settings.color);
+    }
+    this.updateOutlineVisibility();
+  }
+
+  private updateOutlineVisibility(): void {
+    this.outlineMesh.visible =
+      this.outlineSettings !== null &&
+      this.outlineSettings.enabled &&
+      this.referenceMaterial === null &&
+      this.shadingMode !== 'wireframe';
   }
 
   /** Swap the per-texture material set without rebuilding geometry. */
@@ -1109,6 +1167,7 @@ export class MeshNodeView {
     this.group.removeFromParent();
     const faceGeometry = this.selectedFaceMesh.geometry;
     this.triangleGeometry.dispose();
+    this.outlineMaterial.dispose();
     this.wireGeometry.dispose();
     this.frontWireGeometry.dispose();
     this.previewLineGeometry.dispose();

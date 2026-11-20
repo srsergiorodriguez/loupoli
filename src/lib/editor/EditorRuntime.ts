@@ -13,6 +13,7 @@ import {
   cloneModifiers,
   createModifier,
   invertLinearTransform,
+  MODIFIER_DEFINITIONS,
   modifierLabel,
   validateModifier,
   validateModifiers,
@@ -5373,6 +5374,14 @@ export class EditorRuntime {
     if (this.drag || this.gizmoDrag || this.modalTransform || this.actionDrag) {
       return 'Finish the current edit before applying modifiers.';
     }
+    const enabledGeometryModifiers = node.modifiers.filter(
+      (modifier) =>
+        modifier.enabled &&
+        MODIFIER_DEFINITIONS[modifier.type].category === 'geometry'
+    );
+    if (enabledGeometryModifiers.length === 0) {
+      return 'No enabled geometry modifiers to apply.';
+    }
     if (node.shapeKeys.length > 0) {
       return 'Applying a modifier would invalidate shape keys.';
     }
@@ -5382,9 +5391,6 @@ export class EditorRuntime {
       )
     ) {
       return 'Applying a modifier would invalidate Mesh Motion keys.';
-    }
-    if (!node.modifiers.some((modifier) => modifier.enabled)) {
-      return 'No enabled modifiers to apply.';
     }
     const evaluated = node.getEvaluatedMesh();
     if (evaluated.error) {
@@ -5409,6 +5415,14 @@ export class EditorRuntime {
       return;
     }
     const before = cloneModifiers(node.modifiers);
+    const retainedRenderEffects = before.filter(
+      (modifier) => MODIFIER_DEFINITIONS[modifier.type].category === 'render'
+    );
+    const appliedCount = before.filter(
+      (modifier) =>
+        modifier.enabled &&
+        MODIFIER_DEFINITIONS[modifier.type].category === 'geometry'
+    ).length;
     this.lastLoopCut = null;
     this.armedAction = null;
     this.renderer.setActionPreviewLine(null);
@@ -5422,7 +5436,12 @@ export class EditorRuntime {
           evaluated.mesh,
           'Apply modifiers'
         ),
-        new SetModifiersCommand(node, before, [], 'Apply modifiers')
+        new SetModifiersCommand(
+          node,
+          before,
+          retainedRenderEffects,
+          'Apply modifiers'
+        )
       ])
     );
     this.syncScene();
@@ -5430,8 +5449,8 @@ export class EditorRuntime {
     this.notify(
       'success',
       'Modifiers applied',
-      `${before.filter((modifier) => modifier.enabled).length} enabled modifier${
-        before.filter((modifier) => modifier.enabled).length === 1 ? '' : 's'
+      `${appliedCount} enabled geometry modifier${
+        appliedCount === 1 ? '' : 's'
       } baked into the base mesh.`
     );
   }

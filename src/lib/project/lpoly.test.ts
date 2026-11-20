@@ -575,7 +575,14 @@ describe('.lpoli', () => {
         spacingX: 2.5,
         spacingY: 1.5
       },
-      { id: 'm3', type: 'radial-array', enabled: true, axis: 'z', count: 8 }
+      { id: 'm3', type: 'radial-array', enabled: true, axis: 'z', count: 8 },
+      {
+        id: 'm4',
+        type: 'outline',
+        enabled: true,
+        thickness: 0.08,
+        color: '#e07a5f'
+      }
     ]);
     const bytes = encodeLpoly(document, SETTINGS);
     const decoded = decodeLpoly(bytes);

@@ -62,7 +62,7 @@ Inspector field rows share one compact rhythm:
 - A vector field is one row. Its label-to-control gap is `--field-label-gap` (4 px), matching a field label above its control.
 - Labels use the shared UI label style; numeric prefixes and values remain monospace.
 - Nested outliner/track lists keep their own 2 px row gap. Grouped cards may keep internal gaps but must not add outer margins.
-- Actions use `InspectorActionGroup` (a labeled `ActionRow`) for clustered commands, and `ActionRow` directly only for a compact unlabeled primary row. Every Inspector section puts its destructive action in a separate `InspectorActionGroup` labeled Remove, last in the section.
+- Actions stay in compact `ActionRow` clusters with a 4 px gap. Do not add a new subtitle or card header for every button group; use the section body and existing group labels. Primary actions sit first; destructive actions sit last, end-aligned, and use `variant="danger"`.
 - `ActionButton` handles icon+text actions and `IconButton` handles icon-only actions. Do not create per-section button styles; `variant="danger"` is neutral at rest and red on hover/focus.
 
 ![Inspector field rhythm](media/inspector-spacing.png)

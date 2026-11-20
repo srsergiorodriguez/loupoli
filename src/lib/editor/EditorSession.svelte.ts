@@ -1,4 +1,5 @@
 import type { PrimitiveKind } from '../geometry/primitives';
+import type { ModifierKind } from '../geometry/modifiers';
 import type { PaintSample } from '../paint/types';
 import type { NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { EditorRuntime } from './EditorRuntime';
@@ -1371,7 +1372,7 @@ export class EditorSession {
     this.runtime?.ungroupActiveGroup();
   }
 
-  addModifier(kind: 'mirror' | 'grid-array' | 'radial-array'): void {
+  addModifier(kind: ModifierKind): void {
     this.runtime?.addModifier(kind);
   }
 

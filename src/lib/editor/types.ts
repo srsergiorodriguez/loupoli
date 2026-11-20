@@ -180,6 +180,8 @@ export interface ModifierPatch {
   readonly merge?: boolean;
   readonly mergeThreshold?: number;
   readonly mirrorUv?: boolean;
+  readonly thickness?: number;
+  readonly color?: string;
 }
 
 /** Screen-space preview for a projected line, shape, or gradient. */

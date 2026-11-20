@@ -42,6 +42,7 @@ import type { SurfaceHit } from './SurfaceHit';
 import { CameraRig, type AxisProjection, type AxisName } from './CameraRig';
 import { ViewportGrid } from './Grid';
 import { MeshNodeView } from './MeshNodeView';
+import type { OutlineModifier } from '../geometry/modifiers';
 import { LightGizmos } from './LightGizmos';
 import { CameraGizmos } from './CameraGizmos';
 import { ambientVisibility, bakeNormalSign } from '../lighting/bake';
@@ -419,6 +420,7 @@ export class ViewportRenderer {
       if (node.reference) {
         view.setSurfaceMaterials(this.materials);
         view.setReferenceMaterial(this.referenceMaterialFor(node));
+        view.setOutline(null);
       } else {
         view.setReferenceMaterial(null);
         view.setSurfaceMaterials(this.materialsForNode(node));
@@ -427,6 +429,11 @@ export class ViewportRenderer {
           stale.material.dispose();
           this.referenceMaterials.delete(node.id);
         }
+        const outline = node.modifiers.find(
+          (modifier): modifier is OutlineModifier =>
+            modifier.type === 'outline' && modifier.enabled
+        );
+        view.setOutline(outline ?? null);
       }
 
       const parent =

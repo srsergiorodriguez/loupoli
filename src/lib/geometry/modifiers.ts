@@ -45,20 +45,59 @@ export interface RadialArrayModifier {
   readonly count: number;
 }
 
+/** Screen-space inverted-hull outline effect. */
+export interface OutlineModifier {
+  readonly id: string;
+  readonly type: 'outline';
+  readonly enabled: boolean;
+  /** Outline width in world units. */
+  readonly thickness: number;
+  /** Six-digit CSS hex color. */
+  readonly color: string;
+}
+
 /** Serializable modifier union evaluated over a node's base DCEL. */
-export type Modifier = MirrorModifier | GridArrayModifier | RadialArrayModifier;
+export type Modifier = MirrorModifier | GridArrayModifier | RadialArrayModifier | OutlineModifier;
 
 /** Modifier types exposed by the stack UI. */
-export const MODIFIER_KINDS = ['mirror', 'grid-array', 'radial-array'] as const;
+export const MODIFIER_KINDS = [
+  'mirror',
+  'grid-array',
+  'radial-array',
+  'outline'
+] as const;
 
 /** Modifier type name. */
 export type ModifierKind = (typeof MODIFIER_KINDS)[number];
+
+/** Whether a modifier changes geometry or is a render-only effect. */
+export type ModifierCategory = 'geometry' | 'render';
+
+/** One self-contained modifier implementation used by creation, validation, and evaluation. */
+export interface ModifierDefinition {
+  readonly kind: ModifierKind;
+  readonly label: string;
+  readonly category: ModifierCategory;
+  readonly create: () => Modifier;
+  readonly validate: (
+    value: Record<string, unknown>,
+    id: string,
+    enabled: boolean
+  ) => Modifier;
+  /** Geometry evaluation. Render effects use their own render path. */
+  readonly evaluate?: (
+    mesh: HalfEdgeMesh,
+    provenance: ModifierProvenance,
+    modifier: Modifier
+  ) => EvaluatedModifierMesh;
+}
 
 /** Display labels for stack rows. */
 export const MODIFIER_LABELS: Readonly<Record<ModifierKind, string>> = {
   mirror: 'Mirror',
   'grid-array': 'Grid Array',
-  'radial-array': 'Radial Array'
+  'radial-array': 'Radial Array',
+  outline: 'Outline'
 };
 
 /** Hard ceiling on generated faces from a modifier evaluation. */
@@ -76,33 +115,7 @@ function createModifierId(): string {
 
 /** Construct a modifier with safe defaults. */
 export function createModifier(kind: ModifierKind): Modifier {
-  const id = createModifierId();
-  switch (kind) {
-    case 'mirror':
-      return {
-        id,
-        type: 'mirror',
-        enabled: true,
-        axis: 'x',
-        flip: false,
-        clip: true,
-        merge: true,
-        mergeThreshold: 0.001,
-        mirrorUv: false
-      };
-    case 'grid-array':
-      return {
-        id,
-        type: 'grid-array',
-        enabled: true,
-        countX: 2,
-        countY: 1,
-        spacingX: 1.5,
-        spacingY: 1.5
-      };
-    case 'radial-array':
-      return { id, type: 'radial-array', enabled: true, axis: 'z', count: 6 };
-  }
+  return MODIFIER_DEFINITIONS[kind].create();
 }
 
 /** Deep-copy a modifier stack for commands, persistence, and snapshots. */
@@ -670,6 +683,188 @@ function radialEvaluated(
   return buildEvaluated(faces);
 }
 
+function isModifierAxis(value: unknown): value is ModifierAxis {
+  return value === 'x' || value === 'y' || value === 'z';
+}
+
+const MIRROR_DEFINITION: ModifierDefinition = {
+  kind: 'mirror',
+  label: MODIFIER_LABELS.mirror,
+  category: 'geometry',
+  create: () => ({
+    id: createModifierId(),
+    type: 'mirror',
+    enabled: true,
+    axis: 'x',
+    flip: false,
+    clip: true,
+    merge: true,
+    mergeThreshold: 0.001,
+    mirrorUv: false
+  }),
+  validate: (value, id, enabled) => {
+    if (!isModifierAxis(value.axis)) {
+      throw new Error('Mirror axis is invalid.');
+    }
+    const flip = typeof value.flip === 'boolean' ? value.flip : false;
+    const clip = typeof value.clip === 'boolean' ? value.clip : true;
+    const merge = typeof value.merge === 'boolean' ? value.merge : true;
+    const mergeThreshold =
+      typeof value.mergeThreshold === 'number' &&
+      Number.isFinite(value.mergeThreshold)
+        ? Math.min(10, Math.max(1e-6, value.mergeThreshold))
+        : 0.001;
+    const mirrorUv = typeof value.mirrorUv === 'boolean' ? value.mirrorUv : false;
+    return {
+      id,
+      type: 'mirror',
+      enabled,
+      axis: value.axis,
+      flip,
+      clip,
+      merge,
+      mergeThreshold,
+      mirrorUv
+    };
+  },
+  evaluate: (mesh, provenance, modifier) => {
+    if (modifier.type !== 'mirror') {
+      throw new Error('Mirror evaluator received another modifier kind.');
+    }
+    return mirrorEvaluated(mesh, provenance, modifier);
+  }
+};
+
+const GRID_ARRAY_DEFINITION: ModifierDefinition = {
+  kind: 'grid-array',
+  label: MODIFIER_LABELS['grid-array'],
+  category: 'geometry',
+  create: () => ({
+    id: createModifierId(),
+    type: 'grid-array',
+    enabled: true,
+    countX: 2,
+    countY: 1,
+    spacingX: 1.5,
+    spacingY: 1.5
+  }),
+  validate: (value, id, enabled) => {
+    const { countX, countY, spacingX, spacingY } = value;
+    if (
+      !Number.isInteger(countX) ||
+      !Number.isInteger(countY) ||
+      (countX as number) < 1 ||
+      (countY as number) < 1 ||
+      (countX as number) > 64 ||
+      (countY as number) > 64 ||
+      typeof spacingX !== 'number' ||
+      typeof spacingY !== 'number' ||
+      !Number.isFinite(spacingX) ||
+      !Number.isFinite(spacingY) ||
+      Math.abs(spacingX) > 10_000 ||
+      Math.abs(spacingY) > 10_000
+    ) {
+      throw new Error('Grid array parameters are invalid.');
+    }
+    return {
+      id,
+      type: 'grid-array',
+      enabled,
+      countX: countX as number,
+      countY: countY as number,
+      spacingX,
+      spacingY
+    };
+  },
+  evaluate: (mesh, provenance, modifier) => {
+    if (modifier.type !== 'grid-array') {
+      throw new Error('Grid array evaluator received another modifier kind.');
+    }
+    if (modifier.countX < 1 || modifier.countY < 1) {
+      throw new Error('Grid array counts must be at least one.');
+    }
+    return gridEvaluated(
+      mesh,
+      provenance,
+      modifier.countX,
+      modifier.countY,
+      modifier.spacingX,
+      modifier.spacingY
+    );
+  }
+};
+
+const RADIAL_ARRAY_DEFINITION: ModifierDefinition = {
+  kind: 'radial-array',
+  label: MODIFIER_LABELS['radial-array'],
+  category: 'geometry',
+  create: () => ({
+    id: createModifierId(),
+    type: 'radial-array',
+    enabled: true,
+    axis: 'z',
+    count: 6
+  }),
+  validate: (value, id, enabled) => {
+    if (!isModifierAxis(value.axis) || !Number.isInteger(value.count)) {
+      throw new Error('Radial array parameters are invalid.');
+    }
+    if ((value.count as number) < 1 || (value.count as number) > 128) {
+      throw new Error('Radial array count is outside the supported range.');
+    }
+    return {
+      id,
+      type: 'radial-array',
+      enabled,
+      axis: value.axis,
+      count: value.count as number
+    };
+  },
+  evaluate: (mesh, provenance, modifier) => {
+    if (modifier.type !== 'radial-array') {
+      throw new Error('Radial array evaluator received another modifier kind.');
+    }
+    if (modifier.count < 1) {
+      throw new Error('Radial array count must be at least one.');
+    }
+    return radialEvaluated(mesh, provenance, modifier.axis, modifier.count);
+  }
+};
+
+const OUTLINE_DEFINITION: ModifierDefinition = {
+  kind: 'outline',
+  label: MODIFIER_LABELS.outline,
+  category: 'render',
+  create: () => ({
+    id: createModifierId(),
+    type: 'outline',
+    enabled: true,
+    thickness: 0.08,
+    color: '#e07a5f'
+  }),
+  validate: (value, id, enabled) => {
+    const thickness =
+      typeof value.thickness === 'number' && Number.isFinite(value.thickness)
+        ? Math.min(1, Math.max(0.001, value.thickness))
+        : 0.08;
+    const color =
+      typeof value.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.color)
+        ? value.color.toLowerCase()
+        : '#e07a5f';
+    return { id, type: 'outline', enabled, thickness, color };
+  }
+};
+
+/** Complete modifier registry used by creation, validation, evaluation, and the stack UI. */
+export const MODIFIER_DEFINITIONS: Readonly<
+  Record<ModifierKind, ModifierDefinition>
+> = {
+  mirror: MIRROR_DEFINITION,
+  'grid-array': GRID_ARRAY_DEFINITION,
+  'radial-array': RADIAL_ARRAY_DEFINITION,
+  outline: OUTLINE_DEFINITION
+};
+
 /**
  * Evaluate the enabled modifier stack and return provenance maps back to the
  * unchanged base mesh.
@@ -694,35 +889,14 @@ export function evaluateModifiersWithProvenance(
     provenance: identityProvenance(base)
   };
   for (const modifier of active) {
-    if (modifier.type === 'mirror') {
-      current = mirrorEvaluated(
-        current.mesh,
-        current.provenance,
-        modifier
-      );
-    } else if (modifier.type === 'grid-array') {
-      if (modifier.countX < 1 || modifier.countY < 1) {
-        throw new Error('Grid array counts must be at least one.');
-      }
-      current = gridEvaluated(
-        current.mesh,
-        current.provenance,
-        modifier.countX,
-        modifier.countY,
-        modifier.spacingX,
-        modifier.spacingY
-      );
-    } else {
-      if (modifier.count < 1) {
-        throw new Error('Radial array count must be at least one.');
-      }
-      current = radialEvaluated(
-        current.mesh,
-        current.provenance,
-        modifier.axis,
-        modifier.count
-      );
+    const definition = MODIFIER_DEFINITIONS[modifier.type];
+    if (definition.category !== 'geometry') {
+      continue;
     }
+    if (!definition.evaluate) {
+      throw new Error(`${definition.label} has no geometry evaluator.`);
+    }
+    current = definition.evaluate(current.mesh, current.provenance, modifier);
   }
 
   // Seams are authored on the base DCEL. Carry them onto every evaluated edge
@@ -751,90 +925,22 @@ export function validateModifier(value: unknown): Modifier {
   if (typeof value !== 'object' || value === null) {
     throw new Error('Modifier is not an object.');
   }
-  const modifier = value as Partial<Modifier> & Record<string, unknown>;
+  const raw = value as Record<string, unknown>;
+  const type = raw.type;
   if (
-    typeof modifier.id !== 'string' ||
-    modifier.id.length === 0 ||
-    typeof modifier.enabled !== 'boolean' ||
-    (modifier.type !== 'mirror' &&
-      modifier.type !== 'grid-array' &&
-      modifier.type !== 'radial-array')
+    typeof raw.id !== 'string' ||
+    raw.id.length === 0 ||
+    typeof raw.enabled !== 'boolean' ||
+    typeof type !== 'string' ||
+    !(type in MODIFIER_DEFINITIONS)
   ) {
     throw new Error('Modifier metadata is invalid.');
   }
-  const isAxis = (axis: unknown): axis is ModifierAxis =>
-    axis === 'x' || axis === 'y' || axis === 'z';
-
-  if (modifier.type === 'mirror') {
-    if (!isAxis(modifier.axis)) {
-      throw new Error('Mirror axis is invalid.');
-    }
-    const flip =
-      typeof modifier.flip === 'boolean' ? modifier.flip : false;
-    const clip =
-      typeof modifier.clip === 'boolean' ? modifier.clip : true;
-    const merge =
-      typeof modifier.merge === 'boolean' ? modifier.merge : true;
-    const mergeThreshold =
-      typeof modifier.mergeThreshold === 'number' &&
-      Number.isFinite(modifier.mergeThreshold)
-        ? Math.min(10, Math.max(1e-6, modifier.mergeThreshold))
-        : 0.001;
-    const mirrorUv =
-      typeof modifier.mirrorUv === 'boolean' ? modifier.mirrorUv : false;
-    return {
-      id: modifier.id,
-      type: 'mirror',
-      enabled: modifier.enabled,
-      axis: modifier.axis,
-      flip,
-      clip,
-      merge,
-      mergeThreshold,
-      mirrorUv
-    };
-  }
-  if (modifier.type === 'grid-array') {
-    const { countX, countY, spacingX, spacingY } = modifier;
-    if (
-      !Number.isInteger(countX) ||
-      !Number.isInteger(countY) ||
-      (countX as number) < 1 ||
-      (countY as number) < 1 ||
-      (countX as number) > 64 ||
-      (countY as number) > 64 ||
-      typeof spacingX !== 'number' ||
-      typeof spacingY !== 'number' ||
-      !Number.isFinite(spacingX) ||
-      !Number.isFinite(spacingY) ||
-      Math.abs(spacingX) > 10_000 ||
-      Math.abs(spacingY) > 10_000
-    ) {
-      throw new Error('Grid array parameters are invalid.');
-    }
-    return {
-      id: modifier.id,
-      type: 'grid-array',
-      enabled: modifier.enabled,
-      countX: countX as number,
-      countY: countY as number,
-      spacingX,
-      spacingY
-    };
-  }
-  if (!isAxis(modifier.axis) || !Number.isInteger(modifier.count)) {
-    throw new Error('Radial array parameters are invalid.');
-  }
-  if ((modifier.count as number) < 1 || (modifier.count as number) > 128) {
-    throw new Error('Radial array count is outside the supported range.');
-  }
-  return {
-    id: modifier.id,
-    type: 'radial-array',
-    enabled: modifier.enabled,
-    axis: modifier.axis,
-    count: modifier.count as number
-  };
+  return MODIFIER_DEFINITIONS[type as ModifierKind].validate(
+    raw,
+    raw.id,
+    raw.enabled
+  );
 }
 
 /** Validate a stored modifier stack. */
