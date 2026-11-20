@@ -182,6 +182,7 @@ export interface ModifierPatch {
   readonly mirrorUv?: boolean;
   readonly thickness?: number;
   readonly color?: string;
+  readonly offset?: number;
 }
 
 /** Screen-space preview for a projected line, shape, or gradient. */

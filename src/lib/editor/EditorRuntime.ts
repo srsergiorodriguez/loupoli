@@ -5407,7 +5407,7 @@ export class EditorRuntime {
     }
     const reason = this.modifierApplyBlockedReason();
     if (reason) {
-      this.notify('warning', 'Cannot apply modifiers', reason);
+      this.notify('warning', 'Cannot apply geometry modifiers', reason);
       return;
     }
     const evaluated = node.getEvaluatedMesh();
@@ -5429,18 +5429,18 @@ export class EditorRuntime {
     this.selection.clear();
     this.selection.setContext(node.id, this.selection.mode);
     this.history.execute(
-      new CompositeCommand('Apply modifiers', [
+      new CompositeCommand('Apply geometry', [
         new ReplaceMeshCommand(
           node,
           node.mesh,
           evaluated.mesh,
-          'Apply modifiers'
+          'Apply geometry'
         ),
         new SetModifiersCommand(
           node,
           before,
           retainedRenderEffects,
-          'Apply modifiers'
+          'Apply geometry'
         )
       ])
     );
@@ -5448,10 +5448,10 @@ export class EditorRuntime {
     this.publish();
     this.notify(
       'success',
-      'Modifiers applied',
+      'Geometry applied',
       `${appliedCount} enabled geometry modifier${
         appliedCount === 1 ? '' : 's'
-      } baked into the base mesh.`
+      } baked into the base mesh; render effects were preserved.`
     );
   }
 
@@ -11347,7 +11347,7 @@ export class EditorRuntime {
         this.notify(
           'warning',
           'Generated modifier geometry',
-          'Apply modifiers to make this seam editable.'
+          'Apply geometry modifiers to make this seam editable.'
         );
       }
     } else {

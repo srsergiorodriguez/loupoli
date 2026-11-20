@@ -772,7 +772,8 @@
       | 'spacingY'
       | 'count'
       | 'mergeThreshold'
-      | 'thickness',
+      | 'thickness'
+      | 'offset',
     value: number
   ): void {
     if (!Number.isFinite(value)) {
@@ -2418,7 +2419,7 @@
 
           {#if modifiers.length === 0}
             <p class="hint">
-              Non-destructive Mirror, Grid Array, Radial Array, and render-effect Outline evaluation.
+              Non-destructive Mirror, Grid Array, Radial Array, Solidify, and render-effect Outline evaluation.
             </p>
           {:else}
             <div class="modifier-list">
@@ -2619,7 +2620,7 @@
                             updateModifierNumber(modifier.id, 'count', value)}
                         />
                       </label>
-                    {:else}
+                    {:else if modifier.type === 'outline'}
                       <label class="modifier-field">
                         <span>Thickness</span>
                         <NumberField
@@ -2642,6 +2643,35 @@
                             updateModifierColor(modifier.id, value)}
                         />
                       </div>
+                    {:else}
+                      <label class="modifier-field">
+                        <span>Thickness</span>
+                        <NumberField
+                          value={modifier.thickness}
+                          label="Solidify thickness"
+                          step={0.01}
+                          precision={3}
+                          min={0.0001}
+                          max={10}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'thickness', value)}
+                        />
+                      </label>
+                      <label class="modifier-field">
+                        <span>Offset</span>
+                        <NumberField
+                          value={modifier.offset}
+                          label="Solidify offset"
+                          step={0.05}
+                          precision={2}
+                          min={-1}
+                          max={1}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'offset', value)}
+                        />
+                      </label>
                     {/if}
                   </div>
                 </div>

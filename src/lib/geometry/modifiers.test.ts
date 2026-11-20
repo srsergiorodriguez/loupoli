@@ -15,6 +15,7 @@ import {
   type GridArrayModifier,
   type MirrorModifier,
   type OutlineModifier,
+  type SolidifyModifier,
   type RadialArrayModifier,
   validateModifier
 } from './modifiers';
@@ -304,6 +305,22 @@ describe('modifier registry', () => {
     const result = evaluateModifiers(cube, [outline]);
     expect(result.faceCount).toBe(cube.faceCount);
     expect(result.boundaryEdgeCount).toBe(0);
+  });
+
+  it('closes an open grid into a solid shell', () => {
+    const grid = createGridMesh(3, 3);
+    const solidify = createModifier('solidify') as SolidifyModifier;
+    const result = evaluateModifiers(grid, [solidify]);
+    result.validate();
+    expect(result.boundaryEdgeCount).toBe(0);
+    expect(result.faceCount).toBe(grid.faceCount * 2 + grid.boundaryEdgeCount);
+    const normalized = validateModifier({
+      ...solidify,
+      thickness: 100,
+      offset: 8
+    }) as SolidifyModifier;
+    expect(normalized.thickness).toBe(10);
+    expect(normalized.offset).toBe(1);
   });
 
   it('rejects unknown modifier kinds and malformed metadata', () => {

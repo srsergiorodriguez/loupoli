@@ -47,7 +47,7 @@ This is the authoritative map of the application shell. New controls must be ass
 
 ### Inspector section sets
 
-- **Model:** Scene → Transform → Selection → Mesh → Modifiers. Modifiers includes Apply modifiers. PS1 look controls live in Render.
+- **Model:** Scene → Transform → Selection → Mesh → Modifiers. Modifiers includes Apply geometry. PS1 look controls live in Render.
 - **UV:** Scene → Selection. Selection remains for edge/seam authoring; 3D editing sections are hidden.
 - **Paint:** Scene → Brush → Texture. Brush and Texture are adjacent; 3D selection overlays are hidden while the selection set persists.
 - **Light:** Scene → Lighting. Mesh editing and selection chrome are hidden; Scene remains for choosing the bake target.

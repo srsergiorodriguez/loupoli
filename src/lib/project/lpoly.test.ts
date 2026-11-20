@@ -582,6 +582,13 @@ describe('.lpoli', () => {
         enabled: true,
         thickness: 0.08,
         color: '#e07a5f'
+      },
+      {
+        id: 'm5',
+        type: 'solidify',
+        enabled: true,
+        thickness: 0.1,
+        offset: -1
       }
     ]);
     const bytes = encodeLpoly(document, SETTINGS);

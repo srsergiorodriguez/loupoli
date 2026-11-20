@@ -56,15 +56,27 @@ export interface OutlineModifier {
   readonly color: string;
 }
 
+/** Thickness shell for open surfaces and cards. */
+export interface SolidifyModifier {
+  readonly id: string;
+  readonly type: 'solidify';
+  readonly enabled: boolean;
+  /** Shell thickness in world units. */
+  readonly thickness: number;
+  /** -1 keeps the outer surface fixed, 1 keeps the inner surface fixed. */
+  readonly offset: number;
+}
+
 /** Serializable modifier union evaluated over a node's base DCEL. */
-export type Modifier = MirrorModifier | GridArrayModifier | RadialArrayModifier | OutlineModifier;
+export type Modifier = MirrorModifier | GridArrayModifier | RadialArrayModifier | OutlineModifier | SolidifyModifier;
 
 /** Modifier types exposed by the stack UI. */
 export const MODIFIER_KINDS = [
   'mirror',
   'grid-array',
   'radial-array',
-  'outline'
+  'outline',
+  'solidify'
 ] as const;
 
 /** Modifier type name. */
@@ -97,7 +109,8 @@ export const MODIFIER_LABELS: Readonly<Record<ModifierKind, string>> = {
   mirror: 'Mirror',
   'grid-array': 'Grid Array',
   'radial-array': 'Radial Array',
-  outline: 'Outline'
+  outline: 'Outline',
+  solidify: 'Solidify'
 };
 
 /** Hard ceiling on generated faces from a modifier evaluation. */
@@ -683,6 +696,179 @@ function radialEvaluated(
   return buildEvaluated(faces);
 }
 
+function solidifyEvaluated(
+  mesh: HalfEdgeMesh,
+  provenance: ModifierProvenance,
+  thickness: number,
+  offset: number
+): EvaluatedModifierMesh {
+  if (!Number.isFinite(thickness) || thickness <= 0) {
+    throw new Error('Solidify thickness must be a positive finite number.');
+  }
+  if (!Number.isFinite(offset) || offset < -1 || offset > 1) {
+    throw new Error('Solidify offset must be between -1 and 1.');
+  }
+  if (mesh.faceCount * 2 > MAX_MODIFIER_FACES) {
+    throw new Error('Solidify exceeds the modifier face limit.');
+  }
+
+  const vertexNormals = new Float32Array(mesh.vertexCount * 3);
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const normal = mesh.computeFaceNormal(face);
+    const start = mesh.faceHalfEdge[face];
+    let halfEdge = start;
+    do {
+      const vertex = mesh.heOrigin[halfEdge];
+      const offset3 = vertex * 3;
+      vertexNormals[offset3] += normal[0];
+      vertexNormals[offset3 + 1] += normal[1];
+      vertexNormals[offset3 + 2] += normal[2];
+      halfEdge = mesh.heNext[halfEdge];
+    } while (halfEdge !== start);
+  }
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const offset3 = vertex * 3;
+    const length = Math.hypot(
+      vertexNormals[offset3],
+      vertexNormals[offset3 + 1],
+      vertexNormals[offset3 + 2]
+    );
+    if (length <= 1e-8) {
+      throw new Error('Solidify found a vertex without a stable normal.');
+    }
+    vertexNormals[offset3] /= length;
+    vertexNormals[offset3 + 1] /= length;
+    vertexNormals[offset3 + 2] /= length;
+  }
+
+  const outerShift = thickness * ((offset + 1) / 2);
+  const innerShift = outerShift - thickness;
+  const shiftedCorner = (
+    vertex: number,
+    uv: readonly [number, number],
+    baseEdge: number,
+    amount: number
+  ): ProvenanceCorner => {
+    const offset3 = vertex * 3;
+    const position = mesh.getVertexPosition(vertex);
+    return {
+      position: [
+        position[0] + vertexNormals[offset3] * amount,
+        position[1] + vertexNormals[offset3 + 1] * amount,
+        position[2] + vertexNormals[offset3 + 2] * amount
+      ],
+      uv: [uv[0], uv[1]],
+      baseVertex: provenance.vertexBase[vertex] ?? -1,
+      baseEdge,
+      baseLinear: Array.from(
+        provenance.vertexLinear.subarray(vertex * 9, vertex * 9 + 9)
+      )
+    };
+  };
+
+  const faces: ProvenanceFace[] = [];
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const start = mesh.faceHalfEdge[face];
+    const corners: ProvenanceCorner[] = [];
+    let halfEdge = start;
+    do {
+      const vertex = mesh.heOrigin[halfEdge];
+      const uvOffset = halfEdge * 2;
+      corners.push(
+        shiftedCorner(
+          vertex,
+          [mesh.heUv[uvOffset], mesh.heUv[uvOffset + 1]],
+          provenance.edgeBase[mesh.heEdge[halfEdge]] ?? -1,
+          outerShift
+        )
+      );
+      halfEdge = mesh.heNext[halfEdge];
+    } while (halfEdge !== start);
+
+    const inner: ProvenanceCorner[] = [];
+    halfEdge = start;
+    do {
+      const vertex = mesh.heOrigin[halfEdge];
+      const uvOffset = halfEdge * 2;
+      inner.push(
+        shiftedCorner(
+          vertex,
+          [mesh.heUv[uvOffset], mesh.heUv[uvOffset + 1]],
+          provenance.edgeBase[mesh.heEdge[halfEdge]] ?? -1,
+          innerShift
+        )
+      );
+      halfEdge = mesh.heNext[halfEdge];
+    } while (halfEdge !== start);
+    inner.reverse();
+
+    faces.push({
+      corners,
+      material: mesh.faceMaterial[face],
+      baseFace: provenance.faceBase[face] ?? face
+    });
+    faces.push({
+      corners: inner,
+      material: mesh.faceMaterial[face],
+      baseFace: provenance.faceBase[face] ?? face
+    });
+  }
+
+  // Rim faces close every open boundary. The outer shell follows the source
+  // winding; the reversed inner shell and outward rim make a closed solid.
+  for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+    const halfEdge = mesh.edgeHalfEdge[edge];
+    const twin = mesh.heTwin[halfEdge];
+    const face = mesh.heFace[halfEdge];
+    const twinFace = twin >= 0 ? mesh.heFace[twin] : -1;
+    if ((face >= 0) === (twinFace >= 0)) {
+      continue;
+    }
+    const boundary = face >= 0 ? halfEdge : twin;
+    if (boundary < 0 || mesh.heFace[boundary] < 0) {
+      continue;
+    }
+    const a = mesh.heOrigin[boundary];
+    const b = mesh.heOrigin[mesh.heNext[boundary]];
+    const uvAOffset = boundary * 2;
+    const uvBOffset = mesh.heNext[boundary] * 2;
+    faces.push({
+      corners: [
+        shiftedCorner(
+          b,
+          [mesh.heUv[uvBOffset], mesh.heUv[uvBOffset + 1]],
+          -1,
+          outerShift
+        ),
+        shiftedCorner(
+          a,
+          [mesh.heUv[uvAOffset], mesh.heUv[uvAOffset + 1]],
+          -1,
+          outerShift
+        ),
+        shiftedCorner(
+          a,
+          [mesh.heUv[uvAOffset], mesh.heUv[uvAOffset + 1]],
+          -1,
+          innerShift
+        ),
+        shiftedCorner(
+          b,
+          [mesh.heUv[uvBOffset], mesh.heUv[uvBOffset + 1]],
+          -1,
+          innerShift
+        )
+      ],
+      material: mesh.faceMaterial[mesh.heFace[boundary]],
+      baseFace: provenance.faceBase[mesh.heFace[boundary]] ?? -1
+    });
+  }
+  if (faces.length > MAX_MODIFIER_FACES) {
+    throw new Error('Solidify exceeds the modifier face limit.');
+  }
+  return buildEvaluated(faces);
+}
+
 function isModifierAxis(value: unknown): value is ModifierAxis {
   return value === 'x' || value === 'y' || value === 'z';
 }
@@ -855,6 +1041,41 @@ const OUTLINE_DEFINITION: ModifierDefinition = {
   }
 };
 
+const SOLIDIFY_DEFINITION: ModifierDefinition = {
+  kind: 'solidify',
+  label: MODIFIER_LABELS.solidify,
+  category: 'geometry',
+  create: () => ({
+    id: createModifierId(),
+    type: 'solidify',
+    enabled: true,
+    thickness: 0.1,
+    offset: -1
+  }),
+  validate: (value, id, enabled) => {
+    const thickness =
+      typeof value.thickness === 'number' && Number.isFinite(value.thickness)
+        ? Math.min(10, Math.max(0.0001, value.thickness))
+        : 0.1;
+    const offset =
+      typeof value.offset === 'number' && Number.isFinite(value.offset)
+        ? Math.min(1, Math.max(-1, value.offset))
+        : -1;
+    return { id, type: 'solidify', enabled, thickness, offset };
+  },
+  evaluate: (mesh, provenance, modifier) => {
+    if (modifier.type !== 'solidify') {
+      throw new Error('Solidify evaluator received another modifier kind.');
+    }
+    return solidifyEvaluated(
+      mesh,
+      provenance,
+      modifier.thickness,
+      modifier.offset
+    );
+  }
+};
+
 /** Complete modifier registry used by creation, validation, evaluation, and the stack UI. */
 export const MODIFIER_DEFINITIONS: Readonly<
   Record<ModifierKind, ModifierDefinition>
@@ -862,7 +1083,8 @@ export const MODIFIER_DEFINITIONS: Readonly<
   mirror: MIRROR_DEFINITION,
   'grid-array': GRID_ARRAY_DEFINITION,
   'radial-array': RADIAL_ARRAY_DEFINITION,
-  outline: OUTLINE_DEFINITION
+  outline: OUTLINE_DEFINITION,
+  solidify: SOLIDIFY_DEFINITION
 };
 
 /**
