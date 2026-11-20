@@ -29,12 +29,13 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Selection',
         paragraphs: [
-          'The V, E, and F buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Add, Shift, Cmd, or Ctrl extends it; Sub removes elements. Changing mode clears the element set, while object selection remains in the Scene outliner.',
+          'The 1, 2, and 3 buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Toggle, Shift, Cmd, or Ctrl toggles subsequent picks; clicking a selected element removes it. Changing mode clears the element set, while object selection remains in the Scene outliner.',
           'The Loop toggle is available in Edge mode. Enabling it expands the current edge selection; it walks through connected quad edges, follows an open boundary, and stops at a pole or a non-quad junction. The same Edge mode supports marking seams for UV work.'
         ],
         controls: [
-          'V / E / F: vertex, edge, or face mode',
-          'Add, Sub, Shift, Cmd, Ctrl: selection combination',
+          '1 / 2 / 3: vertex, edge, or face mode',
+          'Toggle, Shift, Cmd, Ctrl: toggle selection',
+          'Shift+Tab: toggle grid snapping',
           'X / Y / Z: lock a transform to a world axis'
         ]
       },
@@ -78,7 +79,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The 3D and UV selections are linked. Selecting a face in the viewport highlights its UV corners, and selecting UV corners updates the viewport selection. Switch to Island mode to work with one connected chart at a time.'
         ],
         controls: [
-          'V / E / F / Island: UV selection mode',
+          '1 / 2 / 3 / Island: UV selection mode',
           'Seam: mark or clear a chart boundary',
           'Unwrap: build charts from the selected faces and seams',
           'Pin / Unpin: hold one or two UV corners during unwrap'

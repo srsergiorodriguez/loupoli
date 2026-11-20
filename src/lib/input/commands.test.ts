@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   command,
   commandForKeyboardEvent,
+  commandShortcutReference,
   commandTooltipFor,
   type CommandId
 } from './commands';
@@ -14,12 +15,12 @@ describe('command registry', () => {
     expect(command('selection.island').scope).toBe('uv');
     expect(command('edit.undo').scope).toBe('global');
     expect(command('tool.move').presentation).toBe('icon');
-    expect(command('selection.add').presentation).toBe('text');
+    expect(command('selection.toggle').presentation).toBe('text');
   });
 
   it('derives tooltips from the shared metadata', () => {
     expect(commandTooltipFor('tool.move')).toBe('Move — G');
-    expect(commandTooltipFor('selection.vertex')).toBe('Vertex');
+    expect(commandTooltipFor('selection.vertex')).toBe('Vertex — 1');
   });
 
   it('resolves keyboard events through command bindings', () => {
@@ -57,6 +58,21 @@ describe('command registry', () => {
     expect(commandForKeyboardEvent(key('a', { metaKey: true }))).toBe(
       'selection.all'
     );
+    expect(commandForKeyboardEvent(key('1'))).toBe('selection.vertex');
+    expect(commandForKeyboardEvent(key('2'))).toBe('selection.edge');
+    expect(commandForKeyboardEvent(key('3'))).toBe('selection.face');
+    expect(commandForKeyboardEvent(key('Tab', { shiftKey: true }))).toBe(
+      'snap.toggle'
+    );
+  });
+
+  it('derives the shortcut reference from command metadata', () => {
+    const reference = commandShortcutReference();
+    expect(reference.find((entry) => entry.id === 'selection.vertex')?.display).toBe('1');
+    expect(reference.find((entry) => entry.id === 'selection.edge')?.display).toBe('2');
+    expect(reference.find((entry) => entry.id === 'selection.face')?.display).toBe('3');
+    expect(reference.find((entry) => entry.id === 'snap.toggle')?.display).toBe('⇧Tab');
+    expect(reference.every((entry) => entry.display.length > 0)).toBe(true);
   });
 
   it('has a definition for every command id', () => {
@@ -73,8 +89,7 @@ describe('command registry', () => {
       'selection.face',
       'selection.island',
       'selection.all',
-      'selection.add',
-      'selection.subtract',
+      'selection.toggle',
       'tool.select',
       'tool.lasso',
       'tool.move',
@@ -85,6 +100,7 @@ describe('command registry', () => {
       'transform.axisX',
       'transform.axisY',
       'transform.axisZ',
+      'snap.toggle',
       'mesh.extrude',
       'mesh.inset',
       'mesh.loopCut',

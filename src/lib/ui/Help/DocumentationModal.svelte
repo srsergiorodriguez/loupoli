@@ -1,6 +1,10 @@
 <script lang="ts">
   import ModalDialog from '../Primitives/ModalDialog.svelte';
   import { DOCUMENTATION } from '../../help/documentation';
+  import {
+    commandShortcutReference,
+    type CommandScope
+  } from '../../input/commands';
 
   /** Full-screen tabbed reference for each workspace. */
   interface Props {
@@ -8,10 +12,38 @@
   }
 
   let { onClose }: Props = $props();
-  let activeId = $state(DOCUMENTATION[0].id);
+  const shortcuts = commandShortcutReference();
+  const tabs = [
+    ...DOCUMENTATION.map((page) => ({ id: page.id, label: page.label })),
+    { id: 'shortcuts', label: 'Shortcuts' }
+  ] as const;
+  let activeId = $state<string>(tabs[0].id);
   const active = $derived(
-    DOCUMENTATION.find((page) => page.id === activeId) ?? DOCUMENTATION[0]
+    DOCUMENTATION.find((page) => page.id === activeId) ?? null
   );
+  const scopeLabels: Record<CommandScope, string> = {
+    global: 'Global',
+    shell: 'Application',
+    active: 'Active editor',
+    '3d': '3D viewport',
+    uv: 'UV pane',
+    paint: 'Paint pane'
+  };
+  const scopeOrder: readonly CommandScope[] = [
+    'global',
+    'shell',
+    'active',
+    '3d',
+    'uv',
+    'paint'
+  ];
+  const shortcutGroups = scopeOrder
+    .map((scope) => ({
+      scope,
+      label: scopeLabels[scope],
+      entries: shortcuts.filter((entry) => entry.scope === scope)
+    }))
+    .filter((group) => group.entries.length > 0);
 
   function moveTab(event: KeyboardEvent): void {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
@@ -19,11 +51,11 @@
     }
     event.preventDefault();
     const direction = event.key === 'ArrowLeft' ? -1 : 1;
-    const index = DOCUMENTATION.findIndex((page) => page.id === activeId);
-    const next = (index + direction + DOCUMENTATION.length) % DOCUMENTATION.length;
-    activeId = DOCUMENTATION[next].id;
+    const index = tabs.findIndex((tab) => tab.id === activeId);
+    const next = (index + direction + tabs.length) % tabs.length;
+    activeId = tabs[next].id;
     document
-      .querySelector<HTMLButtonElement>(`[data-documentation-tab="${DOCUMENTATION[next].id}"]`)
+      .querySelector<HTMLButtonElement>(`[data-documentation-tab="${tabs[next].id}"]`)
       ?.focus();
   }
 </script>
@@ -37,63 +69,98 @@
       aria-label="Workspace documentation"
       onkeydown={moveTab}
     >
-      {#each DOCUMENTATION as page (page.id)}
+      {#each tabs as tab (tab.id)}
         <button
           type="button"
           role="tab"
-          id={`documentation-tab-${page.id}`}
-          aria-selected={page.id === activeId}
-          aria-controls={`documentation-panel-${page.id}`}
-          tabindex={page.id === activeId ? 0 : -1}
-          data-documentation-tab={page.id}
-          class:active={page.id === activeId}
-          onclick={() => (activeId = page.id)}
+          id={`documentation-tab-${tab.id}`}
+          aria-selected={tab.id === activeId}
+          aria-controls={`documentation-panel-${tab.id}`}
+          tabindex={tab.id === activeId ? 0 : -1}
+          data-documentation-tab={tab.id}
+          class:active={tab.id === activeId}
+          onclick={() => (activeId = tab.id)}
         >
-          {page.label}
+          {tab.label}
         </button>
       {/each}
     </div>
 
-    <div
-      class="page"
-      id={`documentation-panel-${active.id}`}
-      role="tabpanel"
-      aria-labelledby={`documentation-tab-${active.id}`}
-    >
-      <header class="page-head">
-        <div>
-          <p class="eyebrow">{active.label} workspace</p>
-          <h3>{active.title}</h3>
-        </div>
-        <p class="summary">{active.summary}</p>
-      </header>
+    {#if activeId === 'shortcuts'}
+      <div
+        class="shortcuts-page"
+        id="documentation-panel-shortcuts"
+        role="tabpanel"
+        aria-labelledby="documentation-tab-shortcuts"
+      >
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">Reference</p>
+            <h3>Keyboard shortcuts</h3>
+          </div>
+          <p class="summary">
+            Every binding comes from the shared command registry. Shortcuts are ignored while typing in a field.
+          </p>
+        </header>
 
-      <div class="page-grid">
-        <figure>
-          <img src={active.image} alt={active.alt} />
-          <figcaption>{active.label} workspace.</figcaption>
-        </figure>
-
-        <article class="guide">
-          {#each active.sections as section (section.heading)}
-            <section class="doc-section">
-              <h4>{section.heading}</h4>
-              {#each section.paragraphs as paragraph (paragraph)}
-                <p>{paragraph}</p>
-              {/each}
-              {#if section.controls}
-                <h5>Controls</h5>
-                <ul>
-                  {#each section.controls as control (control)}
-                    <li>{control}</li>
-                  {/each}
-                </ul>
-              {/if}
+        <div class="shortcut-groups">
+          {#each shortcutGroups as group (group.scope)}
+            <section class="shortcut-group">
+              <h4>{group.label}</h4>
+              <dl>
+                {#each group.entries as entry (entry.id)}
+                  <div class="shortcut-row">
+                    <dt>{entry.label}</dt>
+                    <dd><kbd>{entry.display}</kbd></dd>
+                  </div>
+                {/each}
+              </dl>
             </section>
           {/each}
-        </article>
+        </div>
       </div>
-    </div>
+    {:else if active}
+      <div
+        class="page"
+        id={`documentation-panel-${active.id}`}
+        role="tabpanel"
+        aria-labelledby={`documentation-tab-${active.id}`}
+      >
+        <header class="page-head">
+          <div>
+            <p class="eyebrow">{active.label} workspace</p>
+            <h3>{active.title}</h3>
+          </div>
+          <p class="summary">{active.summary}</p>
+        </header>
+
+        <div class="page-grid">
+          <figure>
+            <img src={active.image} alt={active.alt} />
+            <figcaption>{active.label} workspace.</figcaption>
+          </figure>
+
+          <article class="guide">
+            {#each active.sections as section (section.heading)}
+              <section class="doc-section">
+                <h4>{section.heading}</h4>
+                {#each section.paragraphs as paragraph (paragraph)}
+                  <p>{paragraph}</p>
+                {/each}
+                {#if section.controls}
+                  <h5>Controls</h5>
+                  <ul>
+                    {#each section.controls as control (control)}
+                      <li>{control}</li>
+                    {/each}
+                  </ul>
+                {/if}
+              </section>
+            {/each}
+          </article>
+        </div>
+      </div>
+    {/if}
   </div>
 </ModalDialog>
 
@@ -212,6 +279,86 @@
     color: var(--text-tertiary);
     font-size: var(--text-sm);
     line-height: var(--leading-ui);
+  }
+
+  .shortcuts-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .shortcut-groups {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+    padding-bottom: var(--space-3);
+  }
+
+  .shortcut-group {
+    min-width: 0;
+    padding: var(--space-3);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+  }
+
+  .shortcut-group h4 {
+    margin: 0 0 var(--space-2);
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+
+  .shortcut-group dl {
+    margin: 0;
+  }
+
+  .shortcut-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: var(--control-h);
+    border-top: var(--hairline) solid var(--border-subtle);
+  }
+
+  .shortcut-row:first-child {
+    border-top: 0;
+  }
+
+  .shortcut-row dt {
+    min-width: 0;
+    color: var(--text-secondary);
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+  }
+
+  .shortcut-row dd {
+    flex: 0 0 auto;
+    margin: 0;
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 24px;
+    padding: 2px 6px;
+    border: var(--hairline) solid var(--border-strong);
+    border-radius: var(--radius-xs);
+    background: var(--bg-raised);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    text-align: center;
+  }
+
+  @media (max-width: 760px) {
+    .shortcut-groups {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .guide {

@@ -1,4 +1,4 @@
-import { shortcut, type ShortcutId } from './shortcuts';
+import { MOD_KEY, shortcut, type ShortcutId } from './shortcuts';
 
 /** The region or editor that owns a command. */
 export type CommandScope = 'global' | 'active' | '3d' | 'uv' | 'paint' | 'shell';
@@ -18,8 +18,7 @@ export type CommandId =
   | 'selection.island'
   | 'selection.loop'
   | 'selection.all'
-  | 'selection.add'
-  | 'selection.subtract'
+  | 'selection.toggle'
   | 'tool.select'
   | 'tool.lasso'
   | 'tool.move'
@@ -30,6 +29,7 @@ export type CommandId =
   | 'transform.axisX'
   | 'transform.axisY'
   | 'transform.axisZ'
+  | 'snap.toggle'
   | 'mesh.extrude'
   | 'mesh.inset'
   | 'mesh.loopCut'
@@ -73,14 +73,13 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'file.open': { label: 'Open project', scope: 'global', shortcut: 'open', presentation: 'icon', bindings: [{ key: 'o', mod: true }] },
   'file.save': { label: 'Save project', scope: 'global', shortcut: 'save', presentation: 'icon', bindings: [{ key: 's', mod: true }] },
   'view.sidebar': { label: 'Toggle sidebar', scope: 'shell', presentation: 'icon' },
-  'selection.vertex': { label: 'Vertex', scope: 'active', presentation: 'text' },
-  'selection.edge': { label: 'Edge', scope: 'active', presentation: 'text' },
-  'selection.face': { label: 'Face', scope: 'active', presentation: 'text' },
+  'selection.vertex': { label: 'Vertex', scope: 'active', shortcut: 'vertexMode', presentation: 'text', bindings: [{ key: '1' }] },
+  'selection.edge': { label: 'Edge', scope: 'active', shortcut: 'edgeMode', presentation: 'text', bindings: [{ key: '2' }] },
+  'selection.face': { label: 'Face', scope: 'active', shortcut: 'faceMode', presentation: 'text', bindings: [{ key: '3' }] },
   'selection.island': { label: 'Island', scope: 'uv', presentation: 'text' },
   'selection.loop': { label: 'Loop', scope: 'active', presentation: 'text' },
   'selection.all': { label: 'All', scope: 'active', shortcut: 'selectAll', presentation: 'text', bindings: [{ key: 'a', mod: true }] },
-  'selection.add': { label: 'Add', scope: 'active', presentation: 'text' },
-  'selection.subtract': { label: 'Sub', scope: 'active', presentation: 'text' },
+  'selection.toggle': { label: 'Toggle', scope: 'active', presentation: 'text' },
   'tool.select': { label: 'Select', scope: 'active', presentation: 'icon' },
   'tool.lasso': { label: 'Lasso', scope: 'active', presentation: 'icon' },
   'tool.move': { label: 'Move', scope: 'active', shortcut: 'move', presentation: 'icon', bindings: [{ key: 'g' }] },
@@ -92,6 +91,7 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'transform.axisX': { label: 'X axis lock', scope: '3d', presentation: 'text', bindings: [{ key: 'x' }] },
   'transform.axisY': { label: 'Y axis lock', scope: '3d', presentation: 'text', bindings: [{ key: 'y' }] },
   'transform.axisZ': { label: 'Z axis lock', scope: '3d', presentation: 'text', bindings: [{ key: 'z' }] },
+  'snap.toggle': { label: 'Toggle grid snap', scope: '3d', shortcut: 'snap', presentation: 'text', bindings: [{ key: 'tab', shift: true }] },
   'mesh.extrude': { label: 'Extrude', scope: '3d', shortcut: 'extrude', presentation: 'icon-text', bindings: [{ key: 'e' }] },
   'mesh.inset': { label: 'Inset', scope: '3d', shortcut: 'inset', presentation: 'icon-text', bindings: [{ key: 'i' }] },
   'mesh.loopCut': { label: 'Loop cut', scope: '3d', shortcut: 'loopCut', presentation: 'icon-text', bindings: [{ key: 'l', shift: false }] },
@@ -123,6 +123,63 @@ export function commandTooltipFor(id: CommandId): string {
     : definition.label;
 }
 
+
+/** One shortcut row derived from central command metadata. */
+export interface ShortcutReferenceEntry {
+  readonly id: CommandId;
+  readonly label: string;
+  readonly scope: CommandScope;
+  readonly display: string;
+}
+
+function keyLabel(key: string): string {
+  if (key === ' ') return 'Space';
+  if (key === 'escape') return 'Esc';
+  if (key === 'delete') return 'Delete';
+  if (key === 'backspace') return '⌫';
+  if (key.length === 1) return key.toUpperCase();
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function bindingDisplay(binding: KeyBinding): string {
+  let prefix = '';
+  if (binding.mod) prefix += MOD_KEY;
+  if (binding.shift) prefix += '⇧';
+  if (binding.alt) prefix += '⌥';
+  return `${prefix}${keyLabel(binding.key)}`;
+}
+
+/** Build the shortcut reference directly from the command registry. */
+export function commandShortcutReference(): readonly ShortcutReferenceEntry[] {
+  const scopeOrder: Record<CommandScope, number> = {
+    global: 0,
+    shell: 1,
+    active: 2,
+    '3d': 3,
+    uv: 4,
+    paint: 5
+  };
+  return Object.entries(definitions)
+    .map(([id, definition]) => {
+      const display = definition.shortcut
+        ? shortcut(definition.shortcut).display
+        : definition.bindings?.[0]
+          ? bindingDisplay(definition.bindings[0])
+          : '';
+      return {
+        id: id as CommandId,
+        label: definition.label,
+        scope: definition.scope as CommandScope,
+        display
+      };
+    })
+    .filter((entry) => entry.display.length > 0)
+    .sort(
+      (a, b) =>
+        scopeOrder[a.scope] - scopeOrder[b.scope] ||
+        a.label.localeCompare(b.label)
+    );
+}
 
 function bindingMatches(binding: KeyBinding, event: KeyboardEvent): boolean {
   const key = event.key.toLowerCase();

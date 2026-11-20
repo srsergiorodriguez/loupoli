@@ -28,6 +28,8 @@ export interface InputRouterHost {
    */
   activateEditor(editor: '3d' | 'uv'): void;
   isUvActive(): boolean;
+  setSelectionMode(mode: 'vertex' | 'edge' | 'face'): void;
+  toggleSnap(): void;
   isAnnotationMode(): boolean;
   isPencilMode(): boolean;
   finishPenClick(): void;
@@ -570,6 +572,22 @@ export class InputRouter {
       case 'edit.redo':
         event.preventDefault();
         this.host.redo();
+        return;
+      case 'selection.vertex':
+      case 'selection.edge':
+      case 'selection.face':
+        event.preventDefault();
+        this.host.setSelectionMode(
+          matched === 'selection.vertex'
+            ? 'vertex'
+            : matched === 'selection.edge'
+              ? 'edge'
+              : 'face'
+        );
+        return;
+      case 'snap.toggle':
+        event.preventDefault();
+        this.host.toggleSnap();
         return;
       case 'selection.all':
         event.preventDefault();

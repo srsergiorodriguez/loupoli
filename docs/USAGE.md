@@ -50,18 +50,20 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Object row click | Make that object active. Shift/Cmd/Ctrl-click toggles multi-selection; the sticky **Multi-select objects** toggle does the same for pen/touch. |
 | Group row click | Select the group for numeric or gizmo transforms. Group children stay editable from the indented outliner rows. |
 | X/Y/Z while a vertex is selected | Toggle a world-axis lock for the next vertex drag. 44 px X/Y/Z chips provide the same control for pen/touch. |
-| Grid snap toggle/step | Snap object/vertex movement and action amounts from the status-bar control; world steps 0.01–1.0, with independent UV and rotation steps. |
+| Grid snap toggle/step | Snap object/vertex movement, gizmo rotation, and action amounts from the status-bar control; Shift+Tab toggles snapping, world steps 0.01–1.0, with independent UV and rotation steps. |
 | Move/Rotate/Scale handle | With an element selection, the gizmo sits at the selection median and drags the selected elements; otherwise it transforms the active object/group on that axis. Pen, mouse, and touch are supported. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | ActionDock | Tap/click Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. |
 | E / I | Arm Extrude / Inset for the current face selection. |
 | L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the selected edge loop. Loop Cut follows the selected edge; Loop Slide moves either way from its starting position. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
-| Shift, Cmd, or Ctrl + click | Add or remove an element from the current selection. |
+| 1 / 2 / 3 | Switch vertex, edge, or face selection mode. |
+| Shift+Tab | Toggle grid snapping. |
+| Shift, Cmd, or Ctrl + click | Toggle an element in the current selection. |
 | Right-drag | Pan the view. |
 | Lasso tool + drag | Select a screen-space region in the current element mode. |
-| Add toggle | Sticky additive selection for pen, mouse, and touch taps. |
-| Touch tap / drag | One-finger tap selects the current V/E/F element; dragging a handle or gizmo edits, while empty-space drag orbits unless the Lasso tool is active. With Add on, taps toggle the set. |
+| Toggle | Sticky additive/toggle selection for pen, mouse, and touch taps. Clicking a selected element removes it. |
+| Touch tap / drag | One-finger tap selects the current element mode; dragging a handle or gizmo edits, while empty-space drag orbits unless the Lasso tool is active. With Toggle on, taps toggle the set. |
 | Mouse LMB on empty canvas or a mesh face away from a handle | Orbit the camera. |
 | Alt/Option + LMB | Orbit. Useful for trackpads and one-button mice. |
 | Alt/Option + Shift + LMB | Pan. |

@@ -7,6 +7,8 @@ describe('shortcut metadata', () => {
     expect(shortcut('move').display).toBe('G');
     expect(shortcut('loopSlide').display).toBe('⇧L');
     expect(commandTooltip('Move', 'move')).toBe('Move — G');
+    expect(shortcut('vertexMode').display).toBe('1');
+    expect(shortcut('snap').display).toBe('⇧Tab');
     expect(commandTooltip('Lasso')).toBe('Lasso');
   });
 });

@@ -848,6 +848,13 @@ export class EditorRuntime {
     this.inputHost = {
       activateEditor: (editor) => this.setActiveEditor(editor),
       isUvActive: () => this.activeEditor !== '3d',
+      setSelectionMode: (mode) => {
+        this.setSelectionMode(mode);
+        if (this.uvOpen) {
+          this.setUvSelectionMode(mode);
+        }
+      },
+      toggleSnap: () => this.setSnapEnabled(!this.snapEnabled),
       isAnnotationMode: () => this.annotationMode,
       isPencilMode: () => this.pencilMode,
       finishPenClick: () => this.finishPenClick(),

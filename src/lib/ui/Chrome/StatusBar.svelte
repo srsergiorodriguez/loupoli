@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import SnapPopover from './SnapPopover.svelte';
+  import { shortcut } from '../../input/shortcuts';
 
   /** Session projection used by the status strip. */
   interface Props {
@@ -134,6 +135,8 @@
       class:is-active={session.snapshot.snapEnabled}
       aria-expanded={snapOpen}
       aria-haspopup="dialog"
+      aria-keyshortcuts="Shift+Tab"
+      title={`Grid snapping — ${shortcut('snap').display}`}
       onclick={() => (snapOpen = !snapOpen)}
     >
       <span class="snap-dot" aria-hidden="true"></span>

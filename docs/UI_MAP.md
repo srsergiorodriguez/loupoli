@@ -18,7 +18,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Application Bar** | Identity, project file state, global document actions | Brand, project name, save state, open, save, undo, redo, about, documentation, sidebar toggle |
 | **Workspace Tabs** | Switch the working context | Model, UV, Paint, Light, Animate, Render. Reserved: Export interchange workspace |
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale |
-| **Selection Bar** | Element mode and selection combination | V/E/F, Island (UV only), Loop (3D Edge only), All, Add, Sub |
+| **Selection Bar** | Element mode and selection combination | 1/2/3, Island (UV only), Loop (3D Edge only), All, Toggle |
 | **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock; Light workspace adds selectable/draggable light markers and arrow-tip direction handles |
 | **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width; used by UV, Paint, and Render preview |
 | **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV, Paint, and Render preview |

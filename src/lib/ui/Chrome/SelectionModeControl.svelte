@@ -20,19 +20,19 @@
   }>>([
     {
       id: 'vertex',
-      short: 'V',
+      short: '1',
       label: command('selection.vertex').label,
       command: 'selection.vertex'
     },
     {
       id: 'edge',
-      short: 'E',
+      short: '2',
       label: command('selection.edge').label,
       command: 'selection.edge'
     },
     {
       id: 'face',
-      short: 'F',
+      short: '3',
       label: command('selection.face').label,
       command: 'selection.face'
     },
@@ -64,9 +64,9 @@
     return session.snapshot.uvSelectionMode === id;
   }
 
-  function toggleCombine(mode: 'add' | 'subtract'): void {
+  function toggleCombine(): void {
     session.setSelectionCombineMode(
-      session.snapshot.selectionCombineMode === mode ? 'replace' : mode
+      session.snapshot.selectionCombineMode === 'add' ? 'replace' : 'add'
     );
   }
 </script>
@@ -83,7 +83,7 @@
       class:active={isActive(mode.id)}
       aria-pressed={isActive(mode.id)}
       aria-label={`${mode.label} selection mode`}
-      title={`${mode.label} selection mode`}
+      title={commandTooltipFor(mode.command)}
       onclick={() => chooseMode(mode.id)}
     >
       <span class="mode-key" aria-hidden="true">{mode.short}</span>
@@ -118,22 +118,11 @@
     class="mode-button"
     class:active={session.snapshot.selectionCombineMode === 'add'}
     aria-pressed={session.snapshot.selectionCombineMode === 'add'}
-    aria-label="Add to selection"
-    title="Add to selection"
-    onclick={() => toggleCombine('add')}
+    aria-label="Toggle selection"
+    title={commandTooltipFor('selection.toggle')}
+    onclick={toggleCombine}
   >
-    <span class="mode-label mode-label--combine">{command('selection.add').label}</span>
-  </button>
-  <button
-    type="button"
-    class="mode-button"
-    class:active={session.snapshot.selectionCombineMode === 'subtract'}
-    aria-pressed={session.snapshot.selectionCombineMode === 'subtract'}
-    aria-label="Subtract from selection"
-    title="Subtract from selection"
-    onclick={() => toggleCombine('subtract')}
-  >
-    <span class="mode-label mode-label--combine">{command('selection.subtract').label}</span>
+    <span class="mode-label mode-label--combine">{command('selection.toggle').label}</span>
   </button>
 </div>
 

@@ -33,7 +33,11 @@ export type ShortcutId =
   | 'extrude'
   | 'inset'
   | 'loopCut'
-  | 'loopSlide';
+  | 'loopSlide'
+  | 'vertexMode'
+  | 'edgeMode'
+  | 'faceMode'
+  | 'snap';
 
 const definitions: Record<ShortcutId, Omit<ShortcutDefinition, 'id'>> = {
   undo: { label: 'Undo', display: `${MOD_KEY}Z` },
@@ -55,7 +59,11 @@ const definitions: Record<ShortcutId, Omit<ShortcutDefinition, 'id'>> = {
   extrude: { label: 'Extrude', display: 'E' },
   inset: { label: 'Inset', display: 'I' },
   loopCut: { label: 'Loop cut', display: 'L' },
-  loopSlide: { label: 'Loop slide', display: '⇧L' }
+  loopSlide: { label: 'Loop slide', display: '⇧L' },
+  vertexMode: { label: 'Vertex mode', display: '1' },
+  edgeMode: { label: 'Edge mode', display: '2' },
+  faceMode: { label: 'Face mode', display: '3' },
+  snap: { label: 'Toggle grid snap', display: '⇧Tab' }
 };
 
 /** Look up one shortcut definition. */
