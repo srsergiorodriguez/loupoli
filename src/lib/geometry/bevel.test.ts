@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createCubeMesh, createGridMesh } from './primitives';
-import { bevelEdge } from './bevel';
+import { bevelEdge, bevelEdgeWithCorners } from './bevel';
 import type { HalfEdgeMesh } from './HalfEdgeMesh';
 
 function signedVolume(mesh: HalfEdgeMesh): number {
@@ -63,5 +63,43 @@ describe('edge bevel', () => {
     expect(() => bevelEdge(cube, 0, 10)).toThrow(/too large/);
     const grid = createGridMesh(4, 4);
     expect(() => bevelEdge(grid, 0, 0.1)).toThrow(/interior/);
+  });
+});
+
+describe('vertex bevel', () => {
+  it('cuts a cube corner into a closed corner polygon', async () => {
+    const { bevelVertex } = await import('./bevel');
+    const source = createCubeMesh(2);
+    const result = bevelVertex(source, 0, 0.3);
+    result.mesh.validate();
+    expect(result.mesh.faceCount).toBe(source.faceCount + 1);
+    expect(result.mesh.vertexCount).toBe(source.vertexCount + 2);
+    expect(result.mesh.boundaryEdgeCount).toBe(0);
+    expect(result.mesh.faceVertexCount(result.cornerFace)).toBe(3);
+  });
+});
+
+describe('edge bevel with corners', () => {
+  it('removes both sharp cube endpoints on every cube edge', () => {
+    const source = createCubeMesh(2);
+    for (let edge = 0; edge < source.edgeCount; edge += 1) {
+      const halfEdge = source.edgeHalfEdge[edge];
+      const a = source.getVertexPosition(source.heOrigin[halfEdge]);
+      const b = source.getVertexPosition(
+        source.heOrigin[source.heNext[halfEdge]]
+      );
+      const result = bevelEdgeWithCorners(source, edge, 0.25);
+      result.mesh.validate();
+      expect(result.mesh.boundaryEdgeCount).toBe(0);
+      for (let vertex = 0; vertex < result.mesh.vertexCount; vertex += 1) {
+        const p = result.mesh.getVertexPosition(vertex);
+        expect(
+          Math.hypot(p[0] - a[0], p[1] - a[1], p[2] - a[2])
+        ).toBeGreaterThan(1e-5);
+        expect(
+          Math.hypot(p[0] - b[0], p[1] - b[1], p[2] - b[2])
+        ).toBeGreaterThan(1e-5);
+      }
+    }
   });
 });

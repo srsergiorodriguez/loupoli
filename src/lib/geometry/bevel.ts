@@ -361,3 +361,289 @@ export function bevelEdge(
     chamferFace: faces.length - 3
   };
 }
+
+/** Result of one vertex bevel operation. */
+export interface BevelVertexResult {
+  readonly mesh: HalfEdgeMesh;
+  /** New corner polygon in the rebuilt mesh. */
+  readonly cornerFace: number;
+  /** Clamped distance used along every incident edge. */
+  readonly distance: number;
+}
+
+/**
+ * Bevel one interior vertex into a planar corner polygon.
+ *
+ * Each incident edge is split at the same distance from the vertex. The
+ * surrounding faces replace the vertex with the two split points, and a new
+ * n-gon closes the corner. This is the operation needed to remove the sharp
+ * endpoint left by a single-edge chamfer.
+ */
+export function bevelVertex(
+  mesh: HalfEdgeMesh,
+  vertex: number,
+  amount: number
+): BevelVertexResult {
+  if (!Number.isInteger(vertex) || vertex < 0 || vertex >= mesh.vertexCount) {
+    throw new RangeError(`Vertex ${vertex} is outside the mesh.`);
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Bevel amount must be a positive finite number.');
+  }
+  const startHalfEdge = mesh.vertexOut[vertex];
+  if (startHalfEdge < 0) {
+    throw new Error('Bevel requires a connected interior vertex.');
+  }
+
+  const outgoing: number[] = [];
+  let current = startHalfEdge;
+  do {
+    if (mesh.heFace[current] < 0 || mesh.heFace[mesh.heTwin[current]] < 0) {
+      throw new Error('Bevel requires an interior vertex without an open boundary.');
+    }
+    outgoing.push(current);
+    let previous = current;
+    while (mesh.heNext[previous] !== current) {
+      previous = mesh.heNext[previous];
+    }
+    const twin = mesh.heTwin[previous];
+    if (twin < 0) {
+      throw new Error('Bevel requires an interior vertex without an open boundary.');
+    }
+    current = twin;
+  } while (current !== startHalfEdge && outgoing.length <= mesh.halfEdgeCount);
+
+  const incidentEdges = outgoing.map((halfEdge) => mesh.heEdge[halfEdge]);
+  if (new Set(incidentEdges).size !== outgoing.length) {
+    throw new Error('Bevel found a non-manifold vertex.');
+  }
+
+  const vertexPosition = mesh.getVertexPosition(vertex);
+  const edgeLengths = outgoing.map((halfEdge) => {
+    const next = mesh.heOrigin[mesh.heNext[halfEdge]];
+    const position = mesh.getVertexPosition(next);
+    return Math.hypot(
+      position[0] - vertexPosition[0],
+      position[1] - vertexPosition[1],
+      position[2] - vertexPosition[2]
+    );
+  });
+  const distance = Math.min(amount, Math.min(...edgeLengths) * 0.45);
+  if (distance <= 1e-5) {
+    throw new Error('Bevel amount is too large or the vertex edges are too short.');
+  }
+
+  const edgePoint = new Map<number, MeshCornerSpec>();
+  for (const halfEdge of outgoing) {
+    const edge = mesh.heEdge[halfEdge];
+    const next = mesh.heOrigin[mesh.heNext[halfEdge]];
+    const position = mesh.getVertexPosition(next);
+    const length = Math.hypot(
+      position[0] - vertexPosition[0],
+      position[1] - vertexPosition[1],
+      position[2] - vertexPosition[2]
+    );
+    const t = distance / Math.max(length, 1e-9);
+    const corner = mesh.getCornerUv(halfEdge);
+    const nextCorner = mesh.getCornerUv(mesh.heNext[halfEdge]);
+    edgePoint.set(edge, {
+      position: [
+        vertexPosition[0] + (position[0] - vertexPosition[0]) * t,
+        vertexPosition[1] + (position[1] - vertexPosition[1]) * t,
+        vertexPosition[2] + (position[2] - vertexPosition[2]) * t
+      ],
+      uv: [
+        corner[0] + (nextCorner[0] - corner[0]) * t,
+        corner[1] + (nextCorner[1] - corner[1]) * t
+      ]
+    });
+  }
+
+  const faces: MeshFaceSpec[] = [];
+  const cutNext = new Map<number, number>();
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const corners = faceCorners(mesh, face);
+    const index = corners.findIndex((corner) => corner.vertex === vertex);
+    if (index < 0) {
+      faces.push({
+        corners: corners.map(cornerSpec),
+        material: mesh.faceMaterial[face]
+      });
+      continue;
+    }
+    const previous = corners[(index - 1 + corners.length) % corners.length];
+    const incomingEdge = mesh.heEdge[previous.halfEdge];
+    const outgoingEdge = mesh.heEdge[corners[index].halfEdge];
+    const incomingPoint = edgePoint.get(incomingEdge);
+    const outgoingPoint = edgePoint.get(outgoingEdge);
+    if (!incomingPoint || !outgoingPoint) {
+      throw new Error('Bevel could not resolve an incident edge.');
+    }
+    // The face keeps a notch cut across the corner: prev -> inPoint ->
+    // outPoint -> next. The corner face will use the opposite edge.
+    cutNext.set(outgoingEdge, incomingEdge);
+    const output: MeshCornerSpec[] = [];
+    for (const corner of corners) {
+      if (corner.vertex !== vertex) {
+        output.push(cornerSpec(corner));
+        continue;
+      }
+      const incoming = edgePoint.get(edgeOfCorner(mesh, previous));
+      const outgoing = edgePoint.get(edgeOfCorner(mesh, corner));
+      if (!incoming || !outgoing) {
+        throw new Error('Bevel could not split an incident face.');
+      }
+      output.push(detach(incoming), detach(outgoing));
+    }
+    faces.push({ corners: output, material: mesh.faceMaterial[face] });
+  }
+
+  // The corner polygon is opposite every face's cut edge (outPoint -> inPoint).
+  const corner: MeshCornerSpec[] = [];
+  let cursor: number | undefined = incidentEdges[0];
+  const seen = new Set<number>();
+  while (cursor !== undefined && !seen.has(cursor)) {
+    seen.add(cursor);
+    const point = edgePoint.get(cursor);
+    if (!point) {
+      throw new Error('Bevel could not build the corner polygon.');
+    }
+    corner.push(detach(point));
+    cursor = cutNext.get(cursor);
+  }
+  if (seen.size !== incidentEdges.length) {
+    throw new Error('Bevel could not close the vertex corner.');
+  }
+  faces.push({
+    corners: corner,
+    material: mesh.faceMaterial[mesh.heFace[startHalfEdge]]
+  });
+
+  const result = HalfEdgeMesh.fromPolygons(faces);
+  return { mesh: result, cornerFace: faces.length - 1, distance };
+}
+
+/** Edge index of one face corner. */
+function edgeOfCorner(mesh: HalfEdgeMesh, corner: FaceCorner): number {
+  return mesh.heEdge[corner.halfEdge];
+}
+
+/**
+ * Bevel one edge and cut both endpoint corners.
+ *
+ * The endpoint vertices are chamfered first, then the shortened edge between
+ * the new corner polygons is beveled. This removes the sharp original corner
+ * points while keeping a single undoable mesh replacement.
+ */
+export function bevelEdgeWithCorners(
+  mesh: HalfEdgeMesh,
+  edge: number,
+  amount: number
+): BevelEdgeResult {
+  if (!Number.isInteger(edge) || edge < 0 || edge >= mesh.edgeCount) {
+    throw new RangeError(`Edge ${edge} is outside the mesh.`);
+  }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error('Bevel amount must be a positive finite number.');
+  }
+  const halfEdge = mesh.edgeHalfEdge[edge];
+  const A = mesh.heOrigin[halfEdge];
+  const B = mesh.heOrigin[mesh.heNext[halfEdge]];
+  const a = mesh.getVertexPosition(A);
+  const b = mesh.getVertexPosition(B);
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  if (length <= 1e-8) {
+    throw new Error('Bevel requires a non-zero length edge.');
+  }
+  const direction = [
+    (b[0] - a[0]) / length,
+    (b[1] - a[1]) / length,
+    (b[2] - a[2]) / length
+  ] as Vec3;
+
+  const firstCorner = bevelVertex(mesh, A, amount);
+  let secondVertex = -1;
+  for (let vertex = 0; vertex < firstCorner.mesh.vertexCount; vertex += 1) {
+    const point = firstCorner.mesh.getVertexPosition(vertex);
+    if (Math.hypot(point[0] - b[0], point[1] - b[1], point[2] - b[2]) < 1e-5) {
+      secondVertex = vertex;
+      break;
+    }
+  }
+  if (secondVertex < 0) {
+    throw new Error('Bevel could not locate the second endpoint.');
+  }
+  const secondCorner = bevelVertex(firstCorner.mesh, secondVertex, amount);
+  const targetA: Vec3 = [
+    a[0] + direction[0] * firstCorner.distance,
+    a[1] + direction[1] * firstCorner.distance,
+    a[2] + direction[2] * firstCorner.distance
+  ];
+  const targetB: Vec3 = [
+    b[0] - direction[0] * secondCorner.distance,
+    b[1] - direction[1] * secondCorner.distance,
+    b[2] - direction[2] * secondCorner.distance
+  ];
+  const findVertex = (target: Vec3): number => {
+    for (let vertex = 0; vertex < secondCorner.mesh.vertexCount; vertex += 1) {
+      const point = secondCorner.mesh.getVertexPosition(vertex);
+      if (
+        Math.hypot(
+          point[0] - target[0],
+          point[1] - target[1],
+          point[2] - target[2]
+        ) < 1e-4
+      ) {
+        return vertex;
+      }
+    }
+    return -1;
+  };
+  const start = findVertex(targetA);
+  const end = findVertex(targetB);
+  if (start < 0 || end < 0) {
+    throw new Error('Bevel could not locate the shortened edge.');
+  }
+  let shortenedEdge = -1;
+  for (let candidate = 0; candidate < secondCorner.mesh.edgeCount; candidate += 1) {
+    const [from, to] = secondCorner.mesh.getEdgeVertices(candidate);
+    if ((from === start && to === end) || (from === end && to === start)) {
+      shortenedEdge = candidate;
+      break;
+    }
+  }
+  if (shortenedEdge < 0) {
+    throw new Error('Bevel could not find the shortened edge.');
+  }
+  const remaining = Math.hypot(
+    targetB[0] - targetA[0],
+    targetB[1] - targetA[1],
+    targetB[2] - targetA[2]
+  );
+  if (remaining <= 1e-5) {
+    throw new Error('Bevel would consume the whole edge.');
+  }
+  // The corner cuts leave less room for the edge chamfer. Try the requested
+  // width first, then reduce it rather than leaving a failed operation.
+  let candidateAmount = Math.min(amount, remaining * 0.42);
+  let result: BevelEdgeResult | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      result = bevelEdge(secondCorner.mesh, shortenedEdge, candidateAmount);
+      break;
+    } catch (error) {
+      lastError = error;
+      candidateAmount *= 0.5;
+      if (candidateAmount < 0.001) {
+        break;
+      }
+    }
+  }
+  if (!result) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('The bevel could not fit the shortened edge.');
+  }
+  return result;
+}

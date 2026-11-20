@@ -19,7 +19,7 @@ import {
   type Modifier,
   type ModifierKind
 } from '../geometry/modifiers';
-import { bevelEdge } from '../geometry/bevel';
+import { bevelEdgeWithCorners } from '../geometry/bevel';
 import {
   bridgeSelectedEdges,
   deleteSelectedElements,
@@ -10018,6 +10018,34 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Whether every face around a vertex is present on both sides of its edges. */
+  private isInteriorVertex(mesh: HalfEdgeMesh, vertex: number): boolean {
+    const start = mesh.vertexOut[vertex];
+    if (start < 0) {
+      return false;
+    }
+    let halfEdge = start;
+    do {
+      if (
+        mesh.heFace[halfEdge] < 0 ||
+        mesh.heTwin[halfEdge] < 0 ||
+        mesh.heFace[mesh.heTwin[halfEdge]] < 0
+      ) {
+        return false;
+      }
+      let previous = halfEdge;
+      while (mesh.heNext[previous] !== halfEdge) {
+        previous = mesh.heNext[previous];
+      }
+      const twin = mesh.heTwin[previous];
+      if (twin < 0) {
+        return false;
+      }
+      halfEdge = twin;
+    } while (halfEdge !== start);
+    return true;
+  }
+
   /** Whether the current selection can be beveled without changing modes. */
   private canBevelSelection(): boolean {
     const node = this.getActiveNode();
@@ -10041,7 +10069,15 @@ export class EditorRuntime {
     return (
       node.mesh.heFace[halfEdge] >= 0 &&
       twin >= 0 &&
-      node.mesh.heFace[twin] >= 0
+      node.mesh.heFace[twin] >= 0 &&
+      this.isInteriorVertex(
+        node.mesh,
+        node.mesh.heOrigin[halfEdge]
+      ) &&
+      this.isInteriorVertex(
+        node.mesh,
+        node.mesh.heOrigin[node.mesh.heNext[halfEdge]]
+      )
     );
   }
 
@@ -10257,7 +10293,7 @@ export class EditorRuntime {
       if (drag.edgeIndex === null) {
         throw new Error('Bevel requires one edge.');
       }
-      return bevelEdge(drag.before, drag.edgeIndex, value).mesh;
+      return bevelEdgeWithCorners(drag.before, drag.edgeIndex, value).mesh;
     }
     if (drag.kind === 'loop-cut') {
       if (drag.edgeIndex === null) {
