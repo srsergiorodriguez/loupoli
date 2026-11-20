@@ -155,6 +155,7 @@ import {
 } from '../io/obj';
 import { exportGlb, importGlb } from '../io/gltf';
 import { SetAnimationCommand } from './commands/AnimationCommands';
+import { AudioAssetCommand } from './commands/AudioAssetCommand';
 import {
   animationExportFrames,
   MAX_OBJ_FRAME_EXPORT
@@ -249,6 +250,7 @@ import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import type {
   AnimationInterpolation,
   AnimationSnapshot,
+  AudioClipSnapshot,
   AnimationTargetKind,
   AnimationTrack,
   CameraPose,
@@ -266,6 +268,12 @@ import {
   videoMimeFor
 } from '../render/videoExport';
 import type { RenderShading, RenderUpscale } from '../render/renderSettings';
+import {
+  AudioAsset,
+  MAX_AUDIO_ASSETS,
+  MAX_AUDIO_BYTES,
+  audioPeaksFromChannels
+} from '../audio/AudioAsset';
 import {
   decodeLpoly,
   encodeLpoly,
@@ -801,6 +809,11 @@ export class EditorRuntime {
   private animationCameraPose = new Map<string, CameraPose>();
   private animationLightPose = new Map<string, LightPose>();
   private animationKeyClipboard: AnimationKeyClipboardEntry[] = [];
+  private audioContext: AudioContext | null = null;
+  private readonly audioBuffers = new Map<string, AudioBuffer>();
+  private audioSource: AudioBufferSourceNode | null = null;
+  private audioGain: GainNode | null = null;
+  private audioPlaybackToken = 0;
   private animationRaf = 0;
   private animationClockStart = 0;
   private animationClockFrame = 0;
@@ -1149,6 +1162,14 @@ export class EditorRuntime {
       animationEndFrame: this.document.animation.endFrame,
       animationFps: this.document.animation.fps,
       animationClipId: this.document.animation.activeClipId,
+      audioAssets: this.document.audioAssets.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        mime: asset.mime,
+        duration: asset.duration,
+        peaks: Array.from(asset.peaks)
+      })),
+      activeClipAudio: this.activeAudioSummary(),
       animationClips: this.document.animation.clips.map((clip) => ({
         id: clip.id,
         name: clip.name,
@@ -7106,6 +7127,268 @@ export class EditorRuntime {
     return removed;
   }
 
+  /** Snapshot-safe summary of the active clip's audio placement. */
+  private activeAudioSummary(): import('./types').AudioClipSummary | null {
+    const clip = this.document.animation.activeClip;
+    const placement = clip.audio;
+    if (!placement) {
+      return null;
+    }
+    const asset = this.document.getAudioAsset(placement.assetId);
+    if (!asset) {
+      return null;
+    }
+    return {
+      assetId: asset.id,
+      name: asset.name,
+      duration: asset.duration,
+      startFrame: placement.startFrame,
+      trimStart: placement.trimStart,
+      trimEnd: placement.trimEnd,
+      gain: placement.gain,
+      muted: placement.muted
+    };
+  }
+
+  /** Import and decode one audio file, attaching it to the active clip. */
+  async importAudioFile(file: File): Promise<void> {
+    if (this.fileBusy) {
+      return;
+    }
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      if (this.document.audioAssets.length >= MAX_AUDIO_ASSETS) {
+        throw new Error(`A project supports at most ${MAX_AUDIO_ASSETS} audio assets.`);
+      }
+      if (file.size < 1 || file.size > MAX_AUDIO_BYTES) {
+        throw new Error('Audio file is empty or larger than the 32 MB limit.');
+      }
+      const context = this.ensureAudioContext();
+      if (!context) {
+        throw new Error('Audio is not available in this WebView.');
+      }
+      const raw = await file.arrayBuffer();
+      const buffer = await context.decodeAudioData(raw.slice(0));
+      if (
+        !Number.isFinite(buffer.duration) ||
+        buffer.duration <= 0 ||
+        buffer.duration > 600
+      ) {
+        throw new Error('Audio duration must be between 0 and 600 seconds.');
+      }
+      const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) =>
+        buffer.getChannelData(index)
+      );
+      const asset = new AudioAsset(
+        file.name.replace(/\.[^.]+$/, '') || 'Audio',
+        file.type,
+        buffer.duration,
+        new Uint8Array(raw),
+        audioPeaksFromChannels(channels)
+      );
+      const animation = this.document.animation;
+      const clip = animation.activeClip;
+      const before = animation.snapshot();
+      const after = this.animationSnapshotWithAudio(before, clip.id, {
+        assetId: asset.id,
+        startFrame: clip.startFrame,
+        trimStart: 0,
+        trimEnd: asset.duration,
+        gain: 1,
+        muted: false
+      });
+      this.history.execute(
+        new CompositeCommand('Add audio', [
+          new AudioAssetCommand(this.document, asset, true, 'Add audio'),
+          new SetAnimationCommand(animation, before, after, 'Add audio')
+        ])
+      );
+      this.audioBuffers.set(asset.id, buffer);
+      this.autosave.markTextureDirty();
+      if (this.animationPlaying) {
+        void this.startClipAudio(this.animationFrame);
+      }
+      this.notify('success', 'Audio added', `${asset.name} · ${buffer.duration.toFixed(1)}s`);
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.notify('error', 'Audio import failed', this.projectError);
+    } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
+  }
+
+  /** Mute or unmute the active clip's audio. */
+  setClipAudioMuted(muted: boolean): void {
+    this.applyClipAudio({ muted });
+  }
+
+  /** Set active clip audio gain. */
+  setClipAudioGain(gain: number): void {
+    if (!Number.isFinite(gain)) {
+      return;
+    }
+    this.applyClipAudio({ gain: Math.max(0, Math.min(2, gain)) });
+  }
+
+  /** Remove the audio placement from the active clip. */
+  removeClipAudio(): void {
+    const animation = this.document.animation;
+    const clip = animation.activeClip;
+    if (!clip.audio) {
+      return;
+    }
+    this.stopClipAudio();
+    const before = animation.snapshot();
+    const after = this.animationSnapshotWithAudio(before, clip.id, null);
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Remove audio')
+    );
+    this.publish();
+  }
+
+  private animationSnapshotWithAudio(
+    snapshot: AnimationSnapshot,
+    clipId: string,
+    audio: AudioClipSnapshot | null
+  ): AnimationSnapshot {
+    return {
+      ...snapshot,
+      clips: (snapshot.clips ?? []).map((clip) =>
+        clip.id === clipId
+          ? { ...clip, ...(audio ? { audio } : { audio: null }) }
+          : clip
+      )
+    };
+  }
+
+  private applyClipAudio(patch: Partial<AudioClipSnapshot>): void {
+    const animation = this.document.animation;
+    const clip = animation.activeClip;
+    const current = clip.audio;
+    if (!current) {
+      return;
+    }
+    const next = { ...current, ...patch };
+    if (next.trimEnd <= next.trimStart) {
+      return;
+    }
+    const before = animation.snapshot();
+    const after = this.animationSnapshotWithAudio(before, clip.id, next);
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Edit audio')
+    );
+    if (this.animationPlaying) {
+      void this.startClipAudio(this.animationFrame);
+    }
+  }
+
+  private ensureAudioContext(): AudioContext | null {
+    if (this.audioContext) {
+      return this.audioContext;
+    }
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!Ctor) {
+      return null;
+    }
+    this.audioContext = new Ctor();
+    return this.audioContext;
+  }
+
+  private async audioBufferFor(asset: AudioAsset): Promise<AudioBuffer | null> {
+    const cached = this.audioBuffers.get(asset.id);
+    if (cached) {
+      return cached;
+    }
+    const context = this.ensureAudioContext();
+    if (!context) {
+      return null;
+    }
+    try {
+      const copy = asset.bytes.slice();
+      const buffer = await context.decodeAudioData(copy.buffer);
+      this.audioBuffers.clear();
+      this.audioBuffers.set(asset.id, buffer);
+      return buffer;
+    } catch {
+      return null;
+    }
+  }
+
+  private stopAudioSource(): void {
+    if (this.audioSource) {
+      try {
+        this.audioSource.stop();
+      } catch {
+        // A source that already ended cannot be stopped again.
+      }
+      this.audioSource.disconnect();
+      this.audioSource = null;
+    }
+    if (this.audioGain) {
+      this.audioGain.disconnect();
+      this.audioGain = null;
+    }
+  }
+
+  private stopClipAudio(): void {
+    this.audioPlaybackToken += 1;
+    this.stopAudioSource();
+  }
+
+  private async startClipAudio(frame: number): Promise<void> {
+    this.stopAudioSource();
+    const token = ++this.audioPlaybackToken;
+    const clip = this.document.animation.activeClip;
+    const placement = clip.audio;
+    if (!placement || placement.muted) {
+      return;
+    }
+    const asset = this.document.getAudioAsset(placement.assetId);
+    if (!asset) {
+      return;
+    }
+    const context = this.ensureAudioContext();
+    if (!context) {
+      return;
+    }
+    await context.resume();
+    const buffer = await this.audioBufferFor(asset);
+    if (!buffer || token !== this.audioPlaybackToken) {
+      return;
+    }
+    const fps = Math.max(1, this.document.animation.fps);
+    const at = Math.max(clip.startFrame, Math.min(clip.endFrame, frame));
+    const delay = Math.max(0, (placement.startFrame - at) / fps);
+    const elapsed = Math.max(0, at - placement.startFrame) / fps;
+    const offset = placement.trimStart + elapsed;
+    const available = placement.trimEnd - offset;
+    const clipRemaining =
+      (clip.endFrame - Math.max(at, placement.startFrame)) / fps;
+    const duration = Math.min(available, clipRemaining);
+    if (duration <= 0.001) {
+      return;
+    }
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const gain = context.createGain();
+    gain.gain.value = placement.gain;
+    source.connect(gain).connect(context.destination);
+    this.audioSource = source;
+    this.audioGain = gain;
+    source.onended = () => {
+      if (this.audioSource === source) {
+        this.audioSource = null;
+      }
+    };
+    source.start(context.currentTime + delay, offset, duration);
+  }
+
   /** Set whether playback loops at the end of the range. */
   setAnimationLoop(loop: boolean): void {
     this.animationLoop = loop;
@@ -7668,12 +7951,14 @@ export class EditorRuntime {
     this.animationPlaying = true;
     this.animationClockStart = performance.now();
     this.animationClockFrame = this.animationFrame;
+    void this.startClipAudio(this.animationFrame);
     this.publish();
     const tick = (now: number): void => {
       if (!this.animationPlaying) {
         return;
       }
       const elapsed = (now - this.animationClockStart) / 1000;
+      const previousFrame = this.animationFrame;
       let next =
         this.animationClockFrame + elapsed * this.document.animation.fps;
       const duration =
@@ -7688,6 +7973,9 @@ export class EditorRuntime {
         }
       }
       this.animationFrame = next;
+      if (next < previousFrame) {
+        void this.startClipAudio(next);
+      }
       this.applyAnimationPose();
       if (next >= this.document.animation.endFrame && !this.animationLoop) {
         this.stopAnimationLoop();
@@ -7720,6 +8008,7 @@ export class EditorRuntime {
       this.animationRaf = 0;
     }
     this.animationPlaying = false;
+    this.stopClipAudio();
   }
 
   /** Clear the preview pose when leaving animation-oriented views. */
@@ -11202,6 +11491,10 @@ export class EditorRuntime {
     this.autosave.dispose();
     this.renderer.dispose();
     this.textureLibrary.dispose();
+    this.stopClipAudio();
+    this.audioBuffers.clear();
+    void this.audioContext?.close();
+    this.audioContext = null;
     this.renderPreviewSource = null;
   }
 
@@ -13943,6 +14236,13 @@ export class EditorRuntime {
     this.refreshMotionLocks();
     this.pruneUvSelection();
     this.renderer.refreshTexture();
+    if (
+      event.command instanceof AudioAssetCommand ||
+      (event.command instanceof CompositeCommand &&
+        event.command.label === 'Add audio')
+    ) {
+      this.autosave.markTextureDirty();
+    }
     if (
       event.command instanceof TextureAssetCommand ||
       event.command instanceof PaintTextureCommand ||

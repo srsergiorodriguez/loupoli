@@ -113,6 +113,55 @@ export interface LightAnimationTrackSnapshot {
   readonly keyframes: readonly LightAnimationKeyframeSnapshot[];
 }
 
+/** One audio placement attached to an animation clip. */
+export interface AudioClipSnapshot {
+  readonly assetId: string;
+  readonly startFrame: number;
+  readonly trimStart: number;
+  readonly trimEnd: number;
+  readonly gain: number;
+  readonly muted: boolean;
+}
+
+/** Normalize and clone one clip audio placement. */
+export function normalizeAudioClip(
+  value: AudioClipSnapshot,
+  duration: number
+): AudioClipSnapshot {
+  if (
+    typeof value.assetId !== 'string' ||
+    value.assetId.length === 0 ||
+    !Number.isFinite(duration) ||
+    duration <= 0
+  ) {
+    throw new Error('Audio clip placement is invalid.');
+  }
+  const trimStart = Math.max(
+    0,
+    Math.min(duration, Number.isFinite(value.trimStart) ? value.trimStart : 0)
+  );
+  const trimEnd = Math.max(
+    trimStart + 0.01,
+    Math.min(
+      duration,
+      Number.isFinite(value.trimEnd) ? value.trimEnd : duration
+    )
+  );
+  const gain = Number.isFinite(value.gain)
+    ? Math.max(0, Math.min(2, value.gain))
+    : 1;
+  return {
+    assetId: value.assetId,
+    startFrame: Number.isInteger(value.startFrame)
+      ? Math.max(0, value.startFrame)
+      : 0,
+    trimStart,
+    trimEnd,
+    gain,
+    muted: value.muted === true
+  };
+}
+
 /** One independently named animation clip. */
 export interface AnimationClipSnapshot {
   readonly id: string;
@@ -125,6 +174,7 @@ export interface AnimationClipSnapshot {
   readonly meshTracks?: readonly MeshMotionTrackSnapshot[];
   readonly cameraTracks?: readonly CameraAnimationTrackSnapshot[];
   readonly lightTracks?: readonly LightAnimationTrackSnapshot[];
+  readonly audio?: AudioClipSnapshot | null;
 }
 
 /**
@@ -1028,6 +1078,7 @@ export class AnimationClip {
   readonly meshTracks: MeshMotionTrack[] = [];
   readonly cameraTracks: CameraAnimationTrack[] = [];
   readonly lightTracks: LightAnimationTrack[] = [];
+  audio: AudioClipSnapshot | null = null;
 
   constructor(
     name = 'Animation 1',
@@ -1065,6 +1116,9 @@ export class AnimationClip {
     clip.lightTracks.push(
       ...(snapshot.lightTracks ?? []).map(LightAnimationTrack.fromSnapshot)
     );
+    if (snapshot.audio) {
+      clip.audio = { ...snapshot.audio };
+    }
     return clip;
   }
 
@@ -1246,7 +1300,8 @@ export class AnimationClip {
       this.textureTracks.length > 0 ||
       this.meshTracks.length > 0 ||
       this.cameraTracks.length > 0 ||
-      this.lightTracks.length > 0
+      this.lightTracks.length > 0 ||
+      this.audio !== null
     );
   }
 
@@ -1279,7 +1334,8 @@ export class AnimationClip {
       textureTracks: this.textureTracks.map((track) => track.snapshot()),
       meshTracks: this.meshTracks.map((track) => track.snapshot()),
       cameraTracks: this.cameraTracks.map((track) => track.snapshot()),
-      lightTracks: this.lightTracks.map((track) => track.snapshot())
+      lightTracks: this.lightTracks.map((track) => track.snapshot()),
+      ...(this.audio ? { audio: { ...this.audio } } : {})
     };
   }
 }
@@ -1293,6 +1349,7 @@ export function estimateAnimationSnapshotBytes(
       (bytes, clip) =>
         bytes +
         128 +
+        (clip.audio ? 128 : 0) +
         clip.tracks.reduce(
           (sum, track) => sum + 96 + track.keyframes.length * 128,
           0
@@ -1543,6 +1600,18 @@ export class SceneAnimation {
   /** Whether the active clip has any track that can play. */
   hasActiveContent(): boolean {
     return this.activeClip.hasContent();
+  }
+
+  /** Clear every clip placement that references one audio asset. */
+  removeAudioReferences(assetId: string): number {
+    let removed = 0;
+    for (const clip of this.clips) {
+      if (clip.audio?.assetId === assetId) {
+        clip.audio = null;
+        removed += 1;
+      }
+    }
+    return removed;
   }
 
   /** Remove texture keys referencing one asset from every clip. */

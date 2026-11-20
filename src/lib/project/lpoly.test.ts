@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MeshNode } from '../scene/MeshNode';
 import { createModifier, type MirrorModifier } from '../geometry/modifiers';
+import { AudioAsset } from '../audio/AudioAsset';
 import { SceneDocument } from '../scene/SceneDocument';
 import {
   createCylinderMesh,
@@ -327,7 +328,7 @@ describe('.lpoli', () => {
 
     const bytes = encodeLpoly(document, SETTINGS);
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    expect(view.getUint16(8, true)).toBe(10);
+    expect(view.getUint16(8, true)).toBe(11);
     const decoded = decodeLpoly(bytes).document.animation;
     expect(decoded.clips.map((clip) => clip.name)).toEqual(['Idle', 'Walk']);
     expect(decoded.activeClipId).toBe(second.id);
@@ -594,6 +595,45 @@ describe('.lpoli', () => {
     const bytes = encodeLpoly(document, SETTINGS);
     const decoded = decodeLpoly(bytes);
     expect(decoded.document.nodes[0].modifiers).toEqual(node.modifiers);
+    const second = encodeLpoly(decoded.document, decoded.settings);
+    expect(Array.from(second)).toEqual(Array.from(bytes));
+  });
+
+  it('round-trips audio assets and clip placement', () => {
+    const document = makeDocument();
+    const asset = new AudioAsset(
+      'Ambience',
+      'audio/wav',
+      3.5,
+      new Uint8Array([1, 2, 3, 4, 5]),
+      new Float32Array(512).fill(0.5)
+    );
+    document.insertAudioAsset(asset);
+    const clip = document.animation.activeClip;
+    clip.audio = {
+      assetId: asset.id,
+      startFrame: 2,
+      trimStart: 0.25,
+      trimEnd: 2.75,
+      gain: 0.8,
+      muted: false
+    };
+    const bytes = encodeLpoly(document, SETTINGS);
+    const decoded = decodeLpoly(bytes);
+    expect(decoded.document.audioAssets).toHaveLength(1);
+    const restored = decoded.document.audioAssets[0];
+    expect(restored.id).toBe(asset.id);
+    expect(restored.name).toBe('Ambience');
+    expect(restored.duration).toBe(3.5);
+    expect(Array.from(restored.bytes)).toEqual([1, 2, 3, 4, 5]);
+    expect(decoded.document.animation.activeClip.audio).toEqual({
+      assetId: asset.id,
+      startFrame: 2,
+      trimStart: 0.25,
+      trimEnd: 2.75,
+      gain: 0.8,
+      muted: false
+    });
     const second = encodeLpoly(decoded.document, decoded.settings);
     expect(Array.from(second)).toEqual(Array.from(bytes));
   });

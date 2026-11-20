@@ -18,6 +18,13 @@ import { SceneDocument } from '../scene/SceneDocument';
 import { SceneLight, type LightKind, type LightSnapshot } from '../scene/SceneLight';
 import { SceneCamera, type CameraSnapshot } from '../scene/SceneCamera';
 import {
+  AudioAsset,
+  AUDIO_PEAK_COUNT,
+  MAX_AUDIO_ASSETS,
+  MAX_AUDIO_BYTES,
+  isValidAudioDuration
+} from '../audio/AudioAsset';
+import {
   type AnimationInterpolation,
   type AnimationClipSnapshot,
   type AnimationSnapshot,
@@ -49,7 +56,7 @@ import {
 } from '../texture/size';
 
 const MAGIC = new Uint8Array([0x4c, 0x50, 0x4f, 0x4c, 0x59, 0x00, 0x00, 0x00]); // LPOLY\0\0\0
-const FORMAT_VERSION = 10;
+const FORMAT_VERSION = 11;
 const MIN_SUPPORTED_VERSION = 3;
 const HEADER_BYTES = 28;
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
@@ -70,6 +77,7 @@ const MAX_NAME_LENGTH = 200;
 const MAX_TEXTURE_LAYERS = 8;
 const MAX_TEXTURE_ASSETS = 32;
 const MAX_TEXTURE_PNG_BYTES = 32 * 1024 * 1024;
+const MAX_TOTAL_AUDIO_BYTES = 64 * 1024 * 1024;
 
 /** Project-level settings saved with a document but not part of its DCEL. */
 export interface ProjectSettings {
@@ -214,6 +222,19 @@ interface TextureManifest {
   readonly assets: readonly TextureAssetManifest[];
 }
 
+interface AudioAssetManifest {
+  readonly id: string;
+  readonly name: string;
+  readonly mime: string;
+  readonly duration: number;
+  readonly bytesLength: number;
+  readonly peaks: readonly number[];
+}
+
+interface AudioManifest {
+  readonly assets: readonly AudioAssetManifest[];
+}
+
 interface Manifest {
   readonly format: 'lpoly';
   readonly version: number;
@@ -224,6 +245,7 @@ interface Manifest {
   readonly lighting?: LightingManifest;
   readonly cameras?: readonly CameraSnapshot[];
   readonly animation?: AnimationSnapshot;
+  readonly audio?: AudioManifest;
   readonly annotations?: readonly import('../scene/SceneAnnotations').AnnotationStrokeSnapshot[];
 }
 
@@ -698,6 +720,121 @@ function buildTextureManifest(
   return { manifest: { assets: manifests }, totalPngBytes };
 }
 
+/** Validate audio asset metadata and total compressed payload size. */
+function buildAudioManifest(
+  assets: readonly import('../audio/AudioAsset').AudioAssetSnapshot[]
+): { manifest: AudioManifest; totalAudioBytes: number } {
+  if (assets.length > MAX_AUDIO_ASSETS) {
+    throw new Error('Audio asset count is outside the supported limit.');
+  }
+  const ids = new Set<string>();
+  let totalAudioBytes = 0;
+  const manifests: AudioAssetManifest[] = assets.map((asset) => {
+    if (
+      typeof asset.id !== 'string' ||
+      asset.id.length === 0 ||
+      ids.has(asset.id) ||
+      typeof asset.name !== 'string' ||
+      asset.name.length === 0 ||
+      asset.name.length > MAX_NAME_LENGTH ||
+      typeof asset.mime !== 'string' ||
+      asset.mime.length === 0 ||
+      asset.mime.length > 64 ||
+      !isValidAudioDuration(asset.duration) ||
+      !(asset.bytes instanceof Uint8Array) ||
+      asset.bytes.byteLength < 1 ||
+      asset.bytes.byteLength > MAX_AUDIO_BYTES ||
+      !(asset.peaks instanceof Float32Array) ||
+      asset.peaks.length !== AUDIO_PEAK_COUNT ||
+      asset.peaks.some(
+        (peak) =>
+          typeof peak !== 'number' ||
+          !Number.isFinite(peak) ||
+          peak < 0 ||
+          peak > 1
+      )
+    ) {
+      throw new Error('Audio asset metadata is invalid.');
+    }
+    ids.add(asset.id);
+    totalAudioBytes += asset.bytes.byteLength;
+    return {
+      id: asset.id,
+      name: asset.name,
+      mime: asset.mime,
+      duration: asset.duration,
+      bytesLength: asset.bytes.byteLength,
+      peaks: Array.from(asset.peaks)
+    };
+  });
+  if (totalAudioBytes > MAX_TOTAL_AUDIO_BYTES) {
+    throw new Error('Audio payload is too large.');
+  }
+  return { manifest: { assets: manifests }, totalAudioBytes };
+}
+
+/** Validate serialized audio metadata before reading its binary chunks. */
+function validateAudioManifest(value: unknown): AudioManifest {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('The .lpoli audio manifest is invalid.');
+  }
+  const audio = value as Partial<AudioManifest>;
+  if (
+    !Array.isArray(audio.assets) ||
+    audio.assets.length > MAX_AUDIO_ASSETS
+  ) {
+    throw new Error('The .lpoli audio asset count is invalid.');
+  }
+  const ids = new Set<string>();
+  let totalAudioBytes = 0;
+  const assets: AudioAssetManifest[] = audio.assets.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli contains an invalid audio asset.');
+    }
+    const asset = raw as Partial<AudioAssetManifest>;
+    if (
+      typeof asset.id !== 'string' ||
+      asset.id.length === 0 ||
+      ids.has(asset.id) ||
+      typeof asset.name !== 'string' ||
+      asset.name.length === 0 ||
+      asset.name.length > MAX_NAME_LENGTH ||
+      typeof asset.mime !== 'string' ||
+      asset.mime.length === 0 ||
+      asset.mime.length > 64 ||
+      !isValidAudioDuration(asset.duration) ||
+      !Number.isInteger(asset.bytesLength) ||
+      (asset.bytesLength as number) < 1 ||
+      (asset.bytesLength as number) > MAX_AUDIO_BYTES ||
+      !Array.isArray(asset.peaks) ||
+      asset.peaks.length !== AUDIO_PEAK_COUNT ||
+      asset.peaks.some(
+        (peak) =>
+          typeof peak !== 'number' ||
+          !Number.isFinite(peak) ||
+          peak < 0 ||
+          peak > 1
+      )
+    ) {
+      throw new Error('The .lpoli audio asset metadata is invalid.');
+    }
+    ids.add(asset.id);
+    totalAudioBytes += asset.bytesLength as number;
+    return {
+      id: asset.id,
+      name: asset.name,
+      mime: asset.mime,
+      duration: asset.duration,
+      bytesLength: asset.bytesLength as number,
+      peaks: Array.from(asset.peaks)
+    };
+  });
+  if (totalAudioBytes > MAX_TOTAL_AUDIO_BYTES) {
+    throw new Error('The .lpoli audio payload is too large.');
+  }
+  return { assets };
+}
+
 function validateCamerasManifest(value: unknown): CameraSnapshot[] {
   if (value === undefined) {
     return [];
@@ -1087,8 +1224,56 @@ function validateAnnotations(
   });
 }
 
+/** Validate one optional audio placement against project audio assets. */
+function validateAudioClip(
+  value: unknown,
+  assets: ReadonlyMap<string, number> | null
+): import('../scene/SceneAnimation').AudioClipSnapshot | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== 'object' || assets === null) {
+    throw new Error('The .lpoli audio clip placement is invalid.');
+  }
+  const clip = value as Partial<
+    import('../scene/SceneAnimation').AudioClipSnapshot
+  >;
+  if (
+    typeof clip.assetId !== 'string' ||
+    !assets.has(clip.assetId) ||
+    typeof clip.startFrame !== 'number' ||
+    !Number.isInteger(clip.startFrame) ||
+    clip.startFrame < 0 ||
+    typeof clip.trimStart !== 'number' ||
+    !Number.isFinite(clip.trimStart) ||
+    clip.trimStart < 0 ||
+    typeof clip.trimEnd !== 'number' ||
+    !Number.isFinite(clip.trimEnd) ||
+    clip.trimEnd <= clip.trimStart ||
+    clip.trimEnd > (assets.get(clip.assetId) ?? 0) + 1e-6 ||
+    typeof clip.gain !== 'number' ||
+    !Number.isFinite(clip.gain) ||
+    clip.gain < 0 ||
+    clip.gain > 2 ||
+    typeof clip.muted !== 'boolean'
+  ) {
+    throw new Error('The .lpoli audio clip placement is invalid.');
+  }
+  return {
+    assetId: clip.assetId,
+    startFrame: clip.startFrame,
+    trimStart: clip.trimStart,
+    trimEnd: clip.trimEnd,
+    gain: clip.gain,
+    muted: clip.muted
+  };
+}
+
 /** Validate v6 clip animation or migrate a legacy flat animation manifest. */
-function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
+function validateAnimationManifest(
+  value: unknown,
+  audioAssets: ReadonlyMap<string, number> | null = null
+): AnimationSnapshot | null {
   if (value === undefined) {
     return null;
   }
@@ -1176,6 +1361,7 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
     const motion = validateMeshMotionTracks(clip.meshTracks, trackIds);
     const cameras = validateCameraAnimationTracks(clip.cameraTracks, trackIds);
     const lights = validateLightAnimationTracks(clip.lightTracks, trackIds);
+    const audio = validateAudioClip(clip.audio, audioAssets);
     totalTracks +=
       textures.trackCount +
       motion.trackCount +
@@ -1196,7 +1382,8 @@ function validateAnimationManifest(value: unknown): AnimationSnapshot | null {
       textureTracks: textures.tracks,
       meshTracks: motion.tracks,
       cameraTracks: cameras.tracks,
-      lightTracks: lights.tracks
+      lightTracks: lights.tracks,
+      ...(audio ? { audio } : {})
     };
   });
   if (
@@ -1439,6 +1626,9 @@ function encodeInternal(
   const textureManifest = textures
     ? buildTextureManifest(textures)
     : null;
+  const audioSnapshots = document.audioAssets.map((asset) => asset.snapshot());
+  const audioManifest =
+    audioSnapshots.length > 0 ? buildAudioManifest(audioSnapshots) : null;
   const manifest: Manifest = {
     format: 'lpoly',
     version: FORMAT_VERSION,
@@ -1454,6 +1644,7 @@ function encodeInternal(
       lights: document.lights.map((light) => light.snapshot())
     },
     ...(textureManifest ? { textures: textureManifest.manifest } : {}),
+    ...(audioManifest ? { audio: audioManifest.manifest } : {}),
     ...(document.annotations.all.length > 0
       ? { annotations: document.annotations.snapshot() }
       : {})
@@ -1504,6 +1695,15 @@ function encodeInternal(
         payloadLength += layer.png.byteLength;
       }
     }
+  }
+  for (const asset of audioSnapshots) {
+    const padding = (4 - (payloadLength % 4)) % 4;
+    if (padding > 0) {
+      chunks.push(new Uint8Array(padding));
+      payloadLength += padding;
+    }
+    chunks.push(asset.bytes);
+    payloadLength += asset.bytes.byteLength;
   }
 
   const trailingPadding = (4 - (payloadLength % 4)) % 4;
@@ -1900,7 +2100,17 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     }
   }
 
-  const animation = validateAnimationManifest(manifest.animation);
+  const audioManifest =
+    manifest.audio !== undefined
+      ? validateAudioManifest(manifest.audio)
+      : null;
+  const audioAssetDurations = new Map(
+    (audioManifest?.assets ?? []).map((asset) => [asset.id, asset.duration])
+  );
+  const animation = validateAnimationManifest(
+    manifest.animation,
+    audioManifest ? audioAssetDurations : null
+  );
   if (animation) {
     document.animation.apply(animation);
   }
@@ -1974,6 +2184,31 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
       });
     }
     textures = assets;
+  }
+
+  if (audioManifest) {
+    for (const asset of audioManifest.assets) {
+      const padding = (4 - (cursor % 4)) % 4;
+      cursor += padding;
+      if (
+        cursor + asset.bytesLength > bytes.byteLength ||
+        cursor + asset.bytesLength > payloadStart + payloadLength
+      ) {
+        throw new Error('The .lpoli payload ended inside an audio chunk.');
+      }
+      const source = bytes.slice(cursor, cursor + asset.bytesLength);
+      cursor += asset.bytesLength;
+      document.insertAudioAsset(
+        new AudioAsset(
+          asset.name,
+          asset.mime,
+          asset.duration,
+          source,
+          Float32Array.from(asset.peaks),
+          asset.id
+        )
+      );
+    }
   }
 
   const alignedEnd = align4(cursor);

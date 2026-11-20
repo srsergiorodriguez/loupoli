@@ -12,6 +12,7 @@ import {
   SceneCamera,
   type CameraSummary
 } from './SceneCamera';
+import { AudioAsset } from '../audio/AudioAsset';
 import { SceneAnimation } from './SceneAnimation';
 import { SceneAnnotations } from './SceneAnnotations';
 import {
@@ -37,6 +38,7 @@ export class SceneDocument {
   readonly groups: SceneGroup[] = [];
   readonly lights: SceneLight[] = [];
   readonly cameras: SceneCamera[] = [];
+  readonly audioAssets: AudioAsset[] = [];
   readonly animation = new SceneAnimation();
   readonly annotations = new SceneAnnotations();
   ambientColor = '#ffffff';
@@ -197,6 +199,38 @@ export class SceneDocument {
   /** Reactive-safe camera summaries. */
   cameraSummaries(): CameraSummary[] {
     return this.cameras.map((camera) => camera.snapshot());
+  }
+
+  /** Insert one project-level audio asset. */
+  insertAudioAsset(asset: AudioAsset): void {
+    if (this.audioAssets.some((item) => item.id === asset.id)) {
+      throw new Error('An audio asset with that id already exists.');
+    }
+    this.audioAssets.push(asset);
+  }
+
+  /** Find one audio asset by id. */
+  getAudioAsset(id: string): AudioAsset | null {
+    return this.audioAssets.find((asset) => asset.id === id) ?? null;
+  }
+
+  /** Remove one audio asset and clear every clip placement that references it. */
+  removeAudioAsset(id: string): AudioAsset | null {
+    const index = this.audioAssets.findIndex((asset) => asset.id === id);
+    if (index < 0) {
+      return null;
+    }
+    const [asset] = this.audioAssets.splice(index, 1);
+    this.animation.removeAudioReferences(id);
+    return asset;
+  }
+
+  /** Replace all project-level audio assets on load or recovery. */
+  replaceAudioAssets(assets: readonly AudioAsset[]): void {
+    this.audioAssets.length = 0;
+    for (const asset of assets) {
+      this.audioAssets.push(asset);
+    }
   }
 
   /** Replace all animation state on project load or recovery. */

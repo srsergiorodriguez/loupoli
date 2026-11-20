@@ -221,3 +221,23 @@ describe('SceneAnimation', () => {
     expect(second.getTextureTrack('node-1')).toBeNull();
     expect(second.textureTracks).toHaveLength(0);
   });
+
+  it('treats an audio-only clip as playable and clears asset references', () => {
+    const animation = new SceneAnimation();
+    const clip = animation.activeClip;
+    clip.audio = {
+      assetId: 'audio-1',
+      startFrame: 4,
+      trimStart: 0.5,
+      trimEnd: 4.5,
+      gain: 0.75,
+      muted: false
+    };
+    expect(animation.hasActiveContent()).toBe(true);
+    const restored = AnimationClip.fromSnapshot(clip.snapshot());
+    expect(restored.audio).toEqual(clip.audio);
+    expect(restored.snapshot().audio).toEqual(clip.audio);
+    expect(animation.removeAudioReferences('audio-1')).toBe(1);
+    expect(clip.audio).toBeNull();
+    expect(animation.hasActiveContent()).toBe(false);
+  });

@@ -219,6 +219,27 @@ export interface AnimationClipSummary {
   readonly trackCount: number;
 }
 
+/** Reactive-safe audio asset projection. */
+export interface AudioAssetSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly mime: string;
+  readonly duration: number;
+  readonly peaks: readonly number[];
+}
+
+/** Reactive-safe placement of one asset on the active animation clip. */
+export interface AudioClipSummary {
+  readonly assetId: string;
+  readonly name: string;
+  readonly duration: number;
+  readonly startFrame: number;
+  readonly trimStart: number;
+  readonly trimEnd: number;
+  readonly gain: number;
+  readonly muted: boolean;
+}
+
 /** Reactive-safe animation track projection. */
 export interface AnimationTrackSummary {
   readonly id: string;
@@ -414,6 +435,8 @@ export interface EditorSnapshot {
   readonly animationFps: number;
   readonly animationClipId: string;
   readonly animationClips: readonly AnimationClipSummary[];
+  readonly audioAssets: readonly AudioAssetSummary[];
+  readonly activeClipAudio: AudioClipSummary | null;
   readonly animationClipboardCount: number;
   readonly meshPoseEditing: boolean;
   readonly meshPoseFrame: number;

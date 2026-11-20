@@ -131,9 +131,9 @@ See [docs/PWA.md](docs/PWA.md) for the full deployment and browser limitations.
 - **Lighting:** directional and point lights, hard/soft shadows, per-corner AO
   preview, direct-light and AO texture baking, and bake-atlas preparation.
 - **Animation and render:** transform/shape-weight/texture/camera/light tracks,
-  multiple clips, mesh-motion poses, scene cameras, clean still/frame/MP4
-  rendering, and cancellable jobs.
-- **Persistence and interchange:** `.lpoli` v10 with binary texture chunks,
+  multiple clips, mesh-motion poses, scene cameras, clip audio with waveform
+  playback, clean still/frame/MP4 rendering, and cancellable jobs.
+- **Persistence and interchange:** `.lpoli` v11 with binary texture and audio chunks,
   IndexedDB autosave/recovery, OBJ/GLB import/export, and native file I/O.
 - **Platforms:** installable PWA, Tauri desktop shell, and signed iPad
   development build.
@@ -174,7 +174,7 @@ Key boundaries:
 Current checks:
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **310 tests across 64 files**.
+- `npm test`: **314 tests across 64 files**.
 - `npm run build`: passes.
 - `cargo test` in `src-tauri`: **7 passing tests**.
 - Signed iPad release installed and launched on an iPad Air with iPadOS 26.6.1.

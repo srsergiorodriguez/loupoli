@@ -163,6 +163,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationFps: 24,
   animationClipId: 'clip-1',
   animationClips: [],
+  audioAssets: [],
+  activeClipAudio: null,
   animationClipboardCount: 0,
   meshPoseEditing: false,
   meshPoseFrame: 0,
@@ -1151,6 +1153,27 @@ export class EditorSession {
   addAnimationClip(): void {
     this.runtime?.addAnimationClip();
   }
+  /** Import an audio file and attach it to the active animation clip. */
+  async importAudioFile(file: File): Promise<void> {
+    await this.runtime?.importAudioFile(file);
+  }
+
+  /** Mute or unmute the active clip's audio. */
+  setClipAudioMuted(muted: boolean): void {
+    this.runtime?.setClipAudioMuted(muted);
+  }
+
+  /** Set active clip audio gain. */
+  setClipAudioGain(gain: number): void {
+    this.runtime?.setClipAudioGain(gain);
+  }
+
+  /** Remove audio placement from the active clip. */
+  removeClipAudio(): void {
+    this.runtime?.removeClipAudio();
+  }
+
+
 
   duplicateAnimationClip(): void {
     this.runtime?.duplicateAnimationClip();

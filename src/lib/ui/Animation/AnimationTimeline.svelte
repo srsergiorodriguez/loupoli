@@ -36,6 +36,7 @@
   } | null>(null);
   let zoomStart = $state<number | null>(null);
   let zoomEnd = $state<number | null>(null);
+  let audioInput = $state<HTMLInputElement>();
 
   const snapshot = $derived(session.snapshot);
   const animationClips = $derived(snapshot.animationClips);
@@ -58,6 +59,43 @@
       : Math.max(viewStart + 1, Math.min(end, Math.round(zoomEnd)))
   );
   const viewSpan = $derived(Math.max(1, viewEnd - viewStart));
+  const activeAudio = $derived(snapshot.activeClipAudio);
+  const activeAudioAsset = $derived(
+    activeAudio
+      ? snapshot.audioAssets.find((asset) => asset.id === activeAudio.assetId) ?? null
+      : null
+  );
+  const audioWavePath = $derived.by(() => {
+    if (!activeAudioAsset || activeAudioAsset.peaks.length === 0) {
+      return '';
+    }
+    const peaks = activeAudioAsset.peaks;
+    const top = peaks.map(
+      (peak, index) =>
+        `${((index / Math.max(1, peaks.length - 1)) * 100).toFixed(2)},${(
+          10 - peak * 9
+        ).toFixed(2)}`
+    );
+    return `M 0,10 L ${top.join(' L ')} L 100,10 Z`;
+  });
+  const audioStart = $derived(
+    activeAudio ? Math.max(viewStart, activeAudio.startFrame) : 0
+  );
+  const audioEnd = $derived(
+    activeAudio
+      ? Math.min(
+          viewEnd,
+          activeAudio.startFrame +
+            (activeAudio.trimEnd - activeAudio.trimStart) * snapshot.animationFps
+        )
+      : 0
+  );
+  const audioLeft = $derived(
+    activeAudio ? percent(audioStart) : 0
+  );
+  const audioWidth = $derived(
+    activeAudio ? Math.max(0, percent(audioEnd) - audioLeft) : 0
+  );
   const tickStep = $derived(niceStep(viewSpan, 8));
   const ticks = $derived.by(() => {
     const result: { frame: number; label: string; major: boolean }[] = [];
@@ -446,6 +484,14 @@
   function cancelKeyDrag(): void {
     keyDrag = null;
   }
+  async function chooseAudio(event: Event): Promise<void> {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    input.value = '';
+    if (file) {
+      await session.importAudioFile(file);
+    }
+  }
 </script>
 
 <section
@@ -498,9 +544,22 @@
       disabled={snapshot.meshPoseEditing || animationClips.length <= 1}
       onActivate={() => session.deleteAnimationClip()}
     />
+    <input
+      bind:this={audioInput}
+      class="visually-hidden"
+      type="file"
+      accept="audio/*"
+      aria-label="Import audio"
+      onchange={chooseAudio}
+    />
+    <ActionButton
+      label={activeAudio ? 'Replace audio' : 'Add audio'}
+      disabled={snapshot.meshPoseEditing || snapshot.fileBusy}
+      onActivate={() => audioInput?.click()}
+    />
     {#if activeClip}
       <span class="timeline-clip-meta">
-        {activeClip.trackCount} track{activeClip.trackCount === 1 ? '' : 's'}
+        {activeClip.trackCount} track{activeClip.trackCount === 1 ? '' : 's'}{activeAudio ? ' + audio' : ''}
       </span>
     {/if}
   </div>
@@ -638,7 +697,7 @@
         ></span>
       </span>
     {/if}
-    {#if snapshot.animationTracks.length === 0}
+    {#if snapshot.animationTracks.length === 0 && !activeAudio}
       <p class="timeline-empty">
         Select an object or group. Use the + button on a track to add a key.
       </p>
@@ -729,6 +788,54 @@
           </span>
         </div>
       {/each}
+      {#if activeAudio}
+        <div class="timeline-track audio-track">
+          <span class="track-label">
+            <span class="track-name">{activeAudio.name}</span>
+            <button
+              type="button"
+              class="track-key-action"
+              aria-label={activeAudio.muted ? 'Unmute audio' : 'Mute audio'}
+              title={activeAudio.muted ? 'Unmute audio' : 'Mute audio'}
+              onpointerdown={(event) => event.stopPropagation()}
+              onclick={(event) => {
+                event.stopPropagation();
+                session.setClipAudioMuted(!activeAudio.muted);
+              }}
+            >{activeAudio.muted ? 'U' : 'M'}</button>
+            <button
+              type="button"
+              class="track-key-action track-remove-action"
+              aria-label="Remove clip audio"
+              title="Remove clip audio"
+              onpointerdown={(event) => event.stopPropagation()}
+              onclick={(event) => {
+                event.stopPropagation();
+                session.removeClipAudio();
+              }}
+            ><Icon name="trash" size={11} /></button>
+          </span>
+          <span class="track-lane">
+            <span
+              class="audio-lane"
+              style:left={`${audioLeft}%`}
+              style:width={`${audioWidth}%`}
+              title={`${activeAudio.name} · ${activeAudio.duration.toFixed(1)}s`}
+            >
+              {#if audioWavePath}
+                <svg
+                  class="audio-wave"
+                  viewBox="0 0 100 20"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <path d={audioWavePath}></path>
+                </svg>
+              {/if}
+            </span>
+          </span>
+        </div>
+      {/if}
     {/if}
   </div>
 </section>
@@ -889,6 +996,33 @@
 
   .timeline-track.texture-track .track-name {
     color: var(--accent-success);
+  }
+
+  .timeline-track.audio-track .track-name {
+    color: var(--accent-secondary);
+  }
+
+  .audio-lane {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: block;
+    min-width: 2px;
+    overflow: hidden;
+    border: var(--hairline) solid
+      color-mix(in srgb, var(--accent-secondary) 45%, var(--border-subtle));
+    border-radius: var(--radius-xs);
+    background: color-mix(in srgb, var(--accent-secondary) 8%, transparent);
+  }
+
+  .audio-wave {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .audio-wave path {
+    fill: color-mix(in srgb, var(--accent-secondary) 65%, transparent);
   }
 
   .timeline-track.camera-track .track-name,
