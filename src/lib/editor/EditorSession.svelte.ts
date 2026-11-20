@@ -94,6 +94,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   globalTransform: null,
   transformOrientation: 'global',
   transformValueSpace: 'local',
+  transformPivotMode: 'median',
   modalTransform: null,
   actionState: null,
   loopSlideAvailable: false,
@@ -959,6 +960,10 @@ export class EditorSession {
 
   setTransformValueSpace(space: TransformOrientation): void {
     this.runtime?.setTransformValueSpace(space);
+  }
+
+  setTransformPivotMode(mode: 'median' | 'origin'): void {
+    this.runtime?.setTransformPivotMode(mode);
   }
 
   orbitView(dx: number, dy: number): void {

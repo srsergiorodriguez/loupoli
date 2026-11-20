@@ -77,6 +77,7 @@
   const gizmoOrientation = $derived(
     session.snapshot.transformOrientation
   );
+  const transformPivotMode = $derived(session.snapshot.transformPivotMode);
   const useGlobalOrientation = $derived(
     transformValueSpace === 'global' && session.snapshot.activeGroupId === null
   );
@@ -315,6 +316,18 @@
   const gizmoOrientationOptions = [
     { id: 'global', label: 'World', title: 'Align gizmo axes to the world' },
     { id: 'local', label: 'Local', title: 'Align gizmo axes to the object' }
+  ] as const;
+  const transformPivotOptions = [
+    {
+      id: 'median',
+      label: 'Median',
+      title: 'Transform around the selection median'
+    },
+    {
+      id: 'origin',
+      label: 'Object',
+      title: 'Transform around the active object origin'
+    }
   ] as const;
 
   let primitive = $state<PrimitiveKind>('quadsphere');
@@ -2108,6 +2121,19 @@
                   session.setTransformOrientation(id === 'local' ? 'local' : 'global')}
               />
             </div>
+            {#if selectionCount > 0}
+              <div class="space-row">
+                <span class="space-label">Pivot</span>
+                <SegmentedControl
+                  label="Transform pivot"
+                  options={transformPivotOptions}
+                  value={transformPivotMode}
+                  variant="workspace"
+                  onSelect={(id) =>
+                    session.setTransformPivotMode(id === 'origin' ? 'origin' : 'median')}
+                />
+              </div>
+            {/if}
           </div>
         {/if}
         {#if activeTransform}

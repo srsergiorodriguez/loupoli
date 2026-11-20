@@ -18,6 +18,7 @@ import type { TextureLayerSummary } from '../texture/TextureAsset';
 import type { TextureAssetSummary } from '../texture/TextureLibrary';
 import type { PaintGradient, PaintTool } from '../paint/types';
 import type { ImageFitMode } from '../texture/imageFit';
+import type { TransformPivotMode } from './transformPivot';
 
 /** The object transform tools exposed by the toolbar. */
 export const TRANSFORM_MODES = ['select', 'translate', 'rotate', 'scale'] as const;
@@ -352,6 +353,7 @@ export interface EditorSnapshot {
   readonly globalTransform: NodeTransform | null;
   readonly transformOrientation: TransformOrientation;
   readonly transformValueSpace: TransformOrientation;
+  readonly transformPivotMode: TransformPivotMode;
   readonly modalTransform: ModalTransformSnapshot | null;
   readonly actionState: MeshActionSnapshot | null;
   readonly loopSlideAvailable: boolean;

@@ -57,6 +57,13 @@ import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { workspaceCan } from './workspaces';
 import { screenRotationDegrees } from './modalRotation';
+import {
+  clampScale,
+  clampScaleComponent,
+  snapRotationRadians,
+  transformPivot,
+  type TransformPivotMode
+} from './transformPivot';
 import { screenScaleFactor } from './modalScale';
 import {
   applyUvView,
@@ -597,6 +604,7 @@ export class EditorRuntime {
     render: 'local'
   };
   private transformValueSpace: TransformOrientation = 'local';
+  private transformPivotMode: TransformPivotMode = 'median';
   private transformMode: TransformMode = 'select';
   private lassoMode = false;
   private lassoPath: [number, number][] = [];
@@ -1048,6 +1056,7 @@ export class EditorRuntime {
       globalTransform,
       transformOrientation: this.transformOrientation,
       transformValueSpace: this.transformValueSpace,
+      transformPivotMode: this.transformPivotMode,
       modalTransform: this.modalSnapshot(),
       actionState: this.actionSnapshot(),
       loopSlideAvailable: this.activeLoopSlidePlan() !== null,
@@ -2017,6 +2026,16 @@ export class EditorRuntime {
       return;
     }
     this.transformValueSpace = space;
+    this.publish();
+  }
+
+  /** Choose the shared median or active-object origin for element transforms. */
+  setTransformPivotMode(mode: TransformPivotMode): void {
+    if (this.transformPivotMode === mode) {
+      return;
+    }
+    this.transformPivotMode = mode;
+    this.updateSelectionGizmoFrame();
     this.publish();
   }
 
@@ -5207,11 +5226,7 @@ export class EditorRuntime {
       const next: NodeTransform = {
         position: [...transform.position],
         rotation: [...transform.rotation],
-        scale: [
-          Math.max(0.001, transform.scale[0]),
-          Math.max(0.001, transform.scale[1]),
-          Math.max(0.001, transform.scale[2])
-        ]
+        scale: clampScale(transform.scale)
       };
       const before = this.cloneTransform(group.transform);
       const unchanged =
@@ -5255,20 +5270,12 @@ export class EditorRuntime {
               transform.rotation,
               parentTransform
             ),
-            scale: [
-              Math.max(0.001, transform.scale[0]),
-              Math.max(0.001, transform.scale[1]),
-              Math.max(0.001, transform.scale[2])
-            ]
+            scale: clampScale(transform.scale)
           }
         : {
             position: [...transform.position],
             rotation: [...transform.rotation],
-            scale: [
-              Math.max(0.001, transform.scale[0]),
-              Math.max(0.001, transform.scale[1]),
-              Math.max(0.001, transform.scale[2])
-            ]
+            scale: clampScale(transform.scale)
           };
     const before = this.cloneTransform(node.transform);
     const unchanged =
@@ -12068,12 +12075,7 @@ export class EditorRuntime {
       const before = selection.vertices.map((vertex) =>
         node.mesh.getVertexPosition(vertex)
       );
-      const pivot: Vec3 = [0, 0, 0];
-      for (const position of before) {
-        pivot[0] += position[0] / before.length;
-        pivot[1] += position[1] / before.length;
-        pivot[2] += position[2] / before.length;
-      }
+      const pivot = transformPivot(before, this.transformPivotMode);
       const worldMatrix = parent
         ? transformMatrix(parent.transform).multiply(
             transformMatrix(node.transform)
@@ -12451,7 +12453,17 @@ export class EditorRuntime {
         value = localDelta.length();
       }
     } else if (modal.kind === 'rotate') {
-      const angleDegrees = this.modalRotationDegrees(modal, numeric);
+      let angleDegrees = this.modalRotationDegrees(modal, numeric);
+      if (numeric === null) {
+        angleDegrees =
+          (snapRotationRadians(
+            (angleDegrees * Math.PI) / 180,
+            this.rotationSnapStep,
+            this.snapEnabled
+          ) *
+            180) /
+          Math.PI;
+      }
       const radians = (angleDegrees * Math.PI) / 180;
       const rotationAxis = axisWorld ?? modal.viewAxis;
       let rotated: Quaternion;
@@ -12483,9 +12495,13 @@ export class EditorRuntime {
           modal.before.scale[index] * factor
         );
       } else {
-        next.scale = next.scale.map((component) =>
-          Math.max(0.001, component * factor)
-        ) as [number, number, number];
+        next.scale = clampScale(
+          next.scale.map((component) => component * factor) as [
+            number,
+            number,
+            number
+          ]
+        );
       }
       value = factor;
     }
@@ -12555,7 +12571,17 @@ export class EditorRuntime {
         value = localDelta.length();
       }
     } else if (modal.kind === 'rotate') {
-      const angleDegrees = this.modalRotationDegrees(modal, numeric);
+      let angleDegrees = this.modalRotationDegrees(modal, numeric);
+      if (numeric === null) {
+        angleDegrees =
+          (snapRotationRadians(
+            (angleDegrees * Math.PI) / 180,
+            this.rotationSnapStep,
+            this.snapEnabled
+          ) *
+            180) /
+          Math.PI;
+      }
       const radians = (angleDegrees * Math.PI) / 180;
       if (axisVector && modal.orientation === 'local') {
         const rotation = new Quaternion().setFromAxisAngle(axisVector, radians);
@@ -12800,12 +12826,7 @@ export class EditorRuntime {
     const before = selected.vertices.map((vertex) =>
       node.mesh.getVertexPosition(vertex)
     );
-    const pivot: Vec3 = [0, 0, 0];
-    for (const position of before) {
-      pivot[0] += position[0] / before.length;
-      pivot[1] += position[1] / before.length;
-      pivot[2] += position[2] / before.length;
-    }
+    const pivot = transformPivot(before, this.transformPivotMode);
     if (hit.axis === 'view' && hit.mode === 'rotate') {
       return false;
     }
@@ -13026,7 +13047,12 @@ export class EditorRuntime {
         return;
       }
       const angle = angleAroundAxis(point, drag.origin, drag.basis);
-      const radians = shortestAngleDelta(drag.startAngle, angle);
+      let radians = shortestAngleDelta(drag.startAngle, angle);
+      radians = snapRotationRadians(
+        radians,
+        this.rotationSnapStep,
+        this.snapEnabled
+      );
       const axisVector = GIZMO_AXIS_VECTORS[drag.axis];
       if (drag.orientation === 'local') {
         const rotation = new Quaternion().setFromAxisAngle(
@@ -13276,8 +13302,7 @@ export class EditorRuntime {
       const factor = Math.max(0.001, 1 + delta / (drag.size * 0.9));
       const axisIndex = drag.axis === 'x' ? 0 : drag.axis === 'y' ? 1 : 2;
       next.scale = [...drag.before.scale];
-      next.scale[axisIndex] = Math.max(
-        0.001,
+      next.scale[axisIndex] = clampScaleComponent(
         drag.before.scale[axisIndex] * factor
       );
     } else {
@@ -13289,7 +13314,12 @@ export class EditorRuntime {
         return;
       }
       const angle = angleAroundAxis(point, drag.origin, drag.basis);
-      const delta = shortestAngleDelta(drag.startAngle, angle);
+      let delta = shortestAngleDelta(drag.startAngle, angle);
+      delta = snapRotationRadians(
+        delta,
+        this.rotationSnapStep,
+        this.snapEnabled
+      );
       const start = new Quaternion().setFromEuler(
         new Euler(
           drag.before.rotation[0],
@@ -13566,13 +13596,10 @@ export class EditorRuntime {
       this.renderer.setSelectionGizmoFrame(null, null);
       return;
     }
-    const pivot: Vec3 = [0, 0, 0];
-    for (const vertex of selected.vertices) {
-      const position = node.mesh.getVertexPosition(vertex);
-      pivot[0] += position[0] / selected.vertices.length;
-      pivot[1] += position[1] / selected.vertices.length;
-      pivot[2] += position[2] / selected.vertices.length;
-    }
+    const pivot = transformPivot(
+      selected.vertices.map((vertex) => node.mesh.getVertexPosition(vertex)),
+      this.transformPivotMode
+    );
     const parent =
       node.parentId !== null
         ? this.document.getGroup(node.parentId)

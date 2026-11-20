@@ -47,6 +47,8 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         ],
         controls: [
           'G / R / S: move, rotate, or scale',
+          'Pivot: Median or Object origin (shown with an element selection)',
+          'Shift+Tab: toggle grid snapping once registered',
           'E / I / L: extrude, inset, or loop cut',
           'Shift+L: loop slide',
           'F: frame the selection; Home: reset the view'
