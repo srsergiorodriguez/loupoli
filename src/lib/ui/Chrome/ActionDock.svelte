@@ -30,7 +30,7 @@
       return `${action.label} — select an edge loop first`;
     }
     if (action.kind === 'bevel' && !available(action.kind)) {
-      return `${action.label} — select one interior edge`;
+      return `${action.label} — select an interior edge with valence-three endpoints`;
     }
     return action.label;
   }

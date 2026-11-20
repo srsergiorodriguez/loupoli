@@ -52,7 +52,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'Pivot: Median or Object origin (shown with an element selection)',
           'Shift+Tab: toggle grid snapping',
           'E / I / L: extrude, inset, or loop cut',
-          'Action Dock: Bevel one selected edge and cut its endpoint corners by dragging or typing an exact width',
+          'Action Dock: Bevel one selected edge by dragging or typing an exact width',
           'Shift+L: loop slide',
           'F: frame the selection; Home: reset the view'
         ]

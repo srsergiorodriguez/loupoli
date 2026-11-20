@@ -19,7 +19,7 @@ import {
   type Modifier,
   type ModifierKind
 } from '../geometry/modifiers';
-import { bevelEdgeWithCorners } from '../geometry/bevel';
+import { bevelEdge } from '../geometry/bevel';
 import {
   bridgeSelectedEdges,
   deleteSelectedElements,
@@ -10046,6 +10046,29 @@ export class EditorRuntime {
     return true;
   }
 
+  /** Number of incident edges at one mesh vertex. */
+  private vertexValence(mesh: HalfEdgeMesh, vertex: number): number {
+    const start = mesh.vertexOut[vertex];
+    if (start < 0) {
+      return 0;
+    }
+    let halfEdge = start;
+    let count = 0;
+    do {
+      count += 1;
+      let previous = halfEdge;
+      while (mesh.heNext[previous] !== halfEdge) {
+        previous = mesh.heNext[previous];
+      }
+      const twin = mesh.heTwin[previous];
+      if (twin < 0) {
+        return 0;
+      }
+      halfEdge = twin;
+    } while (halfEdge !== start && count <= mesh.halfEdgeCount);
+    return count;
+  }
+
   /** Whether the current selection can be beveled without changing modes. */
   private canBevelSelection(): boolean {
     const node = this.getActiveNode();
@@ -10077,7 +10100,15 @@ export class EditorRuntime {
       this.isInteriorVertex(
         node.mesh,
         node.mesh.heOrigin[node.mesh.heNext[halfEdge]]
-      )
+      ) &&
+      this.vertexValence(
+        node.mesh,
+        node.mesh.heOrigin[halfEdge]
+      ) === 3 &&
+      this.vertexValence(
+        node.mesh,
+        node.mesh.heOrigin[node.mesh.heNext[halfEdge]]
+      ) === 3
     );
   }
 
@@ -10293,7 +10324,7 @@ export class EditorRuntime {
       if (drag.edgeIndex === null) {
         throw new Error('Bevel requires one edge.');
       }
-      return bevelEdgeWithCorners(drag.before, drag.edgeIndex, value).mesh;
+      return bevelEdge(drag.before, drag.edgeIndex, value).mesh;
     }
     if (drag.kind === 'loop-cut') {
       if (drag.edgeIndex === null) {

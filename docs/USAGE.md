@@ -58,7 +58,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Merge textures | With two or more textured objects selected, pack their UV layouts into one shared atlas. Texture layers are flattened; the operation is undoable. |
 | ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. |
 | E / I | Arm Extrude / Inset for the current face selection. |
-| Bevel | Select one interior edge, then choose Bevel in the Action Dock. Drag or type the width; both endpoint corners are cut into corner polygons. One edge per operation; the topology rebuild resets UV seams. |
+| Bevel | Select one interior edge, then choose Bevel in the Action Dock. Drag or type the width. One edge per operation; endpoint corners are absorbed by the surrounding faces. Endpoints must be interior valence-three vertices; the topology rebuild resets UV seams. |
 | L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the selected edge loop. Loop Cut follows the selected edge; Loop Slide moves either way from its starting position. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | V / E / F buttons | Switch vertex, edge, or face selection mode; 1 / 2 / 3 are the keyboard shortcuts. |
