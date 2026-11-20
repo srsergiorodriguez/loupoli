@@ -82,7 +82,7 @@ import { extractUvCharts } from '../geometry/uvCharts';
 import { buildBakeAtlasPlan } from '../uv/bakeAtlas';
 import { bakeAtlasTargetSize } from '../texture/size';
 import { resampleTextureDataForBakeAtlas } from '../texture/bakeAtlasTexture';
-import { LscmError, unwrapUvCharts } from '../geometry/lscm';
+import { LscmError, packUvChartRects, unwrapUvCharts } from '../geometry/lscm';
 import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
 import {
   TextureAsset,
@@ -1761,6 +1761,199 @@ export class EditorRuntime {
       this.applyAnimationPose();
     }
     this.publish();
+  }
+
+  /**
+   * Merge the selected objects' textures into one shared atlas.
+   *
+   * Each object's complete UV layout is packed into a cell, its composited
+   * texture is drawn into that cell, and the object is rebound to the new
+   * texture. Source textures stay in the library so undo is lossless. The
+   * merged texture is a single raster layer by design: atlas packing requires a
+   * flattened image and cannot preserve independent per-object layer stacks.
+   */
+  async mergeSelectedTextures(): Promise<void> {
+    if (this.fileBusy || this.bakeBusy) {
+      return;
+    }
+    const nodes = this.document.nodes.filter((node) =>
+      this.selectedNodeIds.has(node.id)
+    );
+    const entries = nodes.flatMap((node) => {
+      if (node.reference || !node.textureId) {
+        return [];
+      }
+      const asset = this.textureLibrary.get(node.textureId);
+      if (!asset || asset.role === 'reference') {
+        return [];
+      }
+      const mesh = node.mesh;
+      let minU = Infinity;
+      let minV = Infinity;
+      let maxU = -Infinity;
+      let maxV = -Infinity;
+      for (let corner = 0; corner < mesh.halfEdgeCount; corner += 1) {
+        const u = mesh.heUv[corner * 2];
+        const v = mesh.heUv[corner * 2 + 1];
+        if (!Number.isFinite(u) || !Number.isFinite(v)) {
+          return [];
+        }
+        minU = Math.min(minU, u);
+        minV = Math.min(minV, v);
+        maxU = Math.max(maxU, u);
+        maxV = Math.max(maxV, v);
+      }
+      if (
+        !Number.isFinite(minU) ||
+        maxU - minU <= 1e-6 ||
+        maxV - minV <= 1e-6
+      ) {
+        return [];
+      }
+      return [{ node, mesh, asset, minU, minV, spanU: maxU - minU, spanV: maxV - minV }];
+    });
+    if (entries.length < 2) {
+      this.notify(
+        'warning',
+        'Merge textures unavailable',
+        'Select at least two mesh objects with assigned model textures.'
+      );
+      return;
+    }
+    const placements = packUvChartRects(
+      entries.map((entry, index) => ({
+        index,
+        spanU: entry.spanU,
+        spanV: entry.spanV
+      }))
+    );
+    if (!placements) {
+      this.notify(
+        'error',
+        'Merge textures failed',
+        'The selected UV layouts could not be packed into one texture.'
+      );
+      return;
+    }
+    const target = bakeAtlasTargetSize(
+      Math.max(1024, ...entries.map((entry) => entry.asset.width)),
+      Math.max(1024, ...entries.map((entry) => entry.asset.height))
+    );
+    this.fileBusy = true;
+    this.projectError = null;
+    this.publish();
+    try {
+      const atlas = document.createElement('canvas');
+      atlas.width = target.width;
+      atlas.height = target.height;
+      const context = atlas.getContext('2d');
+      if (!context) {
+        throw new Error('The merged texture canvas could not be created.');
+      }
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
+        const placement = placements[index];
+        const x = placement.originU * target.width;
+        const y =
+          (1 -
+            (placement.originV + entry.spanV * placement.scale)) *
+          target.height;
+        const width = entry.spanU * placement.scale * target.width;
+        const height = entry.spanV * placement.scale * target.height;
+        context.save();
+        context.beginPath();
+        context.rect(x, y, width, height);
+        context.clip();
+        context.imageSmoothingEnabled = entry.asset.textureFilter === 'linear';
+        context.drawImage(
+          entry.asset.image,
+          0,
+          0,
+          entry.asset.image.width,
+          entry.asset.image.height,
+          x,
+          y,
+          width,
+          height
+        );
+        context.restore();
+      }
+      const bitmap = await createImageBitmap(atlas);
+      const first = entries[0];
+      const asset = this.textureLibrary.build(
+        target.width,
+        target.height,
+        'Merged texture',
+        first.asset.textureFilter
+      );
+      const baseLayerId = asset.activeLayerId;
+      const imported = asset.importBitmapLayer(bitmap, 'Merged atlas', {
+        x: target.width / 2,
+        y: target.height / 2,
+        width: target.width,
+        height: target.height,
+        rotation: 0
+      });
+      bitmap.close();
+      if (!imported) {
+        throw new Error('The merged texture layer could not be created.');
+      }
+      if (baseLayerId) {
+        asset.removeLayer(baseLayerId);
+      }
+      asset.setAlphaMode(first.asset.textureAlphaMode);
+      const commands: import('./commands/EditorCommand').EditorCommand[] = [
+        new CreateTextureAssetCommand(this.textureLibrary, asset)
+      ];
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
+        const placement = placements[index];
+        const before = entry.mesh.heUv.slice();
+        const after = before.slice();
+        for (let corner = 0; corner < entry.mesh.halfEdgeCount; corner += 1) {
+          after[corner * 2] =
+            placement.originU +
+            (before[corner * 2] - entry.minU) * placement.scale;
+          after[corner * 2 + 1] =
+            placement.originV +
+            (before[corner * 2 + 1] - entry.minV) * placement.scale;
+        }
+        commands.push(
+          new ReplaceUvCommand(
+            entry.mesh,
+            entry.node.id,
+            before,
+            after,
+            'Merge texture atlas'
+          )
+        );
+      }
+      commands.push(
+        new AssignTextureCommand(
+          entries.map((entry) => entry.node),
+          asset.id
+        )
+      );
+      this.history.execute(
+        new CompositeCommand('Merge textures', commands)
+      );
+      this.textureLibrary.setActive(asset.id);
+      this.renderer.refreshTexture();
+      this.autosave.markTextureDirty();
+      this.notify(
+        'success',
+        'Textures merged',
+        `${entries.length} objects packed into ${asset.name}`
+      );
+      this.publish();
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.notify('error', 'Merge textures failed', this.projectError);
+      this.publish();
+    } finally {
+      this.fileBusy = false;
+      this.publish();
+    }
   }
 
   /** Duplicate the active texture asset with its layer content. */

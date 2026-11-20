@@ -1050,6 +1050,11 @@
           {/if}
           {#if selectedNodeIds.length > 1 && activeGroupId === null}
             <ActionButton
+              label="Merge textures"
+              icon="stack"
+              onActivate={() => void session.mergeSelectedTextures()}
+            />
+            <ActionButton
               label="Join"
               icon="merge"
               onActivate={() => session.joinSelectedNodes()}

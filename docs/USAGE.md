@@ -55,6 +55,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Two-sided (Mesh Inspector) | Render backfaces for billboard/foliage cards. Works with Cutout or Blend texture alpha. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | Select object in Paint | Activates that object's assigned texture for painting. |
+| Merge textures | With two or more textured objects selected, pack their UV layouts into one shared atlas. Texture layers are flattened; the operation is undoable. |
 | ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. |
 | E / I | Arm Extrude / Inset for the current face selection. |
 | Bevel | Select one interior edge, then choose Bevel in the Action Dock. Drag or type the width. One edge per operation; the topology rebuild resets UV seams. |

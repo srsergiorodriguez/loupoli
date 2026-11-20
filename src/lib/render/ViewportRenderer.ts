@@ -1071,6 +1071,20 @@ export class ViewportRenderer {
         shadowCamera.far = radius * 4;
         shadowCamera.updateProjectionMatrix();
       }
+      // Bias follows shadow-map texel size. A fixed world bias either causes
+      // acne on large scenes or detaches contact shadows on small ones.
+      const softness = Math.max(
+        0,
+        Math.min(1, (directional.shadow.radius - 1) / 6)
+      );
+      directional.shadow.bias = -Math.max(
+        0.0003 + 0.0006 * softness,
+        texel * 0.5
+      );
+      directional.shadow.normalBias = Math.max(
+        0.015 + 0.01 * softness,
+        texel * 2
+      );
     }
   }
 

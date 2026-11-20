@@ -742,6 +742,10 @@ export class EditorSession {
     this.runtime?.createTextureAsset(width, height);
   }
 
+  mergeSelectedTextures(): Promise<void> {
+    return this.runtime?.mergeSelectedTextures() ?? Promise.resolve();
+  }
+
   duplicateActiveTextureAsset(): Promise<void> {
     return this.runtime?.duplicateActiveTextureAsset() ?? Promise.resolve();
   }
