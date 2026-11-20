@@ -1434,6 +1434,10 @@ export class EditorSession {
     this.runtime?.extrudeSelectedFaces();
   }
 
+  bevelSelectedEdge(amount: number): boolean {
+    return this.runtime?.bevelSelectedEdge(amount) ?? false;
+  }
+
   insetSelectedFace(): void {
     this.runtime?.insetSelectedFace();
   }

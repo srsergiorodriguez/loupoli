@@ -177,6 +177,9 @@
   {:else if name === 'eyedropper'}
     <path d="m14.5 4.5 5 5M13 6l5 5M4 20l3.2-.8 8.3-8.3-2.4-2.4L4.8 16.8 4 20Z" />
     <path d="m11.1 7.5 5.4 5.4" />
+  {:else if name === 'bevel'}
+    <path d="M4 4h9l7 7v9H4V4Z" />
+    <path d="M13 4 4 13M20 11l-9-9M4 13v7h16" />
   {:else if name === 'more'}
     <circle cx="5" cy="12" r="1.6" fill="currentColor" />
     <circle cx="12" cy="12" r="1.6" fill="currentColor" />

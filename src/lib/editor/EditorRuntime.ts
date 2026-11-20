@@ -19,6 +19,7 @@ import {
   type Modifier,
   type ModifierKind
 } from '../geometry/modifiers';
+import { bevelEdge } from '../geometry/bevel';
 import {
   bridgeSelectedEdges,
   deleteSelectedElements,
@@ -9599,6 +9600,54 @@ export class EditorRuntime {
   }
 
   /** Inset the single selected face toward its centroid. */
+  /** Bevel exactly one selected interior edge as one mesh replacement. */
+  bevelSelectedEdge(amount: number): boolean {
+    if (this.meshPoseEdit || this.shapeEdit) {
+      return false;
+    }
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      node.reference ||
+      this.selection.mode !== 'edge' ||
+      this.selection.count !== 1
+    ) {
+      return false;
+    }
+    if (node.shapeKeys.length > 0 || node.motionTracked) {
+      this.notify(
+        'warning',
+        'Cannot bevel',
+        'Remove shape keys and Mesh Motion tracks before changing topology.'
+      );
+      return false;
+    }
+    const edge = this.selection.values()[0];
+    let result;
+    try {
+      result = bevelEdge(node.mesh, edge, amount);
+    } catch (error) {
+      this.notify(
+        'error',
+        'Cannot bevel edge',
+        error instanceof Error ? error.message : 'The edge could not be beveled.'
+      );
+      return false;
+    }
+    this.selection.clear();
+    this.lastLoopCut = null;
+    this.history.execute(
+      new ReplaceMeshCommand(
+        node,
+        node.mesh,
+        result.mesh,
+        `Bevel edge ${edge + 1}`
+      )
+    );
+    this.publish();
+    return true;
+  }
+
   insetSelectedFace(): void {
     const node = this.getActiveNode();
     if (

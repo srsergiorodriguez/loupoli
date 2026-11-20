@@ -49,6 +49,7 @@ export type IconName =
   | 'gradient'
   | 'fill'
   | 'eyedropper'
+  | 'bevel'
   | 'more'
   | 'pin'
   | 'unwrap'

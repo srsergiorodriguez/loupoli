@@ -332,6 +332,7 @@
 
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
+  let bevelAmount = $state(0.1);
   let objExportOpen = $state(false);
   let objFramesOpen = $state(false);
   let newTextureOpen = $state(false);
@@ -651,6 +652,10 @@
 
   function deleteObject(): void {
     session.deleteActiveNode();
+  }
+
+  function bevelEdgeSelection(): void {
+    session.bevelSelectedEdge(bevelAmount);
   }
 
   function addReferenceImage(event: Event): void {
@@ -1942,6 +1947,29 @@
             </button>
           {/if}
         </div>
+      {/if}
+
+      {#if canEdit3d && session.snapshot.selectionMode === 'edge' && selectionCount === 1}
+        <div class="bevel-row">
+          <span class="bevel-label">Bevel edge</span>
+          <NumberField
+            label="Bevel amount"
+            value={bevelAmount}
+            min={0.001}
+            max={50}
+            step={0.05}
+            precision={3}
+            onCommit={(value) => (bevelAmount = value)}
+          />
+          <ActionButton
+            label="Bevel"
+            icon="bevel"
+            onActivate={bevelEdgeSelection}
+          />
+        </div>
+        <p class="hint">One edge per operation in this pass. UV seams are reset by the topology rebuild.</p>
+      {:else if canEdit3d && session.snapshot.selectionMode === 'edge' && selectionCount > 1}
+        <p class="hint">Bevel handles one edge at a time in this pass.</p>
       {/if}
 
       {#if canSeam && activeNodeId !== null && session.snapshot.seamCount > 0}
@@ -3245,6 +3273,24 @@
 
   .space-row :global(.segmented) {
     justify-self: end;
+  }
+
+  .bevel-row {
+    display: grid;
+    grid-template-columns: var(--inspector-label-width) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--inspector-row-gap);
+    min-height: var(--control-h);
+  }
+
+  .bevel-label {
+    color: var(--text-secondary);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+  }
+
+  .bevel-row :global(.number-field) {
+    min-width: 0;
   }
 
   .brush-body {
