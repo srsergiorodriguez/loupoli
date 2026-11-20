@@ -84,7 +84,7 @@ All tooltips come from the command registry. Format: `Label — Shortcut` when a
 
 - **Icon only:** universally understood document/UI actions: undo, redo, open, save, sidebar, close, visibility.
 - **Icon + short text:** domain actions: Group, Join, Ungroup, Delete, Add Layer, Extrude, Inset, Loop Cut, Loop Slide.
-- **Text only:** modes and stateful UV operations: V/E/F mode buttons (1/2/3 keyboard), Island, All, Toggle, Fit, Clamp, Sync 3D, Pin, Unpin, Unwrap, Stack.
+- **Text only:** modes and stateful UV operations: V/E/F mode buttons (1/2/3 keyboard), Island, All, Multi, Fit, Clamp, Sync 3D, Pin, Unpin, Unwrap, Stack.
 - **Never icon-only for a destructive action.**
 - Every icon-only control has an accessible label and a tooltip via `TooltipLayer`.
 - Hover is supplemental. Touch users must be able to identify every control without hover.

@@ -54,6 +54,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Move/Rotate/Scale handle | With an element selection, the gizmo sits at the selection median and drags the selected elements; otherwise it transforms the active object/group on that axis. Pen, mouse, and touch are supported. |
 | Two-sided (Mesh Inspector) | Render backfaces for billboard/foliage cards. Works with Cutout or Blend texture alpha. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
+| Select object in Paint | Activates that object's assigned texture for painting. |
 | ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. |
 | E / I | Arm Extrude / Inset for the current face selection. |
 | Bevel | Select one interior edge, then choose Bevel in the Action Dock. Drag or type the width. One edge per operation; the topology rebuild resets UV seams. |
@@ -61,12 +62,13 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | V / E / F buttons | Switch vertex, edge, or face selection mode; 1 / 2 / 3 are the keyboard shortcuts. |
 | Shift+Tab | Toggle grid snapping. |
+| Two-finger tap over a pane | Undo while a pane, such as UV or Paint, has focus. |
 | Cmd/Ctrl+D | Duplicate the active mesh object in place. |
 | Shift, Cmd, or Ctrl + click | Toggle an element in the current selection. |
 | Right-drag | Pan the view. |
 | Lasso tool + drag | Select a screen-space region in the current element mode. |
-| Toggle | Sticky additive/toggle selection for pen, mouse, and touch taps. Clicking a selected element removes it. |
-| Touch tap / drag | One-finger tap selects the current element mode; dragging a handle or gizmo edits, while empty-space drag orbits unless the Lasso tool is active. With Toggle on, taps toggle the set. |
+| Multi | Sticky multi-selection for pen, mouse, and touch taps. Clicking a selected element removes it. |
+| Touch tap / drag | One-finger tap selects the current element mode; dragging a handle or gizmo edits, while empty-space drag orbits unless the Lasso tool is active. With Multi on, taps toggle the set. |
 | Mouse LMB on empty canvas or a mesh face away from a handle | Orbit the camera. |
 | Alt/Option + LMB | Orbit. Useful for trackpads and one-button mice. |
 | Alt/Option + Shift + LMB | Pan. |

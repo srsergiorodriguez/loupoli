@@ -3,6 +3,7 @@
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import SelectField from '../Primitives/SelectField.svelte';
+  import Icon from '../Icons/Icon.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import { onMount } from 'svelte';
   import { shortcutBus } from '../../input/ShortcutBus';
@@ -246,6 +247,14 @@
     }
   }
 
+  function deleteTrack(track: AnimationTrackSummary): void {
+    selectedKeys = selectedKeys.filter((key) => key.trackId !== track.id);
+    if (selectedTrackId === track.id) {
+      selectedTrackId = null;
+    }
+    session.deleteAnimationTrack(track);
+  }
+
   function isKeySelected(trackId: string, frame: number): boolean {
     return selectedKeys.some(
       (selection) => selection.trackId === trackId && selection.frame === frame
@@ -482,6 +491,13 @@
         }
       ]}
     />
+    <IconButton
+      label="Delete clip"
+      icon="trash"
+      tooltip="Delete animation clip"
+      disabled={snapshot.meshPoseEditing || animationClips.length <= 1}
+      onActivate={() => session.deleteAnimationClip()}
+    />
     {#if activeClip}
       <span class="timeline-clip-meta">
         {activeClip.trackCount} track{activeClip.trackCount === 1 ? '' : 's'}
@@ -661,6 +677,18 @@
                 keyTrack(track);
               }}
             >+</button>
+            <button
+              type="button"
+              class="track-key-action track-remove-action"
+              aria-label={`Remove ${track.targetName} track`}
+              title={`Remove ${track.targetName} track`}
+              disabled={snapshot.meshPoseEditing}
+              onpointerdown={(event) => event.stopPropagation()}
+              onclick={(event) => {
+                event.stopPropagation();
+                deleteTrack(track);
+              }}
+            ><Icon name="trash" size={11} /></button>
           </span>
           <span class="track-lane">
             {#each track.keyframes.filter((key) => key.frame >= viewStart && key.frame <= viewEnd) as key (key.frame)}
@@ -952,6 +980,11 @@
   .track-key-action:hover:not(:disabled) {
     border-color: var(--border-strong);
     color: var(--accent-primary);
+  }
+
+  .track-remove-action:hover:not(:disabled) {
+    border-color: var(--accent-danger);
+    color: var(--accent-danger);
   }
 
   .track-key-action:disabled {

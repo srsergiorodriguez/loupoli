@@ -306,6 +306,7 @@ import {
   type ToastKind,
   type ToastMessage,
   type AnimationKeyReference,
+  type AnimationTrackSummary,
   type ObjFrameExportOptions,
   type ActiveJobSnapshot,
   type ImagePlacementSnapshot
@@ -1188,6 +1189,22 @@ export class EditorRuntime {
     };
   }
 
+  /** Follow the active mesh's texture when working in Paint. */
+  private syncPaintTextureToActiveNode(): void {
+    if (this.workspace !== 'paint') {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node || node.reference || !node.textureId) {
+      return;
+    }
+    const asset = this.textureLibrary.get(node.textureId);
+    if (!asset || asset.role === 'reference') {
+      return;
+    }
+    this.textureLibrary.setActive(asset.id);
+  }
+
   /** Select the active texture asset for the inspector and paint tools. */
   setActiveTextureAsset(id: string): void {
     if (this.textureLibrary.activeAssetId === id) {
@@ -1706,30 +1723,43 @@ export class EditorRuntime {
     this.publish();
   }
 
-  /** Delete the active asset when no nodes reference it. */
+  /** Delete the active asset, cleaning texture animation references. */
   deleteActiveTextureAsset(): void {
     const asset = this.textureLibrary.active;
     if (!asset || this.textureLibrary.list().length <= 1) {
       return;
     }
-    const animated = this.document.animation.clips.some((clip) =>
-      clip.textureTracks.some((track) =>
-        track.keyframes.some((key) => key.textureId === asset.id)
-      )
-    );
-    if (
-      animated ||
-      this.document.nodes.some((node) => node.textureId === asset.id)
-    ) {
-      this.projectError = animated
-        ? 'Remove this texture from animation before deleting it.'
-        : 'Unassign this texture before deleting it.';
+    if (this.document.nodes.some((node) => node.textureId === asset.id)) {
+      this.projectError = 'Unassign this texture from its objects before deleting it.';
       this.publish();
       return;
     }
-    this.history.execute(new DeleteTextureAssetCommand(this.textureLibrary, asset));
+    const beforeAnimation = this.document.animation.snapshot();
+    const removed = this.document.animation.removeTextureReferences(asset.id);
+    const afterAnimation = this.document.animation.snapshot();
+    const commands: import('./commands/EditorCommand').EditorCommand[] = [
+      new DeleteTextureAssetCommand(this.textureLibrary, asset)
+    ];
+    if (removed > 0) {
+      commands.unshift(
+        new SetAnimationCommand(
+          this.document.animation,
+          beforeAnimation,
+          afterAnimation,
+          'Remove texture animation'
+        )
+      );
+    }
+    this.history.execute(
+      commands.length === 1
+        ? commands[0]
+        : new CompositeCommand('Delete texture asset', commands)
+    );
     this.renderer.clearTextureMaterials(asset.id);
     this.autosave.markTextureDirty();
+    if (removed > 0) {
+      this.applyAnimationPose();
+    }
     this.publish();
   }
 
@@ -2425,14 +2455,12 @@ export class EditorRuntime {
         this.selection.setContext(this.activeNodeId, this.selection.mode);
       }
     }
-    if (workspace !== 'model') {
-      this.annotationMode = false;
-      if (this.annotationStroke) {
-        this.annotationStroke = null;
-      }
+    if (this.annotationStroke) {
+      this.annotationStroke = null;
     }
     this.workspace = workspace;
     this.applyWorkspaceTransformValueSpace(workspace);
+    this.syncPaintTextureToActiveNode();
     if (workspace !== 'animation') {
       this.pauseAnimation();
     }
@@ -2485,6 +2513,7 @@ export class EditorRuntime {
     }
     this.workspace = workspace;
     this.applyWorkspaceTransformValueSpace(workspace);
+    this.syncPaintTextureToActiveNode();
     this.applyWorkspaceShading(workspace);
     const paint = workspace === 'paint';
     if (!paint && this.uvPaintMode) {
@@ -2975,7 +3004,7 @@ export class EditorRuntime {
       });
     if (selectedCharts.length !== 2) {
       this.uvError =
-        'Select exactly two complete UV islands with Island mode and Add.';
+        'Select exactly two complete UV islands with Island mode and Multi.';
       this.uvRevision += 1;
       this.publish();
       return;
@@ -6296,6 +6325,50 @@ export class EditorRuntime {
     this.applyAnimationPose();
   }
 
+  /** Remove one complete animation track from the active clip. */
+  deleteAnimationTrack(track: AnimationTrackSummary): void {
+    if (this.meshPoseEdit) {
+      return;
+    }
+    const animation = this.document.animation;
+    const before = animation.snapshot();
+    switch (track.kind) {
+      case 'texture':
+        animation.removeTextureTrack(track.targetId);
+        break;
+      case 'camera':
+        animation.removeCameraTrack(track.targetId);
+        break;
+      case 'light':
+        animation.removeLightTrack(track.targetId);
+        break;
+      case 'mesh':
+        animation.removeMeshTrack(track.targetId);
+        break;
+      case 'shape':
+        if (track.shapeKeyId) {
+          animation.removeWeightTrack(track.targetId, track.shapeKeyId);
+        }
+        break;
+      default:
+        animation.removeTrack(track.targetId);
+        break;
+    }
+    const after = animation.snapshot();
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return;
+    }
+    this.history.execute(
+      new SetAnimationCommand(
+        animation,
+        before,
+        after,
+        'Remove animation track'
+      )
+    );
+    this.applyAnimationPose();
+  }
+
   /** Delete the active clip, keeping at least one. */
   deleteAnimationClip(): void {
     if (this.meshPoseEdit) {
@@ -7372,11 +7445,7 @@ export class EditorRuntime {
     if (
       this.animationPlaying ||
       this.meshPoseEdit ||
-      (this.document.animation.tracks.length === 0 &&
-        this.document.animation.weightTracks.length === 0 &&
-        this.document.animation.meshTracks.length === 0 &&
-        this.document.animation.cameraTracks.length === 0 &&
-        this.document.animation.lightTracks.length === 0)
+      !this.document.animation.hasActiveContent()
     ) {
       return;
     }
@@ -7745,6 +7814,8 @@ export class EditorRuntime {
         );
       });
       recorder.start(250);
+      const framePeriod = 1000 / fps;
+      const startedAt = performance.now();
       for (let frame = start; frame <= end; frame += 1) {
         this.throwIfJobCancelled();
         this.setAnimationFrame(frame);
@@ -7770,12 +7841,19 @@ export class EditorRuntime {
             background: this.renderBackground
           }
         );
+        // MediaRecorder timestamps captures in real time. Wait against the
+        // absolute frame deadline instead of adding a full frame period after
+        // rendering, otherwise render time makes the exported video slower
+        // than animation playback.
+        const deadline = startedAt + (frame - start) * framePeriod;
+        const wait = deadline - performance.now();
+        if (wait > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, wait));
+        }
+        this.throwIfJobCancelled();
         context.drawImage(frameCanvas, 0, 0);
         track?.requestFrame();
         this.updateJob(frame - start + 1);
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, 1000 / fps)
-        );
       }
       this.throwIfJobCancelled();
       recorder.stop();
@@ -13837,9 +13915,6 @@ export class EditorRuntime {
 
   /** Enable or disable the Pencil/mouse annotation overlay tool. Touch is excluded. */
   setAnnotationMode(enabled: boolean): void {
-    if (enabled && this.workspace !== 'model') {
-      return;
-    }
     if (this.annotationMode === enabled) {
       return;
     }

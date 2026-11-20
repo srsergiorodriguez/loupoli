@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createCubeMesh, createGridMesh, createQuadSphereMesh } from './primitives';
 import { extractUvCharts } from './uvCharts';
-import { LscmError, unwrapUvCharts } from './lscm';
+import { LscmError, packUvChartRects, unwrapUvCharts } from './lscm';
 
 describe('LSCM unwrap', () => {
   it('unwraps a single quad into finite, non-degenerate UVs', () => {
@@ -135,3 +135,44 @@ describe('LSCM unwrap', () => {
     expect(() => unwrapUvCharts(sphere, [])).toThrow(LscmError);
   });
 });
+  it('packs variable-size chart rectangles without overlap', () => {
+    const placements = packUvChartRects([
+      { index: 0, spanU: 1.2, spanV: 0.4 },
+      { index: 1, spanU: 0.3, spanV: 1.1 },
+      { index: 2, spanU: 0.6, spanV: 0.5 },
+      { index: 3, spanU: 0.2, spanV: 0.2 }
+    ]);
+    expect(placements).not.toBeNull();
+    const boxes = placements!.map((placement, index) => {
+      const rect = [
+        { spanU: 1.2, spanV: 0.4 },
+        { spanU: 0.3, spanV: 1.1 },
+        { spanU: 0.6, spanV: 0.5 },
+        { spanU: 0.2, spanV: 0.2 }
+      ][index];
+      return {
+        minU: placement.originU,
+        minV: placement.originV,
+        maxU: placement.originU + rect.spanU * placement.scale,
+        maxV: placement.originV + rect.spanV * placement.scale
+      };
+    });
+    for (const box of boxes) {
+      expect(box.minU).toBeGreaterThanOrEqual(0);
+      expect(box.minV).toBeGreaterThanOrEqual(0);
+      expect(box.maxU).toBeLessThanOrEqual(1);
+      expect(box.maxV).toBeLessThanOrEqual(1);
+    }
+    for (let first = 0; first < boxes.length; first += 1) {
+      for (let second = first + 1; second < boxes.length; second += 1) {
+        const a = boxes[first];
+        const b = boxes[second];
+        const separated =
+          a.maxU <= b.minU ||
+          b.maxU <= a.minU ||
+          a.maxV <= b.minV ||
+          b.maxV <= a.minV;
+        expect(separated).toBe(true);
+      }
+    }
+  });

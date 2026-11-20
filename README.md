@@ -174,7 +174,7 @@ Key boundaries:
 Current checks:
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **301 tests across 63 files**.
+- `npm test`: **307 tests across 65 files**.
 - `npm run build`: passes.
 - `cargo test` in `src-tauri`: **7 passing tests**.
 - Signed iPad release installed and launched on an iPad Air with iPadOS 26.6.1.

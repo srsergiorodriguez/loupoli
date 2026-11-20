@@ -197,3 +197,27 @@ describe('SceneAnimation', () => {
     expect(restored.getCameraTrack('camera-1')?.evaluate(5)?.fov).toBe(40);
     expect(restored.getLightTrack('light-1')?.evaluate(5)?.intensity).toBe(3);
   });
+
+  it('treats texture-only clips as playable content', () => {
+    const animation = new SceneAnimation();
+    expect(animation.hasActiveContent()).toBe(false);
+    const track = animation.ensureTextureTrack('node-1');
+    track.setKey(0, 'texture-a');
+    track.setKey(12, 'texture-b');
+    expect(animation.hasActiveContent()).toBe(true);
+  });
+
+  it('removes texture animation references across clips', () => {
+    const animation = new SceneAnimation();
+    const first = animation.activeClip;
+    first.ensureTextureTrack('node-1').setKey(0, 'texture-a');
+    first.ensureTextureTrack('node-2').setKey(0, 'texture-b');
+    const second = new AnimationClip('Second', 'clip-second');
+    second.ensureTextureTrack('node-1').setKey(4, 'texture-a');
+    animation.clips.push(second);
+    expect(animation.removeTextureReferences('texture-a')).toBe(2);
+    expect(first.getTextureTrack('node-1')).toBeNull();
+    expect(first.getTextureTrack('node-2')?.keyframes).toHaveLength(1);
+    expect(second.getTextureTrack('node-1')).toBeNull();
+    expect(second.textureTracks).toHaveLength(0);
+  });

@@ -373,8 +373,122 @@ function unwrapChart(
   return result;
 }
 
+/** One sized chart rectangle used by the deterministic UV shelf packer. */
+export interface UvPackRect {
+  readonly index: number;
+  readonly spanU: number;
+  readonly spanV: number;
+}
+
+/** Placement and common scale of one chart rectangle in UV space. */
+export interface UvPackPlacement {
+  readonly originU: number;
+  readonly originV: number;
+  readonly scale: number;
+}
+
+const UV_PACK_MARGIN = 0.02;
+const UV_PACK_GAP = 0.02;
+
 /**
- * Unwrap all charts, normalize them into a simple deterministic shelf, and
+ * Pack chart rectangles with a deterministic variable-size shelf.
+ *
+ * Every chart receives the same scale, preserving texel density. Larger charts
+ * are placed first and the uniform scale is maximized by bisection. The old
+ * equal-cell grid wasted most of the atlas when charts had different aspect
+ * ratios; this shelf still guarantees finite, non-overlapping bounds without
+ * rotating or distorting a chart.
+ */
+export function packUvChartRects(
+  rects: readonly UvPackRect[]
+): UvPackPlacement[] | null {
+  if (rects.length === 0) {
+    return [];
+  }
+  const available = 1 - UV_PACK_MARGIN * 2;
+  let upperBound = Infinity;
+  for (const rect of rects) {
+    if (
+      !Number.isFinite(rect.spanU) ||
+      !Number.isFinite(rect.spanV) ||
+      rect.spanU <= 0 ||
+      rect.spanV <= 0
+    ) {
+      return null;
+    }
+    upperBound = Math.min(
+      upperBound,
+      available / rect.spanU,
+      available / rect.spanV
+    );
+  }
+  if (!Number.isFinite(upperBound) || upperBound <= 0) {
+    return null;
+  }
+
+  const tryPack = (scale: number): UvPackPlacement[] | null => {
+    const ordered = [...rects].sort((a, b) => {
+      const heightDelta = b.spanV * scale - a.spanV * scale;
+      if (Math.abs(heightDelta) > 1e-12) {
+        return heightDelta;
+      }
+      const widthDelta = b.spanU * scale - a.spanU * scale;
+      if (Math.abs(widthDelta) > 1e-12) {
+        return widthDelta;
+      }
+      return a.index - b.index;
+    });
+    const placements: UvPackPlacement[] = new Array(rects.length);
+    let x = UV_PACK_MARGIN;
+    let y = UV_PACK_MARGIN;
+    let rowHeight = 0;
+    for (const rect of ordered) {
+      const width = rect.spanU * scale;
+      const height = rect.spanV * scale;
+      if (width > available + 1e-9 || height > available + 1e-9) {
+        return null;
+      }
+      if (x + width > 1 - UV_PACK_MARGIN + 1e-9) {
+        x = UV_PACK_MARGIN;
+        y += rowHeight + UV_PACK_GAP;
+        rowHeight = 0;
+      }
+      if (y + height > 1 - UV_PACK_MARGIN + 1e-9) {
+        return null;
+      }
+      placements[rect.index] = {
+        originU: x,
+        originV: 1 - y - height,
+        scale
+      };
+      x += width + UV_PACK_GAP;
+      rowHeight = Math.max(rowHeight, height);
+    }
+    return placements;
+  };
+
+  const direct = tryPack(upperBound);
+  if (direct) {
+    return direct;
+  }
+  let low = 0;
+  let high = upperBound;
+  let best: UvPackPlacement[] | null = null;
+  for (let iteration = 0; iteration < 40; iteration += 1) {
+    const middle = (low + high) * 0.5;
+    const candidate = tryPack(middle);
+    if (candidate) {
+      best = candidate;
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+  return best;
+}
+
+/**
+ * Unwrap all charts, normalize them into a deterministic shelf, and
  * return per-half-edge UVs. Charts solve on split corner fans, so one mesh
  * vertex may receive multiple UVs inside the same chart across a seam cut.
  */
@@ -387,15 +501,7 @@ export function unwrapUvCharts(
     throw new LscmError('The mesh has no faces to unwrap.');
   }
   const result = new Float32Array(mesh.heUv);
-  const columns = Math.ceil(Math.sqrt(charts.length));
-  const rows = Math.ceil(charts.length / columns);
-  const cellWidth = 1 / columns;
-  const cellHeight = 1 / rows;
-  const margin = Math.min(cellWidth, cellHeight) * 0.08;
-  const usableWidth = Math.max(1e-6, cellWidth - margin * 2);
-  const usableHeight = Math.max(1e-6, cellHeight - margin * 2);
-
-  charts.forEach((chart, chartIndex) => {
+  const layouts = charts.map((chart) => {
     const chartPins = pinnedCorners
       ? [
           ...new Set(
@@ -420,22 +526,38 @@ export function unwrapUvCharts(
       maxU = Math.max(maxU, uv[0]);
       maxV = Math.max(maxV, uv[1]);
     }
-    const spanU = Math.max(maxU - minU, 1e-9);
-    const spanV = Math.max(maxV - minV, 1e-9);
-    const scale = Math.min(usableWidth / spanU, usableHeight / spanV);
-    const column = chartIndex % columns;
-    const row = Math.floor(chartIndex / columns);
-    const originU = column * cellWidth + margin;
-    const originV = 1 - (row + 1) * cellHeight + margin;
-    for (const face of chart.faces) {
+    return {
+      chart,
+      uvs,
+      minU,
+      minV,
+      spanU: Math.max(maxU - minU, 1e-9),
+      spanV: Math.max(maxV - minV, 1e-9)
+    };
+  });
+  const placements = packUvChartRects(
+    layouts.map((layout, index) => ({
+      index,
+      spanU: layout.spanU,
+      spanV: layout.spanV
+    }))
+  );
+  if (!placements) {
+    throw new LscmError('The UV charts could not be packed into the texture.');
+  }
+  layouts.forEach((layout, chartIndex) => {
+    const placement = placements[chartIndex];
+    for (const face of layout.chart.faces) {
       for (const halfEdge of faceCorners(mesh, face)) {
-        const uvVertex = chart.cornerUvVertex.get(halfEdge);
-        const uv = uvVertex === undefined ? undefined : uvs.get(uvVertex);
+        const uvVertex = layout.chart.cornerUvVertex.get(halfEdge);
+        const uv = uvVertex === undefined ? undefined : layout.uvs.get(uvVertex);
         if (!uv) {
           continue;
         }
-        result[halfEdge * 2] = originU + (uv[0] - minU) * scale;
-        result[halfEdge * 2 + 1] = originV + (uv[1] - minV) * scale;
+        result[halfEdge * 2] =
+          placement.originU + (uv[0] - layout.minU) * placement.scale;
+        result[halfEdge * 2 + 1] =
+          placement.originV + (uv[1] - layout.minV) * placement.scale;
       }
     }
   });

@@ -118,11 +118,11 @@
     class="mode-button"
     class:active={session.snapshot.selectionCombineMode === 'add'}
     aria-pressed={session.snapshot.selectionCombineMode === 'add'}
-    aria-label="Toggle selection"
-    title={commandTooltipFor('selection.toggle')}
+    aria-label="Multi-select mode: add or remove elements"
+    title="Multi-select mode: add or remove elements"
     onclick={toggleCombine}
   >
-    <span class="mode-label mode-label--combine">{command('selection.toggle').label}</span>
+    <span class="mode-label mode-label--combine">Multi</span>
   </button>
 </div>
 

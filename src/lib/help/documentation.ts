@@ -29,13 +29,13 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Selection',
         paragraphs: [
-          'The V, E, and F buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Toggle, Shift, Cmd, or Ctrl toggles subsequent picks; clicking a selected element removes it. Changing mode clears the element set, while object selection remains in the Scene outliner.',
+          'The V, E, and F buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Multi, Shift, Cmd, or Ctrl toggles subsequent picks; clicking a selected element removes it. Changing mode clears the element set, while object selection remains in the Scene outliner.',
           'The Loop toggle is available in Edge mode. Enabling it expands the current edge selection; it walks through connected quad edges, follows an open boundary, and stops at a pole or a non-quad junction. The same Edge mode supports marking seams for UV work.'
         ],
         controls: [
           'V / E / F buttons: vertex, edge, or face mode',
           '1 / 2 / 3: keyboard selection-mode shortcuts',
-          'Toggle, Shift, Cmd, Ctrl: toggle selection',
+          'Multi, Shift, Cmd, Ctrl: toggle selection',
           'Shift+Tab: toggle grid snapping',
           'X / Y / Z: lock a transform to a world axis'
         ]

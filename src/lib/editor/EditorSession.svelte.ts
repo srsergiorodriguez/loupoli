@@ -1151,6 +1151,10 @@ export class EditorSession {
     this.runtime?.duplicateAnimationClip();
   }
 
+  deleteAnimationTrack(track: import('./types').AnimationTrackSummary): void {
+    this.runtime?.deleteAnimationTrack(track);
+  }
+
   deleteAnimationClip(): void {
     this.runtime?.deleteAnimationClip();
   }

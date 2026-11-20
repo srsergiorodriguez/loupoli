@@ -315,18 +315,16 @@
             tooltipPlacement="bottom"
             onActivate={() => session.resetView()}
           />
-          {#if session.snapshot.workspace === 'model'}
-            <IconButton
-              label="Annotate"
-              icon="line"
-              tooltip="Annotate"
-              active={annotationsActive}
-              pressed={annotationsActive}
-              tooltipPlacement="bottom"
-              onActivate={() =>
-                session.setAnnotationMode(!session.snapshot.annotationMode)}
-            />
-          {/if}
+          <IconButton
+            label="Annotate"
+            icon="line"
+            tooltip="Annotate in any workspace"
+            active={annotationsActive}
+            pressed={annotationsActive}
+            tooltipPlacement="bottom"
+            onActivate={() =>
+              session.setAnnotationMode(!session.snapshot.annotationMode)}
+          />
         </div>
           <OrientationGizmo {session} />
         </div>

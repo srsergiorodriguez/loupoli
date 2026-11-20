@@ -1,5 +1,6 @@
 import { shortcutBus } from './ShortcutBus';
 import { commandForKeyboardEvent } from './commands';
+import { paneTouchTapAction } from './paneTouchTap';
 
 /** Normalized pointer data handed to the editor, independent of DOM quirks. */
 export interface PointerSample {
@@ -154,6 +155,11 @@ export class InputRouter {
   private touchLasso = false;
   private lastPenUpAt = -Infinity;
   private lastTouchUpAt = -Infinity;
+  private readonly paneTouches = new Map<number, TouchRecord>();
+  private paneTouchStartedAt = 0;
+  private paneTouchMaxPointers = 0;
+  private paneTouchMaxTravel = 0;
+  private paneTouchInvalid = false;
 
   private readonly mouse: MouseGesture = {
     mode: 'none',
@@ -168,6 +174,94 @@ export class InputRouter {
   private lastMouseX = 0;
   private lastMouseY = 0;
   private hasMousePosition = false;
+
+  private readonly onPanePointerDown = (event: PointerEvent): void => {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    const target = event.target;
+    if (target instanceof Node && this.element.contains(target)) {
+      if (this.paneTouches.size > 0) {
+        this.paneTouchInvalid = true;
+      }
+      return;
+    }
+    if (
+      target instanceof HTMLElement &&
+      target.closest('input,textarea,select,[contenteditable="true"]')
+    ) {
+      return;
+    }
+    if (this.paneTouches.size === 0) {
+      this.paneTouchStartedAt = performance.now();
+      this.paneTouchMaxPointers = 0;
+      this.paneTouchMaxTravel = 0;
+      this.paneTouchInvalid = false;
+    }
+    this.paneTouches.set(event.pointerId, {
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY
+    });
+    this.paneTouchMaxPointers = Math.max(
+      this.paneTouchMaxPointers,
+      this.paneTouches.size
+    );
+  };
+
+  private readonly onPanePointerMove = (event: PointerEvent): void => {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    const record = this.paneTouches.get(event.pointerId);
+    if (!record) {
+      return;
+    }
+    record.lastX = event.clientX;
+    record.lastY = event.clientY;
+    this.paneTouchMaxTravel = Math.max(
+      this.paneTouchMaxTravel,
+      Math.hypot(
+        event.clientX - record.startX,
+        event.clientY - record.startY
+      )
+    );
+  };
+
+  private readonly onPanePointerUp = (event: PointerEvent): void => {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    this.paneTouches.delete(event.pointerId);
+    if (this.paneTouches.size > 0) {
+      return;
+    }
+    const action = paneTouchTapAction(
+      this.paneTouchMaxPointers,
+      performance.now() - this.paneTouchStartedAt,
+      this.paneTouchMaxTravel,
+      this.paneTouchInvalid
+    );
+    this.paneTouchMaxPointers = 0;
+    this.paneTouchMaxTravel = 0;
+    this.paneTouchInvalid = false;
+    if (action === 'undo') {
+      this.host.undo();
+    } else if (action === 'redo') {
+      this.host.redo();
+    }
+  };
+
+  private readonly onPanePointerCancel = (event: PointerEvent): void => {
+    if (event.pointerType !== 'touch') {
+      return;
+    }
+    this.paneTouches.delete(event.pointerId);
+    if (this.paneTouches.size > 0) {
+      this.paneTouchInvalid = true;
+    }
+  };
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     const sample = this.toSample(event);
@@ -654,6 +748,8 @@ export class InputRouter {
   };
 
   private readonly onWindowBlur = (): void => {
+    this.paneTouches.clear();
+    this.paneTouchInvalid = false;
     if (this.host.isModalTransformActive()) {
       this.host.modalTransformKey('Escape');
     }
@@ -691,6 +787,10 @@ export class InputRouter {
     element.addEventListener('contextmenu', this.onContextMenu);
     this.unregisterShortcuts = shortcutBus.register(this.onKeyDown);
     window.addEventListener('blur', this.onWindowBlur);
+    window.addEventListener('pointerdown', this.onPanePointerDown, true);
+    window.addEventListener('pointermove', this.onPanePointerMove, true);
+    window.addEventListener('pointerup', this.onPanePointerUp, true);
+    window.addEventListener('pointercancel', this.onPanePointerCancel, true);
   }
 
   /** Remove every listener owned by the router. */
@@ -704,6 +804,10 @@ export class InputRouter {
     this.element.removeEventListener('contextmenu', this.onContextMenu);
     this.unregisterShortcuts();
     window.removeEventListener('blur', this.onWindowBlur);
+    window.removeEventListener('pointerdown', this.onPanePointerDown, true);
+    window.removeEventListener('pointermove', this.onPanePointerMove, true);
+    window.removeEventListener('pointerup', this.onPanePointerUp, true);
+    window.removeEventListener('pointercancel', this.onPanePointerCancel, true);
     this.touches.clear();
     this.ignoredTouches.clear();
   }

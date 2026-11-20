@@ -770,13 +770,13 @@
       <IconButton
         label="Stack islands"
         icon="stack"
-        tooltip="Stack selected islands"
+        tooltip="Stack the other selected island onto the last picked island"
         onActivate={() => session.stackUvIslands()}
       />
       <IconButton
         label="Mirror stack islands"
         icon="mirror"
-        tooltip="Stack selected islands with mirrored correspondence"
+        tooltip="Mirror-stack onto the last picked island"
         onActivate={() => session.mirrorStackUvIslands()}
       />
     </div>

@@ -1238,6 +1238,35 @@ export class AnimationClip {
     }
   }
 
+  /** Whether this clip contains any animatable data. */
+  hasContent(): boolean {
+    return (
+      this.tracks.length > 0 ||
+      this.weightTracks.length > 0 ||
+      this.textureTracks.length > 0 ||
+      this.meshTracks.length > 0 ||
+      this.cameraTracks.length > 0 ||
+      this.lightTracks.length > 0
+    );
+  }
+
+  /** Remove every texture key that references one asset. */
+  removeTextureReferences(textureId: string): number {
+    let removed = 0;
+    for (const track of [...this.textureTracks]) {
+      for (const key of [...track.keyframes]) {
+        if (key.textureId === textureId) {
+          track.removeKey(key.frame);
+          removed += 1;
+        }
+      }
+      if (track.keyframes.length === 0) {
+        this.removeTextureTrack(track.targetId);
+      }
+    }
+    return removed;
+  }
+
   /** Detached snapshot for commands and persistence. */
   snapshot(): AnimationClipSnapshot {
     return {
@@ -1509,6 +1538,20 @@ export class SceneAnimation {
         ),
       0
     );
+  }
+
+  /** Whether the active clip has any track that can play. */
+  hasActiveContent(): boolean {
+    return this.activeClip.hasContent();
+  }
+
+  /** Remove texture keys referencing one asset from every clip. */
+  removeTextureReferences(textureId: string): number {
+    let removed = 0;
+    for (const clip of this.clips) {
+      removed += clip.removeTextureReferences(textureId);
+    }
+    return removed;
   }
 
   /** Proxy: active clip start. */

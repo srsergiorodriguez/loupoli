@@ -81,7 +81,7 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'selection.island': { label: 'Island', scope: 'uv', presentation: 'text' },
   'selection.loop': { label: 'Loop', scope: 'active', presentation: 'text' },
   'selection.all': { label: 'All', scope: 'active', shortcut: 'selectAll', presentation: 'text', bindings: [{ key: 'a', mod: true }] },
-  'selection.toggle': { label: 'Toggle', scope: 'active', presentation: 'text' },
+  'selection.toggle': { label: 'Multi', scope: 'active', presentation: 'text' },
   'tool.select': { label: 'Select', scope: 'active', presentation: 'icon' },
   'tool.lasso': { label: 'Lasso', scope: 'active', presentation: 'icon' },
   'tool.move': { label: 'Move', scope: 'active', shortcut: 'move', presentation: 'icon', bindings: [{ key: 'g' }] },
