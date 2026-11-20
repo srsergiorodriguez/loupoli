@@ -210,7 +210,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         paragraphs: [
           'The timeline shows one transform row for the active object or group and one weight row for each shape key. Move the playhead to a whole frame, change the transform or weight, then use + Key on the row. A key stores the visible pose at that frame.',
           'Diamonds can be dragged between whole frames and selected for interpolation editing. Linear blends between values; Step holds the previous value until the next key. Delete removes the selected key. The Animation section controls FPS, start and end frames, looping, and the default interpolation for new keys. Camera and light animation use the same clip timeline. In Light and Render, the timeline is hidden by default and can be opened from the top-bar Timeline button; Animate always shows it.',
-          'Add audio imports one audio file for the active clip. The waveform lane follows the clip range, starts and stops with playback, and offers mute and remove controls. Audio assets are stored in the project; video audio muxing is not implemented yet.'
+          'Add audio imports one audio file for the active clip. The waveform lane follows the clip range, starts and stops with playback, and offers mute and remove controls. Audio assets are stored in the project. Browser WebM/MP4 recording and native Apple MP4 export mux the active clip audio; PNG stills and frame sequences are silent.'
         ],
         controls: [
           'Play / pause: transport buttons',

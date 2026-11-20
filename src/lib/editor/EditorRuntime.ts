@@ -120,7 +120,9 @@ import {
   cancelNativeMp4,
   chooseNativeMp4Path,
   finishNativeMp4,
-  nativeMp4Available
+  muxNativeMp4,
+  nativeMp4Available,
+  writeNativeAudioTemp
 } from '../platform/nativeVideo';
 import {
   normalizeAmbientOcclusion,
@@ -268,6 +270,7 @@ import {
   videoMimeFor
 } from '../render/videoExport';
 import type { RenderShading, RenderUpscale } from '../render/renderSettings';
+import { planAudioExport } from '../audio/audioExport';
 import {
   AudioAsset,
   MAX_AUDIO_ASSETS,
@@ -8222,6 +8225,72 @@ export class EditorRuntime {
     }
   }
 
+  /** Build a MediaStream audio track scheduled against the render range. */
+  private async prepareExportAudio(
+    start: number,
+    end: number
+  ): Promise<{
+    stream: MediaStream;
+    start: () => void;
+    stop: () => void;
+  } | null> {
+    const clip = this.document.animation.activeClip;
+    const placement = clip.audio;
+    if (!placement || placement.muted) {
+      return null;
+    }
+    const asset = this.document.getAudioAsset(placement.assetId);
+    if (!asset) {
+      return null;
+    }
+    const context = this.ensureAudioContext();
+    if (!context) {
+      return null;
+    }
+    await context.resume();
+    const buffer = await this.audioBufferFor(asset);
+    if (!buffer) {
+      return null;
+    }
+    const plan = planAudioExport(
+      placement,
+      start,
+      end,
+      Math.max(1, this.document.animation.fps)
+    );
+    if (!plan) {
+      return null;
+    }
+    const destination = context.createMediaStreamDestination();
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const gain = context.createGain();
+    gain.gain.value = plan.gain;
+    source.connect(gain).connect(destination);
+    let started = false;
+    return {
+      stream: destination.stream,
+      start: () => {
+        if (started) {
+          return;
+        }
+        started = true;
+        source.start(context.currentTime + plan.delay, plan.offset, plan.duration);
+      },
+      stop: () => {
+        try {
+          source.stop();
+        } catch {
+          // The source may already have ended.
+        }
+        source.disconnect();
+        gain.disconnect();
+        destination.disconnect();
+        destination.stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }
+
   /** Encode the render range to WebM or MP4 through native or WebView paths. */
   async renderVideo(): Promise<void> {
     if (this.renderBusy) {
@@ -8287,20 +8356,48 @@ export class EditorRuntime {
     }
     let activeRecorder: MediaRecorder | null = null;
     let activeStream: MediaStream | null = null;
+    let exportAudio: Awaited<ReturnType<EditorRuntime['prepareExportAudio']>> = null;
     try {
       const fps = Math.max(1, this.document.animation.fps);
       // A zero-rate stream plus an explicit requestFrame() after every drawn
       // frame is more reliable than the timer-driven captureStream(fps) path,
       // especially in WKWebView and headless Chromium.
-      const stream = output.captureStream(0);
+      const videoStream = output.captureStream(0);
+      exportAudio = await this.prepareExportAudio(start, end);
+      const stream = exportAudio
+        ? new MediaStream([
+            ...videoStream.getVideoTracks(),
+            ...exportAudio.stream.getAudioTracks()
+          ])
+        : videoStream;
       activeStream = stream;
-      const track = stream.getVideoTracks()[0] as
+      const track = videoStream.getVideoTracks()[0] as
         | CanvasCaptureMediaStreamTrack
         | undefined;
-      const recorder = new MediaRecorder(stream, {
-        mimeType: mime,
-        videoBitsPerSecond: 8_000_000
-      });
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, {
+          mimeType: mime,
+          videoBitsPerSecond: 8_000_000,
+          ...(exportAudio ? { audioBitsPerSecond: 128_000 } : {})
+        });
+      } catch (error) {
+        if (!exportAudio) {
+          throw error;
+        }
+        exportAudio.stop();
+        exportAudio = null;
+        activeStream = videoStream;
+        this.notify(
+          'warning',
+          'Audio track unavailable',
+          'Recording video without audio.'
+        );
+        recorder = new MediaRecorder(videoStream, {
+          mimeType: mime,
+          videoBitsPerSecond: 8_000_000
+        });
+      }
       activeRecorder = recorder;
       const chunks: Blob[] = [];
       recorder.addEventListener('dataavailable', (event) => {
@@ -8315,6 +8412,7 @@ export class EditorRuntime {
         );
       });
       recorder.start(250);
+      exportAudio?.start();
       const framePeriod = 1000 / fps;
       const startedAt = performance.now();
       for (let frame = start; frame <= end; frame += 1) {
@@ -8374,7 +8472,7 @@ export class EditorRuntime {
         this.notify(
           'success',
           `${videoLabel(format)} exported`,
-          `${end - start + 1} frames`
+          `${end - start + 1} frames${exportAudio ? ' · audio' : ''}`
         );
       }
     } catch (error) {
@@ -8390,10 +8488,72 @@ export class EditorRuntime {
         activeRecorder.stop();
       }
       activeStream?.getTracks().forEach((track) => track.stop());
+      exportAudio?.stop();
       this.endJob();
       this.setAnimationFrame(originalFrame);
       this.renderBusy = false;
       this.publish();
+    }
+  }
+
+  /** Mux the active clip's audio into a finished native MP4. */
+  private async muxNativeAudio(
+    videoPath: string,
+    start: number,
+    end: number
+  ): Promise<boolean> {
+    const clip = this.document.animation.activeClip;
+    const placement = clip.audio;
+    if (!placement || placement.muted) {
+      return false;
+    }
+    const plan = planAudioExport(
+      placement,
+      start,
+      end,
+      Math.max(1, this.document.animation.fps)
+    );
+    if (!plan) {
+      return false;
+    }
+    const asset = this.document.getAudioAsset(placement.assetId);
+    if (!asset) {
+      return false;
+    }
+    const nameExtension = asset.name.split('.').pop()?.toLowerCase() ?? '';
+    const allowed = new Set(['wav', 'mp3', 'm4a', 'aac', 'ogg', 'flac', 'webm']);
+    const extension = allowed.has(nameExtension)
+      ? nameExtension
+      : asset.mime.includes('mpeg')
+        ? 'mp3'
+        : asset.mime.includes('mp4') || asset.mime.includes('aac')
+          ? 'm4a'
+          : asset.mime.includes('ogg')
+            ? 'ogg'
+            : asset.mime.includes('flac')
+              ? 'flac'
+              : asset.mime.includes('webm')
+                ? 'webm'
+                : 'wav';
+    let tempPath: string | null = null;
+    try {
+      tempPath = await writeNativeAudioTemp(asset.bytes, extension);
+      await muxNativeMp4(
+        videoPath,
+        tempPath,
+        plan.delay,
+        plan.duration,
+        plan.offset,
+        plan.gain
+      );
+      return true;
+    } catch (error) {
+      this.notify(
+        'warning',
+        'Audio mux failed',
+        `${this.errorMessage(error)} The MP4 was kept without audio.`
+      );
+      return false;
     }
   }
 
@@ -8473,11 +8633,12 @@ export class EditorRuntime {
       this.throwIfJobCancelled();
       await finishNativeMp4(session);
       session = null;
+      const muxedAudio = await this.muxNativeAudio(path, start, end);
       this.endJob();
       this.notify(
         'success',
         'MP4 exported',
-        `${end - start + 1} frames · ${width} × ${height}`
+        `${end - start + 1} frames · ${width} × ${height}${muxedAudio ? ' · audio' : ''}`
       );
     } catch (error) {
       if (session !== null) {

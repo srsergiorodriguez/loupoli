@@ -40,6 +40,16 @@ unsafe extern "C" {
     error: *mut *mut c_char,
   ) -> c_int;
   fn loupoli_mp4_finish(handle: *mut c_void, error: *mut *mut c_char) -> c_int;
+  fn loupoli_mp4_mux_audio(
+    video_path: *const c_char,
+    audio_path: *const c_char,
+    output_path: *const c_char,
+    start_seconds: f64,
+    offset_seconds: f64,
+    duration_seconds: f64,
+    gain: f64,
+    error: *mut *mut c_char,
+  ) -> c_int;
   fn loupoli_mp4_cancel(handle: *mut c_void);
   fn loupoli_mp4_release(handle: *mut c_void);
   fn loupoli_mp4_free_error(error: *mut c_char);
@@ -184,6 +194,76 @@ impl Mp4Sessions {
   }
 }
 
+/// Mux one audio source into an existing native MP4 and replace the video file.
+pub fn mux_audio(
+  video_path: String,
+  audio_path: String,
+  start: f64,
+  duration: f64,
+  offset: f64,
+  gain: f64,
+) -> Result<(), String> {
+  if !available() {
+    return Err("Native MP4 audio muxing is unavailable on this platform.".into());
+  }
+  if !start.is_finite()
+    || !duration.is_finite()
+    || !offset.is_finite()
+    || !gain.is_finite()
+    || start < 0.0
+    || duration <= 0.0
+    || offset < 0.0
+    || !(0.0..=2.0).contains(&gain)
+  {
+    return Err("The MP4 audio mux timing is invalid.".into());
+  }
+  #[cfg(any(target_os = "macos", target_os = "ios"))]
+  {
+    let video = PathBuf::from(&video_path);
+    let parent = video
+      .parent()
+      .filter(|path| !path.as_os_str().is_empty())
+      .ok_or_else(|| "The MP4 path has no parent directory.".to_string())?;
+    let stamp = std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .map(|value| value.as_nanos())
+      .unwrap_or(0);
+    let output = parent.join(format!(
+      ".loupoli-mux-{}-{stamp}.mp4",
+      std::process::id()
+    ));
+    let video_text = CString::new(video_path).map_err(|_| "The MP4 path is invalid.".to_string())?;
+    let audio_text = CString::new(audio_path.clone()).map_err(|_| "The audio path is invalid.".to_string())?;
+    let output_text = CString::new(output.to_string_lossy().into_owned())
+      .map_err(|_| "The MP4 mux path is invalid.".to_string())?;
+    let mut error: *mut c_char = std::ptr::null_mut();
+    let result = unsafe {
+      loupoli_mp4_mux_audio(
+        video_text.as_ptr(),
+        audio_text.as_ptr(),
+        output_text.as_ptr(),
+        start,
+        offset,
+        duration,
+        gain,
+        &mut error,
+      )
+    };
+    let _ = std::fs::remove_file(&audio_path);
+    if result != 0 {
+      let _ = std::fs::remove_file(&output);
+      return Err(unsafe { take_error(error) });
+    }
+    std::fs::rename(&output, &video).map_err(|error| {
+      let _ = std::fs::remove_file(&output);
+      format!("The muxed MP4 could not replace the video: {error}")
+    })?;
+    return Ok(());
+  }
+  #[allow(unreachable_code)]
+  Err("Native MP4 audio muxing is unavailable on this platform.".into())
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -213,6 +293,63 @@ mod tests {
     let metadata = std::fs::metadata(&path).expect("MP4 exists");
     assert!(metadata.len() > 100);
     println!("NATIVE_MP4_PATH={}", path.display());
+    let _ = std::fs::remove_file(path);
+  }
+
+  #[test]
+  fn muxes_audio_into_a_native_mp4() {
+    if !available() {
+      return;
+    }
+    let path = std::env::temp_dir().join(format!(
+      "loupoli-native-mp4-audio-{}-{}.mp4",
+      std::process::id(),
+      std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_nanos())
+        .unwrap_or(0)
+    ));
+    let audio_path = path.with_extension("wav");
+    let sessions = Mp4Sessions::default();
+    let session = sessions
+      .begin(path.to_string_lossy().into_owned(), 64, 64, 24)
+      .expect("start native MP4");
+    let frame = include_bytes!("../native/test-frame.jpg");
+    for _ in 0..6 {
+      sessions.append(&session, frame).expect("append frame");
+    }
+    sessions.finish(&session).expect("finish native MP4");
+    let sample_rate = 44_100u32;
+    let sample_count = sample_rate / 10;
+    let data_bytes = sample_count * 2;
+    let mut wav = Vec::with_capacity(44 + data_bytes as usize);
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+    wav.extend_from_slice(b"WAVEfmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_bytes.to_le_bytes());
+    wav.resize(44 + data_bytes as usize, 0);
+    std::fs::write(&audio_path, &wav).expect("write test wav");
+    mux_audio(
+      path.to_string_lossy().into_owned(),
+      audio_path.to_string_lossy().into_owned(),
+      0.0,
+      0.1,
+      0.0,
+      1.0,
+    )
+    .expect("mux audio into MP4");
+    let metadata = std::fs::metadata(&path).expect("muxed MP4 exists");
+    assert!(metadata.len() > 100);
+    assert!(!audio_path.exists());
+    println!("NATIVE_MP4_AUDIO_PATH={}", path.display());
     let _ = std::fs::remove_file(path);
   }
 

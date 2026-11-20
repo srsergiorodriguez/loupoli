@@ -264,6 +264,47 @@ fn mp4_append(request: tauri::ipc::Request<'_>) -> Result<(), String> {
   mp4_sessions().append(session, bytes)
 }
 
+/// Write raw audio bytes to a temp file for native MP4 muxing.
+#[tauri::command]
+fn mp4_audio_temp(request: tauri::ipc::Request<'_>) -> Result<String, String> {
+  let extension = request
+    .headers()
+    .get("x-audio-extension")
+    .and_then(|value| value.to_str().ok())
+    .map(|value| value.trim_start_matches('.').to_lowercase())
+    .filter(|value| matches!(value.as_str(), "wav" | "mp3" | "m4a" | "aac" | "ogg" | "flac" | "webm"))
+    .ok_or_else(|| "The audio extension is invalid.".to_string())?;
+  let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+    return Err("The audio payload must use raw binary IPC.".into());
+  };
+  if bytes.is_empty() || bytes.len() as u64 > 32 * 1024 * 1024 {
+    return Err("The audio payload is outside the supported size.".into());
+  }
+  let stamp = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map(|value| value.as_nanos())
+    .unwrap_or(0);
+  let path = std::env::temp_dir().join(format!(
+    "loupoli-audio-{}-{stamp}.{extension}",
+    std::process::id()
+  ));
+  fs::write(&path, bytes).map_err(|error| format!("The audio temp file could not be written: {error}"))?;
+  Ok(path.to_string_lossy().into_owned())
+}
+
+/// Mux one audio file into a finished native MP4.
+#[tauri::command]
+fn mp4_mux_audio(
+  video_path: String,
+  audio_path: String,
+  start: f64,
+  duration: f64,
+  offset: f64,
+  gain: f64,
+) -> Result<(), String> {
+  mp4::mux_audio(video_path, audio_path, start, duration, offset, gain)
+}
+
 /// Finalize and release a native MP4 session.
 #[tauri::command]
 fn mp4_finish(session: String) -> Result<(), String> {
@@ -296,6 +337,8 @@ pub fn run() {
       mp4_available,
       mp4_begin,
       mp4_append,
+      mp4_audio_temp,
+      mp4_mux_audio,
       mp4_finish,
       mp4_cancel
     ])

@@ -65,3 +65,34 @@ export async function cancelNativeMp4(session: string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('mp4_cancel', { session });
 }
+
+/** Write raw audio bytes to a native temp file for MP4 muxing. */
+export async function writeNativeAudioTemp(
+  bytes: Uint8Array,
+  extension: string
+): Promise<string> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<string>('mp4_audio_temp', bytes, {
+    headers: { 'x-audio-extension': extension }
+  });
+}
+
+/** Mux one temp audio file into an already written native MP4. */
+export async function muxNativeMp4(
+  videoPath: string,
+  audioPath: string,
+  start: number,
+  duration: number,
+  offset: number,
+  gain: number
+): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('mp4_mux_audio', {
+    videoPath,
+    audioPath,
+    start,
+    duration,
+    offset,
+    gain
+  });
+}

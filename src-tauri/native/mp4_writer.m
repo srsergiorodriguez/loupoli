@@ -4,6 +4,7 @@
 #import <Foundation/Foundation.h>
 #import <ImageIO/ImageIO.h>
 #import <dispatch/dispatch.h>
+#import <math.h>
 #import <stdlib.h>
 #import <string.h>
 
@@ -250,4 +251,123 @@ void loupoli_mp4_release(void *handle) {
 
 void loupoli_mp4_free_error(char *error) {
   free(error);
+}
+
+/// Mux an audio file into an existing MP4 through an AVMutableComposition.
+int loupoli_mp4_mux_audio(
+  const char *video_path,
+  const char *audio_path,
+  const char *output_path,
+  double start_seconds,
+  double offset_seconds,
+  double duration_seconds,
+  double gain,
+  char **error
+) {
+  @autoreleasepool {
+    if (video_path == NULL || audio_path == NULL || output_path == NULL) {
+      set_error(error, @"The audio mux paths are invalid.");
+      return -1;
+    }
+    if (!isfinite(start_seconds) || !isfinite(offset_seconds) ||
+        !isfinite(duration_seconds) || !isfinite(gain) ||
+        start_seconds < 0 || offset_seconds < 0 || duration_seconds <= 0 ||
+        gain < 0 || gain > 2) {
+      set_error(error, @"The audio mux timing is invalid.");
+      return -1;
+    }
+    NSString *videoText = [NSString stringWithUTF8String:video_path];
+    NSString *audioText = [NSString stringWithUTF8String:audio_path];
+    NSString *outputText = [NSString stringWithUTF8String:output_path];
+    if (videoText == nil || audioText == nil || outputText == nil) {
+      set_error(error, @"The audio mux path is not valid UTF-8.");
+      return -1;
+    }
+    NSURL *videoURL = [NSURL fileURLWithPath:videoText];
+    NSURL *audioURL = [NSURL fileURLWithPath:audioText];
+    NSURL *outputURL = [NSURL fileURLWithPath:outputText];
+    NSError *localError = nil;
+    AVURLAsset *videoAsset = [AVURLAsset URLAssetWithURL:videoURL options:@{
+      AVURLAssetPreferPreciseDurationAndTimingKey : @YES
+    }];
+    AVURLAsset *audioAsset = [AVURLAsset URLAssetWithURL:audioURL options:@{
+      AVURLAssetPreferPreciseDurationAndTimingKey : @YES
+    }];
+    AVAssetTrack *videoTrack = nil;
+    for (AVAssetTrack *track in videoAsset.tracks) {
+      if ([track.mediaType isEqualToString:AVMediaTypeVideo]) {
+        videoTrack = track;
+        break;
+      }
+    }
+    AVAssetTrack *audioTrack = nil;
+    for (AVAssetTrack *track in audioAsset.tracks) {
+      if ([track.mediaType isEqualToString:AVMediaTypeAudio]) {
+        audioTrack = track;
+        break;
+      }
+    }
+    if (videoTrack == nil || audioTrack == nil) {
+      set_error(error, @"The MP4 or audio file has no usable media track.");
+      return -1;
+    }
+    AVMutableComposition *composition = [AVMutableComposition composition];
+    AVMutableCompositionTrack *compositionVideo =
+      [composition addMutableTrackWithMediaType:AVMediaTypeVideo
+                              preferredTrackID:kCMPersistentTrackID_Invalid];
+    if (![compositionVideo insertTimeRange:CMTimeRangeMake(kCMTimeZero, videoAsset.duration)
+                                   ofTrack:videoTrack
+                                    atTime:kCMTimeZero
+                                     error:&localError]) {
+      set_ns_error(error, localError, @"The MP4 video track could not be composed.");
+      return -1;
+    }
+    AVMutableCompositionTrack *compositionAudio =
+      [composition addMutableTrackWithMediaType:AVMediaTypeAudio
+                              preferredTrackID:kCMPersistentTrackID_Invalid];
+    CMTime offset = CMTimeMakeWithSeconds(offset_seconds, 600);
+    CMTime duration = CMTimeMakeWithSeconds(duration_seconds, 600);
+    CMTime audioStart = CMTimeMakeWithSeconds(start_seconds, 600);
+    CMTime available = CMTimeSubtract(audioAsset.duration, offset);
+    if (CMTIME_IS_INVALID(available) || CMTimeCompare(available, duration) < 0) {
+      set_error(error, @"The audio trim range exceeds the source file.");
+      return -1;
+    }
+    if (![compositionAudio insertTimeRange:CMTimeRangeMake(offset, duration)
+                                   ofTrack:audioTrack
+                                    atTime:audioStart
+                                     error:&localError]) {
+      set_ns_error(error, localError, @"The audio track could not be composed.");
+      return -1;
+    }
+    AVMutableAudioMix *audioMix = [AVMutableAudioMix audioMix];
+    AVMutableAudioMixInputParameters *parameters =
+      [AVMutableAudioMixInputParameters audioMixInputParametersWithTrack:compositionAudio];
+    [parameters setVolume:(float)gain atTime:kCMTimeZero];
+    audioMix.inputParameters = @[parameters];
+
+    [[NSFileManager defaultManager] removeItemAtURL:outputURL error:nil];
+    AVAssetExportSession *exportSession =
+      [[AVAssetExportSession alloc] initWithAsset:composition
+                                       presetName:AVAssetExportPresetHighestQuality];
+    if (exportSession == nil) {
+      set_error(error, @"The MP4 audio mux export session could not be created.");
+      return -1;
+    }
+    exportSession.outputURL = outputURL;
+    exportSession.outputFileType = AVFileTypeMPEG4;
+    exportSession.shouldOptimizeForNetworkUse = YES;
+    exportSession.audioMix = audioMix;
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    [exportSession exportAsynchronouslyWithCompletionHandler:^{
+      dispatch_semaphore_signal(semaphore);
+    }];
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+    if (exportSession.status != AVAssetExportSessionStatusCompleted) {
+      set_ns_error(error, exportSession.error, @"The MP4 audio mux failed.");
+      [[NSFileManager defaultManager] removeItemAtURL:outputURL error:nil];
+      return -1;
+    }
+    return 0;
+  }
 }
