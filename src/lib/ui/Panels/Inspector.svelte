@@ -257,6 +257,40 @@
   const selectionMeta = $derived(
     selectionCount > 0 ? `${selectionCount} selected` : modeLabel
   );
+
+  const selectionTitle = $derived(
+    selectionCount === 1
+      ? `${modeLabel} ${primarySelection === null ? '' : primarySelection + 1}`
+      : `${modePlural.charAt(0).toUpperCase()}${modePlural.slice(1)}`
+  );
+
+  const selectionSubtitle = $derived.by(() => {
+    const mode = session.snapshot.selectionMode;
+    if (selectionCount === 1) {
+      if (!session.can('edit3d')) {
+        return 'Shared with the 3D viewport.';
+      }
+      if (mode === 'edge') {
+        return session.snapshot.workspace === 'model'
+          ? 'Use the Action Dock to bevel this edge.'
+          : 'Bevel is available in the Model workspace.';
+      }
+      if (mode === 'face') {
+        return 'Use Extrude or Inset below.';
+      }
+      return 'Drag the handle or edit its position below.';
+    }
+    if (!session.can('edit3d')) {
+      return 'Shared with the 3D viewport.';
+    }
+    if (mode === 'edge') {
+      return 'Select one edge to bevel; Bridge uses multiple edges.';
+    }
+    if (mode === 'vertex') {
+      return 'Merge or transform the selected vertices.';
+    }
+    return 'Extrude or transform the selected faces.';
+  });
   const transformMeta = $derived(
     activeNodeId === null
       ? 'Local'
@@ -332,7 +366,6 @@
 
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
-  let bevelAmount = $state(0.1);
   let objExportOpen = $state(false);
   let objFramesOpen = $state(false);
   let newTextureOpen = $state(false);
@@ -652,10 +685,6 @@
 
   function deleteObject(): void {
     session.deleteActiveNode();
-  }
-
-  function bevelEdgeSelection(): void {
-    session.bevelSelectedEdge(bevelAmount);
   }
 
   function addReferenceImage(event: Event): void {
@@ -1796,200 +1825,219 @@
       onToggle={(open) => setSection('selection', open)}
     >
       {#if activeGroupId !== null}
-        <p class="selection-title">Group selected</p>
+        <div class="selection-summary">
+          <span class="selection-badge">G</span>
+          <div class="selection-summary-text">
+            <p class="selection-title">Group selected</p>
+            <p class="selection-subtitle">Object transform only</p>
+          </div>
+        </div>
         <p class="hint">
           Move, rotate, or scale the group in the Inspector or with the object
           gizmo. Select a child object above to edit its mesh.
         </p>
       {:else if modifiersActive}
-        <p class="selection-title">
-          {selectionCount > 0 ? `${selectionCount} ${modePlural} selected` : 'Modifiers active'}
-        </p>
+        <div class="selection-summary">
+          <span class="selection-badge">{selectionCount > 0 ? selectionCount : 'M'}</span>
+          <div class="selection-summary-text">
+            <p class="selection-title">
+              {selectionCount > 0 ? `${selectionCount} ${modePlural} selected` : 'Modifiers active'}
+            </p>
+            <p class="selection-subtitle">Editing the base mesh</p>
+          </div>
+        </div>
         <p class="hint">
-          Picking maps through provenance. Vertex dragging and topology actions
-          edit the base mesh, and the stack re-evaluates automatically.
+          Picking maps through provenance; the modifier stack re-evaluates after
+          each edit.
         </p>
       {:else if activeNodeId === null}
         <p class="empty-state">
           The scene is empty. Add a QuadSphere, Cylinder, or Grid above.
         </p>
-      {:else if canEdit3d && session.snapshot.selectionMode === 'vertex' && selectionCount === 1 && selectedPosition}
-        <p class="selection-title">
-          Vertex <span class="text-mono">{primarySelection! + 1}</span>
-        </p>
-        <Vector3Field
-          label="Position (object)"
-          values={selectedPosition}
-          step={0.1}
-          precision={3}
-          onCommit={(position) => session.setSelectedVertexPosition(position)}
-        />
-        <div class="axis-lock" role="group" aria-label="Vertex move axis lock">
-          <span class="axis-lock-label">Move axis</span>
-          {#each ['x', 'y', 'z'] as const as axis (axis)}
-            <button
-              type="button"
-              class="axis-chip axis-chip--{axis}"
-              class:is-active={session.snapshot.axisLock === axis}
-              aria-pressed={session.snapshot.axisLock === axis}
-              onclick={() => toggleAxis(axis)}
-            >
-              {axis.toUpperCase()}
-            </button>
-          {/each}
-        </div>
-        <p class="hint">
-          Drag the selected handle in the viewport. Axis chips or the X/Y/Z keys
-          constrain the move; Grid snap rounds committed coordinates.
-        </p>
-      {:else if selectionCount === 1}
-        <p class="selection-title">
-          {modeLabel} <span class="text-mono">{primarySelection! + 1}</span>
-        </p>
-        <p class="hint">
-          {session.snapshot.selectionMode === 'edge'
-            ? 'The selected topological edge is highlighted in the viewport.'
-            : 'The selected face is highlighted in the viewport.'}
-        </p>
-      {:else if selectionCount > 1}
-        <p class="selection-title">
-          <span class="text-mono">{selectionCount}</span>
-          {modePlural} selected
-        </p>
-        <p class="hint">
-          Every selected {modeLabel.toLowerCase()} is highlighted in the
-          viewport. Use Add mode or Shift/Cmd-click to adjust the set.
+      {:else if selectionCount === 0}
+        <p class="empty-state">
+          No {modeLabel.toLowerCase()} selected. Pick one in the viewport; V/E/F
+          changes mode.
         </p>
       {:else}
-        <p class="empty-state">
-          No {modeLabel.toLowerCase()} selected. Click an element in the
-          viewport, or turn on Add to build a multi-selection.
+        <div class="selection-summary">
+          <span class="selection-badge">{selectionCount}</span>
+          <div class="selection-summary-text">
+            <p class="selection-title">{selectionTitle}</p>
+            <p class="selection-subtitle">{selectionSubtitle}</p>
+          </div>
+        </div>
+      {/if}
+
+      {#if canEdit3d && session.snapshot.selectionMode === 'vertex' && selectionCount === 1 && selectedPosition}
+        <div class="selection-block">
+          <span class="selection-group-label">Position (object)</span>
+          <Vector3Field
+            label="Position"
+            values={selectedPosition}
+            step={0.1}
+            precision={3}
+            onCommit={(position) => session.setSelectedVertexPosition(position)}
+          />
+          <div class="axis-lock" role="group" aria-label="Vertex move axis lock">
+            <span class="axis-lock-label">Move axis</span>
+            {#each ['x', 'y', 'z'] as const as axis (axis)}
+              <button
+                type="button"
+                class="axis-chip axis-chip--{axis}"
+                class:is-active={session.snapshot.axisLock === axis}
+                aria-pressed={session.snapshot.axisLock === axis}
+                onclick={() => toggleAxis(axis)}
+              >
+                {axis.toUpperCase()}
+              </button>
+            {/each}
+          </div>
+        </div>
+        <p class="hint">
+          Drag the vertex handle; axis chips or X/Y/Z lock the move. Grid snap
+          rounds committed values.
         </p>
       {/if}
 
       {#if selectionCount > 0}
-        <div class="selection-actions">
-          {#if canEdit3d && (session.snapshot.selectionMode === 'vertex' && selectionCount >= 2)}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Merge selected vertices"
-              onclick={() => session.mergeSelectedVertices()}
-            >
-              <Icon name="merge" size={14} />
-              <span>Merge</span>
-            </button>
-          {/if}
-          {#if canEdit3d && (session.snapshot.selectionMode === 'face' && selectionCount > 0)}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Extrude selected faces"
-              onclick={() => session.extrudeSelectedFaces()}
-            >
-              <Icon name="extrude" size={14} />
-              <span>Extrude</span>
-            </button>
-          {/if}
-          {#if canEdit3d && (session.snapshot.selectionMode === 'face' && selectionCount === 1)}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Inset selected face"
-              onclick={() => session.insetSelectedFace()}
-            >
-              <Icon name="inset" size={14} />
-              <span>Inset</span>
-            </button>
-          {/if}
-          {#if canSeam && session.snapshot.selectionMode === 'edge' && selectionCount > 0}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Toggle UV seam on selected edges"
-              onclick={() => session.toggleSelectedSeams()}
-            >
-              <Icon name="seam" size={14} />
-              <span>Seam</span>
-            </button>
-          {/if}
-          {#if canEdit3d && (session.snapshot.selectionMode === 'edge' && selectionCount === 1)}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Loop cut selected edge"
-              onclick={() => session.loopCut()}
-            >
-              <Icon name="loop-cut" size={14} />
-              <span>Loop cut</span>
-            </button>
-          {/if}
-          {#if canEdit3d && (session.snapshot.selectionMode === 'edge' && selectionCount >= 2)}
-            <button
-              type="button"
-              class="topology-action"
-              aria-label="Bridge selected edges"
-              onclick={() => session.bridgeSelectedEdges()}
-            >
-              <Icon name="bridge" size={14} />
-              <span>Bridge</span>
-            </button>
-          {/if}
-          {#if canEdit3d}
+        {#if canEdit3d &&
+          ((session.snapshot.selectionMode === 'vertex' && selectionCount >= 2) ||
+            (session.snapshot.selectionMode === 'face' && selectionCount > 0))}
+          <div class="selection-group">
+            <span class="selection-group-label">
+              {session.snapshot.selectionMode === 'vertex' ? 'Vertices' : 'Faces'}
+            </span>
+            <div class="selection-actions">
+              {#if session.snapshot.selectionMode === 'vertex'}
+                <button
+                  type="button"
+                  class="topology-action"
+                  aria-label="Merge selected vertices"
+                  onclick={() => session.mergeSelectedVertices()}
+                >
+                  <Icon name="merge" size={14} />
+                  <span>Merge</span>
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  class="topology-action"
+                  aria-label="Extrude selected faces"
+                  onclick={() => session.extrudeSelectedFaces()}
+                >
+                  <Icon name="extrude" size={14} />
+                  <span>Extrude</span>
+                </button>
+                {#if selectionCount === 1}
+                  <button
+                    type="button"
+                    class="topology-action"
+                    aria-label="Inset selected face"
+                    onclick={() => session.insetSelectedFace()}
+                  >
+                    <Icon name="inset" size={14} />
+                    <span>Inset</span>
+                  </button>
+                {/if}
+              {/if}
+            </div>
+          </div>
+        {/if}
+
+        {#if canEdit3d && session.snapshot.selectionMode === 'edge'}
+          <div class="selection-group">
+            <span class="selection-group-label">Edges</span>
+            <div class="selection-actions">
+              {#if selectionCount === 1}
+                <button
+                  type="button"
+                  class="topology-action"
+                  aria-label="Loop cut selected edge"
+                  onclick={() => session.loopCut()}
+                >
+                  <Icon name="loop-cut" size={14} />
+                  <span>Loop cut</span>
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  class="topology-action"
+                  aria-label="Bridge selected edges"
+                  onclick={() => session.bridgeSelectedEdges()}
+                >
+                  <Icon name="bridge" size={14} />
+                  <span>Bridge</span>
+                </button>
+              {/if}
+            </div>
+            <p class="hint">
+              {selectionCount === 1
+                ? session.snapshot.workspace === 'model'
+                  ? 'Bevel is in the Action Dock; drag or type an exact width.'
+                  : 'Bevel is available in the Model workspace.'
+                : 'Bevel one edge at a time. Loop Slide and Bridge use multi-edge selections.'}
+            </p>
+          </div>
+        {/if}
+
+        {#if canSeam &&
+          activeNodeId !== null &&
+          ((session.snapshot.selectionMode === 'edge' && selectionCount > 0) ||
+            session.snapshot.seamCount > 0)}
+          <div class="selection-group">
+            <span class="selection-group-label">UV seams</span>
+            <div class="selection-actions">
+              {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
+                <button
+                  type="button"
+                  class="topology-action"
+                  aria-label="Toggle UV seam on selected edges"
+                  onclick={() => session.toggleSelectedSeams()}
+                >
+                  <Icon name="seam" size={14} />
+                  <span>Toggle seam</span>
+                </button>
+              {/if}
+              {#if session.snapshot.seamCount > 0}
+                <button
+                  type="button"
+                  class="topology-action"
+                  aria-label="Remove all UV seams from the active mesh"
+                  title={`Clear ${session.snapshot.seamCount} UV seam${session.snapshot.seamCount === 1 ? '' : 's'}`}
+                  onclick={() => session.clearAllSeams()}
+                >
+                  <Icon name="seam" size={14} />
+                  <span>Clear seams</span>
+                </button>
+              {/if}
+            </div>
+            {#if session.snapshot.seamCount > 0}
+              <p class="hint">
+                {session.snapshot.seamCount} seam{session.snapshot.seamCount === 1 ? '' : 's'} on this mesh.
+              </p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if canEdit3d}
+          <div class="selection-group selection-group--danger">
+            <span class="selection-group-label">Remove</span>
             <button
               type="button"
               class="delete-selection"
-              aria-label="Delete selected {modePlural}"
+              aria-label="Delete selected {selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}"
               onclick={() => session.deleteSelection()}
             >
               <Icon name="trash" size={14} />
-              <span>Delete elements</span>
+              <span>Delete {selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}</span>
             </button>
-          {/if}
-        </div>
-      {/if}
-
-      {#if canEdit3d && session.snapshot.selectionMode === 'edge' && selectionCount === 1}
-        <div class="bevel-row">
-          <span class="bevel-label">Bevel edge</span>
-          <NumberField
-            label="Bevel amount"
-            value={bevelAmount}
-            min={0.001}
-            max={50}
-            step={0.05}
-            precision={3}
-            onCommit={(value) => (bevelAmount = value)}
-          />
-          <ActionButton
-            label="Bevel"
-            icon="bevel"
-            onActivate={bevelEdgeSelection}
-          />
-        </div>
-        <p class="hint">One edge per operation in this pass. UV seams are reset by the topology rebuild.</p>
-      {:else if canEdit3d && session.snapshot.selectionMode === 'edge' && selectionCount > 1}
-        <p class="hint">Bevel handles one edge at a time in this pass.</p>
-      {/if}
-
-      {#if canSeam && activeNodeId !== null && session.snapshot.seamCount > 0}
-        <div class="selection-actions">
-          <button
-            type="button"
-            class="topology-action"
-            aria-label="Remove all UV seams from the active mesh"
-            title={`Clear ${session.snapshot.seamCount} UV seam${session.snapshot.seamCount === 1 ? '' : 's'}`}
-            onclick={() => session.clearAllSeams()}
-          >
-            <Icon name="seam" size={14} />
-            <span>Clear seams</span>
-          </button>
-        </div>
+          </div>
+        {/if}
       {/if}
     </InspectorSection>
 {/snippet}
 
-    
       {#snippet brushSection()}
 <InspectorSection
         title="Brush"
@@ -3254,10 +3302,6 @@
     font-size: var(--text-xs);
   }
 
-  .selection-title span {
-    color: var(--text-primary);
-  }
-
   .transform-spaces {
     display: flex;
     flex-direction: column;
@@ -3273,24 +3317,6 @@
 
   .space-row :global(.segmented) {
     justify-self: end;
-  }
-
-  .bevel-row {
-    display: grid;
-    grid-template-columns: var(--inspector-label-width) minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--inspector-row-gap);
-    min-height: var(--control-h);
-  }
-
-  .bevel-label {
-    color: var(--text-secondary);
-    font-family: var(--font-ui);
-    font-size: var(--text-xs);
-  }
-
-  .bevel-row :global(.number-field) {
-    min-width: 0;
   }
 
   .brush-body {
@@ -3530,9 +3556,71 @@
     grid-column: 1 / -1;
   }
 
-  .selection-actions {
+  .selection-summary {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+
+  .selection-badge {
+    display: inline-grid;
+    place-items: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--accent-primary);
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .selection-summary-text {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .selection-subtitle {
+    margin: 0;
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
+    line-height: var(--leading-tight);
+  }
+
+  .selection-block,
+  .selection-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .selection-block {
+    gap: var(--inspector-row-gap);
+  }
+
+  .selection-group {
+    padding-top: var(--space-2);
+    border-top: var(--hairline) solid var(--border-subtle);
+  }
+
+  .selection-group-label {
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+  }
+
+  .selection-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
     gap: var(--space-1);
   }
 
@@ -3541,8 +3629,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: auto;
-    flex: 1 1 auto;
+    width: 100%;
     min-height: var(--control-h);
     padding: 0 var(--space-2);
     gap: 5px;
@@ -3553,11 +3640,6 @@
     font-family: var(--font-body);
     font-size: var(--text-2xs);
     cursor: pointer;
-  }
-
-  .delete-selection {
-    flex: 0 0 auto;
-    margin-left: auto;
   }
 
   .topology-action:hover {

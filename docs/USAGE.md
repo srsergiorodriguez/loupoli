@@ -54,9 +54,9 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Move/Rotate/Scale handle | With an element selection, the gizmo sits at the selection median and drags the selected elements; otherwise it transforms the active object/group on that axis. Pen, mouse, and touch are supported. |
 | Two-sided (Mesh Inspector) | Render backfaces for billboard/foliage cards. Works with Cutout or Blend texture alpha. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
-| ActionDock | Tap/click Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. |
+| ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. |
 | E / I | Arm Extrude / Inset for the current face selection. |
-| Bevel | With one edge selected, set an exact amount in the Selection Inspector and choose Bevel. One edge per operation. |
+| Bevel | Select one interior edge, then choose Bevel in the Action Dock. Drag or type the width. One edge per operation; the topology rebuild resets UV seams. |
 | L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the selected edge loop. Loop Cut follows the selected edge; Loop Slide moves either way from its starting position. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | V / E / F buttons | Switch vertex, edge, or face selection mode; 1 / 2 / 3 are the keyboard shortcuts. |

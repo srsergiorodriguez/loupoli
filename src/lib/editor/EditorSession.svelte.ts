@@ -98,6 +98,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   modalTransform: null,
   actionState: null,
   loopSlideAvailable: false,
+  bevelAvailable: false,
   timelineVisible: false,
   modifiers: [],
   modifiersActive: false,
@@ -1432,10 +1433,6 @@ export class EditorSession {
 
   extrudeSelectedFaces(): void {
     this.runtime?.extrudeSelectedFaces();
-  }
-
-  bevelSelectedEdge(amount: number): boolean {
-    return this.runtime?.bevelSelectedEdge(amount) ?? false;
   }
 
   insetSelectedFace(): void {

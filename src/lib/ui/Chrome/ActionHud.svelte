@@ -13,24 +13,28 @@
       ? 'Extrude'
       : state?.kind === 'inset'
         ? 'Inset'
-        : state?.kind === 'loop-cut'
-          ? 'Loop Cut'
-          : 'Loop Slide'
+        : state?.kind === 'bevel'
+          ? 'Bevel'
+          : state?.kind === 'loop-cut'
+            ? 'Loop Cut'
+            : 'Loop Slide'
   );
 
   const prompt = $derived(
-    state?.kind === 'loop-cut'
-      ? 'Drag along the selected edge'
-      : state?.kind === 'loop-slide'
-        ? 'Drag either way to slide'
-        : 'Drag up or right'
+    state?.kind === 'bevel'
+      ? 'Drag to set width'
+      : state?.kind === 'loop-cut'
+        ? 'Drag along the selected edge'
+        : state?.kind === 'loop-slide'
+          ? 'Drag either way to slide'
+          : 'Drag up or right'
   );
 
   const value = $derived.by(() => {
     if (!state) {
       return '';
     }
-    if (state.kind === 'extrude') {
+    if (state.kind === 'extrude' || state.kind === 'bevel') {
       return state.value.toFixed(3);
     }
     return `${Math.round(state.value * 100)}%`;

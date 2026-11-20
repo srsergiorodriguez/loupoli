@@ -66,6 +66,7 @@ export interface ModalTransformSnapshot {
 export const MESH_ACTIONS = [
   'extrude',
   'inset',
+  'bevel',
   'loop-cut',
   'loop-slide'
 ] as const;
@@ -357,6 +358,7 @@ export interface EditorSnapshot {
   readonly modalTransform: ModalTransformSnapshot | null;
   readonly actionState: MeshActionSnapshot | null;
   readonly loopSlideAvailable: boolean;
+  readonly bevelAvailable: boolean;
   readonly timelineVisible: boolean;
   readonly modifiers: readonly Modifier[];
   readonly modifiersActive: boolean;

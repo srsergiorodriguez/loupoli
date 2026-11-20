@@ -20,9 +20,20 @@
   const actions: readonly ActionChoice[] = [
     { kind: 'extrude', label: 'Extrude', icon: 'extrude' },
     { kind: 'inset', label: 'Inset', icon: 'inset' },
+    { kind: 'bevel', label: 'Bevel', icon: 'bevel' },
     { kind: 'loop-cut', label: 'Loop Cut', icon: 'loop-cut' },
     { kind: 'loop-slide', label: 'Loop Slide', icon: 'loop-slide' }
   ];
+
+  function unavailableLabel(action: ActionChoice): string {
+    if (action.kind === 'loop-slide' && !available(action.kind)) {
+      return `${action.label} — select an edge loop first`;
+    }
+    if (action.kind === 'bevel' && !available(action.kind)) {
+      return `${action.label} — select one interior edge`;
+    }
+    return action.label;
+  }
 
   const activeKind = $derived(session.snapshot.actionState?.kind ?? null);
   const busy = $derived(
@@ -42,6 +53,9 @@
     if (kind === 'inset') {
       return snapshot.selectionMode === 'face' && count === 1;
     }
+    if (kind === 'bevel') {
+      return snapshot.bevelAvailable;
+    }
     if (kind === 'loop-cut') {
       return snapshot.selectionMode === 'edge' && count >= 1;
     }
@@ -57,12 +71,8 @@
           type="button"
           class:active={activeKind === action.kind}
           disabled={!available(action.kind) || busy}
-          aria-label={action.kind === 'loop-slide' && !available(action.kind)
-            ? `${action.label} — select an edge loop first`
-            : action.label}
-          title={action.kind === 'loop-slide' && !available(action.kind)
-            ? `${action.label} — select an edge loop first`
-            : action.label}
+          aria-label={unavailableLabel(action)}
+          title={unavailableLabel(action)}
           onclick={() => session.armAction(action.kind)}
         >
           <Icon name={action.icon} size={18} />
@@ -70,9 +80,12 @@
         </button>
       {/each}
     </div>
-    {#if session.snapshot.selectionMode === 'edge' &&
-      !session.snapshot.loopSlideAvailable}
-      <p class="action-hint">Select an edge loop to enable Loop Slide.</p>
+    {#if session.snapshot.selectionMode === 'edge'}
+      {#if session.snapshot.selectedElements.length > 1}
+        <p class="action-hint">Select one edge to bevel. Select an edge loop for Loop Slide.</p>
+      {:else if !session.snapshot.loopSlideAvailable}
+        <p class="action-hint">Select an edge loop to enable Loop Slide.</p>
+      {/if}
     {/if}
   </aside>
 {/if}
@@ -91,12 +104,12 @@
 
   .action-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(64px, 1fr));
+    grid-template-columns: repeat(3, minmax(64px, 1fr));
     gap: 4px;
   }
 
   .action-hint {
-    max-width: 148px;
+    max-width: 220px;
     margin: 4px 2px 2px;
     color: var(--text-tertiary);
     font-family: var(--font-body);

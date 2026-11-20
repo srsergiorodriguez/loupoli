@@ -1073,6 +1073,7 @@ export class EditorRuntime {
       modalTransform: this.modalSnapshot(),
       actionState: this.actionSnapshot(),
       loopSlideAvailable: this.activeLoopSlidePlan() !== null,
+      bevelAvailable: this.canBevelSelection(),
       timelineVisible: this.timelineVisible,
       boundaryEdges: mesh?.boundaryEdgeCount ?? 0,
       seamCount,
@@ -9600,54 +9601,6 @@ export class EditorRuntime {
   }
 
   /** Inset the single selected face toward its centroid. */
-  /** Bevel exactly one selected interior edge as one mesh replacement. */
-  bevelSelectedEdge(amount: number): boolean {
-    if (this.meshPoseEdit || this.shapeEdit) {
-      return false;
-    }
-    const node = this.getActiveNode();
-    if (
-      !node ||
-      node.reference ||
-      this.selection.mode !== 'edge' ||
-      this.selection.count !== 1
-    ) {
-      return false;
-    }
-    if (node.shapeKeys.length > 0 || node.motionTracked) {
-      this.notify(
-        'warning',
-        'Cannot bevel',
-        'Remove shape keys and Mesh Motion tracks before changing topology.'
-      );
-      return false;
-    }
-    const edge = this.selection.values()[0];
-    let result;
-    try {
-      result = bevelEdge(node.mesh, edge, amount);
-    } catch (error) {
-      this.notify(
-        'error',
-        'Cannot bevel edge',
-        error instanceof Error ? error.message : 'The edge could not be beveled.'
-      );
-      return false;
-    }
-    this.selection.clear();
-    this.lastLoopCut = null;
-    this.history.execute(
-      new ReplaceMeshCommand(
-        node,
-        node.mesh,
-        result.mesh,
-        `Bevel edge ${edge + 1}`
-      )
-    );
-    this.publish();
-    return true;
-  }
-
   insetSelectedFace(): void {
     const node = this.getActiveNode();
     if (
@@ -9789,9 +9742,39 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Whether the current selection can be beveled without changing modes. */
+  private canBevelSelection(): boolean {
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      this.getActiveGroup() !== null ||
+      node.reference ||
+      node.shapeKeys.length > 0 ||
+      node.motionTracked ||
+      this.selection.mode !== 'edge' ||
+      this.selection.count !== 1
+    ) {
+      return false;
+    }
+    const edge = this.selection.values()[0];
+    if (edge < 0 || edge >= node.mesh.edgeCount) {
+      return false;
+    }
+    const halfEdge = node.mesh.edgeHalfEdge[edge];
+    const twin = node.mesh.heTwin[halfEdge];
+    return (
+      node.mesh.heFace[halfEdge] >= 0 &&
+      twin >= 0 &&
+      node.mesh.heFace[twin] >= 0
+    );
+  }
+
   private actionAvailable(kind: MeshActionKind, _node: MeshNode): boolean {
     if (this.getActiveGroup() !== null) {
       return false;
+    }
+    if (kind === 'bevel') {
+      return this.canBevelSelection();
     }
     if (kind === 'loop-slide') {
       return this.activeLoopSlidePlan() !== null;
@@ -9834,6 +9817,9 @@ export class EditorRuntime {
     }
     if (kind === 'inset') {
       return 0.2;
+    }
+    if (kind === 'bevel') {
+      return 0.1;
     }
     if (kind === 'loop-slide') {
       return 0.5;
@@ -9890,6 +9876,23 @@ export class EditorRuntime {
       }
       selection = this.selection.values();
       faceIndex = selection[0];
+    } else if (kind === 'bevel') {
+      if (this.selection.mode !== 'edge' || this.selection.count !== 1) {
+        this.armedAction = null;
+        this.publish();
+        return false;
+      }
+      selection = this.selection.values();
+      edgeIndex = selection[0];
+      const halfEdge = node.mesh.edgeHalfEdge[edgeIndex];
+      const from = node.mesh.heOrigin[halfEdge];
+      const to = node.mesh.heOrigin[node.mesh.heNext[halfEdge]];
+      const edgeLength = Math.hypot(
+        node.mesh.positions[to * 3] - node.mesh.positions[from * 3],
+        node.mesh.positions[to * 3 + 1] - node.mesh.positions[from * 3 + 1],
+        node.mesh.positions[to * 3 + 2] - node.mesh.positions[from * 3 + 2]
+      );
+      value = Math.max(0.001, Math.min(0.1, edgeLength * 0.1));
     } else if (kind === 'loop-cut') {
       if (this.selection.mode !== 'edge' || this.selection.count < 1) {
         this.armedAction = null;
@@ -9973,6 +9976,12 @@ export class EditorRuntime {
         throw new Error('Inset requires one face.');
       }
       return insetSelectedFace(drag.before, drag.faceIndex, value);
+    }
+    if (drag.kind === 'bevel') {
+      if (drag.edgeIndex === null) {
+        throw new Error('Bevel requires one edge.');
+      }
+      return bevelEdge(drag.before, drag.edgeIndex, value).mesh;
     }
     if (drag.kind === 'loop-cut') {
       if (drag.edgeIndex === null) {
@@ -10078,7 +10087,13 @@ export class EditorRuntime {
       return;
     }
     let value: number;
-    if (drag.kind === 'loop-cut') {
+    if (drag.kind === 'bevel') {
+      const travel =
+        drag.startY -
+        sample.clientY +
+        (sample.clientX - drag.startX) * 0.5;
+      value = Math.min(4, Math.max(0.001, drag.startValue + travel * 0.002));
+    } else if (drag.kind === 'loop-cut') {
       const projection =
         (sample.clientX - drag.startX) * drag.dragX +
         (sample.clientY - drag.startY) * drag.dragY;
@@ -10409,7 +10424,9 @@ export class EditorRuntime {
         ? `Extrude ${drag.selection.length} face${drag.selection.length === 1 ? '' : 's'}`
         : drag.kind === 'inset'
           ? 'Inset face'
-          : 'Loop cut';
+          : drag.kind === 'bevel'
+            ? 'Bevel edge'
+            : 'Loop cut';
     this.selection.clear();
     const loopTransition: ReplaceMeshLoopTransition | null =
       drag.kind === 'loop-cut' && drag.edgeIndex !== null
@@ -12406,6 +12423,8 @@ export class EditorRuntime {
     if (drag.numeric.length > 0 && Number.isFinite(parsed)) {
       if (drag.kind === 'extrude') {
         value = Math.min(8, Math.max(0.001, parsed));
+      } else if (drag.kind === 'bevel') {
+        value = Math.min(4, Math.max(0.001, parsed));
       } else {
         value = Math.min(0.95, Math.max(0.01, parsed / 100));
         if (drag.kind === 'inset') {
