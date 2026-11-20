@@ -90,3 +90,33 @@ export class SetGroupVisibilityCommand implements EditorCommand {
     };
   }
 }
+
+
+/** Toggle per-object two-sided surface rendering. */
+export class SetNodeDoubleSidedCommand implements EditorCommand {
+  readonly label: string;
+  readonly estimatedBytes = 32;
+
+  constructor(
+    private readonly node: MeshNode,
+    private readonly doubleSided: boolean
+  ) {
+    this.label = doubleSided ? 'Make two-sided' : 'Make one-sided';
+  }
+
+  execute(): void {
+    this.node.doubleSided = this.doubleSided;
+  }
+
+  undo(): void {
+    this.node.doubleSided = !this.doubleSided;
+  }
+
+  journalPatch(): JournalPatch {
+    return {
+      type: 'set-node-double-sided',
+      nodeId: this.node.id,
+      doubleSided: this.doubleSided
+    };
+  }
+}

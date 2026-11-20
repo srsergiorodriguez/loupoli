@@ -1,5 +1,6 @@
 import type { HalfEdgeMesh, Vec3 } from '../../geometry/HalfEdgeMesh';
 import type { JournalPatch } from '../../project/journal';
+import type { MeshNode } from '../../scene/MeshNode';
 import type { EditorCommand } from './EditorCommand';
 
 /**
@@ -14,6 +15,8 @@ export class TransformVerticesCommand implements EditorCommand {
   private readonly vertices: readonly number[];
   private readonly before: readonly Vec3[];
   private readonly after: readonly Vec3[];
+  private readonly renameFrom: string | null;
+  private readonly renameTo: string | null;
 
   constructor(
     private readonly mesh: HalfEdgeMesh,
@@ -21,7 +24,8 @@ export class TransformVerticesCommand implements EditorCommand {
     before: readonly Vec3[],
     after: readonly Vec3[],
     private readonly nodeId: string | null,
-    label?: string
+    label?: string,
+    private readonly node: MeshNode | null = null
   ) {
     if (before.length !== vertices.length || after.length !== vertices.length) {
       throw new Error('Vertex transform position count does not match.');
@@ -29,11 +33,16 @@ export class TransformVerticesCommand implements EditorCommand {
     this.vertices = [...vertices];
     this.before = before.map((position) => [...position] as Vec3);
     this.after = after.map((position) => [...position] as Vec3);
+    this.renameFrom = node?.hasPrimitiveName() ? node.name : null;
+    this.renameTo = this.renameFrom === null ? null : node?.customName() ?? null;
     this.label = label ?? `Transform ${vertices.length} vertices`;
     this.estimatedBytes = vertices.length * 48 + 64;
   }
 
   execute(): void {
+    if (this.renameFrom !== null && this.renameTo !== null && this.node) {
+      this.node.name = this.renameTo;
+    }
     for (let index = 0; index < this.vertices.length; index += 1) {
       this.mesh.setVertexPosition(this.vertices[index], this.after[index]);
     }
@@ -42,6 +51,9 @@ export class TransformVerticesCommand implements EditorCommand {
   undo(): void {
     for (let index = 0; index < this.vertices.length; index += 1) {
       this.mesh.setVertexPosition(this.vertices[index], this.before[index]);
+    }
+    if (this.renameFrom !== null && this.node) {
+      this.node.name = this.renameFrom;
     }
   }
 
@@ -52,6 +64,13 @@ export class TransformVerticesCommand implements EditorCommand {
       return null;
     }
     const patches: JournalPatch[] = [];
+    if (this.renameFrom !== null && this.renameTo !== null) {
+      patches.push({
+        type: 'set-node-name',
+        nodeId: this.nodeId,
+        name: direction === 'forward' ? this.renameTo : this.renameFrom
+      });
+    }
     for (let index = 0; index < this.vertices.length; index += 1) {
       patches.push({
         type: 'move-vertex',

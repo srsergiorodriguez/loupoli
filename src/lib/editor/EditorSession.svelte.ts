@@ -978,6 +978,10 @@ export class EditorSession {
     this.runtime?.joinSelectedNodes();
   }
 
+  duplicateActiveNode(): void {
+    this.runtime?.duplicateActiveNode();
+  }
+
   groupSelectedNodes(): void {
     this.runtime?.groupSelectedNodes();
   }
@@ -1400,6 +1404,10 @@ export class EditorSession {
 
   createPrimitive(kind: PrimitiveKind): void {
     this.runtime?.createPrimitive(kind);
+  }
+
+  setActiveNodeDoubleSided(doubleSided: boolean): void {
+    this.runtime?.setActiveNodeDoubleSided(doubleSided);
   }
 
   renameActiveObject(name: string): void {

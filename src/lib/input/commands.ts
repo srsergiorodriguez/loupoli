@@ -8,6 +8,7 @@ export type CommandId =
   | 'edit.undo'
   | 'edit.redo'
   | 'edit.delete'
+  | 'edit.duplicate'
   | 'file.new'
   | 'file.open'
   | 'file.save'
@@ -72,6 +73,7 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'file.new': { label: 'New project', scope: 'global', shortcut: 'newProject', presentation: 'icon', bindings: [{ key: 'n', mod: true }] },
   'file.open': { label: 'Open project', scope: 'global', shortcut: 'open', presentation: 'icon', bindings: [{ key: 'o', mod: true }] },
   'file.save': { label: 'Save project', scope: 'global', shortcut: 'save', presentation: 'icon', bindings: [{ key: 's', mod: true }] },
+  'edit.duplicate': { label: 'Duplicate object', scope: 'active', shortcut: 'duplicate', presentation: 'icon', bindings: [{ key: 'd', mod: true }] },
   'view.sidebar': { label: 'Toggle sidebar', scope: 'shell', presentation: 'icon' },
   'selection.vertex': { label: 'Vertex', scope: 'active', shortcut: 'vertexMode', presentation: 'text', bindings: [{ key: '1' }] },
   'selection.edge': { label: 'Edge', scope: 'active', shortcut: 'edgeMode', presentation: 'text', bindings: [{ key: '2' }] },

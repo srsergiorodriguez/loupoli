@@ -47,6 +47,8 @@ export class ReplaceMeshCommand implements EditorCommand {
   readonly estimatedBytes: number;
   private readonly before: HalfEdgeMesh;
   private readonly after: HalfEdgeMesh;
+  private readonly renameFrom: string | null;
+  private readonly renameTo: string | null;
   readonly loopContextBefore: ReplaceMeshLoopContext | null;
   readonly loopContextAfter: ReplaceMeshLoopContext | null;
 
@@ -62,21 +64,44 @@ export class ReplaceMeshCommand implements EditorCommand {
     this.label = label;
     this.loopContextBefore = loopTransition?.before ?? null;
     this.loopContextAfter = loopTransition?.after ?? null;
+    this.renameFrom = node.hasPrimitiveName() ? node.name : null;
+    this.renameTo = this.renameFrom === null ? null : node.customName();
     this.estimatedBytes = meshBytes(before) + meshBytes(after);
   }
 
   execute(): void {
+    if (this.renameFrom !== null && this.renameTo !== null) {
+      this.node.name = this.renameTo;
+    }
     this.node.setMesh(this.after);
   }
 
   undo(): void {
     this.node.setMesh(this.before);
+    if (this.renameFrom !== null) {
+      this.node.name = this.renameFrom;
+    }
   }
 
-  journalPatch(direction: 'forward' | 'backward'): JournalPatch {
+  journalPatch(direction: 'forward' | 'backward'): JournalPatch | readonly JournalPatch[] {
     const mesh: MeshSnapshot = snapshotMesh(
       direction === 'forward' ? this.after : this.before
     );
-    return { type: 'replace-mesh', nodeId: this.node.id, mesh };
+    const replace: JournalPatch = {
+      type: 'replace-mesh',
+      nodeId: this.node.id,
+      mesh
+    };
+    if (this.renameFrom === null || this.renameTo === null) {
+      return replace;
+    }
+    return [
+      {
+        type: 'set-node-name',
+        nodeId: this.node.id,
+        name: direction === 'forward' ? this.renameTo : this.renameFrom
+      },
+      replace
+    ];
   }
 }

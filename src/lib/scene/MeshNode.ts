@@ -1,5 +1,5 @@
 import type { HalfEdgeMesh, Vec3 } from '../geometry/HalfEdgeMesh';
-import type { PrimitiveKind } from '../geometry/primitives';
+import { PRIMITIVE_LABELS, type PrimitiveKind } from '../geometry/primitives';
 import {
   cloneModifiers,
   evaluateModifiersWithProvenance,
@@ -56,6 +56,7 @@ export class MeshNode {
   readonly primitive: PrimitiveKind;
   name: string;
   visible = true;
+  doubleSided = false;
   parentId: string | null = null;
   textureId: string | null;
   materialPalette: string[] = [];
@@ -428,6 +429,32 @@ export class MeshNode {
     return evaluated;
   }
 
+  /** Whether the name is still an untouched primitive label. */
+  hasPrimitiveName(): boolean {
+    if (this.primitive === 'imported' || this.primitive === 'reference') {
+      return false;
+    }
+    const base = PRIMITIVE_LABELS[this.primitive];
+    if (this.name === base) {
+      return true;
+    }
+    const suffix = this.name.startsWith(`${base} `)
+      ? this.name.slice(base.length + 1)
+      : '';
+    return /^[1-9][0-9]*$/.test(suffix);
+  }
+
+  /** First custom name derived from a primitive label and its numeric suffix. */
+  customName(): string {
+    const base = this.primitive === 'imported' || this.primitive === 'reference'
+      ? ''
+      : PRIMITIVE_LABELS[this.primitive];
+    const suffix = base && this.name.startsWith(`${base} `)
+      ? this.name.slice(base.length + 1)
+      : '';
+    return suffix ? `Custom ${suffix}` : 'Custom';
+  }
+
   /** Commit a complete node transform, copying every vector. */
   setTransform(transform: NodeTransform): void {
     this.transform = {
@@ -465,5 +492,6 @@ export interface NodeSummary {
   readonly visible: boolean;
   readonly parentId: string | null;
   readonly textureId: string | null;
+  readonly doubleSided: boolean;
   readonly reference: ReferenceSettings | null;
 }

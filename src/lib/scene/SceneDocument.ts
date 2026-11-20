@@ -290,6 +290,19 @@ export class SceneDocument {
     return new MeshNode(mesh, kind, name, undefined, textureId);
   }
 
+  /** Choose a node name that is not already present in the scene. */
+  uniqueNodeName(base: string): string {
+    const trimmed = base.trim().slice(0, 64) || 'Object';
+    if (!this.nodes.some((node) => node.name === trimmed)) {
+      return trimmed;
+    }
+    let index = 2;
+    while (this.nodes.some((node) => node.name === `${trimmed} ${index}`)) {
+      index += 1;
+    }
+    return `${trimmed} ${index}`;
+  }
+
   /** Compute a non-overlapping local-space X placement for a new node. */
   placementFor(node: MeshNode, spacing = 1.5): Vec3 {
     if (this.nodes.length === 0) {
@@ -342,6 +355,7 @@ export class SceneDocument {
       visible: node.visible,
       parentId: node.parentId,
       textureId: node.textureId,
+      doubleSided: node.doubleSided,
       reference: node.reference
         ? { opacity: node.reference.opacity, inFront: node.reference.inFront }
         : null

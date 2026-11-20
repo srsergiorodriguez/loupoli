@@ -34,6 +34,7 @@ function makeDocument(): SceneDocument {
   cylinder.mesh.edgeFlags[0] = 1;
   cylinder.mesh.edgeFlags[3] = 2;
   cylinder.mesh.faceMaterial[2] = 4;
+  cylinder.doubleSided = true;
   document.insertNode(cylinder);
 
   const grid = new MeshNode(createGridMesh(4, 4), 'grid', 'Ground');
@@ -64,6 +65,7 @@ describe('.lpoli', () => {
     expect(decoded.document.nodes[1].mesh.edgeFlags[0]).toBe(1);
     expect(decoded.document.nodes[1].mesh.edgeFlags[3]).toBe(2);
     expect(decoded.document.nodes[1].mesh.faceMaterial[2]).toBe(4);
+    expect(decoded.document.nodes[1].doubleSided).toBe(true);
 
     const second = encodeLpoly(decoded.document, decoded.settings);
     expect(Array.from(second)).toEqual(Array.from(bytes));

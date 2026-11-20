@@ -52,6 +52,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | X/Y/Z while a vertex is selected | Toggle a world-axis lock for the next vertex drag. 44 px X/Y/Z chips provide the same control for pen/touch. |
 | Grid snap toggle/step | Snap object/vertex movement, gizmo rotation, and action amounts from the status-bar control; Shift+Tab toggles snapping, world steps 0.01–1.0, with independent UV and rotation steps. |
 | Move/Rotate/Scale handle | With an element selection, the gizmo sits at the selection median and drags the selected elements; otherwise it transforms the active object/group on that axis. Pen, mouse, and touch are supported. |
+| Two-sided (Mesh Inspector) | Render backfaces for billboard/foliage cards. Works with Cutout or Blend texture alpha. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | ActionDock | Tap/click Extrude, Inset, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. |
 | E / I | Arm Extrude / Inset for the current face selection. |
@@ -59,6 +60,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | 1 / 2 / 3 | Switch vertex, edge, or face selection mode. |
 | Shift+Tab | Toggle grid snapping. |
+| Cmd/Ctrl+D | Duplicate the active mesh object in place. |
 | Shift, Cmd, or Ctrl + click | Toggle an element in the current selection. |
 | Right-drag | Pan the view. |
 | Lasso tool + drag | Select a screen-space region in the current element mode. |

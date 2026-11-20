@@ -18,7 +18,8 @@ import {
   Raycaster,
   Vector2,
   Vector3,
-  type Camera
+  type Camera,
+  type Material
 } from 'three';
 import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
@@ -188,6 +189,8 @@ export class MeshNodeView {
 
   private lastMeshRevision = -1;
   private referenceMaterial: MeshBasicMaterial | null = null;
+  private doubleSided = false;
+  private readonly doubleSidedMaterials = new Map<Material, Material>();
   private readonly edgeMatrix = new Matrix4();
   private readonly edgePosition = new Vector3();
   private readonly edgeDirection = new Vector3();
@@ -449,6 +452,30 @@ export class MeshNodeView {
     this.updateSelectionGeometry();
   }
 
+  /** Enable or disable backface rendering for this object. */
+  setDoubleSided(enabled: boolean): void {
+    if (this.doubleSided === enabled) {
+      return;
+    }
+    this.doubleSided = enabled;
+    this.setShadingMode(this.shadingMode);
+  }
+
+  /** Return a cached two-sided variant of a shared surface material. */
+  private surfaceMaterial(material: Material): Material {
+    if (!this.doubleSided) {
+      return material;
+    }
+    const cached = this.doubleSidedMaterials.get(material);
+    if (cached) {
+      return cached;
+    }
+    const clone = material.clone();
+    clone.side = DoubleSide;
+    this.doubleSidedMaterials.set(material, clone);
+    return clone;
+  }
+
   /** Switch surface shading for this node. */
   setShadingMode(mode: ShadingMode): void {
     this.shadingMode = mode;
@@ -481,17 +508,24 @@ export class MeshNodeView {
     }
 
     if (mode === 'solid') {
-      this.triangleMesh.material = this.surfaceMaterials.solid;
+      this.triangleMesh.material = this.surfaceMaterial(this.surfaceMaterials.solid);
     } else if (mode === 'lit') {
-      this.triangleMesh.material = this.surfaceMaterials.lit;
+      this.triangleMesh.material = this.surfaceMaterial(this.surfaceMaterials.lit);
     } else {
-      this.triangleMesh.material = this.surfaceMaterials.ps1;
+      this.triangleMesh.material = this.surfaceMaterial(this.surfaceMaterials.ps1);
     }
     this.refreshMaterialColors();
   }
 
   /** Swap the per-texture material set without rebuilding geometry. */
   setSurfaceMaterials(materials: ViewportMaterials): void {
+    if (materials === this.surfaceMaterials) {
+      return;
+    }
+    for (const material of this.doubleSidedMaterials.values()) {
+      material.dispose();
+    }
+    this.doubleSidedMaterials.clear();
     this.surfaceMaterials = materials;
     this.setShadingMode(this.shadingMode);
   }
@@ -1083,6 +1117,10 @@ export class MeshNodeView {
     this.selectedEdgeMesh.dispose();
     this.wireTubeMesh.dispose();
     this.frontWireTubeMesh.dispose();
+    for (const material of this.doubleSidedMaterials.values()) {
+      material.dispose();
+    }
+    this.doubleSidedMaterials.clear();
     this.edgeUnitGeometry.dispose();
     this.selectedFaceOutline.geometry.dispose();
     faceGeometry.dispose();

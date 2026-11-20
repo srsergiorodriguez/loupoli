@@ -30,6 +30,7 @@ export interface InputRouterHost {
   isUvActive(): boolean;
   setSelectionMode(mode: 'vertex' | 'edge' | 'face'): void;
   toggleSnap(): void;
+  duplicateSelection(): void;
   isAnnotationMode(): boolean;
   isPencilMode(): boolean;
   finishPenClick(): void;
@@ -596,6 +597,10 @@ export class InputRouter {
       case 'edit.delete':
         event.preventDefault();
         this.host.deleteSelection();
+        return;
+      case 'edit.duplicate':
+        event.preventDefault();
+        this.host.duplicateSelection();
         return;
       case 'mesh.extrude':
       case 'mesh.inset':

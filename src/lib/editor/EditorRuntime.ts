@@ -55,6 +55,7 @@ import { MeshNode } from '../scene/MeshNode';
 import type { NodeTransform, SelectionMode, ShapeKey } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
+import { createNodeId } from '../scene/MeshNode';
 import { workspaceCan } from './workspaces';
 import { screenRotationDegrees } from './modalRotation';
 import {
@@ -170,6 +171,7 @@ import {
 import { DeleteMeshNodeCommand } from './commands/DeleteMeshNodeCommand';
 import {
   ReorderNodeCommand,
+  SetNodeDoubleSidedCommand,
   SetGroupVisibilityCommand,
   SetNodeVisibilityCommand
 } from './commands/SceneOrderCommands';
@@ -264,6 +266,8 @@ import {
   decodeLpoly,
   encodeLpoly,
   type DecodedProject,
+  restoreNode,
+  snapshotNode,
   type ProjectSettings
 } from '../project/lpoly';
 import {
@@ -855,6 +859,7 @@ export class EditorRuntime {
         }
       },
       toggleSnap: () => this.setSnapEnabled(!this.snapEnabled),
+      duplicateSelection: () => this.duplicateActiveNode(),
       isAnnotationMode: () => this.annotationMode,
       isPencilMode: () => this.pencilMode,
       finishPenClick: () => this.finishPenClick(),
@@ -2882,7 +2887,7 @@ export class EditorRuntime {
       return;
     }
     this.history.execute(
-      new MoveVertexCommand(node.mesh, vertex, before, position, node.id)
+      new MoveVertexCommand(node.mesh, vertex, before, position, node.id, node)
     );
   }
 
@@ -9363,6 +9368,41 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Duplicate the active mesh node in place as one undoable command. */
+  duplicateActiveNode(): void {
+    if (this.meshPoseEdit || this.shapeEdit) {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node || node.reference) {
+      return;
+    }
+    const snapshot = snapshotNode(node);
+    const clone = restoreNode({
+      ...snapshot,
+      id: createNodeId(),
+      name: this.document.uniqueNodeName(`${node.name} Copy`)
+    });
+    const index = this.document.nodes.indexOf(node) + 1;
+    this.activeGroupId = null;
+    this.activeNodeId = clone.id;
+    this.selectedNodeIds.clear();
+    this.selectedNodeIds.add(clone.id);
+    this.selection.setContext(clone.id, 'vertex');
+    this.history.execute(new CreateMeshNodeCommand(this.document, clone, index));
+    this.publish();
+  }
+
+  /** Toggle two-sided rendering for the active mesh object. */
+  setActiveNodeDoubleSided(doubleSided: boolean): void {
+    const node = this.getActiveNode();
+    if (!node || node.reference || node.doubleSided === doubleSided) {
+      return;
+    }
+    this.history.execute(new SetNodeDoubleSidedCommand(node, doubleSided));
+    this.publish();
+  }
+
   /** Rename the active object or group. */
   renameActiveObject(name: string): void {
     const trimmed = name.trim();
@@ -10304,7 +10344,8 @@ export class EditorRuntime {
             beforePositions,
             afterPositions,
             drag.node.id,
-            'Loop slide'
+            'Loop slide',
+            drag.node
           )
         );
       }
@@ -11817,7 +11858,8 @@ export class EditorRuntime {
           drag.vertex,
           drag.original,
           after,
-          drag.node.id
+          drag.node.id,
+          drag.node
         )
       );
     } else {
@@ -12726,7 +12768,8 @@ export class EditorRuntime {
             element.before,
             after,
             element.node.id,
-            `${operation} ${modal.targetLabel}`
+            `${operation} ${modal.targetLabel}`,
+            element.node
           )
         );
       } else {
@@ -13145,7 +13188,8 @@ export class EditorRuntime {
             drag.mode,
             drag.selectionCount,
             drag.selectionMode
-          )
+          ),
+          drag.node
         )
       );
     } else {

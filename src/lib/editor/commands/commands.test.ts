@@ -44,6 +44,18 @@ const SETTINGS: ProjectSettings = {
   ps1Affine: false
 };
 
+function applyPatches(
+  document: SceneDocument,
+  patch: JournalPatch | readonly JournalPatch[] | null
+): void {
+  if (!patch) {
+    return;
+  }
+  for (const item of (Array.isArray(patch) ? patch : [patch]) as readonly JournalPatch[]) {
+    applyJournalPatch(document, item);
+  }
+}
+
 function validateAll(document: SceneDocument): void {
   for (const node of document.nodes) {
     expect(() => node.mesh.validate()).not.toThrow();
@@ -139,7 +151,10 @@ describe('scene commands and journal', () => {
       sphere.id
     );
     history.execute(move);
-    patches.push(move.journalPatch!('forward')!);
+    const movePatch = move.journalPatch!('forward')!;
+    patches.push(
+      ...((Array.isArray(movePatch) ? movePatch : [movePatch]) as JournalPatch[])
+    );
 
     const remove = new DeleteMeshNodeCommand(document, sphere, 0);
     history.execute(remove);
@@ -216,9 +231,9 @@ describe('scene commands and journal', () => {
 
     const checkpoint = encodeLpoly(document, SETTINGS);
     const replay = decodeLpoly(checkpoint).document;
-    applyJournalPatch(replay, command.journalPatch('forward'));
+    applyPatches(replay, command.journalPatch('forward'));
     expect(replay.nodes[0].transform).toEqual(after);
-    applyJournalPatch(replay, command.journalPatch('backward'));
+    applyPatches(replay, command.journalPatch('backward'));
     expect(replay.nodes[0].transform).toEqual(before);
 
     history.undo();
@@ -253,14 +268,43 @@ describe('scene commands and journal', () => {
     const history = new History();
     history.execute(command);
     expect(node.modifiers).toHaveLength(1);
-    applyJournalPatch(replay, command.journalPatch('forward'));
+    applyPatches(replay, command.journalPatch('forward'));
     expect(replay.nodes[0].modifiers).toHaveLength(1);
     history.undo();
     expect(node.modifiers).toHaveLength(0);
-    applyJournalPatch(replay, command.journalPatch('backward'));
+    applyPatches(replay, command.journalPatch('backward'));
     expect(replay.nodes[0].modifiers).toHaveLength(0);
     history.redo();
     expect(node.modifiers[0].type).toBe('mirror');
+  });
+
+  it('renames an untouched primitive when a vertex edit commits', () => {
+    const document = SceneDocument.createDefault();
+    const node = document.nodes[0];
+    const beforeName = node.name;
+    const before = node.mesh.getVertexPosition(0);
+    const after: [number, number, number] = [before[0] + 1, before[1], before[2]];
+    const command = new MoveVertexCommand(
+      node.mesh,
+      0,
+      before,
+      after,
+      node.id,
+      node
+    );
+    const history = new History();
+    history.execute(command);
+    expect(node.name).toBe('Custom');
+    const checkpoint = encodeLpoly(document, SETTINGS);
+    const replay = decodeLpoly(checkpoint).document;
+    applyPatches(replay, command.journalPatch('forward'));
+    expect(replay.nodes[0].name).toBe('Custom');
+    applyPatches(replay, command.journalPatch('backward'));
+    expect(replay.nodes[0].name).toBe(beforeName);
+    history.undo();
+    expect(node.name).toBe(beforeName);
+    history.redo();
+    expect(node.name).toBe('Custom');
   });
 
   it('creates, transforms, and dissolves a group with journal replay', () => {
@@ -321,7 +365,7 @@ describe('scene commands and journal', () => {
     const transform = new TransformGroupCommand(group, before, after);
     history.execute(transform);
     expect(group.transform.position).toEqual([2, 2, 0]);
-    applyJournalPatch(replay, transform.journalPatch('forward'));
+    applyPatches(replay, transform.journalPatch('forward'));
     expect(replay.groups[0].transform.position).toEqual([2, 2, 0]);
 
     const ungroupChildren = document.nodes.map((child) => {
@@ -383,12 +427,12 @@ describe('scene commands and journal', () => {
     expect(node.mesh.boundaryEdgeCount).toBeGreaterThan(0);
     validateAll(document);
 
-    applyJournalPatch(replay, command.journalPatch('forward'));
+    applyPatches(replay, command.journalPatch('forward'));
     expect(replay.nodes[0].mesh.faceCount).toBe(after.faceCount);
     expect(replay.nodes[0].mesh.boundaryEdgeCount).toBe(
       after.boundaryEdgeCount
     );
-    applyJournalPatch(replay, command.journalPatch('backward'));
+    applyPatches(replay, command.journalPatch('backward'));
     expect(replay.nodes[0].mesh.faceCount).toBe(before.faceCount);
 
     history.undo();
@@ -620,7 +664,7 @@ describe('scene commands and journal', () => {
     expect(document.animation.tracks).toHaveLength(0);
     history.redo();
     const replay = decodeLpoly(encodeLpoly(document, SETTINGS)).document;
-    applyJournalPatch(replay, command.journalPatch('forward'));
+    applyPatches(replay, command.journalPatch('forward'));
     expect(replay.animation.getTrack(document.nodes[0].id)?.keyframes).toHaveLength(2);
   });
 

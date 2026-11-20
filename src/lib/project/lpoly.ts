@@ -115,6 +115,7 @@ export interface NodeSnapshot {
   readonly parentId: string | null;
   readonly textureId: string | null;
   readonly reference?: import('../scene/MeshNode').ReferenceSettings | null;
+  readonly doubleSided?: boolean;
   readonly materialPalette?: readonly string[];
   readonly shapeKeys?: readonly {
     readonly id: string;
@@ -151,6 +152,7 @@ interface NodeManifest {
   readonly parentId?: string | null;
   readonly textureId?: string | null;
   readonly reference?: import('../scene/MeshNode').ReferenceSettings | null;
+  readonly doubleSided?: boolean;
   readonly materialPalette?: readonly string[];
   readonly shapeKeys?: readonly {
     readonly id: string;
@@ -498,6 +500,7 @@ export function snapshotNode(node: MeshNode): NodeSnapshot {
     parentId: node.parentId,
     textureId: node.textureId,
     reference: node.reference,
+    doubleSided: node.doubleSided,
     materialPalette: node.materialPalette,
     shapeKeys: node.shapeKeys.map((key) => ({
       id: key.id,
@@ -562,6 +565,7 @@ export function restoreNode(snapshot: NodeSnapshot): MeshNode {
     snapshot.textureId ?? null
   );
   node.visible = snapshot.visible;
+  node.doubleSided = snapshot.doubleSided === true;
   node.setMaterialPalette(snapshot.materialPalette ?? []);
   node.setShapeKeys(
     (snapshot.shapeKeys ?? []).map((key) => ({
@@ -1403,6 +1407,7 @@ function encodeInternal(
     parentId: node.parentId,
     textureId: node.textureId,
     reference: node.reference,
+    doubleSided: node.doubleSided,
     materialPalette: node.materialPalette,
     shapeKeys: node.shapeKeys.map((key) => ({
       id: key.id,
@@ -1785,6 +1790,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
         node.textureId !== null &&
         (typeof node.textureId !== 'string' ||
           !textureAssetIds.has(node.textureId))) ||
+      (node.doubleSided !== undefined && typeof node.doubleSided !== 'boolean') ||
       (node.reference !== undefined &&
         node.reference !== null &&
         (typeof node.reference !== 'object' ||
@@ -1844,6 +1850,7 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     const mesh = restoreMesh(snapshot);
     const restored = new MeshNode(mesh, node.primitive, node.name, node.id);
     restored.visible = node.visible;
+    restored.doubleSided = node.doubleSided === true;
     restored.transform = transform;
     restored.parentId = node.parentId ?? null;
     restored.textureId = node.textureId ?? null;

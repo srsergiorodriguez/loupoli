@@ -64,6 +64,9 @@ describe('command registry', () => {
     expect(commandForKeyboardEvent(key('Tab', { shiftKey: true }))).toBe(
       'snap.toggle'
     );
+    expect(commandForKeyboardEvent(key('d', { metaKey: true }))).toBe(
+      'edit.duplicate'
+    );
   });
 
   it('derives the shortcut reference from command metadata', () => {
@@ -80,6 +83,7 @@ describe('command registry', () => {
       'edit.undo',
       'edit.redo',
       'edit.delete',
+      'edit.duplicate',
       'file.new',
       'file.open',
       'file.save',

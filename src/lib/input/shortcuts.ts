@@ -37,7 +37,8 @@ export type ShortcutId =
   | 'vertexMode'
   | 'edgeMode'
   | 'faceMode'
-  | 'snap';
+  | 'snap'
+  | 'duplicate';
 
 const definitions: Record<ShortcutId, Omit<ShortcutDefinition, 'id'>> = {
   undo: { label: 'Undo', display: `${MOD_KEY}Z` },
@@ -63,7 +64,8 @@ const definitions: Record<ShortcutId, Omit<ShortcutDefinition, 'id'>> = {
   vertexMode: { label: 'Vertex mode', display: '1' },
   edgeMode: { label: 'Edge mode', display: '2' },
   faceMode: { label: 'Face mode', display: '3' },
-  snap: { label: 'Toggle grid snap', display: '⇧Tab' }
+  snap: { label: 'Toggle grid snap', display: '⇧Tab' },
+  duplicate: { label: 'Duplicate object', display: `${MOD_KEY}D` }
 };
 
 /** Look up one shortcut definition. */

@@ -1030,6 +1030,11 @@
           {:else if activeNodeId !== null}
             <span class="scene-action-spacer"></span>
             <ActionButton
+              label="Duplicate"
+              icon="copy"
+              onActivate={() => session.duplicateActiveNode()}
+            />
+            <ActionButton
               label="Delete object"
               icon="trash"
               variant="danger"
@@ -1768,6 +1773,12 @@
           <dd class="text-mono">{counts.triangles}</dd>
         </div>
       </dl>
+      <Switch
+        label="Two-sided"
+        description="Render backfaces. Use with transparent/Cutout textures for foliage cards and other billboard planes."
+        checked={activeNode?.doubleSided ?? false}
+        onChange={(value) => session.setActiveNodeDoubleSided(value)}
+      />
       {/if}
     </InspectorSection>
 {/snippet}

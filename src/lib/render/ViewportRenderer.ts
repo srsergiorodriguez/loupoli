@@ -438,6 +438,7 @@ export class ViewportRenderer {
       }
 
       view.setTransform(animationPose.get(node.id) ?? node.transform);
+      view.setDoubleSided(node.doubleSided);
       view.setVisible(node.visible);
       view.refreshMesh();
       const isActive =

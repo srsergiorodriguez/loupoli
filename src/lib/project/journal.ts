@@ -100,6 +100,11 @@ export type JournalPatch =
       readonly visible: boolean;
     }
   | {
+      readonly type: 'set-node-double-sided';
+      readonly nodeId: string;
+      readonly doubleSided: boolean;
+    }
+  | {
       readonly type: 'set-node-name';
       readonly nodeId: string;
       readonly name: string;
@@ -279,6 +284,14 @@ export function applyJournalPatch(
         throw new Error(`Autosave references missing node ${patch.nodeId}.`);
       }
       node.visible = patch.visible;
+      return;
+    }
+    case 'set-node-double-sided': {
+      const node = document.getNode(patch.nodeId);
+      if (!node) {
+        throw new Error(`Autosave references missing node ${patch.nodeId}.`);
+      }
+      node.doubleSided = patch.doubleSided;
       return;
     }
     case 'set-node-name': {
@@ -502,6 +515,9 @@ export function journalPatchBytes(patch: JournalPatch): number {
       mesh.faceMaterial.byteLength +
       64
     );
+  }
+  if (patch.type === 'set-node-double-sided') {
+    return 32 + patch.nodeId.length * 2;
   }
   const mesh = patch.node.mesh;
   return (
