@@ -150,4 +150,30 @@
       line-height: 1;
     }
   }
+
+  @media (min-width: 900px) {
+    :global(:root[data-density='touch']) .tool-button {
+      width: 68px;
+      height: 52px;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    :global(:root[data-density='touch']) .tool-button.is-active::before {
+      top: auto;
+      bottom: -6px;
+      left: 50%;
+      width: 16px;
+      height: 2px;
+      transform: translateX(-50%);
+    }
+
+    :global(:root[data-density='touch']) .tool-label {
+      display: block;
+      color: currentColor;
+      font-size: var(--text-2xs);
+      font-weight: var(--weight-medium);
+      line-height: 1;
+    }
+  }
 </style>

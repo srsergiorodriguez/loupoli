@@ -160,6 +160,7 @@
 }
 
 :root[data-density="touch"] {
+  --toolrail-w: 76px;
   --control-h: var(--control-h-touch);
   --control-h-sm: 36px;
   --control-h-lg: 48px;
