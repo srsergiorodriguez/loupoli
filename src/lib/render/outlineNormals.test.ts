@@ -29,6 +29,27 @@ describe('outline normals', () => {
     expect(Array.from(out.slice(15, 18))).toEqual([1, 0, 0]);
   });
 
+  it('weights each adjacent face once, not once per triangle', () => {
+    // A quad fan emits two triangles for one face and one for another at the
+    // same corner. The duplicate must not rotate the mitered corner.
+    const positions = new Float32Array([
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ]);
+    const normals = new Float32Array([
+      1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1
+    ]);
+    const out = new Float32Array(positions.length);
+
+    writeSmoothedOutlineNormals(positions, normals, out);
+
+    // Symmetric corner miter: (1, 1, 1) rather than a duplicate-weighted skew.
+    for (let vertex = 0; vertex < 4; vertex += 1) {
+      expect(out[vertex * 3]).toBeCloseTo(1, 6);
+      expect(out[vertex * 3 + 1]).toBeCloseTo(1, 6);
+      expect(out[vertex * 3 + 2]).toBeCloseTo(1, 6);
+    }
+  });
+
   it('keeps a source normal when coincident faces cancel', () => {
     const positions = new Float32Array([0, 0, 0, 0, 0, 0]);
     const normals = new Float32Array([1, 0, 0, -1, 0, 0]);

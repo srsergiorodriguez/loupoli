@@ -7,6 +7,11 @@
  * instead; an inverted hull is not shaded, so the smoothed directions only
  * affect the silhouette.
  *
+ * Face normals are deduplicated per position before averaging. Quad fan
+ * tessellation emits a different number of triangles at each corner, so
+ * counting triangles would weight one adjacent face more than another and
+ * rotate the outline at an otherwise symmetric hard corner.
+ *
  * The vector keeps a miter scale: normalizing the averaged normal would move a
  * hard corner inside the intersection of its offset face planes, rounding the
  * hull away from the model edge. The scale restores that plane intersection
@@ -29,74 +34,70 @@ export function writeSmoothedOutlineNormals(
     throw new Error('Outline normal buffers must have matching lengths.');
   }
 
+  interface Bucket {
+    readonly normals: Map<string, readonly [number, number, number]>;
+    output: readonly [number, number, number] | null;
+  }
+
   const vertexCount = positions.length / 3;
-  const slotByPosition = new Map<string, number>();
-  const sums: number[] = [];
-  const minDots: number[] = [];
+  const buckets = new Map<string, Bucket>();
 
   for (let vertex = 0; vertex < vertexCount; vertex += 1) {
     const offset = vertex * 3;
-    const key = `${positions[offset].toFixed(6)},${positions[offset + 1].toFixed(6)},${positions[offset + 2].toFixed(6)}`;
-    let slot = slotByPosition.get(key);
-    if (slot === undefined) {
-      slot = sums.length / 3;
-      slotByPosition.set(key, slot);
-      sums.push(0, 0, 0);
-      minDots.push(1);
+    const positionKey = `${positions[offset].toFixed(6)},${positions[offset + 1].toFixed(6)},${positions[offset + 2].toFixed(6)}`;
+    let bucket = buckets.get(positionKey);
+    if (!bucket) {
+      bucket = { normals: new Map(), output: null };
+      buckets.set(positionKey, bucket);
     }
-    const sumOffset = slot * 3;
-    sums[sumOffset] += normals[offset];
-    sums[sumOffset + 1] += normals[offset + 1];
-    sums[sumOffset + 2] += normals[offset + 2];
+    const nx = normals[offset];
+    const ny = normals[offset + 1];
+    const nz = normals[offset + 2];
+    const normalKey = `${nx.toFixed(5)},${ny.toFixed(5)},${nz.toFixed(5)}`;
+    if (!bucket.normals.has(normalKey)) {
+      bucket.normals.set(normalKey, [nx, ny, nz]);
+    }
   }
 
-  const slotCount = sums.length / 3;
-  const slotNormals = new Float32Array(slotCount * 3);
-  for (let slot = 0; slot < slotCount; slot += 1) {
-    const offset = slot * 3;
-    const length = Math.hypot(sums[offset], sums[offset + 1], sums[offset + 2]);
+  for (const bucket of buckets.values()) {
+    let sumX = 0;
+    let sumY = 0;
+    let sumZ = 0;
+    for (const normal of bucket.normals.values()) {
+      sumX += normal[0];
+      sumY += normal[1];
+      sumZ += normal[2];
+    }
+    const length = Math.hypot(sumX, sumY, sumZ);
     if (length < 1e-8) {
       continue;
     }
-    slotNormals[offset] = sums[offset] / length;
-    slotNormals[offset + 1] = sums[offset + 1] / length;
-    slotNormals[offset + 2] = sums[offset + 2] / length;
-  }
-
-  // Measure how far each incident face normal is from the averaged normal.
-  // The smallest dot product determines the miter needed to keep the offset
-  // plane parallel to that face.
-  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
-    const offset = vertex * 3;
-    const key = `${positions[offset].toFixed(6)},${positions[offset + 1].toFixed(6)},${positions[offset + 2].toFixed(6)}`;
-    const slot = slotByPosition.get(key) ?? 0;
-    const normalOffset = slot * 3;
-    const dot =
-      normals[offset] * slotNormals[normalOffset] +
-      normals[offset + 1] * slotNormals[normalOffset + 1] +
-      normals[offset + 2] * slotNormals[normalOffset + 2];
-    if (dot < minDots[slot]) {
-      minDots[slot] = dot;
+    const nx = sumX / length;
+    const ny = sumY / length;
+    const nz = sumZ / length;
+    let minDot = 1;
+    for (const normal of bucket.normals.values()) {
+      const dot = nx * normal[0] + ny * normal[1] + nz * normal[2];
+      if (dot < minDot) {
+        minDot = dot;
+      }
     }
+    const miter = Math.min(2, 1 / Math.max(0.5, minDot));
+    bucket.output = [nx * miter, ny * miter, nz * miter];
   }
 
   for (let vertex = 0; vertex < vertexCount; vertex += 1) {
     const offset = vertex * 3;
-    const key = `${positions[offset].toFixed(6)},${positions[offset + 1].toFixed(6)},${positions[offset + 2].toFixed(6)}`;
-    const slot = slotByPosition.get(key) ?? 0;
-    const normalOffset = slot * 3;
-    const nx = slotNormals[normalOffset];
-    const ny = slotNormals[normalOffset + 1];
-    const nz = slotNormals[normalOffset + 2];
-    if (Math.hypot(nx, ny, nz) < 1e-8) {
+    const positionKey = `${positions[offset].toFixed(6)},${positions[offset + 1].toFixed(6)},${positions[offset + 2].toFixed(6)}`;
+    const output = buckets.get(positionKey)?.output;
+    if (output) {
+      outNormals[offset] = output[0];
+      outNormals[offset + 1] = output[1];
+      outNormals[offset + 2] = output[2];
+    } else {
       outNormals[offset] = normals[offset];
       outNormals[offset + 1] = normals[offset + 1];
       outNormals[offset + 2] = normals[offset + 2];
-      continue;
     }
-    const miter = Math.min(2, 1 / Math.max(0.5, minDots[slot]));
-    outNormals[offset] = nx * miter;
-    outNormals[offset + 1] = ny * miter;
-    outNormals[offset + 2] = nz * miter;
   }
 }
