@@ -150,6 +150,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 - Use `ActionButton` for icon+text actions, `IconButton` for icon-only actions, and `ThreeDotMenu`/`ActionMenu` for overflow.
 - Use `DangerAction` for every destructive action. It requires a visible label and renders last/end-aligned; do not hand-build destructive rows.
 - Use `CreateRow` for selector + Add creation rows, with an optional trailing action snippet.
+- Use `CompactAction` for timeline and other dense track-row actions. It owns the compact hit area; destructive uses must include visible `Remove` text.
 - Use `ActionRow` for grouped commands. Do not create per-section action layouts or button skins.
 - `ActionButton` and `IconButton` set `aria-pressed` only when `active`/`pressed` is explicitly provided; set it only for toggle actions.
 - `ModalDialog` owns the footer layout: action snippets provide `ActionButton`s in secondary-to-primary order. Do not add per-dialog footer wrappers; the confirm action uses `variant="primary"` and sits last.
@@ -168,6 +169,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Shape keys | Add shape key | selected key: name, weight, Edit target, Capture base; rows support visibility and drag reorder | Delete shape key, last/right |
 
 - Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.
+- Track selection is a real button in the track label, separate from Key/Remove actions. Never put `role="button"` on a row that contains buttons or other interactive controls.
 - Shape-key weight keys are timeline keys; the Shape keys Inspector does not duplicate Key/Unkey. Shape-key rows use the same outliner grouping, visibility, and drag-reorder behavior as scene objects and texture layers.
 - A more-actions (`ThreeDotMenu`) or overflow menu is always the last control in its action row.
 - Camera and Render use `ActionRow` rather than per-section button wrappers; primary/destructive actions sit last and right. The render preview is an always-open PaneHost pane beside the camera view, built from the same PaneFrame as UV and Paint, with live output and a play/pause control.

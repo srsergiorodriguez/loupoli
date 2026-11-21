@@ -3,7 +3,7 @@
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import SelectField from '../Primitives/SelectField.svelte';
-  import Icon from '../Icons/Icon.svelte';
+  import CompactAction from '../Primitives/CompactAction.svelte';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import { onMount } from 'svelte';
   import { shortcutBus } from '../../input/ShortcutBus';
@@ -705,42 +705,33 @@
           class:texture-track={track.kind === 'texture'}
           class:camera-track={track.kind === 'camera'}
           class:light-track={track.kind === 'light'}
-          role="button"
-          tabindex="0"
-          onclick={() => selectTrack(track)}
-          onkeydown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              selectTrack(track);
-            }
-          }}
         >
           <span class="track-label">
-            <span class="track-name">{track.targetName}</span>
             <button
               type="button"
-              class="track-key-action"
-              aria-label={`Key ${track.targetName}`}
-              title={`Key ${track.targetName}`}
-              disabled={snapshot.meshPoseEditing}
+              class="track-select"
+              aria-label={`Select ${track.targetName} track`}
+              aria-pressed={selectedTrack?.id === track.id ||
+                (!selectedTrack && activeTrack?.id === track.id)}
               onpointerdown={(event) => event.stopPropagation()}
-              onclick={(event) => {
-                event.stopPropagation();
-                keyTrack(track);
-              }}
-            >+</button>
-            <button
-              type="button"
-              class="track-key-action track-remove-action track-remove-labeled"
-              aria-label={`Remove ${track.targetName} track`}
-              title={`Remove ${track.targetName} track`}
+              onclick={() => selectTrack(track)}
+            >
+              <span class="track-name">{track.targetName}</span>
+            </button>
+            <CompactAction
+              label={`Key ${track.targetName}`}
+              icon="plus"
               disabled={snapshot.meshPoseEditing}
-              onpointerdown={(event) => event.stopPropagation()}
-              onclick={(event) => {
-                event.stopPropagation();
-                deleteTrack(track);
-              }}
-            ><Icon name="trash" size={10} /><span>Remove</span></button>
+              onActivate={() => keyTrack(track)}
+            />
+            <CompactAction
+              label={`Remove ${track.targetName} track`}
+              icon="trash"
+              text="Remove"
+              destructive
+              disabled={snapshot.meshPoseEditing}
+              onActivate={() => deleteTrack(track)}
+            />
           </span>
           <span class="track-lane">
             {#each track.keyframes.filter((key) => key.frame >= viewStart && key.frame <= viewEnd) as key (key.frame)}
@@ -785,28 +776,20 @@
         <div class="timeline-track audio-track">
           <span class="track-label">
             <span class="track-name">{activeAudio.name}</span>
-            <button
-              type="button"
-              class="track-key-action"
-              aria-label={activeAudio.muted ? 'Unmute audio' : 'Mute audio'}
-              title={activeAudio.muted ? 'Unmute audio' : 'Mute audio'}
-              onpointerdown={(event) => event.stopPropagation()}
-              onclick={(event) => {
-                event.stopPropagation();
-                session.setClipAudioMuted(!activeAudio.muted);
-              }}
-            ><Icon name={activeAudio.muted ? 'volume-off' : 'volume'} size={11} /></button>
-            <button
-              type="button"
-              class="track-key-action track-remove-action track-remove-labeled"
-              aria-label="Remove clip audio"
-              title="Remove clip audio"
-              onpointerdown={(event) => event.stopPropagation()}
-              onclick={(event) => {
-                event.stopPropagation();
-                session.removeClipAudio();
-              }}
-            ><Icon name="trash" size={10} /><span>Remove</span></button>
+            <CompactAction
+              label={activeAudio.muted ? 'Unmute audio' : 'Mute audio'}
+              icon={activeAudio.muted ? 'volume-off' : 'volume'}
+              pressed={!activeAudio.muted}
+              onActivate={() =>
+                session.setClipAudioMuted(!activeAudio.muted)}
+            />
+            <CompactAction
+              label="Remove clip audio"
+              icon="trash"
+              text="Remove"
+              destructive
+              onActivate={() => session.removeClipAudio()}
+            />
           </span>
           <span class="track-lane">
             <span
@@ -1070,72 +1053,33 @@
     overflow: hidden;
   }
 
-  .track-name {
+  .track-select {
+    display: flex;
+    align-items: center;
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    color: var(--text-secondary);
-    font-size: var(--text-2xs);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .track-key-action {
-    position: relative;
-    display: grid;
-    place-items: center;
-    flex: 0 0 auto;
-    width: 20px;
-    height: 20px;
     padding: 0;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-xs);
-    background: var(--bg-input);
+    border: 0;
+    background: transparent;
     color: var(--text-secondary);
-    font-family: var(--font-mono);
-    font-size: var(--text-xs);
-    line-height: 1;
+    font-family: var(--font-ui);
+    text-align: left;
     cursor: pointer;
   }
 
-  .track-key-action::before {
-    content: '';
-    position: absolute;
-    inset: -4px;
+  .track-select:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 1px;
   }
 
-  .track-key-action:hover:not(:disabled) {
-    border-color: var(--border-strong);
-    color: var(--accent-primary);
-  }
-
-  .track-remove-action:hover:not(:disabled) {
-    border-color: var(--accent-danger);
-    color: var(--accent-danger);
-  }
-
-  .track-remove-labeled {
-    display: inline-flex;
-    width: auto;
+  .track-name {
+    display: block;
     min-width: 0;
-    padding: 0 3px;
-    gap: 2px;
-    font-size: 9px;
-    line-height: 1;
-  }
-
-  .track-remove-labeled span {
+    overflow: hidden;
+    color: inherit;
+    font-size: var(--text-2xs);
+    text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .track-key-action:disabled {
-    opacity: .45;
-    cursor: default;
-  }
-
-  .track-key-action:focus-visible {
-    outline: 2px solid var(--accent-primary);
-    outline-offset: -2px;
   }
 
   .track-lane {
@@ -1186,8 +1130,4 @@
     inset: -13px;
   }
 
-  :global(:root[data-density='touch']) .track-key-action {
-    width: var(--hit-min);
-    height: var(--hit-min);
-  }
 </style>

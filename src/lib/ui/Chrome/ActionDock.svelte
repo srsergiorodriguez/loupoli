@@ -70,6 +70,7 @@
         <button
           type="button"
           class:active={activeKind === action.kind}
+          aria-pressed={activeKind === action.kind}
           disabled={!available(action.kind) || busy}
           aria-label={unavailableLabel(action)}
           title={unavailableLabel(action)}
