@@ -289,18 +289,20 @@ export class MeshNodeView {
         uniform vec2 uResolution;
         void main() {
           vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-          vec3 viewNormal = normalize(normalMatrix * outlineNormal);
+          vec3 outlineVector = normalMatrix * outlineNormal;
+          float outlineScale = length(outlineVector);
+          vec3 outlineDirection = outlineVector / max(outlineScale, 1e-5);
           vec4 clipPosition = projectionMatrix * viewPosition;
           if (uScreenSpace) {
-            vec3 clipNormal = (projectionMatrix * vec4(viewNormal, 0.0)).xyz;
+            vec3 clipNormal = (projectionMatrix * vec4(outlineDirection, 0.0)).xyz;
             vec2 direction = clipNormal.xy;
             float directionLength = length(direction);
             if (directionLength > 1e-5) {
               clipPosition.xy += (direction / directionLength) *
-                (uThickness * 2.0 / uResolution) * clipPosition.w;
+                (uThickness * outlineScale * 2.0 / uResolution) * clipPosition.w;
             }
           } else {
-            viewPosition.xyz += viewNormal * uThickness;
+            viewPosition.xyz += outlineDirection * outlineScale * uThickness;
             clipPosition = projectionMatrix * viewPosition;
           }
           gl_Position = clipPosition;
