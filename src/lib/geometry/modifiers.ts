@@ -1030,8 +1030,8 @@ const OUTLINE_DEFINITION: ModifierDefinition = {
     id: createModifierId(),
     type: 'outline',
     enabled: true,
-    thickness: 4,
-    units: 'screen',
+    thickness: 0.05,
+    units: 'world',
     color: '#e07a5f'
   }),
   validate: (value, id, enabled) => {

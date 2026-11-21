@@ -292,20 +292,22 @@ export class MeshNodeView {
           vec3 outlineVector = normalMatrix * outlineNormal;
           float outlineScale = length(outlineVector);
           vec3 outlineDirection = outlineVector / max(outlineScale, 1e-5);
-          vec4 clipPosition = projectionMatrix * viewPosition;
           if (uScreenSpace) {
-            vec3 clipNormal = (projectionMatrix * vec4(outlineDirection, 0.0)).xyz;
-            vec2 direction = clipNormal.xy;
-            float directionLength = length(direction);
-            if (directionLength > 1e-5) {
-              clipPosition.xy += (direction / directionLength) *
-                (uThickness * outlineScale * 2.0 / uResolution) * clipPosition.w;
+            // Offset in view space, then project. This keeps the outline
+            // attached to the mesh's perspective convergence instead of
+            // translating already-projected vertices in clip XY.
+            float viewDepth = max(-viewPosition.z, 0.001);
+            float pixelsToView = (2.0 * uThickness * outlineScale * viewDepth) /
+              max(uResolution.y * projectionMatrix[1][1], 1e-5);
+            vec2 lateral = outlineDirection.xy;
+            float lateralLength = length(lateral);
+            if (lateralLength > 1e-5) {
+              viewPosition.xy += (lateral / lateralLength) * pixelsToView;
             }
           } else {
             viewPosition.xyz += outlineDirection * outlineScale * uThickness;
-            clipPosition = projectionMatrix * viewPosition;
           }
-          gl_Position = clipPosition;
+          gl_Position = projectionMatrix * viewPosition;
         }
       `,
       fragmentShader: `
