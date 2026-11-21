@@ -1531,9 +1531,8 @@
             onChange={(value) => session.setPs1Enabled(value)}
           />
           <p class="hint">
-            Enabling switches to Texture + Wire and Texture / baked render
-            shading so the look is visible. Disabling restores the shading used
-            before PS1.
+            Switches to Texture + Wire and baked Texture. Choosing another
+            shading exits PS1.
           </p>
         </div>
         <ActionRow align="end">

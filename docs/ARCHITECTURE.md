@@ -603,7 +603,7 @@ gl_FragColor = albedo;
 
 ### Requirements and edge cases
 
-- The Render Inspector exposes one **PS1 look** toggle that enables both vertex snapping and affine UV interpolation. It is off by default. Enabling it switches the viewport to Texture + Wire and render shading to Texture / baked; disabling it restores the viewport and render shading that were active before PS1. Uniform updates must reach every per-texture PS1 material clone as well as the base material. Older files with either legacy flag enabled normalize to the single enabled state.
+- The Render Inspector exposes one **PS1 look** toggle that enables both vertex snapping and affine UV interpolation. It is off by default. Enabling it switches the viewport to Texture + Wire and render shading to Texture / baked; disabling it restores the viewport and render shading that were active before PS1. Choosing another viewport or render shading exits the look, so the toggle never remains on while the effect is unreachable. Uniform updates must reach every per-texture PS1 material clone as well as the base material. Older files with either legacy flag enabled normalize to the single enabled state.
 - Default Unlit rendering must therefore look like a correctly mapped, unsnapped albedo view. PS1 is a deliberate mode, not a default.
 - Apply quantization in clip space **before** the GPU's clipping stage. Shared vertices snap identically, so no cracks appear within a mesh.
 - Do not snap Z; avoid depth fighting. If depth precision needs attention, solve it separately.

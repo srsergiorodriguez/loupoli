@@ -59,6 +59,7 @@ import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { createNodeId } from '../scene/MeshNode';
 import { annotationsVisible, workspaceCan } from './workspaces';
+import { isPs1ShadingMode } from './ps1';
 import { screenRotationDegrees } from './modalRotation';
 import {
   clampScale,
@@ -2225,6 +2226,17 @@ export class EditorRuntime {
   }
 
   setShadingMode(mode: ShadingMode): void {
+    // Choosing a non-texture path makes the PS1 shader unreachable. Leaving
+    // the toggle on would lie about the viewport, so exit the look first.
+    if ((this.ps1Snap || this.ps1Affine) && !isPs1ShadingMode(mode)) {
+      const previousRenderShading = this.deactivatePs1Look();
+      if (
+        previousRenderShading !== null &&
+        this.renderShading !== previousRenderShading
+      ) {
+        this.updateRenderSettings({ renderShading: previousRenderShading });
+      }
+    }
     this.workspaceShading[this.workspace] = mode;
     if (this.shading === mode) {
       return;
@@ -2247,7 +2259,7 @@ export class EditorRuntime {
       this.ps1Snap = true;
       this.ps1Affine = true;
       this.renderer.setPs1Options(true, true);
-      if (this.shading !== 'unlit' && this.shading !== 'texture-wire') {
+      if (!isPs1ShadingMode(this.shading)) {
         this.setShadingMode('texture-wire');
       }
       if (this.renderShading !== 'texture') {
@@ -2257,21 +2269,33 @@ export class EditorRuntime {
       return;
     }
 
-    this.ps1Snap = false;
-    this.ps1Affine = false;
-    this.renderer.setPs1Options(false, false);
-    const previousShading =
-      this.ps1PreviousShading ?? DEFAULT_WORKSPACE_SHADING[this.workspace];
-    const previousRenderShading = this.ps1PreviousRenderShading ?? 'lit';
-    this.ps1PreviousShading = null;
-    this.ps1PreviousRenderShading = null;
-    if (this.shading !== previousShading) {
-      this.setShadingMode(previousShading);
-    }
+    const previousRenderShading = this.deactivatePs1Look() ?? 'lit';
     if (this.renderShading !== previousRenderShading) {
       this.updateRenderSettings({ renderShading: previousRenderShading });
     }
     this.publish();
+  }
+
+  /**
+   * Clear PS1 uniforms and restore the viewport shading that preceded the look.
+   * Returns the render shading to restore, or null when PS1 was already off.
+   */
+  private deactivatePs1Look(): RenderShading | null {
+    if (!this.ps1Snap && !this.ps1Affine) {
+      return null;
+    }
+    const previousShading =
+      this.ps1PreviousShading ?? DEFAULT_WORKSPACE_SHADING[this.workspace];
+    const previousRenderShading = this.ps1PreviousRenderShading ?? 'lit';
+    this.ps1Snap = false;
+    this.ps1Affine = false;
+    this.ps1PreviousShading = null;
+    this.ps1PreviousRenderShading = null;
+    this.renderer.setPs1Options(false, false);
+    if (this.shading !== previousShading) {
+      this.setShadingMode(previousShading);
+    }
+    return previousRenderShading;
   }
 
   /** Set the gizmo axis orientation without changing the value space. */
@@ -5929,6 +5953,16 @@ export class EditorRuntime {
       renderEndFrame: number;
     }>
   ): void {
+    // PS1 is a Texture render look. Choosing Lit or Solid for the render
+    // output must exit the look instead of leaving the toggle active but the
+    // output unsnapped.
+    if (
+      (this.ps1Snap || this.ps1Affine) &&
+      patch.renderShading !== undefined &&
+      patch.renderShading !== 'texture'
+    ) {
+      this.deactivatePs1Look();
+    }
     const clampDimension = (value: number): number =>
       Math.max(1, Math.min(4096, Math.round(value)));
     if (patch.renderVirtualWidth !== undefined) {
@@ -15034,6 +15068,10 @@ export class EditorRuntime {
     const loadedPs1 = decoded.settings.ps1Snap || decoded.settings.ps1Affine;
     this.ps1Snap = loadedPs1;
     this.ps1Affine = loadedPs1;
+    if (loadedPs1 && !isPs1ShadingMode(this.shading)) {
+      this.shading = 'texture-wire';
+      this.workspaceShading[this.workspace] = this.shading;
+    }
     this.ps1PreviousShading = null;
     this.ps1PreviousRenderShading = null;
     this.renderer.setShadingMode(this.shading);
