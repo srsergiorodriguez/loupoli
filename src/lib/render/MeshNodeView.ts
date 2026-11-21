@@ -1,5 +1,4 @@
 import {
-  BackSide,
   Box3,
   BufferAttribute,
   BufferGeometry,
@@ -32,7 +31,6 @@ import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import type { ShadingMode } from '../editor/types';
 import type { ViewportMaterials } from './materials';
 import type { SurfaceHit } from './SurfaceHit';
-import { writeSmoothedOutlineNormals } from './outlineNormals';
 
 /** Shared materials supplied by the viewport to every node view. */
 export interface NodeViewSharedMaterials {
@@ -60,6 +58,18 @@ const FRONT_WIRE_TUBE_RADIUS = 0.014;
 const SELECTED_EDGE_RADIUS = 0.025;
 const SEAM_TUBE_RADIUS = 0.019;
 const Y_AXIS = new Vector3(0, 1, 0);
+
+/** Eight screen/view-plane directions used to dilate the silhouette. */
+const OUTLINE_DIRECTIONS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+  [Math.SQRT1_2, Math.SQRT1_2],
+  [-Math.SQRT1_2, Math.SQRT1_2],
+  [Math.SQRT1_2, -Math.SQRT1_2],
+  [-Math.SQRT1_2, -Math.SQRT1_2]
+];
 
 /** Convert one authored sRGB byte to the linear color space of vertex colors. */
 function srgbByteToLinear(byte: number): number {
@@ -161,8 +171,8 @@ export class MeshNodeView {
   private selectedVertexGeometry = new BufferGeometry();
 
   private readonly triangleMesh: Mesh;
-  private readonly outlineMaterial: ShaderMaterial;
-  private readonly outlineMesh: Mesh;
+  private readonly outlineMaterials: ShaderMaterial[] = [];
+  private readonly outlineMeshes: Mesh[] = [];
   private readonly outlineMaskMesh: Mesh;
   private outlineSettings: OutlineModifier | null = null;
   private readonly wireSegments: LineSegments;
@@ -182,7 +192,6 @@ export class MeshNodeView {
 
   private trianglePositions: Float32Array;
   private triangleNormals: Float32Array;
-  private outlineNormals: Float32Array;
   private triangleColors: Float32Array;
   private triangleUvs: Float32Array;
   private readonly wirePositions: Float32Array;
@@ -223,7 +232,6 @@ export class MeshNodeView {
 
     this.trianglePositions = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleNormals = new Float32Array(mesh.triangleVertexCount * 3);
-    this.outlineNormals = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleColors = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleUvs = new Float32Array(mesh.triangleVertexCount * 2);
     this.wirePositions = new Float32Array(mesh.edgeCount * 6);
@@ -239,10 +247,6 @@ export class MeshNodeView {
     this.triangleGeometry.setAttribute(
       'normal',
       new BufferAttribute(this.triangleNormals, 3).setUsage(DynamicDrawUsage)
-    );
-    this.triangleGeometry.setAttribute(
-      'outlineNormal',
-      new BufferAttribute(this.outlineNormals, 3).setUsage(DynamicDrawUsage)
     );
     this.triangleGeometry.setAttribute(
       'uv',
@@ -279,65 +283,59 @@ export class MeshNodeView {
     this.triangleMesh.castShadow = true;
     this.triangleMesh.receiveShadow = true;
 
-    this.outlineMaterial = new ShaderMaterial({
-      uniforms: {
-        uThickness: { value: 4 },
-        uScreenSpace: { value: true },
-        uResolution: { value: new Vector2(1, 1) },
-        uColor: { value: new Color('#121214') }
-      },
-      vertexShader: `
-        attribute vec3 outlineNormal;
-        uniform float uThickness;
-        uniform bool uScreenSpace;
-        uniform vec2 uResolution;
-        void main() {
-          vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
-          vec3 outlineVector = normalMatrix * outlineNormal;
-          float outlineScale = length(outlineVector);
-          vec3 outlineDirection = outlineVector / max(outlineScale, 1e-5);
-          if (uScreenSpace) {
-            // Offset in view space, then project. This keeps the outline
-            // attached to the mesh's perspective convergence instead of
-            // translating already-projected vertices in clip XY.
-            float viewDepth = max(-viewPosition.z, 0.001);
-            float pixelsToView = (2.0 * uThickness * outlineScale * viewDepth) /
-              max(uResolution.y * projectionMatrix[1][1], 1e-5);
-            vec2 lateral = outlineDirection.xy;
-            float lateralLength = length(lateral);
-            if (lateralLength > 1e-5) {
-              viewPosition.xy += (lateral / lateralLength) * pixelsToView;
+    for (const [dx, dy] of OUTLINE_DIRECTIONS) {
+      const material = new ShaderMaterial({
+        uniforms: {
+          uOffset: { value: new Vector2(dx, dy) },
+          uThickness: { value: 0.05 },
+          uScreenSpace: { value: false },
+          uResolution: { value: new Vector2(1, 1) },
+          uColor: { value: new Color('#121214') }
+        },
+        vertexShader: `
+          uniform vec2 uOffset;
+          uniform float uThickness;
+          uniform bool uScreenSpace;
+          uniform vec2 uResolution;
+          void main() {
+            vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+            float distance = uThickness;
+            if (uScreenSpace) {
+              float viewDepth = max(-viewPosition.z, 0.001);
+              distance = (2.0 * uThickness * viewDepth) /
+                max(uResolution.y * projectionMatrix[1][1], 1e-5);
             }
-          } else {
-            viewPosition.xyz += outlineDirection * outlineScale * uThickness;
+            viewPosition.xy += uOffset * distance;
+            gl_Position = projectionMatrix * viewPosition;
           }
-          gl_Position = projectionMatrix * viewPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform vec3 uColor;
-        void main() {
-          gl_FragColor = vec4(uColor, 1.0);
-        }
-      `,
-      side: BackSide,
-      depthTest: true,
-      depthWrite: false,
-      stencilWrite: true,
-      stencilWriteMask: 0x00,
-      stencilRef: 1,
-      stencilFunc: NotEqualStencilFunc,
-      stencilFail: KeepStencilOp,
-      stencilZFail: KeepStencilOp,
-      stencilZPass: KeepStencilOp
-    });
-    this.outlineMesh = new Mesh(this.triangleGeometry, this.outlineMaterial);
-    this.outlineMesh.name = 'loupoli-outline';
-    this.outlineMesh.frustumCulled = false;
-    this.outlineMesh.renderOrder = -1;
-    this.outlineMesh.castShadow = false;
-    this.outlineMesh.receiveShadow = false;
-    this.outlineMesh.visible = false;
+        `,
+        fragmentShader: `
+          uniform vec3 uColor;
+          void main() {
+            gl_FragColor = vec4(uColor, 1.0);
+          }
+        `,
+        side: DoubleSide,
+        depthTest: false,
+        depthWrite: false,
+        stencilWrite: true,
+        stencilWriteMask: 0x00,
+        stencilRef: 1,
+        stencilFunc: NotEqualStencilFunc,
+        stencilFail: KeepStencilOp,
+        stencilZFail: KeepStencilOp,
+        stencilZPass: KeepStencilOp
+      });
+      const outlineMesh = new Mesh(this.triangleGeometry, material);
+      outlineMesh.name = 'loupoli-outline';
+      outlineMesh.frustumCulled = false;
+      outlineMesh.renderOrder = -1;
+      outlineMesh.castShadow = false;
+      outlineMesh.receiveShadow = false;
+      outlineMesh.visible = false;
+      this.outlineMaterials.push(material);
+      this.outlineMeshes.push(outlineMesh);
+    }
 
     this.outlineMaskMesh = new Mesh(
       this.triangleGeometry,
@@ -442,7 +440,7 @@ export class MeshNodeView {
 
     this.group.add(
       this.outlineMaskMesh,
-      this.outlineMesh,
+      ...this.outlineMeshes,
       this.triangleMesh,
       this.wireSegments,
       this.wireTubeMesh,
@@ -608,24 +606,27 @@ export class MeshNodeView {
     this.updateOutlineVisibility();
   }
 
-  /** Apply or clear the render-only inverted-hull outline effect. */
+  /** Apply or clear the render-only silhouetted outline effect. */
   setOutline(settings: OutlineModifier | null): void {
     this.outlineSettings = settings;
     if (settings) {
-      this.outlineMaterial.uniforms.uThickness.value = settings.thickness;
-      this.outlineMaterial.uniforms.uScreenSpace.value =
-        settings.units === 'screen';
-      (this.outlineMaterial.uniforms.uColor.value as Color).set(settings.color);
+      for (const material of this.outlineMaterials) {
+        material.uniforms.uThickness.value = settings.thickness;
+        material.uniforms.uScreenSpace.value = settings.units === 'screen';
+        (material.uniforms.uColor.value as Color).set(settings.color);
+      }
     }
     this.updateOutlineVisibility();
   }
 
   /** Set the CSS viewport size used to convert screen-pixel widths to NDC. */
   setOutlineResolution(width: number, height: number): void {
-    (this.outlineMaterial.uniforms.uResolution.value as Vector2).set(
-      Math.max(1, width),
-      Math.max(1, height)
-    );
+    for (const material of this.outlineMaterials) {
+      (material.uniforms.uResolution.value as Vector2).set(
+        Math.max(1, width),
+        Math.max(1, height)
+      );
+    }
   }
 
   private updateOutlineVisibility(): void {
@@ -634,7 +635,9 @@ export class MeshNodeView {
       this.outlineSettings.enabled &&
       this.referenceMaterial === null &&
       this.shadingMode !== 'wireframe';
-    this.outlineMesh.visible = visible;
+    for (const mesh of this.outlineMeshes) {
+      mesh.visible = visible;
+    }
     this.outlineMaskMesh.visible = visible;
   }
 
@@ -738,11 +741,6 @@ export class MeshNodeView {
       this.triangleNormals,
       this.triangleUvs
     );
-    writeSmoothedOutlineNormals(
-      this.trianglePositions,
-      this.triangleNormals,
-      this.outlineNormals
-    );
     this.writeMaterialColors(mesh);
     mesh.writeEdgePositions(this.wirePositions);
     this.updateWireTubes();
@@ -754,7 +752,6 @@ export class MeshNodeView {
 
     this.triangleGeometry.getAttribute('position').needsUpdate = true;
     this.triangleGeometry.getAttribute('normal').needsUpdate = true;
-    this.triangleGeometry.getAttribute('outlineNormal').needsUpdate = true;
     this.triangleGeometry.getAttribute('uv').needsUpdate = true;
     this.triangleGeometry.getAttribute('color').needsUpdate = true;
     this.wireGeometry.getAttribute('position').needsUpdate = true;
@@ -1236,7 +1233,9 @@ export class MeshNodeView {
     this.group.removeFromParent();
     const faceGeometry = this.selectedFaceMesh.geometry;
     this.triangleGeometry.dispose();
-    this.outlineMaterial.dispose();
+    for (const material of this.outlineMaterials) {
+      material.dispose();
+    }
     this.wireGeometry.dispose();
     this.frontWireGeometry.dispose();
     this.previewLineGeometry.dispose();
@@ -1735,7 +1734,6 @@ export class MeshNodeView {
     const previousGeometry = this.triangleGeometry;
     this.trianglePositions = new Float32Array(vertexCount * 3);
     this.triangleNormals = new Float32Array(vertexCount * 3);
-    this.outlineNormals = new Float32Array(vertexCount * 3);
     this.triangleColors = new Float32Array(vertexCount * 3);
     this.triangleUvs = new Float32Array(vertexCount * 2);
 
@@ -1747,10 +1745,6 @@ export class MeshNodeView {
     geometry.setAttribute(
       'normal',
       new BufferAttribute(this.triangleNormals, 3).setUsage(DynamicDrawUsage)
-    );
-    geometry.setAttribute(
-      'outlineNormal',
-      new BufferAttribute(this.outlineNormals, 3).setUsage(DynamicDrawUsage)
     );
     geometry.setAttribute(
       'uv',
@@ -1767,7 +1761,9 @@ export class MeshNodeView {
     // The inverted hull shares this geometry. Rebinding it here is essential:
     // vertex edits can change the adaptive triangle count, and a stale hull
     // would keep drawing the previous topology (or a disposed geometry).
-    this.outlineMesh.geometry = geometry;
+    for (const mesh of this.outlineMeshes) {
+      mesh.geometry = geometry;
+    }
     this.outlineMaskMesh.geometry = geometry;
     previousGeometry.dispose();
   }

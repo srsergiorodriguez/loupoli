@@ -48,7 +48,7 @@ export interface RadialArrayModifier {
 /** Unit used by the outline extrusion width. */
 export type OutlineUnits = 'world' | 'screen';
 
-/** Inverted-hull silhouette with screen-pixel or world-unit width. */
+/** Stencil-masked silhouette dilation with screen-pixel or world-unit width. */
 export interface OutlineModifier {
   readonly id: string;
   readonly type: 'outline';
