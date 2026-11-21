@@ -315,16 +315,18 @@
             tooltipPlacement="bottom"
             onActivate={() => session.resetView()}
           />
-          <IconButton
-            label="Annotate"
-            icon="line"
-            tooltip="Annotate in any workspace"
-            active={annotationsActive}
-            pressed={annotationsActive}
-            tooltipPlacement="bottom"
-            onActivate={() =>
-              session.setAnnotationMode(!session.snapshot.annotationMode)}
-          />
+          {#if !(session.snapshot.workspace === 'render' && session.snapshot.renderCameraView)}
+            <IconButton
+              label="Annotate"
+              icon="line"
+              tooltip="Annotate in any workspace"
+              active={annotationsActive}
+              pressed={annotationsActive}
+              tooltipPlacement="bottom"
+              onActivate={() =>
+                session.setAnnotationMode(!session.snapshot.annotationMode)}
+            />
+          {/if}
         </div>
           <OrientationGizmo {session} />
         </div>

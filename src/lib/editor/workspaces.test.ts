@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workspaceCan } from './workspaces';
+import { annotationsVisible, workspaceCan } from './workspaces';
 import {
   defaultInspectorOpen,
   inspectorSectionsFor
@@ -10,6 +10,14 @@ describe('workspace capabilities', () => {
     expect(workspaceCan('uv', 'select3d')).toBe(true);
     expect(workspaceCan('uv', 'edit3d')).toBe(false);
     expect(workspaceCan('uv', 'seamAuthoring')).toBe(true);
+  });
+
+  it('shows annotations in every 3D workspace except the clean camera view', () => {
+    for (const workspace of ['model', 'uv', 'paint', 'light', 'animation'] as const) {
+      expect(annotationsVisible(workspace)).toBe(true);
+    }
+    expect(annotationsVisible('render', false)).toBe(true);
+    expect(annotationsVisible('render', true)).toBe(false);
   });
 
   it('grants paint but no selection in Paint', () => {

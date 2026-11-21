@@ -58,7 +58,7 @@ import type { NodeTransform, SelectionMode, ShapeKey } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import { SceneDocument } from '../scene/SceneDocument';
 import { createNodeId } from '../scene/MeshNode';
-import { workspaceCan } from './workspaces';
+import { annotationsVisible, workspaceCan } from './workspaces';
 import { screenRotationDegrees } from './modalRotation';
 import {
   clampScale,
@@ -5690,6 +5690,10 @@ export class EditorRuntime {
       return;
     }
     this.renderCameraView = true;
+    if (this.annotationMode) {
+      this.annotationMode = false;
+      this.annotationStroke = null;
+    }
     const view = this.activeCameraRenderPose();
     if (view) {
       this.renderer.setCameraView(view.position, view.target, view.fov);
@@ -12279,6 +12283,9 @@ export class EditorRuntime {
     }
 
     if (this.annotationMode) {
+      if (this.workspace === 'render' && this.renderCameraView) {
+        return false;
+      }
       return this.beginAnnotationStroke(sample);
     }
 
@@ -14604,7 +14611,7 @@ export class EditorRuntime {
   /** Build world-space annotation segments, including the live stroke. */
   private syncAnnotationOverlay(): void {
     const show =
-      (this.workspace === 'model' || this.workspace === 'animation') &&
+      annotationsVisible(this.workspace, this.renderCameraView) &&
       (this.document.annotations.all.length > 0 || this.annotationStroke !== null);
     if (!show) {
       this.renderer.setAnnotationSegments(null);
@@ -14656,6 +14663,14 @@ export class EditorRuntime {
   /** Enable or disable the Pencil/mouse annotation overlay tool. Touch is excluded. */
   setAnnotationMode(enabled: boolean): void {
     if (this.annotationMode === enabled) {
+      return;
+    }
+    if (enabled && this.workspace === 'render' && this.renderCameraView) {
+      this.notify(
+        'warning',
+        'Annotation unavailable',
+        'Exit the camera view to annotate the scene.'
+      );
       return;
     }
     if (this.annotationStroke) {
