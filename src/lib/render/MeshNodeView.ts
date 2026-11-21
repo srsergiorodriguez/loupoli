@@ -1741,6 +1741,10 @@ export class MeshNodeView {
     this.triangleGeometry = geometry;
     this.triangleMesh.geometry = geometry;
     this.pickingMesh.geometry = geometry;
+    // The inverted hull shares this geometry. Rebinding it here is essential:
+    // vertex edits can change the adaptive triangle count, and a stale hull
+    // would keep drawing the previous topology (or a disposed geometry).
+    this.outlineMesh.geometry = geometry;
     previousGeometry.dispose();
   }
 }
