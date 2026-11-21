@@ -21,7 +21,7 @@
     icon,
     onActivate,
     disabled = false,
-    active = false,
+    active = undefined,
     pressed = undefined,
     variant = 'default',
     tooltip,
@@ -33,9 +33,9 @@
 <button
   type="button"
   class="icon-button icon-button--{variant}"
-  class:active
+  class:active={active === true}
   aria-label={label}
-  aria-pressed={pressed}
+  aria-pressed={pressed ?? active}
   aria-keyshortcuts={shortcut || undefined}
   {disabled}
   data-tooltip={tooltip ? `${tooltip}${shortcut ? ` — ${shortcut}` : ''}` : undefined}

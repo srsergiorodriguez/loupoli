@@ -151,7 +151,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 - Use `DangerAction` for every destructive action. It requires a visible label and renders last/end-aligned; do not hand-build destructive rows.
 - Use `CreateRow` for selector + Add creation rows, with an optional trailing action snippet.
 - Use `ActionRow` for grouped commands. Do not create per-section action layouts or button skins.
-- `ActionButton` sets `aria-pressed` only when `active` is explicitly provided; set it only for toggle actions.
+- `ActionButton` and `IconButton` set `aria-pressed` only when `active`/`pressed` is explicitly provided; set it only for toggle actions.
 - Create actions sit above the outliner.
 - Contextual selection actions sit below the outliner.
 - Destructive actions are last and right-aligned.
