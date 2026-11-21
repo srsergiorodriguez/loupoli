@@ -30,6 +30,7 @@ import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import type { ShadingMode } from '../editor/types';
 import type { ViewportMaterials } from './materials';
 import type { SurfaceHit } from './SurfaceHit';
+import { writeSmoothedOutlineNormals } from './outlineNormals';
 
 /** Shared materials supplied by the viewport to every node view. */
 export interface NodeViewSharedMaterials {
@@ -177,6 +178,7 @@ export class MeshNodeView {
 
   private trianglePositions: Float32Array;
   private triangleNormals: Float32Array;
+  private outlineNormals: Float32Array;
   private triangleColors: Float32Array;
   private triangleUvs: Float32Array;
   private readonly wirePositions: Float32Array;
@@ -217,6 +219,7 @@ export class MeshNodeView {
 
     this.trianglePositions = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleNormals = new Float32Array(mesh.triangleVertexCount * 3);
+    this.outlineNormals = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleColors = new Float32Array(mesh.triangleVertexCount * 3);
     this.triangleUvs = new Float32Array(mesh.triangleVertexCount * 2);
     this.wirePositions = new Float32Array(mesh.edgeCount * 6);
@@ -232,6 +235,10 @@ export class MeshNodeView {
     this.triangleGeometry.setAttribute(
       'normal',
       new BufferAttribute(this.triangleNormals, 3).setUsage(DynamicDrawUsage)
+    );
+    this.triangleGeometry.setAttribute(
+      'outlineNormal',
+      new BufferAttribute(this.outlineNormals, 3).setUsage(DynamicDrawUsage)
     );
     this.triangleGeometry.setAttribute(
       'uv',
@@ -270,14 +277,33 @@ export class MeshNodeView {
 
     this.outlineMaterial = new ShaderMaterial({
       uniforms: {
-        uThickness: { value: 0.03 },
+        uThickness: { value: 4 },
+        uScreenSpace: { value: true },
+        uResolution: { value: new Vector2(1, 1) },
         uColor: { value: new Color('#121214') }
       },
       vertexShader: `
+        attribute vec3 outlineNormal;
         uniform float uThickness;
+        uniform bool uScreenSpace;
+        uniform vec2 uResolution;
         void main() {
-          vec3 expanded = position + normalize(normal) * uThickness;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(expanded, 1.0);
+          vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+          vec3 viewNormal = normalize(normalMatrix * outlineNormal);
+          vec4 clipPosition = projectionMatrix * viewPosition;
+          if (uScreenSpace) {
+            vec3 clipNormal = (projectionMatrix * vec4(viewNormal, 0.0)).xyz;
+            vec2 direction = clipNormal.xy;
+            float directionLength = length(direction);
+            if (directionLength > 1e-5) {
+              clipPosition.xy += (direction / directionLength) *
+                (uThickness * 2.0 / uResolution) * clipPosition.w;
+            }
+          } else {
+            viewPosition.xyz += viewNormal * uThickness;
+            clipPosition = projectionMatrix * viewPosition;
+          }
+          gl_Position = clipPosition;
         }
       `,
       fragmentShader: `
@@ -562,9 +588,19 @@ export class MeshNodeView {
     this.outlineSettings = settings;
     if (settings) {
       this.outlineMaterial.uniforms.uThickness.value = settings.thickness;
+      this.outlineMaterial.uniforms.uScreenSpace.value =
+        settings.units === 'screen';
       (this.outlineMaterial.uniforms.uColor.value as Color).set(settings.color);
     }
     this.updateOutlineVisibility();
+  }
+
+  /** Set the CSS viewport size used to convert screen-pixel widths to NDC. */
+  setOutlineResolution(width: number, height: number): void {
+    (this.outlineMaterial.uniforms.uResolution.value as Vector2).set(
+      Math.max(1, width),
+      Math.max(1, height)
+    );
   }
 
   private updateOutlineVisibility(): void {
@@ -675,6 +711,11 @@ export class MeshNodeView {
       this.triangleNormals,
       this.triangleUvs
     );
+    writeSmoothedOutlineNormals(
+      this.trianglePositions,
+      this.triangleNormals,
+      this.outlineNormals
+    );
     this.writeMaterialColors(mesh);
     mesh.writeEdgePositions(this.wirePositions);
     this.updateWireTubes();
@@ -686,6 +727,7 @@ export class MeshNodeView {
 
     this.triangleGeometry.getAttribute('position').needsUpdate = true;
     this.triangleGeometry.getAttribute('normal').needsUpdate = true;
+    this.triangleGeometry.getAttribute('outlineNormal').needsUpdate = true;
     this.triangleGeometry.getAttribute('uv').needsUpdate = true;
     this.triangleGeometry.getAttribute('color').needsUpdate = true;
     this.wireGeometry.getAttribute('position').needsUpdate = true;
@@ -1666,6 +1708,7 @@ export class MeshNodeView {
     const previousGeometry = this.triangleGeometry;
     this.trianglePositions = new Float32Array(vertexCount * 3);
     this.triangleNormals = new Float32Array(vertexCount * 3);
+    this.outlineNormals = new Float32Array(vertexCount * 3);
     this.triangleColors = new Float32Array(vertexCount * 3);
     this.triangleUvs = new Float32Array(vertexCount * 2);
 
@@ -1677,6 +1720,10 @@ export class MeshNodeView {
     geometry.setAttribute(
       'normal',
       new BufferAttribute(this.triangleNormals, 3).setUsage(DynamicDrawUsage)
+    );
+    geometry.setAttribute(
+      'outlineNormal',
+      new BufferAttribute(this.outlineNormals, 3).setUsage(DynamicDrawUsage)
     );
     geometry.setAttribute(
       'uv',

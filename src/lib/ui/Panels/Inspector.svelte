@@ -42,7 +42,8 @@
     MODIFIER_KINDS,
     MODIFIER_LABELS,
     type ModifierAxis,
-    type ModifierKind
+    type ModifierKind,
+    type OutlineUnits
   } from '../../geometry/modifiers';
   import {
     videoMimeFor
@@ -804,6 +805,12 @@
 
   function updateModifierColor(modifierId: string, value: string): void {
     session.updateModifier(modifierId, { color: value } as ModifierPatch);
+  }
+
+  function updateOutlineUnits(modifierId: string, event: Event): void {
+    const units = (event.currentTarget as HTMLSelectElement)
+      .value as OutlineUnits;
+    session.updateModifier(modifierId, { units } as ModifierPatch);
   }
 
   function toggleAxis(axis: Exclude<AxisLock, null>): void {
@@ -2589,14 +2596,28 @@
                       </label>
                     {:else if modifier.type === 'outline'}
                       <label class="modifier-field">
-                        <span>Thickness</span>
+                        <span>Units</span>
+                        <select
+                          value={modifier.units}
+                          aria-label="Outline units"
+                          onchange={(event) =>
+                            updateOutlineUnits(modifier.id, event)}
+                        >
+                          <option value="screen">Screen</option>
+                          <option value="world">World</option>
+                        </select>
+                      </label>
+                      <label class="modifier-field">
+                        <span>{modifier.units === 'screen' ? 'Width' : 'Thickness'}</span>
                         <NumberField
                           value={modifier.thickness}
-                          label="Outline thickness"
-                          step={0.005}
-                          precision={3}
-                          min={0.001}
-                          max={1}
+                          label={modifier.units === 'screen'
+                            ? 'Outline width in pixels'
+                            : 'Outline thickness in world units'}
+                          step={modifier.units === 'screen' ? 0.5 : 0.005}
+                          precision={modifier.units === 'screen' ? 1 : 3}
+                          min={modifier.units === 'screen' ? 0.5 : 0.001}
+                          max={modifier.units === 'screen' ? 24 : 1}
                           framed
                           onCommit={(value) =>
                             updateModifierNumber(modifier.id, 'thickness', value)}

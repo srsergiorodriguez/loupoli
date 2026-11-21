@@ -294,14 +294,30 @@ describe('modifier registry', () => {
   it('validates and evaluates the render-only outline effect', () => {
     const cube = createCubeMesh(2);
     const outline = createModifier('outline') as OutlineModifier;
+    expect(outline.units).toBe('screen');
     expect(outline.thickness).toBeGreaterThan(0);
     const normalized = validateModifier({
       ...outline,
+      units: 'world',
       thickness: 4,
       color: 'not-a-color'
     }) as OutlineModifier;
+    expect(normalized.units).toBe('world');
     expect(normalized.thickness).toBe(1);
     expect(normalized.color).toBe('#e07a5f');
+    const legacy = validateModifier({
+      ...outline,
+      units: undefined,
+      thickness: 0.08
+    }) as OutlineModifier;
+    expect(legacy.units).toBe('world');
+    expect(legacy.thickness).toBe(0.08);
+    const screen = validateModifier({
+      ...outline,
+      thickness: 99
+    }) as OutlineModifier;
+    expect(screen.units).toBe('screen');
+    expect(screen.thickness).toBe(24);
     const result = evaluateModifiers(cube, [outline]);
     expect(result.faceCount).toBe(cube.faceCount);
     expect(result.boundaryEdgeCount).toBe(0);

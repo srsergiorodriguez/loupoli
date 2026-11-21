@@ -45,13 +45,18 @@ export interface RadialArrayModifier {
   readonly count: number;
 }
 
-/** Screen-space inverted-hull outline effect. */
+/** Unit used by the outline extrusion width. */
+export type OutlineUnits = 'world' | 'screen';
+
+/** Inverted-hull silhouette with screen-pixel or world-unit width. */
 export interface OutlineModifier {
   readonly id: string;
   readonly type: 'outline';
   readonly enabled: boolean;
-  /** Outline width in world units. */
+  /** Extrusion width in screen pixels or world units. */
   readonly thickness: number;
+  /** Width interpretation; missing legacy values normalize to world. */
+  readonly units: OutlineUnits;
   /** Six-digit CSS hex color. */
   readonly color: string;
 }
@@ -1025,19 +1030,25 @@ const OUTLINE_DEFINITION: ModifierDefinition = {
     id: createModifierId(),
     type: 'outline',
     enabled: true,
-    thickness: 0.08,
+    thickness: 4,
+    units: 'screen',
     color: '#e07a5f'
   }),
   validate: (value, id, enabled) => {
+    // Older v11 modifiers predate `units`; keep their world-space width.
+    const units: OutlineUnits = value.units === 'screen' ? 'screen' : 'world';
+    const fallback = units === 'screen' ? 4 : 0.08;
+    const min = units === 'screen' ? 0.5 : 0.001;
+    const max = units === 'screen' ? 24 : 1;
     const thickness =
       typeof value.thickness === 'number' && Number.isFinite(value.thickness)
-        ? Math.min(1, Math.max(0.001, value.thickness))
-        : 0.08;
+        ? Math.min(max, Math.max(min, value.thickness))
+        : fallback;
     const color =
       typeof value.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.color)
         ? value.color.toLowerCase()
         : '#e07a5f';
-    return { id, type: 'outline', enabled, thickness, color };
+    return { id, type: 'outline', enabled, thickness, units, color };
   }
 };
 

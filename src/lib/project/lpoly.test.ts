@@ -581,7 +581,8 @@ describe('.lpoli', () => {
         id: 'm4',
         type: 'outline',
         enabled: true,
-        thickness: 0.08,
+        thickness: 4,
+        units: 'screen',
         color: '#e07a5f'
       },
       {

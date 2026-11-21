@@ -181,6 +181,7 @@ export interface ModifierPatch {
   readonly mergeThreshold?: number;
   readonly mirrorUv?: boolean;
   readonly thickness?: number;
+  readonly units?: 'world' | 'screen';
   readonly color?: string;
   readonly offset?: number;
 }

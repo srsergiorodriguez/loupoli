@@ -172,6 +172,8 @@ export class ViewportRenderer {
   private activeNodeId: string | null = null;
   private activeGroupId: string | null = null;
   private pixelRatio = 1;
+  private viewportCssWidth = 1;
+  private viewportCssHeight = 1;
   private renderCount = 0;
   private rafId = 0;
   private disposed = false;
@@ -416,6 +418,7 @@ export class ViewportRenderer {
         this.nodeViews.set(node.id, view);
         view.setShadingMode(this.currentMode);
         view.setSeamVisible(this.seamOverlayVisible);
+        view.setOutlineResolution(this.viewportCssWidth, this.viewportCssHeight);
       }
       if (node.reference) {
         view.setSurfaceMaterials(this.materials);
@@ -695,6 +698,7 @@ export class ViewportRenderer {
     }
     for (const view of views) {
       view.setCleanRender(true);
+      view.setOutlineResolution(width, height);
     }
     this.grid.group.visible = false;
     this.objectGizmo.group.visible = false;
@@ -756,6 +760,7 @@ export class ViewportRenderer {
       this.annotations.group.visible = previousAnnotations;
       for (const view of views) {
         view.setCleanRender(false);
+        view.setOutlineResolution(this.viewportCssWidth, this.viewportCssHeight);
       }
       for (const view of hiddenReferences) {
         view.group.visible = true;
@@ -1846,6 +1851,11 @@ export class ViewportRenderer {
       window.matchMedia('(pointer: coarse)').matches;
     const cap = coarsePointer ? TOUCH_PIXEL_RATIO_CAP : DESKTOP_PIXEL_RATIO_CAP;
     this.pixelRatio = Math.min(window.devicePixelRatio || 1, cap);
+    this.viewportCssWidth = width;
+    this.viewportCssHeight = height;
+    for (const view of this.nodeViews.values()) {
+      view.setOutlineResolution(width, height);
+    }
 
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.shadowMap.enabled = true;
