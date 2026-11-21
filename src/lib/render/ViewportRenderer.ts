@@ -68,6 +68,8 @@ const DESKTOP_PIXEL_RATIO_CAP = 2;
 const TOUCH_PIXEL_RATIO_CAP = 1.5;
 /** AO preview is CPU-facing; keep the interactive budget bounded. */
 const MAX_AO_PREVIEW_FACES = 16000;
+const DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
+const POINT_SHADOW_MAP_SIZE = 512;
 
 /** Optional callbacks for the editor runtime that owns this viewport. */
 interface ViewportRendererOptions {
@@ -996,11 +998,14 @@ export class ViewportRenderer {
         shadowCamera.bottom = -12;
         shadowCamera.updateProjectionMatrix();
       }
-      directional.shadow.mapSize.set(1024, 1024);
+      directional.shadow.mapSize.set(
+        DIRECTIONAL_SHADOW_MAP_SIZE,
+        DIRECTIONAL_SHADOW_MAP_SIZE
+      );
       directional.shadow.camera.near = 0.1;
       directional.shadow.camera.far = 50;
-      directional.shadow.bias = -(0.0003 + 0.0006 * softness);
-      directional.shadow.normalBias = 0.015 + 0.01 * softness;
+      directional.shadow.bias = -(0.0001 + 0.0002 * softness);
+      directional.shadow.normalBias = 0.004 + 0.003 * softness;
       directional.shadow.radius = 1 + softness * 6;
     } else {
       const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
@@ -1010,11 +1015,14 @@ export class ViewportRenderer {
         summary.position[1],
         summary.position[2]
       );
-      light.shadow.mapSize.set(512, 512);
+      light.shadow.mapSize.set(
+        POINT_SHADOW_MAP_SIZE,
+        POINT_SHADOW_MAP_SIZE
+      );
       light.shadow.camera.near = 0.1;
       light.shadow.camera.far = 30;
-      light.shadow.bias = -(0.0006 + 0.0006 * softness);
-      light.shadow.normalBias = 0.015 + 0.01 * softness;
+      light.shadow.bias = -(0.0004 + 0.0004 * softness);
+      light.shadow.normalBias = 0.006 + 0.004 * softness;
       light.shadow.radius = 1 + softness * 6;
       light.shadow.camera.updateProjectionMatrix();
     }
@@ -1045,7 +1053,7 @@ export class ViewportRenderer {
       : bounds.getSize(new Vector3());
     const rawRadius = Math.max(2, size.length() * 0.55);
     const radius = Math.max(2, Math.ceil(rawRadius * 2) * 0.5);
-    const mapSize = 1024;
+    const mapSize = DIRECTIONAL_SHADOW_MAP_SIZE;
     const texel = (radius * 2) / mapSize;
 
     for (const entry of this.documentLights.values()) {
@@ -1108,12 +1116,12 @@ export class ViewportRenderer {
         Math.min(1, (directional.shadow.radius - 1) / 6)
       );
       directional.shadow.bias = -Math.max(
-        0.0003 + 0.0006 * softness,
-        texel * 0.5
+        0.0001 + 0.0002 * softness,
+        texel * 0.25
       );
       directional.shadow.normalBias = Math.max(
-        0.015 + 0.01 * softness,
-        texel * 2
+        0.004 + 0.003 * softness,
+        texel
       );
     }
   }
