@@ -1037,7 +1037,7 @@
       </p>
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
-        <div class="scene-action-row">
+        <ActionRow>
           <ActionButton
             label="Multi"
             icon="plus"
@@ -1073,20 +1073,23 @@
               onActivate={() => session.ungroupActiveGroup()}
             />
           {:else if activeNodeId !== null}
-            <span class="scene-action-spacer"></span>
             <ActionButton
               label="Duplicate"
               icon="copy"
               onActivate={() => session.duplicateActiveNode()}
             />
+          {/if}
+        </ActionRow>
+        {#if activeGroupId === null && activeNodeId !== null}
+          <ActionRow align="end">
             <ActionButton
               label="Delete object"
               icon="trash"
               variant="danger"
               onActivate={deleteObject}
             />
-          {/if}
-        </div>
+          </ActionRow>
+        {/if}
       {/if}
     </InspectorSection>
 {/snippet}
@@ -3243,17 +3246,6 @@
   .primitive-select {
     min-width: 0;
     padding: 0 var(--space-2);
-  }
-
-  .scene-action-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-1);
-  }
-
-  .scene-action-spacer {
-    flex: 1;
   }
 
   .primitive-select:hover {
