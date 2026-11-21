@@ -23,13 +23,15 @@ import {
   Vector2,
   Vector3,
   type Camera,
-  type Material
+  type Material,
+  type Object3D,
+  type MeshLambertMaterial
 } from 'three';
 import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { OutlineModifier } from '../geometry/modifiers';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import type { ShadingMode } from '../editor/types';
-import type { ViewportMaterials } from './materials';
+import { attachContactShadows, type ViewportMaterials } from './materials';
 import type { SurfaceHit } from './SurfaceHit';
 
 /** Shared materials supplied by the viewport to every node view. */
@@ -185,6 +187,7 @@ export class MeshNodeView {
   private edgeCapacity = 1;
   private readonly selectedFaceMesh: Mesh;
   private readonly selectedFaceOutline: LineSegments;
+  private readonly contactDepthVisibility = new Map<Object3D, boolean>();
 
   private trianglePositions: Float32Array;
   private triangleNormals: Float32Array;
@@ -556,6 +559,12 @@ export class MeshNodeView {
     }
     const clone = material.clone();
     clone.side = DoubleSide;
+    if ((clone as MeshLambertMaterial).isMeshLambertMaterial) {
+      attachContactShadows(
+        clone as MeshLambertMaterial,
+        this.surfaceMaterials.contact
+      );
+    }
     this.doubleSidedMaterials.set(material, clone);
     return clone;
   }
@@ -685,6 +694,26 @@ export class MeshNodeView {
       this.cornerAo = factors.slice();
     }
     this.refreshMaterialColors();
+  }
+
+  /** Hide every overlay so a depth prepass only records model surfaces. */
+  beginContactDepthPass(): void {
+    this.contactDepthVisibility.clear();
+    for (const child of this.group.children) {
+      if (child === this.triangleMesh) {
+        continue;
+      }
+      this.contactDepthVisibility.set(child, child.visible);
+      child.visible = false;
+    }
+  }
+
+  /** Restore the overlay visibility recorded by beginContactDepthPass. */
+  endContactDepthPass(): void {
+    for (const [child, visible] of this.contactDepthVisibility) {
+      child.visible = visible;
+    }
+    this.contactDepthVisibility.clear();
   }
 
   /** Hide all editor-only overlays for one clean render. */
