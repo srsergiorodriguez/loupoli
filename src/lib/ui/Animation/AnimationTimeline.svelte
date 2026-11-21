@@ -537,13 +537,6 @@
         }
       ]}
     />
-    <IconButton
-      label="Delete clip"
-      icon="trash"
-      tooltip="Delete animation clip"
-      disabled={snapshot.meshPoseEditing || animationClips.length <= 1}
-      onActivate={() => session.deleteAnimationClip()}
-    />
     <input
       bind:this={audioInput}
       class="visually-hidden"
@@ -738,7 +731,7 @@
             >+</button>
             <button
               type="button"
-              class="track-key-action track-remove-action"
+              class="track-key-action track-remove-action track-remove-labeled"
               aria-label={`Remove ${track.targetName} track`}
               title={`Remove ${track.targetName} track`}
               disabled={snapshot.meshPoseEditing}
@@ -747,7 +740,7 @@
                 event.stopPropagation();
                 deleteTrack(track);
               }}
-            ><Icon name="trash" size={11} /></button>
+            ><Icon name="trash" size={10} /><span>Remove</span></button>
           </span>
           <span class="track-lane">
             {#each track.keyframes.filter((key) => key.frame >= viewStart && key.frame <= viewEnd) as key (key.frame)}
@@ -802,10 +795,10 @@
                 event.stopPropagation();
                 session.setClipAudioMuted(!activeAudio.muted);
               }}
-            >{activeAudio.muted ? 'U' : 'M'}</button>
+            ><Icon name={activeAudio.muted ? 'eye-off' : 'eye'} size={11} /></button>
             <button
               type="button"
-              class="track-key-action track-remove-action"
+              class="track-key-action track-remove-action track-remove-labeled"
               aria-label="Remove clip audio"
               title="Remove clip audio"
               onpointerdown={(event) => event.stopPropagation()}
@@ -813,7 +806,7 @@
                 event.stopPropagation();
                 session.removeClipAudio();
               }}
-            ><Icon name="trash" size={11} /></button>
+            ><Icon name="trash" size={10} /><span>Remove</span></button>
           </span>
           <span class="track-lane">
             <span
@@ -1119,6 +1112,20 @@
   .track-remove-action:hover:not(:disabled) {
     border-color: var(--accent-danger);
     color: var(--accent-danger);
+  }
+
+  .track-remove-labeled {
+    display: inline-flex;
+    width: auto;
+    min-width: 0;
+    padding: 0 3px;
+    gap: 2px;
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .track-remove-labeled span {
+    white-space: nowrap;
   }
 
   .track-key-action:disabled {

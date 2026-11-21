@@ -145,7 +145,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 
 | Region | Create above list | Context actions below list | Destructive |
 |---|---|---|---|
-| Scene | primitive select + Add | Multi, Group, Join/Ungroup | Delete object, last/right |
+| Scene | primitive select + Add + Reference | Multi, Group, Join/Ungroup | Delete object, last/right |
 | Texture assets | New, import/duplicate overflow | Assign/Unassign, filter, alpha | Delete texture in overflow |
 | Texture layers | Add layer | selection properties | Delete layer, last/right |
 | Animation | — | track + key in timeline | Delete key in timeline header, last/right |

@@ -976,6 +976,12 @@
             {/each}
           </select>
           <ActionButton label="Add" icon="plus" onActivate={addPrimitive} />
+          <ActionButton
+            label="Reference"
+            icon="image"
+            disabled={session.snapshot.fileBusy}
+            onActivate={() => referenceImportInput.click()}
+          />
         </div>
       {/if}
 
@@ -1022,12 +1028,6 @@
               onSelect: () => void session.exportGlb()
             }
           ]}
-        />
-        <ActionButton
-          label="Reference"
-          icon="image"
-          disabled={session.snapshot.fileBusy}
-          onActivate={() => referenceImportInput.click()}
         />
       </ActionRow>
       <p class="hint">
@@ -2006,15 +2006,14 @@
         {/if}
 
         {#if canEdit3d}
-          <div class="selection-group selection-group--danger">
-            <span class="selection-group-label">Remove</span>
+          <ActionRow align="end">
             <ActionButton
               label={`Delete ${selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}`}
               icon="trash"
               variant="danger"
               onActivate={() => session.deleteSelection()}
             />
-          </div>
+          </ActionRow>
         {/if}
       {/if}
     </InspectorSection>
@@ -2364,14 +2363,14 @@
                       />
                     </div>
                   </ActionRow>
-                  <div class="shape-danger-row">
+                  <ActionRow align="end">
                     <ActionButton
                       label="Delete shape key"
                       icon="trash"
                       variant="danger"
                       onActivate={() => session.removeShapeKey(activeShapeKey.id)}
                     />
-                  </div>
+                  </ActionRow>
                   <p class="hint">
                     Use the key button on this shape's timeline track to add a
                     weight key. Shape weights use the same Linear/Step
@@ -2462,13 +2461,6 @@
                         tooltip="Move modifier down"
                         disabled={index === modifiers.length - 1}
                         onActivate={() => session.moveModifier(modifier.id, 1)}
-                      />
-                      <IconButton
-                        label="Remove modifier"
-                        icon="trash"
-                        variant="danger"
-                        tooltip="Remove modifier"
-                        onActivate={() => session.removeModifier(modifier.id)}
                       />
                     </span>
                   </div>
@@ -2677,6 +2669,14 @@
                       </label>
                     {/if}
                   </div>
+                  <ActionRow align="end">
+                    <ActionButton
+                      label="Remove"
+                      icon="trash"
+                      variant="danger"
+                      onActivate={() => session.removeModifier(modifier.id)}
+                    />
+                  </ActionRow>
                 </div>
               {/each}
             </div>
@@ -3229,7 +3229,7 @@
 
   .scene-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: var(--space-1);
   }
 
@@ -3848,11 +3848,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-1);
-  }
-
-  .shape-danger-row {
-    display: flex;
-    justify-content: flex-end;
   }
 
   .shape-edit-banner {
