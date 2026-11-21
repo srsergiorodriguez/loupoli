@@ -59,17 +59,13 @@ const SELECTED_EDGE_RADIUS = 0.025;
 const SEAM_TUBE_RADIUS = 0.019;
 const Y_AXIS = new Vector3(0, 1, 0);
 
-/** Eight screen/view-plane directions used to dilate the silhouette. */
-const OUTLINE_DIRECTIONS: readonly (readonly [number, number])[] = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-  [Math.SQRT1_2, Math.SQRT1_2],
-  [-Math.SQRT1_2, Math.SQRT1_2],
-  [Math.SQRT1_2, -Math.SQRT1_2],
-  [-Math.SQRT1_2, -Math.SQRT1_2]
-];
+/** Screen/view-plane directions used to dilate the silhouette. */
+const OUTLINE_DIRECTION_COUNT = 24;
+const OUTLINE_DIRECTIONS: readonly (readonly [number, number])[] =
+  Array.from({ length: OUTLINE_DIRECTION_COUNT }, (_, index) => {
+    const angle = (index / OUTLINE_DIRECTION_COUNT) * Math.PI * 2;
+    return [Math.cos(angle), Math.sin(angle)] as const;
+  });
 
 /** Convert one authored sRGB byte to the linear color space of vertex colors. */
 function srgbByteToLinear(byte: number): number {
