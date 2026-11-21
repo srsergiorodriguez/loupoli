@@ -33,6 +33,7 @@ export type CommandId =
   | 'snap.toggle'
   | 'mesh.extrude'
   | 'mesh.inset'
+  | 'mesh.bevel'
   | 'mesh.loopCut'
   | 'mesh.loopSlide'
   | 'uv.axisU'
@@ -96,6 +97,7 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'snap.toggle': { label: 'Toggle grid snap', scope: '3d', shortcut: 'snap', presentation: 'text', bindings: [{ key: 'tab', shift: true }] },
   'mesh.extrude': { label: 'Extrude', scope: '3d', shortcut: 'extrude', presentation: 'icon-text', bindings: [{ key: 'e' }] },
   'mesh.inset': { label: 'Inset', scope: '3d', shortcut: 'inset', presentation: 'icon-text', bindings: [{ key: 'i' }] },
+  'mesh.bevel': { label: 'Bevel', scope: '3d', presentation: 'icon-text' },
   'mesh.loopCut': { label: 'Loop cut', scope: '3d', shortcut: 'loopCut', presentation: 'icon-text', bindings: [{ key: 'l', shift: false }] },
   'mesh.loopSlide': { label: 'Loop slide', scope: '3d', shortcut: 'loopSlide', presentation: 'icon-text', bindings: [{ key: 'l', shift: true }] },
   'uv.axisU': { label: 'U axis lock', scope: 'uv', presentation: 'text', bindings: [{ key: 'u' }] },

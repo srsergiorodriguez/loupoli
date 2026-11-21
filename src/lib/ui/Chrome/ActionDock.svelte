@@ -3,6 +3,12 @@
   import type { IconName } from '../Icons/types';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import type { MeshActionKind } from '../../editor/types';
+  import {
+    command as commandDefinition,
+    commandTooltipFor,
+    type CommandId
+  } from '../../input/commands';
+  import { shortcut as shortcutDefinition } from '../../input/shortcuts';
 
   /** Session projection for the one-shot modeling action dock. */
   interface Props {
@@ -13,26 +19,32 @@
     readonly kind: MeshActionKind;
     readonly label: string;
     readonly icon: IconName;
+    readonly command: CommandId;
   }
 
   let { session }: Props = $props();
 
   const actions: readonly ActionChoice[] = [
-    { kind: 'extrude', label: 'Extrude', icon: 'extrude' },
-    { kind: 'inset', label: 'Inset', icon: 'inset' },
-    { kind: 'bevel', label: 'Bevel', icon: 'bevel' },
-    { kind: 'loop-cut', label: 'Loop Cut', icon: 'loop-cut' },
-    { kind: 'loop-slide', label: 'Loop Slide', icon: 'loop-slide' }
+    { kind: 'extrude', label: 'Extrude', icon: 'extrude', command: 'mesh.extrude' },
+    { kind: 'inset', label: 'Inset', icon: 'inset', command: 'mesh.inset' },
+    { kind: 'bevel', label: 'Bevel', icon: 'bevel', command: 'mesh.bevel' },
+    { kind: 'loop-cut', label: 'Loop Cut', icon: 'loop-cut', command: 'mesh.loopCut' },
+    { kind: 'loop-slide', label: 'Loop Slide', icon: 'loop-slide', command: 'mesh.loopSlide' }
   ];
 
-  function unavailableLabel(action: ActionChoice): string {
+  function actionTooltip(action: ActionChoice): string {
     if (action.kind === 'loop-slide' && !available(action.kind)) {
       return `${action.label} — select an edge loop first`;
     }
     if (action.kind === 'bevel' && !available(action.kind)) {
       return `${action.label} — select an interior edge with valence-three endpoints`;
     }
-    return action.label;
+    return commandTooltipFor(action.command);
+  }
+
+  function actionShortcut(action: ActionChoice): string {
+    const id = commandDefinition(action.command).shortcut;
+    return id ? shortcutDefinition(id).display : '';
   }
 
   const activeKind = $derived(session.snapshot.actionState?.kind ?? null);
@@ -71,9 +83,10 @@
           type="button"
           class:active={activeKind === action.kind}
           aria-pressed={activeKind === action.kind}
+          aria-keyshortcuts={actionShortcut(action) || undefined}
           disabled={!available(action.kind) || busy}
-          aria-label={unavailableLabel(action)}
-          title={unavailableLabel(action)}
+          aria-label={actionTooltip(action)}
+          title={actionTooltip(action)}
           onclick={() => session.armAction(action.kind)}
         >
           <Icon name={action.icon} size={18} />
