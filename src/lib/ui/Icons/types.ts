@@ -37,6 +37,8 @@ export type IconName =
   | 'seam'
   | 'eye'
   | 'eye-off'
+  | 'volume'
+  | 'volume-off'
   | 'lasso'
   | 'home'
   | 'columns'

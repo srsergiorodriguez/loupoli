@@ -16,6 +16,8 @@
   import ColorField from '../Primitives/ColorField.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
+  import CreateRow from '../Primitives/CreateRow.svelte';
+  import DangerAction from '../Primitives/DangerAction.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import ExportObjDialog from './ExportObjDialog.svelte';
   import ExportObjFramesDialog from './ExportObjFramesDialog.svelte';
@@ -366,6 +368,14 @@
 
   let primitive = $state<PrimitiveKind>('quadsphere');
   let modifierKind = $state<ModifierKind>('mirror');
+  const primitiveOptions = PRIMITIVE_KINDS.map((kind) => ({
+    value: kind,
+    label: PRIMITIVE_LABELS[kind]
+  }));
+  const modifierOptions = MODIFIER_KINDS.map((kind) => ({
+    value: kind,
+    label: MODIFIER_LABELS[kind]
+  }));
   let objExportOpen = $state(false);
   let objFramesOpen = $state(false);
   let newTextureOpen = $state(false);
@@ -965,24 +975,20 @@
       {/if}
 
       {#if canEdit3d}
-        <div class="scene-actions">
-          <select
-            class="primitive-select"
-            bind:value={primitive}
-            aria-label="Primitive type"
-          >
-            {#each PRIMITIVE_KINDS as kind (kind)}
-              <option value={kind}>{PRIMITIVE_LABELS[kind]}</option>
-            {/each}
-          </select>
-          <ActionButton label="Add" icon="plus" onActivate={addPrimitive} />
+        <CreateRow
+          label="Primitive type"
+          value={primitive}
+          options={primitiveOptions}
+          onChange={(value) => (primitive = value as PrimitiveKind)}
+          onAdd={addPrimitive}
+        >
           <ActionButton
             label="Reference"
             icon="image"
             disabled={session.snapshot.fileBusy}
             onActivate={() => referenceImportInput.click()}
           />
-        </div>
+        </CreateRow>
       {/if}
 
       <ActionRow>
@@ -1081,14 +1087,7 @@
           {/if}
         </ActionRow>
         {#if activeGroupId === null && activeNodeId !== null}
-          <ActionRow align="end">
-            <ActionButton
-              label="Delete object"
-              icon="trash"
-              variant="danger"
-              onActivate={deleteObject}
-            />
-          </ActionRow>
+          <DangerAction label="Delete object" onActivate={deleteObject} />
         {/if}
       {/if}
     </InspectorSection>
@@ -1369,14 +1368,10 @@
               onActivate={() => session.toggleCameraView()}
             />
           </ActionRow>
-          <ActionRow align="end">
-            <ActionButton
-              label="Delete camera"
-              icon="trash"
-              variant="danger"
-              onActivate={() => session.deleteActiveCamera()}
-            />
-          </ActionRow>
+          <DangerAction
+            label="Delete camera"
+            onActivate={() => session.deleteActiveCamera()}
+          />
         {/if}
       </div>
     </InspectorSection>
@@ -1675,14 +1670,10 @@
                 session.updateActiveLight({ shadowSoftness: value })}
             />
           {/if}
-          <ActionRow align="end">
-            <ActionButton
-              label="Delete light"
-              icon="trash"
-              variant="danger"
-              onActivate={() => session.deleteActiveLight()}
-            />
-          </ActionRow>
+          <DangerAction
+            label="Delete light"
+            onActivate={() => session.deleteActiveLight()}
+          />
         {/if}
         <div class="light-divider"></div>
         <div class="light-subhead">
@@ -1922,7 +1913,7 @@
             <span class="selection-group-label">
               {session.snapshot.selectionMode === 'vertex' ? 'Vertices' : 'Faces'}
             </span>
-            <div class="selection-actions">
+            <ActionRow>
               {#if session.snapshot.selectionMode === 'vertex'}
                 <ActionButton
                   label="Merge"
@@ -1943,14 +1934,14 @@
                   />
                 {/if}
               {/if}
-            </div>
+            </ActionRow>
           </div>
         {/if}
 
         {#if canEdit3d && session.snapshot.selectionMode === 'edge'}
           <div class="selection-group">
             <span class="selection-group-label">Edges</span>
-            <div class="selection-actions">
+            <ActionRow>
               {#if selectionCount === 1}
                 <ActionButton
                   label="Loop cut"
@@ -1964,7 +1955,7 @@
                   onActivate={() => session.bridgeSelectedEdges()}
                 />
               {/if}
-            </div>
+            </ActionRow>
             <p class="hint">
               {selectionCount === 1
                 ? session.snapshot.workspace === 'model'
@@ -1981,7 +1972,7 @@
             session.snapshot.seamCount > 0)}
           <div class="selection-group">
             <span class="selection-group-label">UV seams</span>
-            <div class="selection-actions">
+            <ActionRow>
               {#if session.snapshot.selectionMode === 'edge' && selectionCount > 0}
                 <ActionButton
                   label="Toggle seam"
@@ -1996,7 +1987,7 @@
                   onActivate={() => session.clearAllSeams()}
                 />
               {/if}
-            </div>
+            </ActionRow>
             {#if session.snapshot.seamCount > 0}
               <p class="hint">
                 {session.snapshot.seamCount} seam{session.snapshot.seamCount === 1 ? '' : 's'} on this mesh.
@@ -2006,14 +1997,10 @@
         {/if}
 
         {#if canEdit3d}
-          <ActionRow align="end">
-            <ActionButton
-              label={`Delete ${selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}`}
-              icon="trash"
-              variant="danger"
-              onActivate={() => session.deleteSelection()}
-            />
-          </ActionRow>
+          <DangerAction
+            label={`Delete ${selectionCount === 1 ? modeLabel.toLowerCase() : modePlural}`}
+            onActivate={() => session.deleteSelection()}
+          />
         {/if}
       {/if}
     </InspectorSection>
@@ -2348,29 +2335,23 @@
                       session.setShapeKeyWeight(activeShapeKey.id, value)}
                   />
                   <ActionRow>
-                    <div class="shape-key-primary-actions">
-                      <ActionButton
-                        label="Edit target"
-                        icon="cursor"
-                        variant="primary"
-                        onActivate={() => session.beginShapeEdit(activeShapeKey.id)}
-                      />
-                      <ActionButton
-                        label="Capture base"
-                        icon="checker"
-                        onActivate={() =>
-                          session.captureShapeKeyFromMesh(activeShapeKey.id)}
-                      />
-                    </div>
-                  </ActionRow>
-                  <ActionRow align="end">
                     <ActionButton
-                      label="Delete shape key"
-                      icon="trash"
-                      variant="danger"
-                      onActivate={() => session.removeShapeKey(activeShapeKey.id)}
+                      label="Edit target"
+                      icon="cursor"
+                      variant="primary"
+                      onActivate={() => session.beginShapeEdit(activeShapeKey.id)}
+                    />
+                    <ActionButton
+                      label="Capture base"
+                      icon="checker"
+                      onActivate={() =>
+                        session.captureShapeKeyFromMesh(activeShapeKey.id)}
                     />
                   </ActionRow>
+                  <DangerAction
+                    label="Delete shape key"
+                    onActivate={() => session.removeShapeKey(activeShapeKey.id)}
+                  />
                   <p class="hint">
                     Use the key button on this shape's timeline track to add a
                     weight key. Shape weights use the same Linear/Step
@@ -2398,22 +2379,13 @@
         {#if activeNodeId === null}
           <p class="empty-state">Select a mesh object to edit its stack.</p>
         {:else}
-          <div class="modifier-add-row">
-            <select
-              class="modifier-select"
-              bind:value={modifierKind}
-              aria-label="Modifier type"
-            >
-              {#each MODIFIER_KINDS as kind (kind)}
-                <option value={kind}>{MODIFIER_LABELS[kind]}</option>
-              {/each}
-            </select>
-            <ActionButton
-              label="Add"
-              icon="plus"
-              onActivate={() => session.addModifier(modifierKind)}
-            />
-          </div>
+          <CreateRow
+            label="Modifier type"
+            value={modifierKind}
+            options={modifierOptions}
+            onChange={(value) => (modifierKind = value as ModifierKind)}
+            onAdd={() => session.addModifier(modifierKind)}
+          />
 
           {#if modifierError}
             <p class="modifier-error">{modifierError}</p>
@@ -2669,14 +2641,10 @@
                       </label>
                     {/if}
                   </div>
-                  <ActionRow align="end">
-                    <ActionButton
-                      label="Remove"
-                      icon="trash"
-                      variant="danger"
-                      onActivate={() => session.removeModifier(modifier.id)}
-                    />
-                  </ActionRow>
+                  <DangerAction
+                    label="Remove modifier"
+                    onActivate={() => session.removeModifier(modifier.id)}
+                  />
                 </div>
               {/each}
             </div>
@@ -2812,15 +2780,11 @@
                 )}
             />
           </div>
-          <ActionRow align="end">
-            <ActionButton
-              label="Delete texture"
-              icon="trash"
-              variant="danger"
-              disabled={textureUsage > 0 || textureAssets.length <= 1}
-              onActivate={() => session.deleteActiveTextureAsset()}
-            />
-          </ActionRow>
+          <DangerAction
+            label="Delete texture"
+            disabled={textureUsage > 0 || textureAssets.length <= 1}
+            onActivate={() => session.deleteActiveTextureAsset()}
+          />
         </div>
 
         <div class="texture-block">
@@ -2905,15 +2869,11 @@
               </OutlinerRow>
             {/each}
           </div>
-          <ActionRow align="end">
-            <ActionButton
-              label="Delete layer"
-              icon="trash"
-              variant="danger"
-              disabled={textureLayers.length <= 1}
-              onActivate={() => session.removeTextureLayer(activeTextureLayer?.id ?? '')}
-            />
-          </ActionRow>
+          <DangerAction
+            label="Delete layer"
+            disabled={textureLayers.length <= 1}
+            onActivate={() => session.removeTextureLayer(activeTextureLayer?.id ?? '')}
+          />
         </div>
 
         {#if activeTextureLayer}
@@ -3227,31 +3187,6 @@
     gap: 2px;
   }
 
-  .scene-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: var(--space-1);
-  }
-
-  .primitive-select {
-    min-height: var(--control-h);
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    color: var(--text-secondary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-  }
-
-  .primitive-select {
-    min-width: 0;
-    padding: 0 var(--space-2);
-  }
-
-  .primitive-select:hover {
-    background: var(--bg-hover);
-  }
-
   .object-glyph {
     display: grid;
     place-items: center;
@@ -3426,13 +3361,6 @@
     box-shadow: inset 0 0 0 1px currentColor;
   }
 
-  .modifier-add-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-1);
-  }
-
-  .modifier-select,
   .modifier-field select {
     min-height: var(--control-h);
     min-width: 0;
@@ -3442,10 +3370,6 @@
     color: var(--text-secondary);
     font-family: var(--font-body);
     font-size: var(--text-2xs);
-  }
-
-  .modifier-select {
-    padding: 0 var(--space-2);
   }
 
   .modifier-error {
@@ -3616,16 +3540,6 @@
     font-weight: var(--weight-medium);
     letter-spacing: var(--tracking-label);
     text-transform: uppercase;
-  }
-
-  .selection-actions {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
-    gap: var(--space-1);
-  }
-
-  .selection-actions :global(.action-button) {
-    width: 100%;
   }
 
   .empty-state,
@@ -3842,12 +3756,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--inspector-row-gap);
-  }
-
-  .shape-key-primary-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-1);
   }
 
   .shape-edit-banner {

@@ -795,7 +795,7 @@
                 event.stopPropagation();
                 session.setClipAudioMuted(!activeAudio.muted);
               }}
-            ><Icon name={activeAudio.muted ? 'eye-off' : 'eye'} size={11} /></button>
+            ><Icon name={activeAudio.muted ? 'volume-off' : 'volume'} size={11} /></button>
             <button
               type="button"
               class="track-key-action track-remove-action track-remove-labeled"

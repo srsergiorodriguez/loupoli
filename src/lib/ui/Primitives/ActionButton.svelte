@@ -16,7 +16,7 @@
     label,
     icon,
     disabled = false,
-    active = false,
+    active = undefined,
     variant = 'default',
     onActivate
   }: Props = $props();
@@ -25,7 +25,7 @@
 <button
   type="button"
   class="action-button action-button--{variant}"
-  class:active
+  class:active={active === true}
   {disabled}
   aria-pressed={active}
   onclick={() => onActivate?.()}

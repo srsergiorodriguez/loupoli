@@ -83,12 +83,22 @@ All tooltips come from the command registry. Format: `Label — Shortcut` when a
 
 ## 8. Icon and text matrix
 
-- **Icon only:** universally understood document/UI actions: undo, redo, open, save, sidebar, close, visibility.
-- **Icon + short text:** domain actions: Group, Join, Ungroup, Delete, Add Layer, Extrude, Inset, Loop Cut, Loop Slide.
-- **Text only:** modes and stateful UV operations: V/E/F mode buttons (1/2/3 keyboard), Island, All, Multi, Fit, Clamp, Sync 3D, Pin, Unpin, Unwrap, Stack.
-- **Never icon-only for a destructive action.**
+Use the least ambiguous representation that still fits the context. Do not add text to every icon, and do not rely on icon literacy for uncommon or consequential actions.
+
+| Tier | Use it for | Examples | Requirement |
+|---|---|---|---|
+| **Icon only** | Universally recognized, frequent, reversible controls in a dense tool or transport surface | Undo/redo, open/save, play/pause, zoom, visibility, view orientation | Accessible name, tooltip, focus state; long-press or first-use discovery on touch |
+| **Icon + short text** | Domain actions, creation actions, expensive actions, and destructive actions | Extrude, Inset, Bevel, Loop Cut, Join, Merge textures, Apply geometry, Delete object | Visible verb label; icon is a scanning aid, not the label |
+| **Text only** | Modes and stateful choices | V/E/F, Replace/Multi, Linear/Step, Mute/Unmute, Local/World | The label must name the state or result, not an internal concept |
+
+Additional rules:
+
+- **Never icon-only for a destructive action.** Use `DangerAction`, which requires a visible label and handles end alignment.
+- If an action is destructive, expensive, asynchronous, or domain-specific, prefer icon + text even when a symbol exists.
+- A tooltip is documentation, not a label. Hover is supplemental; touch users must be able to identify the control without hover.
+- Keep icon + text actions separate from adjacent icon-only actions; do not allow them to read as one composite control.
+- Use a standard icon only for its established meaning. Do not reuse a visibility eye for sound, for example; audio uses `volume` / `volume-off` or a text state.
 - Every icon-only control has an accessible label and a tooltip via `TooltipLayer`.
-- Hover is supplemental. Touch users must be able to identify every control without hover.
 
 
 Texture asset actions use visible commands: New and Duplicate sit together; Delete texture is a separate end-aligned danger action, disabled while assigned or last. Layer-local actions (including Import image and effect creation) live under Add layer. Do not use a three-dot asset menu for these actions.
@@ -138,7 +148,10 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 ### Actions
 
 - Use `ActionButton` for icon+text actions, `IconButton` for icon-only actions, and `ThreeDotMenu`/`ActionMenu` for overflow.
-- Do not create per-section button styles. `active` handles toggles; `variant="danger"` handles destructive actions.
+- Use `DangerAction` for every destructive action. It requires a visible label and renders last/end-aligned; do not hand-build destructive rows.
+- Use `CreateRow` for selector + Add creation rows, with an optional trailing action snippet.
+- Use `ActionRow` for grouped commands. Do not create per-section action layouts or button skins.
+- `ActionButton` sets `aria-pressed` only when `active` is explicitly provided; set it only for toggle actions.
 - Create actions sit above the outliner.
 - Contextual selection actions sit below the outliner.
 - Destructive actions are last and right-aligned.
