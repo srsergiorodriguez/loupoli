@@ -12,7 +12,6 @@
 </script>
 
 {#snippet actions()}
-  <div class="dialog-actions">
     <ActionButton label="Cancel" onActivate={() => session.cancelNewProject()} />
     <ActionButton
       label="New project"
@@ -20,7 +19,6 @@
       variant="primary"
       onActivate={() => session.confirmNewProject()}
     />
-  </div>
 {/snippet}
 
 <ModalDialog
@@ -56,9 +54,4 @@
     font-size: var(--text-xs);
   }
 
-  .dialog-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
 </style>

@@ -1,7 +1,6 @@
 <script lang="ts">
   import ActionButton from '../Primitives/ActionButton.svelte';
-  import ActionRow from '../Primitives/ActionRow.svelte';
-  import ModalDialog from '../Primitives/ModalDialog.svelte';
+    import ModalDialog from '../Primitives/ModalDialog.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
   import SelectField from '../Primitives/SelectField.svelte';
   import Switch from '../Primitives/Switch.svelte';
@@ -176,15 +175,14 @@
   </p>
 
   {#snippet actions()}
-    <ActionRow align="end">
       <ActionButton label="Cancel" onActivate={() => onCancel()} />
       <ActionButton
         label={busy ? 'Exporting…' : 'Export frames'}
+        variant="primary"
         icon="save"
         disabled={!canExport}
         onActivate={onExport}
       />
-    </ActionRow>
   {/snippet}
 </ModalDialog>
 

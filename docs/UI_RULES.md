@@ -152,6 +152,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 - Use `CreateRow` for selector + Add creation rows, with an optional trailing action snippet.
 - Use `ActionRow` for grouped commands. Do not create per-section action layouts or button skins.
 - `ActionButton` and `IconButton` set `aria-pressed` only when `active`/`pressed` is explicitly provided; set it only for toggle actions.
+- `ModalDialog` owns the footer layout: action snippets provide `ActionButton`s in secondary-to-primary order. Do not add per-dialog footer wrappers; the confirm action uses `variant="primary"` and sits last.
 - Create actions sit above the outliner.
 - Contextual selection actions sit below the outliner.
 - Destructive actions are last and right-aligned.

@@ -1,7 +1,6 @@
 <script lang="ts">
   import ActionButton from '../Primitives/ActionButton.svelte';
-  import ActionRow from '../Primitives/ActionRow.svelte';
-  import ModalDialog from '../Primitives/ModalDialog.svelte';
+    import ModalDialog from '../Primitives/ModalDialog.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
   import {
     MAX_TEXTURE_DIMENSION,
@@ -70,15 +69,14 @@
   {/if}
 
   {#snippet actions()}
-    <ActionRow align="end">
       <ActionButton label="Cancel" onActivate={onCancel} />
       <ActionButton
         label="Create texture"
+        variant="primary"
         icon="plus"
         disabled={error !== null}
         onActivate={create}
       />
-    </ActionRow>
   {/snippet}
 </ModalDialog>
 

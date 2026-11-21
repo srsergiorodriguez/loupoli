@@ -151,6 +151,11 @@
   }
 
   footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-1);
     padding: var(--space-2) var(--space-3) var(--space-3);
     border-top: var(--hairline) solid var(--border-subtle);
   }

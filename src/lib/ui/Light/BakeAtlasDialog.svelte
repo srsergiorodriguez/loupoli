@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
-  import ActionRow from '../Primitives/ActionRow.svelte';
-  import ModalDialog from '../Primitives/ModalDialog.svelte';
+    import ModalDialog from '../Primitives/ModalDialog.svelte';
 
   /** Confirmation for the destructive unique-bake-atlas preparation. */
   interface Props {
@@ -49,14 +48,13 @@
     </p>
 
     {#snippet actions()}
-      <ActionRow align="end">
-        <ActionButton label="Cancel" onActivate={close} />
-        <ActionButton
-          label="Create and bake"
-          icon="copy"
-          onActivate={() => void session.prepareBakeAtlas()}
-        />
-      </ActionRow>
+      <ActionButton label="Cancel" onActivate={close} />
+      <ActionButton
+        label="Create and bake"
+        variant="primary"
+        icon="copy"
+        onActivate={() => void session.prepareBakeAtlas()}
+      />
     {/snippet}
   </ModalDialog>
 {/if}

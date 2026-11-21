@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
-  import ActionRow from '../Primitives/ActionRow.svelte';
-  import ModalDialog from '../Primitives/ModalDialog.svelte';
+    import ModalDialog from '../Primitives/ModalDialog.svelte';
   import SelectField from '../Primitives/SelectField.svelte';
   import {
     imageFitRect,
@@ -147,15 +146,14 @@
   {/if}
 
   {#snippet actions()}
-    <ActionRow align="end">
       <ActionButton label="Cancel" onActivate={onCancel} />
       <ActionButton
         label="Place image"
+        variant="primary"
         icon="image"
         disabled={bitmap === null}
         onActivate={() => onImport({ mode })}
       />
-    </ActionRow>
   {/snippet}
 </ModalDialog>
 
