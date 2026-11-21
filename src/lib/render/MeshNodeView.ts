@@ -9,11 +9,13 @@ import {
   DynamicDrawUsage,
   Group,
   InstancedMesh,
+  KeepStencilOp,
   LineBasicMaterial,
   LineSegments,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  NotEqualStencilFunc,
   Points,
   PointsMaterial,
   Quaternion,
@@ -35,6 +37,7 @@ import { writeSmoothedOutlineNormals } from './outlineNormals';
 /** Shared materials supplied by the viewport to every node view. */
 export interface NodeViewSharedMaterials {
   readonly picking: MeshBasicMaterial;
+  readonly outlineMask: MeshBasicMaterial;
   readonly vertex: PointsMaterial;
   readonly selectedVertex: PointsMaterial;
   readonly selectedEdge: MeshBasicMaterial;
@@ -160,6 +163,7 @@ export class MeshNodeView {
   private readonly triangleMesh: Mesh;
   private readonly outlineMaterial: ShaderMaterial;
   private readonly outlineMesh: Mesh;
+  private readonly outlineMaskMesh: Mesh;
   private outlineSettings: OutlineModifier | null = null;
   private readonly wireSegments: LineSegments;
   private readonly seamSegments: LineSegments;
@@ -318,7 +322,14 @@ export class MeshNodeView {
       `,
       side: BackSide,
       depthTest: true,
-      depthWrite: true
+      depthWrite: false,
+      stencilWrite: true,
+      stencilWriteMask: 0x00,
+      stencilRef: 1,
+      stencilFunc: NotEqualStencilFunc,
+      stencilFail: KeepStencilOp,
+      stencilZFail: KeepStencilOp,
+      stencilZPass: KeepStencilOp
     });
     this.outlineMesh = new Mesh(this.triangleGeometry, this.outlineMaterial);
     this.outlineMesh.name = 'loupoli-outline';
@@ -327,6 +338,15 @@ export class MeshNodeView {
     this.outlineMesh.castShadow = false;
     this.outlineMesh.receiveShadow = false;
     this.outlineMesh.visible = false;
+
+    this.outlineMaskMesh = new Mesh(
+      this.triangleGeometry,
+      shared.outlineMask
+    );
+    this.outlineMaskMesh.name = 'loupoli-outline-mask';
+    this.outlineMaskMesh.frustumCulled = false;
+    this.outlineMaskMesh.renderOrder = -2;
+    this.outlineMaskMesh.visible = false;
 
     this.wireSegments = new LineSegments(
       this.wireGeometry,
@@ -421,6 +441,7 @@ export class MeshNodeView {
     this.pickingMesh.visible = false;
 
     this.group.add(
+      this.outlineMaskMesh,
       this.outlineMesh,
       this.triangleMesh,
       this.wireSegments,
@@ -608,11 +629,13 @@ export class MeshNodeView {
   }
 
   private updateOutlineVisibility(): void {
-    this.outlineMesh.visible =
+    const visible =
       this.outlineSettings !== null &&
       this.outlineSettings.enabled &&
       this.referenceMaterial === null &&
       this.shadingMode !== 'wireframe';
+    this.outlineMesh.visible = visible;
+    this.outlineMaskMesh.visible = visible;
   }
 
   /** Swap the per-texture material set without rebuilding geometry. */
@@ -1745,6 +1768,7 @@ export class MeshNodeView {
     // vertex edits can change the adaptive triangle count, and a stale hull
     // would keep drawing the previous topology (or a disposed geometry).
     this.outlineMesh.geometry = geometry;
+    this.outlineMaskMesh.geometry = geometry;
     previousGeometry.dispose();
   }
 }

@@ -1,10 +1,12 @@
 import {
+  AlwaysStencilFunc,
   AmbientLight,
   Box3,
   Color,
   DirectionalLight,
   DoubleSide,
   Group as ThreeGroup,
+  KeepStencilOp,
   LineBasicMaterial,
   Matrix4,
   MeshBasicMaterial,
@@ -15,6 +17,7 @@ import {
   PointLight,
   PointsMaterial,
   Quaternion,
+  ReplaceStencilOp,
   Raycaster,
   Scene,
   SRGBColorSpace,
@@ -88,6 +91,7 @@ export class ViewportRenderer {
   private readonly cameraRig = new CameraRig();
   private readonly grid: ViewportGrid;
   private readonly materials: ViewportMaterials;
+  private outlineMaskMaterial!: MeshBasicMaterial;
   private readonly nodeViews = new Map<string, MeshNodeView>();
   private readonly textureMaterials = new Map<
     string,
@@ -192,7 +196,7 @@ export class ViewportRenderer {
       alpha: false,
       antialias: false,
       depth: true,
-      stencil: false,
+      stencil: true,
       premultipliedAlpha: false,
       preserveDrawingBuffer: false,
       powerPreference: 'high-performance'
@@ -252,6 +256,20 @@ export class ViewportRenderer {
       side: DoubleSide,
       colorWrite: false,
       depthWrite: false
+    });
+    this.outlineMaskMaterial = new MeshBasicMaterial({
+      name: 'loupoli-outline-mask',
+      colorWrite: false,
+      depthWrite: false,
+      depthTest: false,
+      side: DoubleSide,
+      stencilWrite: true,
+      stencilRef: 1,
+      stencilFunc: AlwaysStencilFunc,
+      stencilZPass: ReplaceStencilOp,
+      stencilFail: KeepStencilOp,
+      stencilZFail: KeepStencilOp,
+      toneMapped: false
     });
     this.selectedEdgeMaterial = new MeshBasicMaterial({
       name: 'loupoli-selected-edge',
@@ -708,7 +726,7 @@ export class ViewportRenderer {
 
     const target = new WebGLRenderTarget(width, height, {
       depthBuffer: true,
-      stencilBuffer: false
+      stencilBuffer: true
     });
     target.texture.colorSpace = SRGBColorSpace;
     try {
@@ -1518,6 +1536,7 @@ export class ViewportRenderer {
     this.vertexMaterial.dispose();
     this.selectedVertexMaterial.dispose();
     this.pickingMaterial.dispose();
+    this.outlineMaskMaterial.dispose();
     this.selectedEdgeMaterial.dispose();
     this.selectedOutlineMaterial.dispose();
     this.previewLineMaterial.dispose();
@@ -1548,6 +1567,7 @@ export class ViewportRenderer {
   private overlayMaterials() {
     return {
       picking: this.pickingMaterial,
+      outlineMask: this.outlineMaskMaterial,
       vertex: this.vertexMaterial,
       selectedVertex: this.selectedVertexMaterial,
       selectedEdge: this.selectedEdgeMaterial,
