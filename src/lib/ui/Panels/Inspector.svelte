@@ -1944,7 +1944,7 @@
             <ActionRow>
               {#if selectionCount === 1}
                 <ActionButton
-                  label="Loop cut"
+                  label="Loop Cut"
                   icon="loop-cut"
                   onActivate={() => session.loopCut()}
                 />
