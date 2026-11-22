@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BakeAtlasChart } from '../uv/bakeAtlas';
 import {
   bakeChartImageTransform,
+  bleedIslandEdges,
   erodeCoverage
 } from './bakeAtlasTexture';
 
@@ -91,6 +92,35 @@ describe('bake atlas donor erosion', () => {
       1
     );
     expect(core.reduce((sum, value) => sum + value, 0)).toBeGreaterThan(0);
+  });
+
+  it('does not flood a sparse layer across its transparent interior', () => {
+    const width = 12;
+    const height = 12;
+    const coverageData = coverage(
+      width,
+      height,
+      (x, y) => x > 1 && x < 10 && y > 1 && y < 10
+    );
+    const core = erodeCoverage(coverageData, width, height, 1);
+    const allowed = new Uint8Array(width * height);
+    for (let y = 2; y < 10; y += 1) {
+      for (let x = 2; x < 10; x += 1) {
+        allowed[y * width + x] = 1;
+      }
+    }
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    const dot = (7 * width + 6) * 4;
+    pixels[dot] = 0;
+    pixels[dot + 1] = 0;
+    pixels[dot + 2] = 255;
+    pixels[dot + 3] = 255;
+    bleedIslandEdges(pixels, core, allowed, width, height);
+    // The blue dot remains in place; the transparent interior is untouched.
+    expect(pixels[dot + 2]).toBe(255);
+    expect(pixels[dot + 3]).toBe(255);
+    const interior = (5 * width + 5) * 4;
+    expect(pixels[interior + 3]).toBe(0);
   });
 
   it('does not restore the boundary of a wide island', () => {

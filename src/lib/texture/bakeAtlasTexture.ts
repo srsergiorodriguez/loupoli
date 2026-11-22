@@ -157,7 +157,7 @@ export function erodeCoverage(
  * prevents filtered or sub-texel-offset samples from reaching the source
  * backdrop without distorting UVs or repainting the island.
  */
-function bleedIslandEdges(
+export function bleedIslandEdges(
   pixels: Uint8ClampedArray,
   core: Uint8Array,
   allowed: Uint8Array,
@@ -188,7 +188,13 @@ function bleedIslandEdges(
     const y = Math.floor(donor / width);
     const donorOffset = donor * 4;
     const tryTarget = (target: number): void => {
-      if (filled[target] !== 0 || allowed[target] === 0) {
+      if (
+        filled[target] !== 0 ||
+        allowed[target] === 0 ||
+        // Never flood a sparse layer across the interior of its island. Only
+        // the eroded boundary band and the external gutter receive donor color.
+        core[target] !== 0
+      ) {
         return;
       }
       const targetOffset = target * 4;
