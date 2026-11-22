@@ -1,8 +1,10 @@
 import {
   AlwaysStencilFunc,
   AmbientLight,
+  BasicShadowMap,
   Box3,
   Color,
+  PCFShadowMap,
   DirectionalLight,
   DoubleSide,
   Group as ThreeGroup,
@@ -10,15 +12,7 @@ import {
   LineBasicMaterial,
   Matrix4,
   MeshBasicMaterial,
-  MeshDepthMaterial,
-  DepthFormat,
-  DepthTexture,
-  NearestFilter,
-  NoColorSpace,
   Object3D,
-  RGBADepthPacking,
-  UnsignedIntType,
-  PCFShadowMap,
   PerspectiveCamera,
   Plane,
   PointLight,
@@ -61,8 +55,8 @@ import {
   type AmbientOcclusionSettings
 } from '../lighting/ao';
 import { AnnotationOverlay } from './AnnotationOverlay';
+import { installPcssShadowShader } from './pcss';
 import {
-  attachContactShadows,
   createViewportMaterials,
   disposeViewportMaterials,
   type Ps1Uniforms,
@@ -76,7 +70,6 @@ const DESKTOP_PIXEL_RATIO_CAP = 2;
 const TOUCH_PIXEL_RATIO_CAP = 1.5;
 /** AO preview is CPU-facing; keep the interactive budget bounded. */
 const MAX_AO_PREVIEW_FACES = 16000;
-const MAX_CONTACT_STILL_PIXELS = 4_000_000;
 const DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
 const POINT_SHADOW_MAP_SIZE = 512;
 
@@ -102,8 +95,6 @@ export class ViewportRenderer {
   private readonly cameraRig = new CameraRig();
   private readonly grid: ViewportGrid;
   private readonly materials: ViewportMaterials;
-  private readonly contactDepthMaterial: MeshDepthMaterial;
-  private contactTarget: WebGLRenderTarget | null = null;
   private outlineMaskMaterial!: MeshBasicMaterial;
   private readonly nodeViews = new Map<string, MeshNodeView>();
   private readonly textureMaterials = new Map<
@@ -232,16 +223,14 @@ export class ViewportRenderer {
     this.resolveNodeTextureId =
       options.resolveNodeTextureId ?? ((node) => node.textureId);
     this.resolveNodeAlphaMode = options.resolveNodeAlphaMode ?? (() => 'opaque');
+    const pcss = installPcssShadowShader();
     this.renderer = new WebGLRenderer(rendererParameters);
+    this.renderer.shadowMap.type = pcss ? BasicShadowMap : PCFShadowMap;
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setClearColor(theme.canvas.color, 1);
     this.renderer.autoClear = true;
 
     this.materials = createViewportMaterials(theme);
-    this.contactDepthMaterial = new MeshDepthMaterial({
-      depthPacking: RGBADepthPacking,
-      side: DoubleSide
-    });
     this.grid = new ViewportGrid(theme);
     this.scene.add(this.grid.group);
     this.objectGizmo = new ObjectGizmo(theme);
@@ -746,7 +735,6 @@ export class ViewportRenderer {
       stencilBuffer: true
     });
     target.texture.colorSpace = SRGBColorSpace;
-    let stillContactTarget: WebGLRenderTarget | null = null;
     try {
       this.setShadingMode(
         options.shading === 'texture' ? 'unlit' : options.shading
@@ -762,21 +750,6 @@ export class ViewportRenderer {
       camera.lookAt(new Vector3(...options.camera.target));
       camera.updateMatrixWorld(true);
       this.updateAmbientOcclusionPreview(true);
-      if (
-        this.currentMode === 'lit' &&
-        this.nodeViews.size > 0 &&
-        width * height <= MAX_CONTACT_STILL_PIXELS
-      ) {
-        stillContactTarget = this.createContactDepthTarget(width, height);
-        this.renderContactDepthInto(
-          stillContactTarget,
-          camera,
-          width,
-          height
-        );
-      } else {
-        this.materials.contact.uContactEnabled.value = 0;
-      }
       this.renderer.setRenderTarget(target);
       this.renderer.setViewport(0, 0, width, height);
       this.renderer.setClearColor(
@@ -785,7 +758,6 @@ export class ViewportRenderer {
       );
       this.renderer.clear(true, true, true);
       this.renderer.render(this.scene, camera);
-      this.materials.contact.uContactEnabled.value = 0;
       const raw = new Uint8Array(width * height * 4);
       this.renderer.readRenderTargetPixels(target, 0, 0, width, height, raw);
       const flipped = new Uint8ClampedArray(raw.length);
@@ -817,8 +789,6 @@ export class ViewportRenderer {
       for (const view of hiddenReferences) {
         view.group.visible = true;
       }
-      stillContactTarget?.dispose();
-      stillContactTarget = null;
       target.dispose();
       this.schedule();
     }
@@ -1470,7 +1440,6 @@ export class ViewportRenderer {
       existing.materials.ps1.dispose();
     }
     const lit = this.materials.lit.clone();
-    attachContactShadows(lit, this.materials.contact);
     lit.map = texture;
     lit.alphaTest = alphaMode === 'cutout' ? 0.5 : 0;
     lit.transparent = alphaMode === 'blend';
@@ -1595,9 +1564,6 @@ export class ViewportRenderer {
       this.disposeDocumentLight(entry);
     }
     this.documentLights.clear();
-    this.contactTarget?.dispose();
-    this.contactTarget = null;
-    this.contactDepthMaterial.dispose();
     disposeViewportMaterials(this.materials);
 
     this.scene.clear();
@@ -1833,116 +1799,6 @@ export class ViewportRenderer {
     return factors;
   }
 
-  /** Allocate the depth target used by the contact-shadow prepass. */
-  private createContactDepthTarget(
-    width: number,
-    height: number
-  ): WebGLRenderTarget {
-    const target = new WebGLRenderTarget(width, height, {
-      depthBuffer: true,
-      stencilBuffer: false,
-      minFilter: NearestFilter,
-      magFilter: NearestFilter
-    });
-    target.texture.colorSpace = NoColorSpace;
-    target.depthTexture = new DepthTexture(width, height, UnsignedIntType);
-    target.depthTexture.format = DepthFormat;
-    target.depthTexture.minFilter = NearestFilter;
-    target.depthTexture.magFilter = NearestFilter;
-    return target;
-  }
-
-  /** Render model depth for a camera and bind it to the contact uniforms. */
-  private renderContactDepthInto(
-    target: WebGLRenderTarget,
-    camera: PerspectiveCamera,
-    width: number,
-    height: number
-  ): void {
-    const uniforms = this.materials.contact;
-    uniforms.uContactDepth.value = target.depthTexture;
-    uniforms.uContactResolution.value.set(width, height);
-    uniforms.uContactNear.value = camera.near;
-    uniforms.uContactFar.value = camera.far;
-    uniforms.uContactEnabled.value = 1;
-
-    const previousGrid = this.grid.group.visible;
-    const previousObjectGizmo = this.objectGizmo.group.visible;
-    const previousLightGizmos = this.lightGizmos.group.visible;
-    const previousCameraGizmos = this.cameraGizmos.group.visible;
-    const previousAnnotations = this.annotations.group.visible;
-    const previousOverride = this.scene.overrideMaterial;
-    const previousClear = this.renderer.getClearColor(new Color());
-    const previousClearAlpha = this.renderer.getClearAlpha();
-    const hiddenReferences: MeshNodeView[] = [];
-    const sampledViews: MeshNodeView[] = [];
-
-    this.grid.group.visible = false;
-    this.objectGizmo.group.visible = false;
-    this.lightGizmos.group.visible = false;
-    this.cameraGizmos.group.visible = false;
-    this.annotations.group.visible = false;
-    for (const view of this.nodeViews.values()) {
-      if (view.isReference) {
-        if (view.group.visible) {
-          hiddenReferences.push(view);
-          view.group.visible = false;
-        }
-        continue;
-      }
-      view.beginContactDepthPass();
-      sampledViews.push(view);
-    }
-
-    this.scene.overrideMaterial = this.contactDepthMaterial;
-    this.renderer.setRenderTarget(target);
-    this.renderer.setClearColor(0x000000, 0);
-    this.renderer.clear(true, true, false);
-    this.renderer.render(this.scene, camera);
-    this.renderer.setRenderTarget(null);
-    this.renderer.setClearColor(previousClear, previousClearAlpha);
-    this.scene.overrideMaterial = previousOverride;
-    this.grid.group.visible = previousGrid;
-    this.objectGizmo.group.visible = previousObjectGizmo;
-    this.lightGizmos.group.visible = previousLightGizmos;
-    this.cameraGizmos.group.visible = previousCameraGizmos;
-    this.annotations.group.visible = previousAnnotations;
-    for (const view of sampledViews) {
-      view.endContactDepthPass();
-    }
-    for (const view of hiddenReferences) {
-      view.group.visible = true;
-    }
-  }
-
-  /** Depth-only pass used by the Lit contact-shadow shader. */
-  private renderContactDepth(): void {
-    const enabled =
-      this.currentMode === 'lit' && this.nodeViews.size > 0;
-    if (!enabled) {
-      this.materials.contact.uContactEnabled.value = 0;
-      return;
-    }
-
-    const drawing = this.renderer.getDrawingBufferSize(new Vector2());
-    const width = Math.max(1, Math.floor(drawing.x));
-    const height = Math.max(1, Math.floor(drawing.y));
-    if (
-      this.contactTarget === null ||
-      this.contactTarget.width !== width ||
-      this.contactTarget.height !== height
-    ) {
-      this.contactTarget?.dispose();
-      this.contactTarget = this.createContactDepthTarget(width, height);
-    }
-    this.renderContactDepthInto(
-      this.contactTarget,
-      this.cameraRig.camera,
-      width,
-      height
-    );
-  }
-
   private markCameraChanged(): void {
     this.cameraChanged = true;
     this.schedule();
@@ -1974,7 +1830,6 @@ export class ViewportRenderer {
         view.updateFrontWire(this.cameraRig.camera);
       }
     }
-    this.renderContactDepth();
     this.renderer.render(this.scene, this.cameraRig.camera);
     this.renderCount += 1;
 
@@ -2036,7 +1891,6 @@ export class ViewportRenderer {
 
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setSize(width, height, false);
 
     const camera = this.cameraRig.camera;
@@ -2059,7 +1913,6 @@ export class ViewportRenderer {
         view.updateFrontWire(this.cameraRig.camera);
       }
     }
-    this.renderContactDepth();
     this.renderer.render(this.scene, this.cameraRig.camera);
     this.renderCount += 1;
     this.schedule();
