@@ -36,6 +36,8 @@ export function installPcssShadowShader(): boolean {
 
   const pcss = `float getShadow( sampler2D shadowMap, vec2 shadowMapSize, float shadowIntensity, float shadowBias, float shadowRadius, vec4 shadowCoord ) {
 
+  float pattern = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
+  float patternAngle = ( pattern - 0.5 ) * 0.9;
   vec3 coords = shadowCoord.xyz / shadowCoord.w;
   #ifdef USE_REVERSED_DEPTH_BUFFER
     coords.z -= shadowBias;
@@ -56,7 +58,7 @@ export function installPcssShadowShader(): boolean {
 
   for ( int i = 0; i < 8; i ++ ) {
     float radius = sqrt( ( float( i ) + 0.5 ) / 8.0 ) * searchRadius;
-    float angle = float( i ) * 2.3999632297;
+    float angle = float( i ) * 2.3999632297 + patternAngle;
     vec2 offset = vec2( cos( angle ), sin( angle ) ) * radius * texel;
     float depth = texture2D( shadowMap, coords.xy + offset ).r;
     if ( depth < receiver - 0.001 ) {
@@ -76,13 +78,13 @@ export function installPcssShadowShader(): boolean {
   float visible = 0.0;
   for ( int i = 0; i < 12; i ++ ) {
     float radius = sqrt( ( float( i ) + 0.5 ) / 12.0 ) * filterRadius;
-    float angle = float( i ) * 2.3999632297;
+    float angle = float( i ) * 2.3999632297 + patternAngle;
     vec2 offset = vec2( cos( angle ), sin( angle ) ) * radius * texel;
     float depth = texture2D( shadowMap, coords.xy + offset ).r;
     visible += step( receiver, depth );
   }
 
-  return mix( 1.0, visible / 12.0, shadowIntensity );
+  return mix( 1.0, visible / 24.0, shadowIntensity );
 }`;
 
   let patched = chunk.slice(0, functionStart) + pcss + chunk.slice(functionEnd + 4);

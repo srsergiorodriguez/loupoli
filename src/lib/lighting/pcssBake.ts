@@ -2,11 +2,11 @@ import { Matrix4, OrthographicCamera, Vector3 } from 'three';
 import { shadowRadiusForSoftness } from './shadowSettings';
 
 /** Shadow-map resolution used by the CPU PCSS evaluator. */
-const BAKE_PCSS_RESOLUTION = 1024;
+const BAKE_PCSS_RESOLUTION = 2048;
 /** Blocker taps; must match the viewport PCSS shader. */
 const BLOCKER_TAPS = 8;
 /** Filter taps; must match the viewport PCSS shader. */
-const FILTER_TAPS = 12;
+const FILTER_TAPS = 24;
 const GOLDEN_ANGLE = 2.3999632297;
 
 /**
@@ -121,7 +121,7 @@ export class BakePcssShadowMap {
   }
 
   /** PCSS visibility at a world-space point; 1 is fully lit. */
-  visibility(position: Vector3, normal: Vector3): number {
+  visibility(position: Vector3, normal: Vector3, angleOffset = 0): number {
     if (!this.valid) {
       return 1;
     }
@@ -145,7 +145,7 @@ export class BakePcssShadowMap {
     for (let i = 0; i < BLOCKER_TAPS; i += 1) {
       const sampleRadius =
         Math.sqrt((i + 0.5) / BLOCKER_TAPS) * searchRadius;
-      const angle = i * GOLDEN_ANGLE;
+      const angle = i * GOLDEN_ANGLE + angleOffset;
       const x = Math.round(u + Math.cos(angle) * sampleRadius);
       const y = Math.round(v + Math.sin(angle) * sampleRadius);
       if (x < 0 || x >= BAKE_PCSS_RESOLUTION || y < 0 || y >= BAKE_PCSS_RESOLUTION) {
@@ -176,7 +176,7 @@ export class BakePcssShadowMap {
     for (let i = 0; i < FILTER_TAPS; i += 1) {
       const sampleRadius =
         Math.sqrt((i + 0.5) / FILTER_TAPS) * filterRadius;
-      const angle = i * GOLDEN_ANGLE;
+      const angle = i * GOLDEN_ANGLE + angleOffset;
       const x = Math.round(u + Math.cos(angle) * sampleRadius);
       const y = Math.round(v + Math.sin(angle) * sampleRadius);
       if (x < 0 || x >= BAKE_PCSS_RESOLUTION || y < 0 || y >= BAKE_PCSS_RESOLUTION) {

@@ -923,7 +923,11 @@ export async function bakeLighting(
               if (light.kind === 'directional') {
                 const pcss = pcssMaps.get(light.id);
                 visibility = pcss
-                  ? pcss.visibility(worldPosition, normal)
+                  ? pcss.visibility(
+                      worldPosition,
+                      normal,
+                      ((texelSeed >>> 0) % 6283) / 1000
+                    )
                   : shadowVisibility(
                       light,
                       worldPosition.clone().addScaledVector(normal, 0.005),
