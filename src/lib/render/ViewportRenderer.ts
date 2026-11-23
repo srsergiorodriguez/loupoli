@@ -1,10 +1,8 @@
 import {
   AlwaysStencilFunc,
   AmbientLight,
-  BasicShadowMap,
   Box3,
   Color,
-  PCFShadowMap,
   DirectionalLight,
   DoubleSide,
   Group as ThreeGroup,
@@ -13,6 +11,7 @@ import {
   Matrix4,
   MeshBasicMaterial,
   Object3D,
+  PCFShadowMap,
   PerspectiveCamera,
   Plane,
   PointLight,
@@ -54,12 +53,7 @@ import {
   DEFAULT_AMBIENT_OCCLUSION,
   type AmbientOcclusionSettings
 } from '../lighting/ao';
-import {
-  shadowRadiusForSoftness,
-  shadowSoftnessFromRadius
-} from '../lighting/shadowSettings';
 import { AnnotationOverlay } from './AnnotationOverlay';
-import { installPcssShadowShader } from './pcss';
 import {
   createViewportMaterials,
   disposeViewportMaterials,
@@ -227,9 +221,7 @@ export class ViewportRenderer {
     this.resolveNodeTextureId =
       options.resolveNodeTextureId ?? ((node) => node.textureId);
     this.resolveNodeAlphaMode = options.resolveNodeAlphaMode ?? (() => 'opaque');
-    const pcss = installPcssShadowShader();
     this.renderer = new WebGLRenderer(rendererParameters);
-    this.renderer.shadowMap.type = pcss ? BasicShadowMap : PCFShadowMap;
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setClearColor(theme.canvas.color, 1);
     this.renderer.autoClear = true;
@@ -990,7 +982,7 @@ export class ViewportRenderer {
         summary.direction[2]
       ).normalize();
       entry.direction.copy(direction);
-      const softness = Math.max(0, summary.shadowSoftness);
+      const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
       directional.position.set(
         -direction.x * 10,
         -direction.y * 10,
@@ -1014,9 +1006,9 @@ export class ViewportRenderer {
       directional.shadow.camera.far = 50;
       directional.shadow.bias = -(0.0001 + 0.0002 * softness);
       directional.shadow.normalBias = 0.004 + 0.003 * softness;
-      directional.shadow.radius = shadowRadiusForSoftness(softness);
+      directional.shadow.radius = 1 + softness * 6;
     } else {
-      const softness = Math.max(0, summary.shadowSoftness);
+      const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
       entry.direction.set(0, 0, 0);
       light.position.set(
         summary.position[0],
@@ -1031,7 +1023,7 @@ export class ViewportRenderer {
       light.shadow.camera.far = 30;
       light.shadow.bias = -(0.0004 + 0.0004 * softness);
       light.shadow.normalBias = 0.006 + 0.004 * softness;
-      light.shadow.radius = shadowRadiusForSoftness(softness);
+      light.shadow.radius = 1 + softness * 6;
       light.shadow.camera.updateProjectionMatrix();
     }
   }
@@ -1119,7 +1111,10 @@ export class ViewportRenderer {
       }
       // Bias follows shadow-map texel size. A fixed world bias either causes
       // acne on large scenes or detaches contact shadows on small ones.
-      const softness = shadowSoftnessFromRadius(directional.shadow.radius);
+      const softness = Math.max(
+        0,
+        Math.min(1, (directional.shadow.radius - 1) / 6)
+      );
       directional.shadow.bias = -Math.max(
         0.0001 + 0.0002 * softness,
         texel * 0.25
@@ -1892,6 +1887,7 @@ export class ViewportRenderer {
 
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setSize(width, height, false);
 
     const camera = this.cameraRig.camera;

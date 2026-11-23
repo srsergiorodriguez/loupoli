@@ -6,7 +6,6 @@ import {
   Quaternion,
   Vector3
 } from 'three';
-import { clampShadowSoftness } from '../lighting/shadowSettings';
 import { readTheme } from '../../design/theme';
 import type { HalfEdgeMesh, Vec2, Vec3 } from '../geometry/HalfEdgeMesh';
 import {
@@ -9790,7 +9789,7 @@ export class EditorRuntime {
       ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
       ...(patch.castShadows !== undefined ? { castShadows: patch.castShadows } : {}),
       ...(patch.shadowSoftness !== undefined
-        ? { shadowSoftness: clampShadowSoftness(patch.shadowSoftness) }
+        ? { shadowSoftness: Math.max(0, Math.min(1, patch.shadowSoftness)) }
         : {})
     };
     if (baseAfter.name.length === 0) {

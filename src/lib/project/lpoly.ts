@@ -1,4 +1,3 @@
-import { MAX_SHADOW_SOFTNESS } from '../lighting/shadowSettings';
 import {
   HalfEdgeMesh,
   type Vec3
@@ -396,7 +395,7 @@ function validateLightingManifest(
         (typeof light.shadowSoftness !== 'number' ||
           !Number.isFinite(light.shadowSoftness) ||
           light.shadowSoftness < 0 ||
-          light.shadowSoftness > MAX_SHADOW_SOFTNESS))
+          light.shadowSoftness > 1))
     ) {
       throw new Error('The .lpoli contains invalid light metadata.');
     }
