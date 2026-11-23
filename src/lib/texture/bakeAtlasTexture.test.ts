@@ -3,7 +3,8 @@ import type { BakeAtlasChart } from '../uv/bakeAtlas';
 import {
   bakeChartImageTransform,
   bleedIslandEdges,
-  erodeCoverage
+  erodeCoverage,
+  shouldBleedAtlasLayer
 } from './bakeAtlasTexture';
 
 function chart(overrides: Partial<BakeAtlasChart> = {}): BakeAtlasChart {
@@ -121,6 +122,20 @@ describe('bake atlas donor erosion', () => {
     expect(pixels[dot + 3]).toBe(255);
     const interior = (5 * width + 5) * 4;
     expect(pixels[interior + 3]).toBe(0);
+  });
+
+  it('skips gutter bleed for sparse layers and keeps opaque layers padded', () => {
+    const width = 4;
+    const height = 4;
+    const allowed = new Uint8Array(width * height).fill(1);
+    const sparse = new Uint8ClampedArray(width * height * 4);
+    sparse[3] = 255;
+    expect(shouldBleedAtlasLayer(sparse, allowed)).toBe(false);
+    const opaque = new Uint8ClampedArray(width * height * 4);
+    for (let pixel = 0; pixel < width * height; pixel += 1) {
+      opaque[pixel * 4 + 3] = 255;
+    }
+    expect(shouldBleedAtlasLayer(opaque, allowed)).toBe(true);
   });
 
   it('does not restore the boundary of a wide island', () => {

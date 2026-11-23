@@ -54,6 +54,10 @@ import {
   DEFAULT_AMBIENT_OCCLUSION,
   type AmbientOcclusionSettings
 } from '../lighting/ao';
+import {
+  shadowRadiusForSoftness,
+  shadowSoftnessFromRadius
+} from '../lighting/shadowSettings';
 import { AnnotationOverlay } from './AnnotationOverlay';
 import { installPcssShadowShader } from './pcss';
 import {
@@ -986,7 +990,7 @@ export class ViewportRenderer {
         summary.direction[2]
       ).normalize();
       entry.direction.copy(direction);
-      const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
+      const softness = Math.max(0, summary.shadowSoftness);
       directional.position.set(
         -direction.x * 10,
         -direction.y * 10,
@@ -1010,9 +1014,9 @@ export class ViewportRenderer {
       directional.shadow.camera.far = 50;
       directional.shadow.bias = -(0.0001 + 0.0002 * softness);
       directional.shadow.normalBias = 0.004 + 0.003 * softness;
-      directional.shadow.radius = 1 + softness * 6;
+      directional.shadow.radius = shadowRadiusForSoftness(softness);
     } else {
-      const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
+      const softness = Math.max(0, summary.shadowSoftness);
       entry.direction.set(0, 0, 0);
       light.position.set(
         summary.position[0],
@@ -1027,7 +1031,7 @@ export class ViewportRenderer {
       light.shadow.camera.far = 30;
       light.shadow.bias = -(0.0004 + 0.0004 * softness);
       light.shadow.normalBias = 0.006 + 0.004 * softness;
-      light.shadow.radius = 1 + softness * 6;
+      light.shadow.radius = shadowRadiusForSoftness(softness);
       light.shadow.camera.updateProjectionMatrix();
     }
   }
@@ -1115,10 +1119,7 @@ export class ViewportRenderer {
       }
       // Bias follows shadow-map texel size. A fixed world bias either causes
       // acne on large scenes or detaches contact shadows on small ones.
-      const softness = Math.max(
-        0,
-        Math.min(1, (directional.shadow.radius - 1) / 6)
-      );
+      const softness = shadowSoftnessFromRadius(directional.shadow.radius);
       directional.shadow.bias = -Math.max(
         0.0001 + 0.0002 * softness,
         texel * 0.25

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { MAX_SHADOW_SOFTNESS } from '../../lighting/shadowSettings';
   import { onDestroy, onMount } from 'svelte';
   import Icon from '../Icons/Icon.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
@@ -1669,7 +1670,7 @@
               label="Shadow softness"
               value={activeLight.shadowSoftness}
               min={0}
-              max={1}
+              max={MAX_SHADOW_SOFTNESS}
               step={0.01}
               precision={2}
               onChange={(value) =>

@@ -213,6 +213,25 @@ export function bleedIslandEdges(
   }
 }
 
+/** Whether a layer is opaque enough to need an external atlas gutter. */
+export function shouldBleedAtlasLayer(
+  pixels: Uint8ClampedArray,
+  allowed: Uint8Array
+): boolean {
+  let allowedCount = 0;
+  let opaqueCount = 0;
+  for (let pixel = 0; pixel < allowed.length; pixel += 1) {
+    if (allowed[pixel] === 0) {
+      continue;
+    }
+    allowedCount += 1;
+    if (pixels[pixel * 4 + 3] > 0) {
+      opaqueCount += 1;
+    }
+  }
+  return allowedCount > 0 && opaqueCount / allowedCount >= 0.5;
+}
+
 /**
  * Rebuild a texture layer stack in the unique bake-atlas layout.
  *
@@ -331,13 +350,18 @@ export async function resampleTextureDataForBakeAtlas(
           plan.width,
           plan.height
         );
-        bleedIslandEdges(
-          pixels.data,
-          core,
-          allowed,
-          plan.width,
-          plan.height
-        );
+        // Sparse layers (dots, decals, cheeks) must not paint their donor
+        // colors into the external gutter; that gutter is sampled at chart
+        // edges and would show up as colored seam lines on the baked model.
+        if (shouldBleedAtlasLayer(pixels.data, allowed)) {
+          bleedIslandEdges(
+            pixels.data,
+            core,
+            allowed,
+            plan.width,
+            plan.height
+          );
+        }
         context.putImageData(pixels, 0, 0);
         const blob = await workCanvas.convertToBlob({ type: 'image/png' });
         layers.push({

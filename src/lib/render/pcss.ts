@@ -71,17 +71,18 @@ export function installPcssShadowShader(): boolean {
 
   float blocker = blockerSum / blockerCount;
   float penumbra = clamp( ( receiver - blocker ) / max( blocker, 0.01 ), 0.0, 1.0 );
-  float filterRadius = mix( 1.0, searchRadius, sqrt( penumbra ) );
+  float contactClamp = smoothstep( 0.02, 0.2, penumbra );
+  float filterRadius = mix( 0.0, searchRadius, sqrt( penumbra ) ) * contactClamp;
   float visible = 0.0;
-  for ( int i = 0; i < 8; i ++ ) {
-    float radius = sqrt( ( float( i ) + 0.5 ) / 8.0 ) * filterRadius;
+  for ( int i = 0; i < 12; i ++ ) {
+    float radius = sqrt( ( float( i ) + 0.5 ) / 12.0 ) * filterRadius;
     float angle = float( i ) * 2.3999632297;
     vec2 offset = vec2( cos( angle ), sin( angle ) ) * radius * texel;
     float depth = texture2D( shadowMap, coords.xy + offset ).r;
     visible += step( receiver, depth );
   }
 
-  return mix( 1.0, visible / 8.0, shadowIntensity );
+  return mix( 1.0, visible / 12.0, shadowIntensity );
 }`;
 
   let patched = chunk.slice(0, functionStart) + pcss + chunk.slice(functionEnd + 4);

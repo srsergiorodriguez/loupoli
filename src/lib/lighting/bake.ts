@@ -4,6 +4,7 @@ import type { LightSummary } from '../scene/SceneLight';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import { bleedImageData } from '../texture/bleed';
+import { BakePcssShadowMap } from './pcssBake';
 import type { AmbientOcclusionSettings } from './ao';
 import {
   bvhRayOccluded,
@@ -788,6 +789,21 @@ export async function bakeLighting(
       direction: new Vector3(...light.direction).normalize(),
       position: new Vector3(...light.position)
     }));
+  const pcssMaps = new Map<string, BakePcssShadowMap>();
+  if (occluders.length > 0) {
+    for (const light of lights) {
+      if (light.kind === 'directional' && light.castShadows) {
+        pcssMaps.set(
+          light.id,
+          new BakePcssShadowMap(
+            light.direction,
+            occluders,
+            light.shadowSoftness
+          )
+        );
+      }
+    }
+  }
   let covered = false;
   // Derive the coverage mask from the same barycentric rasterization as the
   // lighting pass. This avoids a full-resolution OffscreenCanvas and its
@@ -904,13 +920,26 @@ export async function bakeLighting(
             }
             let visibility = 1;
             if (light.castShadows) {
-              visibility = shadowVisibility(
-                light,
-                worldPosition.clone().addScaledVector(normal, 0.005),
-                shadowSamples,
-                bvh,
-                texelSeed
-              );
+              if (light.kind === 'directional') {
+                const pcss = pcssMaps.get(light.id);
+                visibility = pcss
+                  ? pcss.visibility(worldPosition, normal)
+                  : shadowVisibility(
+                      light,
+                      worldPosition.clone().addScaledVector(normal, 0.005),
+                      shadowSamples,
+                      bvh,
+                      texelSeed
+                    );
+              } else {
+                visibility = shadowVisibility(
+                  light,
+                  worldPosition.clone().addScaledVector(normal, 0.005),
+                  shadowSamples,
+                  bvh,
+                  texelSeed
+                );
+              }
               if (visibility <= 0) {
                 continue;
               }
