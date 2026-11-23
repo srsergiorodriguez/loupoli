@@ -1078,9 +1078,6 @@
 {#snippet paintFooter()}
   <div class="paint-foot">
     {#if imagePlacement}
-      <span class="paint-hint">
-        Drag the image to move · corner handles scale · top handle rotates · Enter commits · Esc cancels
-      </span>
       <label class="placement-angle">
         <span>Angle</span>
         <NumberField
@@ -1136,16 +1133,6 @@
           onActivate={() => session.commitImagePlacement()}
         />
       </div>
-    {:else}
-      <span class="paint-hint">
-        {#if eyedropper}
-          Click the texture to sample a color · Esc cancels
-        {:else if !activeLayer}
-          Add a texture layer in the Inspector
-        {:else}
-          Drag the model or texture to paint · MMB/Alt orbit · RMB pan · wheel zoom
-        {/if}
-      </span>
     {/if}
   </div>
 {/snippet}
@@ -1154,7 +1141,7 @@
   label="Paint editor"
   header={paintHeader}
   toolbar={paintToolbar}
-  footer={paintFooter}
+  footer={imagePlacement ? paintFooter : undefined}
 >
 
   <div
@@ -1360,12 +1347,4 @@
 
 
 
-
-  .paint-hint {
-    flex: 1 1 100%;
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
-    line-height: 1.3;
-  }
 </style>

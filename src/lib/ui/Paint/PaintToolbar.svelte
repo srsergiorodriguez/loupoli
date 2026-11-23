@@ -64,6 +64,23 @@
     shapeFilled: session.snapshot.paintShapeFilled,
     gradient: session.snapshot.paintGradient
   });
+
+  const canFillSelection = $derived.by(() => {
+    const snapshot = session.snapshot;
+    if (snapshot.workspace !== 'paint' || !snapshot.activeNodeTextureId) {
+      return false;
+    }
+    const activeLayer = snapshot.textureLayers.find(
+      (layer) => layer.id === snapshot.textureActiveId
+    );
+    if (!activeLayer || activeLayer.kind === 'effect') {
+      return false;
+    }
+    const faces =
+      snapshot.selectionMode === 'face' ? snapshot.selectedElements.length : 0;
+    return faces > 0 || snapshot.uvSelectedCorners.length > 0;
+  });
+
 </script>
 
 <div class="paint-toolbar">
@@ -109,6 +126,14 @@
   {/if}
   <span class="paint-size">{session.snapshot.uvBrushSize} texels</span>
   <span class="paint-divider" aria-hidden="true"></span>
+  <IconButton
+    label="Fill selected faces or UV islands"
+    icon="fill"
+    tooltip="Fill selected faces or UV islands"
+    tooltipPlacement="bottom"
+    disabled={!canFillSelection}
+    onActivate={() => session.fillPaintSelection()}
+  />
   <IconButton
     label={session.snapshot.paintUvOverlay ? 'Hide UV overlay' : 'Show UV overlay'}
     icon={session.snapshot.paintUvOverlay ? 'eye' : 'eye-off'}

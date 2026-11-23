@@ -58,7 +58,6 @@
   onclick={onActivate}
 >
   <span class="tool-icon"><Icon name={icon} size={19} /></span>
-  <span class="tool-label">{resolvedLabel}</span>
 </button>
 
 <style>
@@ -110,11 +109,6 @@
     pointer-events: none;
   }
 
-  .tool-label {
-    display: none;
-    pointer-events: none;
-  }
-
   :global(:root[data-density='touch']) .tool-button {
     width: var(--hit-min);
     height: var(--hit-min);
@@ -122,15 +116,8 @@
 
   @media (max-width: 899px) {
     .tool-button {
-      width: 64px;
-      height: 52px;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    :global(:root[data-density='touch']) .tool-button {
-      width: 64px;
-      height: 52px;
+      width: var(--hit-min);
+      height: var(--hit-min);
     }
 
     .tool-button.is-active::before {
@@ -140,40 +127,6 @@
       width: 16px;
       height: 2px;
       transform: translateX(-50%);
-    }
-
-    .tool-label {
-      display: block;
-      color: currentColor;
-      font-size: var(--text-2xs);
-      font-weight: var(--weight-medium);
-      line-height: 1;
-    }
-  }
-
-  @media (min-width: 900px) {
-    :global(:root[data-density='touch']) .tool-button {
-      width: 68px;
-      height: 52px;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    :global(:root[data-density='touch']) .tool-button.is-active::before {
-      top: auto;
-      bottom: -6px;
-      left: 50%;
-      width: 16px;
-      height: 2px;
-      transform: translateX(-50%);
-    }
-
-    :global(:root[data-density='touch']) .tool-label {
-      display: block;
-      color: currentColor;
-      font-size: var(--text-2xs);
-      font-weight: var(--weight-medium);
-      line-height: 1;
     }
   }
 </style>

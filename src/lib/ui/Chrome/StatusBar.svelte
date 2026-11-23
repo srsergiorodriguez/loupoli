@@ -17,93 +17,9 @@
       ? session.snapshot.evaluatedCounts
       : session.snapshot.counts
   );
-  const selectedElements = $derived(session.snapshot.selectedElements);
-  const selectionCount = $derived(selectedElements.length);
-  const pointer = $derived(session.snapshot.pointer);
-
-  const modeLabel = $derived(
-    session.snapshot.selectionMode === 'vertex'
-      ? 'Vertex'
-      : session.snapshot.selectionMode === 'edge'
-        ? 'Edge'
-        : 'Face'
-  );
-  const modePlural = $derived(
-    session.snapshot.selectionMode === 'vertex'
-      ? 'vertices'
-      : session.snapshot.selectionMode === 'edge'
-        ? 'edges'
-        : 'faces'
-  );
-
-  const dynamicHint = $derived.by(() => {
-    if (session.snapshot.meshPoseEditing) {
-      return `Mesh pose · frame ${session.snapshot.meshPoseFrame} · move elements · Finish or Cancel in Animation`;
-    }
-    if (pointer?.type === 'pen') {
-      const pressure = Math.round(pointer.pressure * 100);
-      return `Pen · ${pressure}% pressure · tilt ${Math.round(pointer.tiltX)}° / ${Math.round(pointer.tiltY)}°`;
-    }
-    if (session.snapshot.nodes.length === 0) {
-      return 'Scene empty · add a primitive in the inspector';
-    }
-    if (session.snapshot.uvOpen) {
-      if (session.snapshot.uvPaintMode) {
-        return `Paint · active layer · ${session.snapshot.uvBrushSize} texel brush`;
-      }
-      const count = session.snapshot.uvSelectedCorners.length;
-      const mode =
-        session.snapshot.uvTransformMode === 'rotate'
-          ? 'rotate'
-          : session.snapshot.uvTransformMode === 'scale'
-            ? 'scale'
-            : 'move';
-      return count > 0
-        ? `UV · ${count} corner${count === 1 ? '' : 's'} · drag to ${mode}${mode === 'rotate' ? '' : ' · U/V lock'}`
-        : 'UV · select 3D faces or click UV corners';
-    }
-    if (session.snapshot.workspace === 'render') {
-      return 'Orbit/pan free camera · Through hides handles · F frame';
-    }
-    if (session.snapshot.workspace === 'light') {
-      return 'Drag light markers · arrow tips aim · Add light in the Inspector';
-    }
-    if (session.snapshot.modifiersActive) {
-      return 'Modifiers active · base edits re-evaluate · gizmo uses base median';
-    }
-    if (session.snapshot.workspace === 'animation' && selectionCount === 0) {
-      return 'Timeline scrub/play · + Key per track · drag diamonds';
-    }
-    if (selectionCount === 1) {
-      if (session.snapshot.selectionMode === 'vertex') {
-        const axis = session.snapshot.axisLock;
-        return axis
-          ? `Vertex ${selectedElements[0] + 1} · ${axis.toUpperCase()} axis · drag or use the gizmo`
-          : `Vertex ${selectedElements[0] + 1} selected · drag or use the gizmo`;
-      }
-      return `${modeLabel} ${selectedElements[0] + 1} selected · Move/Rotate/Scale gizmo`;
-    }
-    if (selectionCount > 1) {
-      return `${selectionCount} ${modePlural} selected · Move/Rotate/Scale gizmo`;
-    }
-    return '';
-  });
 </script>
 
 <footer class="status-bar" aria-label="Status">
-  <div class="status-cell status-hint">
-    {#if dynamicHint}
-      <span>{dynamicHint}</span>
-    {:else}
-      <span class="hint-desktop">Drag orbit · Move/Rotate/Scale gizmo · E/I/L actions · Add/Shift-click select · F frame</span>
-      <span class="hint-touch">
-        {session.pencilMode
-          ? 'Pencil edits · 1-finger orbit · 2-finger pan/zoom · 2/3-finger undo/redo'
-          : 'Tap select · 1-finger edit · 2-finger pan/zoom · 2/3-finger undo/redo'}
-      </span>
-    {/if}
-  </div>
-
   <div class="status-cell status-counts text-mono" aria-label="Mesh counts">
     <span>{counts.vertices} V</span>
     <span class="count-separator">·</span>
@@ -162,7 +78,7 @@
     bottom: 0;
     left: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     height: calc(var(--status-h) + var(--safe-bottom));
     padding:
@@ -183,16 +99,6 @@
     min-width: 0;
   }
 
-  .status-hint {
-    overflow: hidden;
-    color: var(--text-tertiary);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .hint-touch {
-    display: none;
-  }
 
   .status-counts {
     display: flex;
@@ -265,15 +171,6 @@
     opacity: .65;
   }
 
-  @media (pointer: coarse) {
-    .hint-desktop {
-      display: none;
-    }
-
-    .hint-touch {
-      display: inline;
-    }
-  }
 
   @media (max-width: 1050px) {
     .status-counts {

@@ -39,7 +39,9 @@
   // svelte-ignore state_referenced_locally
   let hexDraft = $state(hsvToHex(hsv));
   let svField: HTMLButtonElement;
+  let hueField: HTMLButtonElement;
   let dragPointer: number | null = null;
+  let hueDragPointer: number | null = null;
   const cssColor = $derived(rgbaColor(hsvToHex(hsv), alphaValue));
 
   onMount(() => {
@@ -63,6 +65,7 @@
       document.removeEventListener('keydown', escape);
       window.removeEventListener('resize', onClose);
       stopSvDrag();
+      stopHueDrag();
     };
   });
 
@@ -114,6 +117,38 @@
     window.removeEventListener('pointermove', moveSvDrag);
     window.removeEventListener('pointerup', endSvDrag);
     window.removeEventListener('pointercancel', endSvDrag);
+  }
+
+  function updateHue(event: PointerEvent): void {
+    const rect = hueField.getBoundingClientRect();
+    const next = Math.max(
+      0,
+      Math.min(360, ((event.clientX - rect.left) / rect.width) * 360)
+    );
+    emit({ ...hsv, h: next });
+  }
+
+  function beginHueDrag(event: PointerEvent): void {
+    event.preventDefault();
+    hueDragPointer = event.pointerId;
+    updateHue(event);
+    window.addEventListener('pointermove', moveHueDrag);
+    window.addEventListener('pointerup', stopHueDrag);
+    window.addEventListener('pointercancel', stopHueDrag);
+  }
+
+  function moveHueDrag(event: PointerEvent): void {
+    if (event.pointerId === hueDragPointer) {
+      event.preventDefault();
+      updateHue(event);
+    }
+  }
+
+  function stopHueDrag(): void {
+    hueDragPointer = null;
+    window.removeEventListener('pointermove', moveHueDrag);
+    window.removeEventListener('pointerup', stopHueDrag);
+    window.removeEventListener('pointercancel', stopHueDrag);
   }
 
   function commitHex(): void {
@@ -182,15 +217,30 @@
 
   <label class="slider-row">
     <span>Hue</span>
-    <input
-      class="hue"
-      type="range"
-      min="0"
-      max="360"
-      step="1"
-      value={hsv.h}
-      oninput={(event) => emit({ ...hsv, h: Number(event.currentTarget.value) })}
-    />
+    <button
+      type="button"
+      bind:this={hueField}
+      class="hue-field"
+      role="slider"
+      aria-label="Hue"
+      aria-valuemin={0}
+      aria-valuemax={360}
+      aria-valuenow={Math.round(hsv.h)}
+      onpointerdown={beginHueDrag}
+      onkeydown={(event) => {
+        const step = event.shiftKey ? 10 : 1;
+        let next = hsv.h;
+        if (event.key === 'ArrowLeft') next = Math.max(0, hsv.h - step);
+        else if (event.key === 'ArrowRight') next = Math.min(360, hsv.h + step);
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = 360;
+        else return;
+        event.preventDefault();
+        emit({ ...hsv, h: next });
+      }}
+    >
+      <span class="hue-thumb" style:left={`${(hsv.h / 360) * 100}%`}></span>
+    </button>
   </label>
 
   <label class="slider-row">
@@ -339,13 +389,13 @@
     cursor: pointer;
   }
 
-  .hue {
-    height: 14px;
+  .hue-field {
+    position: relative;
+    width: 100%;
+    height: 28px;
+    padding: 0;
     border: 0;
     border-radius: var(--radius-pill);
-    opacity: 1 !important;
-    appearance: none;
-    -webkit-appearance: none;
     background: linear-gradient(
       to right,
       #f00 0%,
@@ -356,26 +406,31 @@
       #f0f 83.333%,
       #f00 100%
     );
+    cursor: pointer;
+    touch-action: none;
   }
 
-  .hue::-webkit-slider-thumb {
-    width: 10px;
-    height: 18px;
-    border: 2px solid white;
-    border-radius: var(--radius-xs);
-    background: transparent;
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
-    appearance: none;
-    -webkit-appearance: none;
+  .hue-field:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 3px;
   }
 
-  .hue::-moz-range-thumb {
+  .hue-thumb {
+    position: absolute;
+    top: 50%;
     width: 10px;
-    height: 18px;
+    height: 20px;
     border: 2px solid white;
     border-radius: var(--radius-xs);
-    background: transparent;
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  @media (pointer: coarse) {
+    .hue-field {
+      height: var(--hit-min);
+    }
   }
 
   .alpha-track {

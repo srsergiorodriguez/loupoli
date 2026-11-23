@@ -8,6 +8,7 @@
   import SegmentedControl from '../Primitives/SegmentedControl.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
   import SliderField from '../Primitives/SliderField.svelte';
+  import SliderNumberField from '../Primitives/SliderNumberField.svelte';
   import {
     MAX_PAINT_SPACING,
     MIN_PAINT_SPACING
@@ -974,10 +975,7 @@
               onActivate={() => referenceReplaceInput.click()}
             />
           </ActionRow>
-          <p class="hint">
-            Reference planes are editor-only: they are not rendered or
-            exported. Move, rotate, and scale them with the Transform section.
-          </p>
+          <p class="hint">Editor-only; excluded from renders and exports.</p>
         </div>
       {/if}
 
@@ -1043,11 +1041,7 @@
           ]}
         />
       </ActionRow>
-      <p class="hint">
-        OBJ and GLB use Y-up at the file boundary; geometry and UVs are
-        preserved. GLB includes object, shape-key, and Mesh Motion clips;
-        camera/light and texture-swap animation stay in the project timeline.
-      </p>
+
 
       {#if canEdit3d && (nodes.length > 0 || groups.length > 0)}
         <ActionRow>
@@ -1145,12 +1139,7 @@
               disabled={shapeEditingId !== null}
               onActivate={() => session.beginMeshPoseEdit()}
             />
-            <p class="hint">
-              Move selected vertices, edges, or faces at the playhead, then
-              Finish pose to store a Mesh Motion key without changing the base
-              mesh. Finish creates a key even when the pose is unchanged;
-              Cancel discards it.
-            </p>
+            <p class="hint">Move elements, then Finish to store a key; Cancel discards it.</p>
             {#if activeMeshTrack && activeMeshTrack.keyframes.length > 0}
               <p class="hint">
                 Topology editing is locked while this object has Mesh Motion
@@ -1192,19 +1181,14 @@
                   onActivate={() => session.keyActiveTexture()}
                 />
               </ActionRow>
-              <p class="hint">
-                Texture assets use Step timing and override the object's base
-                binding. Choosing an asset keys it at the playhead.
-              </p>
+
             {:else}
               <ActionButton
                 label="Key texture"
                 icon="image"
                 onActivate={() => session.keyActiveTexture()}
               />
-              <p class="hint">
-                Key the object's current texture to start a Step texture track.
-              </p>
+
             {/if}
           {:else}
             <p class="hint">Select a mesh object to animate its texture.</p>
@@ -1274,10 +1258,7 @@
           onChange={(value) =>
             session.setAnimationInterpolation(value as 'linear' | 'step')}
         />
-        <p class="hint">
-          Used for new keys. Select a timeline diamond to change its existing
-          interpolation.
-        </p>
+
       </div>
     </InspectorSection>
     {/snippet}
@@ -1298,10 +1279,7 @@
           />
         </ActionRow>
         {#if activeCamera && animationTracks.some((track) => track.kind === 'camera' && track.targetId === activeCamera.id)}
-          <p class="hint">
-            Camera changes auto-key at the current frame while its animation
-            track exists.
-          </p>
+          <p class="hint">Camera edits auto-key on this track.</p>
         {/if}
         <div class="object-list">
           {#each cameras as camera (camera.id)}
@@ -1761,10 +1739,7 @@
             onChange={(value) =>
               session.setAmbientOcclusion({ samples: Number(value) })}
           />
-          <p class="hint">
-            Lit previews ambient occlusion per face corner; Bake lighting
-            evaluates it per texel and multiplies it into the same lighting layer.
-          </p>
+
         {/if}
         <div class="light-divider"></div>
         <div class="light-bake">
@@ -1776,7 +1751,7 @@
               <strong>select an object first</strong>
             {/if}
           </span>
-          <span class="texture-note">Direct light, shadows, and AO (when enabled) are included. Overlapping UVs create a unique bake copy and bake in one action.</span>
+          <span class="texture-note">Direct light, shadows, and AO (when enabled). Overlapping UVs bake into a copy.</span>
           <ActionButton
             label={session.snapshot.bakeBusy ? 'Baking…' : 'Bake lighting'}
             icon="lit"
@@ -1843,10 +1818,7 @@
             <p class="selection-subtitle">Object transform only</p>
           </div>
         </div>
-        <p class="hint">
-          Move, rotate, or scale the group in the Inspector or with the object
-          gizmo. Select a child object above to edit its mesh.
-        </p>
+
       {:else if modifiersActive}
         <div class="selection-summary">
           <span class="selection-badge">{selectionCount > 0 ? selectionCount : 'M'}</span>
@@ -1857,10 +1829,7 @@
             <p class="selection-subtitle">Editing the base mesh</p>
           </div>
         </div>
-        <p class="hint">
-          Picking maps through provenance; the modifier stack re-evaluates after
-          each edit.
-        </p>
+
       {:else if activeNodeId === null}
         <p class="empty-state">
           The scene is empty. Add a QuadSphere, Cylinder, or Grid above.
@@ -1905,10 +1874,7 @@
             {/each}
           </div>
         </div>
-        <p class="hint">
-          Drag the vertex handle; axis chips or X/Y/Z lock the move. Grid snap
-          rounds committed values.
-        </p>
+
       {/if}
 
       {#if selectionCount > 0}
@@ -1962,13 +1928,7 @@
                 />
               {/if}
             </ActionRow>
-            <p class="hint">
-              {selectionCount === 1
-                ? session.snapshot.workspace === 'model'
-                  ? 'Bevel is in the Action Dock; drag or type an exact width.'
-                  : 'Bevel is available in the Model workspace.'
-                : 'Bevel one edge at a time. Loop Slide and Bridge use multi-edge selections.'}
-            </p>
+            <p class="hint">Bevel: one edge at a time, from the Action Dock.</p>
           </div>
         {/if}
 
@@ -2037,13 +1997,14 @@
 
           <div class="brush-group">
             <span class="brush-group-title">Tip</span>
-            <SliderField
+            <SliderNumberField
               label="Size"
               value={session.snapshot.uvBrushSize}
               min={2}
               max={512}
               step={1}
               precision={0}
+              unit="px"
               onChange={(value) => session.setUvBrushSize(value)}
             />
             <SliderField
@@ -2223,21 +2184,7 @@
               onCommit={commitScale}
             />
           </div>
-          {#if session.snapshot.workspace === 'animation'}
-            <p class="hint">
-              Transform tracks store local values relative to the parent.
-              {transformValueSpace === 'local'
-                ? 'These are the values written by transform keys.'
-                : 'World edits are converted to local when keyed.'}
-            </p>
-          {:else if useGlobalOrientation}
-            <p class="hint">
-              Position and rotation are world-space. Scale remains object-local.
-            </p>
-          {/if}
-          <p class="hint">
-            World, UV, and rotation snapping are controlled from the status bar.
-          </p>
+
         {:else}
           <p class="empty-state">No active object to transform.</p>
         {/if}
@@ -2284,10 +2231,7 @@
             </ActionRow>
           {/if}
           {#if shapeKeys.length === 0}
-            <p class="hint">
-              Add a key, then edit its target directly or edit the base and
-              capture it. Shape weights are keyed from the timeline track.
-            </p>
+            <p class="hint">Add or capture a key, then key its weight in the timeline.</p>
           {:else}
             <div class="shape-key-list">
               {#each shapeKeys as key (key.id)}
@@ -2325,10 +2269,7 @@
                   onCommit={(value) => session.renameShapeKey(activeShapeKey.id, value)}
                 />
                 {#if shapeEditingId}
-                  <p class="hint">
-                    Edit the target with the viewport tools. Finish records one
-                    undo step and restores the base mesh.
-                  </p>
+                  <p class="hint">Edit the target, then Finish.</p>
                 {:else}
                   <SliderField
                     label="Weight"
@@ -2358,11 +2299,7 @@
                     label="Delete shape key"
                     onActivate={() => session.removeShapeKey(activeShapeKey.id)}
                   />
-                  <p class="hint">
-                    Use the key button on this shape's timeline track to add a
-                    weight key. Shape weights use the same Linear/Step
-                    interpolation as transform keys.
-                  </p>
+
                 {/if}
               </div>
             {/if}
@@ -2397,11 +2334,7 @@
             <p class="modifier-error">{modifierError}</p>
           {/if}
 
-          {#if modifiers.length === 0}
-            <p class="hint">
-              Non-destructive Mirror, Grid Array, Radial Array, Solidify, and render-effect Outline evaluation.
-            </p>
-          {:else}
+          {#if modifiers.length > 0}
             <div class="modifier-list">
               {#each modifiers as modifier, index (modifier.id)}
                 <div
@@ -2681,21 +2614,10 @@
             </ActionRow>
             {#if session.snapshot.modifierApplyBlockedReason}
               <p class="hint">{session.snapshot.modifierApplyBlockedReason}</p>
-            {:else}
-              <p class="hint">
-                Bakes the enabled stack into the base mesh and clears the stack.
-                Undo restores both.
-              </p>
             {/if}
           {/if}
 
-          {#if modifiersActive}
-            <p class="hint">
-              Modifiers are non-destructive. Picking maps through provenance;
-              dragging a vertex or running a topology action edits the base
-              mesh and re-evaluates the stack.
-            </p>
-          {/if}
+
         {/if}
         </div>
             </InspectorSection>
@@ -3015,10 +2937,7 @@
                   onChange={(value) => patchActiveEffect({ monochrome: value })}
                 />
               {/if}
-              <p class="hint">
-                Applied to the layers below in sRGB. Alpha is preserved.
-                Select a raster layer to paint.
-              </p>
+
             {:else}
               <div class="texture-property-pair">
                 <SelectField
@@ -3492,8 +3411,18 @@
   }
 
   .modifier-field select {
+    box-sizing: border-box;
     width: 100%;
+    height: var(--control-h);
+    min-height: var(--control-h);
     padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    line-height: normal;
   }
 
   .modifier-switch {

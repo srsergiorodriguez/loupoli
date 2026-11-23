@@ -126,7 +126,9 @@
   {:else if name === 'chevron-down'}
     <path d="m6 10 6 6 6-6" />
   {:else if name === 'extrude'}
-    <path d="M4 15h16M6 15V9h12v6M12 9V3M9 6l3-3 3 3" />
+    <path d="M4 14 12 9l8 5-8 5-8-5Z" />
+    <path d="M4 14v3l8 5 8-5v-3" />
+    <path d="M12 9V2M9 5l3-3 3 3" />
   {:else if name === 'inset'}
     <path d="M3 3h18v18H3V3ZM8 8h8v8H8V8Z" />
   {:else if name === 'loop-cut'}
@@ -178,14 +180,16 @@
     <path d="M4.5 16.5h15M4.5 12h15M4.5 7.5h15" opacity=".35" />
     <path d="M4.5 18.5h5M17.5 5.5h-5" />
   {:else if name === 'fill'}
-    <path d="m7 4 9 9-5 5-7-7 3-7Z" />
-    <path d="M13.5 19.5c2.3 0 3.5-1.2 3.5-2.8 0-1.2-1.1-2.6-1.7-3.2l-1.8 1.7c-.8 1-1.5 2.3-1.5 3.2 0 1.6 1.2 2.1 1.5 1.1Z" />
+    <path d="M4.6 10.2 11 3.8l7.2 7.2-6.4 6.4a2.1 2.1 0 0 1-3 0l-4.2-4.2a2.1 2.1 0 0 1 0-3Z" />
+    <path d="m8.7 6.1 7.2 7.2" />
+    <path d="M18.7 14.3c1.2 1.7 2.1 3.1 2.1 4.5a2.1 2.1 0 0 1-4.2 0c0-1.4.9-2.8 2.1-4.5Z" />
   {:else if name === 'eyedropper'}
     <path d="m14.5 4.5 5 5M13 6l5 5M4 20l3.2-.8 8.3-8.3-2.4-2.4L4.8 16.8 4 20Z" />
     <path d="m11.1 7.5 5.4 5.4" />
   {:else if name === 'bevel'}
-    <path d="M4 4h9l7 7v9H4V4Z" />
-    <path d="M13 4 4 13M20 11l-9-9M4 13v7h16" />
+    <path d="M4 4h10l6 6v10H4V4Z" />
+    <path d="M14 4v6h6" />
+    <path d="M4 14h6v6" />
   {:else if name === 'more'}
     <circle cx="5" cy="12" r="1.6" fill="currentColor" />
     <circle cx="12" cy="12" r="1.6" fill="currentColor" />

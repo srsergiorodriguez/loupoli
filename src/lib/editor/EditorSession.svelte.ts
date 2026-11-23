@@ -472,6 +472,10 @@ export class EditorSession {
     this.runtime?.finishTexturePaint();
   }
 
+  fillPaintSelection(): void {
+    this.runtime?.fillPaintSelection();
+  }
+
   cancelTexturePaint(): void {
     this.runtime?.cancelTexturePaint();
   }

@@ -4744,6 +4744,112 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Fill explicitly selected faces and UV islands in the active paint texture. */
+  fillPaintSelection(): void {
+    if (this.workspace !== 'paint' || this.imagePlacement) {
+      return;
+    }
+    const node = this.getActiveNode();
+    if (!node || node.reference) {
+      return;
+    }
+    const asset = this.textureLibrary.get(node.textureId);
+    if (!asset || !asset.activeLayerId) {
+      this.projectError =
+        'Assign a texture and active paint layer before filling a selection.';
+      this.publish();
+      return;
+    }
+    const mesh = node.mesh;
+    const faces = new Set<number>();
+    if (this.selection.mode === 'face') {
+      for (const face of this.selection.values()) {
+        if (face >= 0 && face < mesh.faceCount) {
+          faces.add(face);
+        }
+      }
+    }
+    if (this.uvSelection.size > 0) {
+      const selectedCorners = new Set(this.uvSelection);
+      for (const chart of extractUvCharts(mesh)) {
+        const touchesSelection = chart.faces.some((face) => {
+          const start = mesh.faceHalfEdge[face];
+          let halfEdge = start;
+          do {
+            if (selectedCorners.has(halfEdge)) {
+              return true;
+            }
+            halfEdge = mesh.heNext[halfEdge];
+          } while (halfEdge !== start);
+          return false;
+        });
+        if (touchesSelection) {
+          for (const face of chart.faces) {
+            faces.add(face);
+          }
+        }
+      }
+    }
+    if (faces.size === 0) {
+      this.projectError =
+        'Select faces or UV island corners in the viewport or UV pane first.';
+      this.publish();
+      return;
+    }
+    const path = new Path2D();
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const face of faces) {
+      const start = mesh.faceHalfEdge[face];
+      let halfEdge = start;
+      let first = true;
+      do {
+        const x = mesh.heUv[halfEdge * 2] * asset.width;
+        const y = (1 - mesh.heUv[halfEdge * 2 + 1]) * asset.height;
+        if (first) {
+          path.moveTo(x, y);
+          first = false;
+        } else {
+          path.lineTo(x, y);
+        }
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        halfEdge = mesh.heNext[halfEdge];
+      } while (halfEdge !== start);
+      path.closePath();
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      return;
+    }
+    const engine = new PaintEngine(
+      asset,
+      asset.activeLayerId,
+      this.paintSettings(1)
+    );
+    if (!engine.beginProjected({ x: 0, y: 0, pressure: 1 })) {
+      this.projectError = 'The active texture layer cannot be painted.';
+      this.publish();
+      return;
+    }
+    engine.fillProjected(path, { minX, minY, maxX, maxY });
+    engine.finish();
+    const patch = asset.endPaint();
+    if (patch) {
+      this.history.execute(
+        new PaintTextureCommand(asset, patch, 'Fill selected faces')
+      );
+    }
+    this.textureLibrary.setActive(asset.id);
+    this.projectError = null;
+    this.uvRevision += 1;
+    this.renderer.refreshTexture();
+    this.publish();
+  }
+
   cancelTexturePaint(): void {
     const engine = this.paintEngine;
     if (!engine) {

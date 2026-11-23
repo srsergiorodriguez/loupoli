@@ -877,15 +877,6 @@
         disabled={selectedCount === 0}
       >Apply</button>
     </form>
-    <span class="uv-foot-hint">
-      {#if keyboardKind}
-        {keyboardKind === 'move' ? 'Grab' : keyboardKind === 'rotate' ? 'Rotate' : 'Scale'}
-        · {keyboardNumeric ? `${keyboardKind === 'move' ? (session.snapshot.uvAxisLock === 'v' ? 'ΔV' : 'ΔU') : keyboardKind === 'rotate' ? 'Angle' : 'Factor'} ${keyboardNumeric}` : 'move pointer or type a number'}
-        · U/V axis · Enter {keyboardNumeric ? 'apply' : 'commit'} · Esc cancel
-      {:else}
-        16 px pick · 2-finger pinch/pan · {pinnedCount === 2 ? '2 pins' : 'auto pins'} · {session.snapshot.snapEnabled ? `snap UV ${session.snapshot.uvSnapStep}` : 'snap off'}
-      {/if}
-    </span>
   </div>
 {/snippet}
 
@@ -1070,14 +1061,5 @@
     cursor: default;
   }
 
-  .uv-foot-hint {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 
-  @media (max-width: 720px) {
-    .uv-foot-hint {
-      display: none;
-    }
-  }
 </style>

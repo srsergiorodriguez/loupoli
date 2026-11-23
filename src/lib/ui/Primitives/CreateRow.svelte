@@ -67,8 +67,12 @@
   }
 
   select {
+    box-sizing: border-box;
     min-width: 0;
+    width: 100%;
+    height: var(--control-h);
     min-height: var(--control-h);
+    line-height: normal;
     padding: 0 var(--space-2);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);

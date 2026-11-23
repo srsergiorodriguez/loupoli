@@ -42,6 +42,15 @@ textarea {
   color: inherit;
 }
 
+/* Native select heights vary by platform/WebKit. Normalize the control box
+   while preserving the native menu affordance. */
+select {
+  box-sizing: border-box;
+  min-height: var(--control-h);
+  height: var(--control-h);
+  line-height: normal;
+}
+
 /* WebKit keeps UA fieldset padding/margin. Reset it globally so grouped
    numeric controls keep the shared Inspector rhythm regardless of reuse. */
 fieldset {

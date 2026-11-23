@@ -198,7 +198,8 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 
 - Every interactive target is at least 44 CSS px on touch.
 - No hover-only actions.
-- Hover tooltips are desktop aids; visible labels or a Shortcuts/Help section cover iPad. The Tool Rail shows icon + label at touch density even on wide tablet layouts, and expands `--toolrail-w` so labels do not clip.
+- Hover tooltips are desktop aids; accessible labels and the Shortcuts/Help section cover iPad. The Tool Rail is icon-only at every density and width; labels remain available through accessible names and tooltips.
+Use exact numeric entry alongside sliders for settings where slider resolution is insufficient, and prefer compact status/action footers over instructional prose.
 - Test mouse, pen, one-finger touch, and two-finger navigation for any new gesture.
 
 ## 11. Command and shortcut registry
