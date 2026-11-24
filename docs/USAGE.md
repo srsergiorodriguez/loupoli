@@ -54,7 +54,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Move/Rotate/Scale handle | With an element selection, the gizmo sits at the selection median and drags the selected elements; otherwise it transforms the active object/group on that axis. Pen, mouse, and touch are supported. |
 | Two-sided (Mesh Inspector) | Render backfaces for billboard/foliage cards. Works with Cutout or Blend texture alpha. |
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
-| Select object in Paint | Activates that object's assigned texture for painting. |
+| Select object in Paint | Activates that object's assigned texture for painting; selecting another object switches to its texture automatically. |
 | Merge textures | With two or more textured objects selected, pack their UV layouts into one shared atlas. Texture layers are flattened; the operation is undoable. |
 | Export model | Import / Export opens the shared OBJ/GLB dialog. Choose active/selected/scene scope, texture or export-time atlas, OBJ axis/scale, or GLB clip/range/FPS, camera/light, and procedural-modulator options. |
 | ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. Subdivide splits the selected faces into triangles, or the whole mesh into quads when nothing is selected. |

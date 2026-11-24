@@ -2561,6 +2561,7 @@ export class EditorRuntime {
     this.selectedNodeIds.add(node.id);
     this.selection.setContext(node.id, snapshot.mode);
     this.selection.setValues(snapshot.values);
+    this.syncPaintTextureToActiveNode();
     this.uvSelectionMode = snapshot.uvMode;
     this.uvSelection.clear();
     for (const corner of snapshot.uvValues) {
@@ -10841,6 +10842,7 @@ export class EditorRuntime {
       this.uvPins.clear();
     }
     this.selection.setContext(this.activeNodeId, this.selection.mode);
+    this.syncPaintTextureToActiveNode();
     this.syncScene();
     this.publish();
   }
@@ -10946,6 +10948,7 @@ export class EditorRuntime {
       this.selectedNodeIds.add(fallback.id);
     }
     this.selection.setContext(fallback?.id ?? null, this.selection.mode);
+    this.syncPaintTextureToActiveNode();
     const referenceAsset = node.reference
       ? this.textureLibrary.get(node.textureId)
       : null;
@@ -11062,6 +11065,7 @@ export class EditorRuntime {
       this.selectedNodeIds.add(target.id);
       this.selection.clear();
       this.selection.setContext(target.id, this.selection.mode);
+      this.syncPaintTextureToActiveNode();
       this.history.execute(command);
       this.renderer.frameActiveNode();
       this.publish();
