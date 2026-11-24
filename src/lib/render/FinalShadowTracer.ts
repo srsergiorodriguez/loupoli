@@ -131,21 +131,28 @@ export class FinalShadowTracer {
     }
     const samples = Math.max(1, Math.round(softnessSamples));
     const softness = Math.max(0, Math.min(1, light.softness));
+    const directional = light.kind === 'directional';
     const baseDirection = new Vector3();
+    if (directional) {
+      baseDirection.copy(light.direction).multiplyScalar(-1).normalize();
+    }
+    const origin = new Vector3();
+    const tangent = new Vector3();
+    const bitangent = new Vector3();
+    const up = new Vector3();
+    const sampleDirection = new Vector3();
     for (let index = 0; index < size; index += 1) {
       if (this.hitValid[index] === 0) {
         continue;
       }
       const offset = index * 3;
-      const origin = new Vector3(
+      origin.set(
         this.hitPoints[offset] + this.hitNormals[offset] * 0.005,
         this.hitPoints[offset + 1] + this.hitNormals[offset + 1] * 0.005,
         this.hitPoints[offset + 2] + this.hitNormals[offset + 2] * 0.005
       );
       let maxDistance = Infinity;
-      if (light.kind === 'directional') {
-        baseDirection.copy(light.direction).multiplyScalar(-1).normalize();
-      } else {
+      if (!directional) {
         baseDirection.copy(light.position).sub(origin);
         maxDistance = baseDirection.length();
         if (maxDistance < 1e-4) {
@@ -155,36 +162,32 @@ export class FinalShadowTracer {
         baseDirection.multiplyScalar(1 / maxDistance);
       }
       const count = softness > 0 ? samples : 1;
-      let visible = 0;
-      const tangent = new Vector3();
-      const bitangent = new Vector3();
-      const up = Math.abs(baseDirection.z) < 0.9
-        ? new Vector3(0, 0, 1)
-        : new Vector3(1, 0, 0);
+      const sourceRadius = directional
+        ? Math.tan(softness * 0.04)
+        : Math.min(maxDistance * 0.8, softness * 0.12);
+      up.set(
+        Math.abs(baseDirection.z) < 0.9 ? 0 : 1,
+        0,
+        Math.abs(baseDirection.z) < 0.9 ? 1 : 0
+      );
       tangent.crossVectors(baseDirection, up).normalize();
       bitangent.crossVectors(baseDirection, tangent).normalize();
+      let visible = 0;
       for (let sample = 0; sample < count; sample += 1) {
-        const angle = sample * 2.399963;
-        const radius =
-          count === 1
-            ? 0
-            : (light.kind === 'directional'
-                ? Math.tan(softness * 0.04)
-                : Math.min(
-                    maxDistance * 0.8,
-                    softness * 0.12
-                  )) *
-              Math.sqrt((sample + 0.5) / count);
-        const direction = baseDirection
-          .clone()
-          .addScaledVector(tangent, Math.cos(angle) * radius)
-          .addScaledVector(bitangent, Math.sin(angle) * radius)
-          .normalize();
+        sampleDirection.copy(baseDirection);
+        if (count > 1) {
+          const angle = sample * 2.399963;
+          const radius = sourceRadius * Math.sqrt((sample + 0.5) / count);
+          sampleDirection
+            .addScaledVector(tangent, Math.cos(angle) * radius)
+            .addScaledVector(bitangent, Math.sin(angle) * radius)
+            .normalize();
+        }
         if (
           !bvhRayOccluded(
             this.bvh,
             origin,
-            direction,
+            sampleDirection,
             maxDistance
           )
         ) {
@@ -203,8 +206,6 @@ export class FinalShadowTracer {
     }
     return mask;
   }
-
-
 }
 
 

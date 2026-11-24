@@ -888,15 +888,33 @@ export class ViewportRenderer {
         }
         let visibility = 1;
         if (mask !== null) {
-          const maskX = Math.min(
-            maskWidth - 1,
-            Math.floor(((pixel % width) + 0.5) * maskWidth / width)
+          const fx = Math.max(
+            0,
+            Math.min(
+              maskWidth - 1,
+              ((pixel % width) + 0.5) * maskWidth / width - 0.5
+            )
           );
-          const maskY = Math.min(
-            maskHeight - 1,
-            Math.floor((Math.floor(pixel / width) + 0.5) * maskHeight / height)
+          const fy = Math.max(
+            0,
+            Math.min(
+              maskHeight - 1,
+              (Math.floor(pixel / width) + 0.5) * maskHeight / height - 0.5
+            )
           );
-          visibility = mask[maskY * maskWidth + maskX] / 255;
+          const x0 = Math.floor(fx);
+          const y0 = Math.floor(fy);
+          const x1 = Math.min(maskWidth - 1, x0 + 1);
+          const y1 = Math.min(maskHeight - 1, y0 + 1);
+          const tx = fx - x0;
+          const ty = fy - y0;
+          const top =
+            mask[y0 * maskWidth + x0] * (1 - tx) +
+            mask[y0 * maskWidth + x1] * tx;
+          const bottom =
+            mask[y1 * maskWidth + x0] * (1 - tx) +
+            mask[y1 * maskWidth + x1] * tx;
+          visibility = (top * (1 - ty) + bottom * ty) / 255;
         }
         const targetOffset = pixel * 3;
         accumulator[targetOffset] += srgbToLinear(raw[source]) * visibility;
