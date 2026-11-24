@@ -9790,7 +9790,7 @@ export class EditorRuntime {
           width: target.width,
           height: target.height,
           occluders: this.bakeOccluders(),
-          shadowSamples: 16,
+          shadowSamples: 32,
           ambientOcclusion: this.document.ambientOcclusion
         },
         {

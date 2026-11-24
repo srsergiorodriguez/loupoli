@@ -643,94 +643,6 @@ function dilateMask(
 }
 
 /**
- * Apply a separable box blur to the baked lighting image.
- *
- * Ray-traced shadows alone produce a hard boundary per texel. The viewport uses
- * PCF-soft shadow maps, so a resolution-scaled penumbra makes the baked result
- * read like the Lit preview.
- */
-function blurLighting(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  radius: number,
-  allowed?: Uint8Array
-): void {
-  if (radius <= 0 || width === 0 || height === 0) {
-    return;
-  }
-  const horizontal = new Uint8ClampedArray(data.length);
-  const valid = (pixel: number): boolean =>
-    allowed === undefined || allowed[pixel] !== 0;
-  for (let pass = 0; pass < 2; pass += 1) {
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const pixel = y * width + x;
-        if (!valid(pixel)) {
-          continue;
-        }
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        let count = 0;
-        for (let offset = -radius; offset <= radius; offset += 1) {
-          const sx = Math.min(width - 1, Math.max(0, x + offset));
-          const sample = y * width + sx;
-          if (!valid(sample)) {
-            continue;
-          }
-          const index = sample * 4;
-          r += data[index];
-          g += data[index + 1];
-          b += data[index + 2];
-          count += 1;
-        }
-        if (count === 0) {
-          continue;
-        }
-        const out = pixel * 4;
-        horizontal[out] = r / count;
-        horizontal[out + 1] = g / count;
-        horizontal[out + 2] = b / count;
-        horizontal[out + 3] = 255;
-      }
-    }
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const pixel = y * width + x;
-        if (!valid(pixel)) {
-          continue;
-        }
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        let count = 0;
-        for (let offset = -radius; offset <= radius; offset += 1) {
-          const sy = Math.min(height - 1, Math.max(0, y + offset));
-          const sample = sy * width + x;
-          if (!valid(sample)) {
-            continue;
-          }
-          const index = sample * 4;
-          r += horizontal[index];
-          g += horizontal[index + 1];
-          b += horizontal[index + 2];
-          count += 1;
-        }
-        if (count === 0) {
-          continue;
-        }
-        const out = pixel * 4;
-        data[out] = r / count;
-        data[out + 1] = g / count;
-        data[out + 2] = b / count;
-        data[out + 3] = 255;
-      }
-    }
-  }
-}
-
-/**
  * Bake direct ambient/directional/point light into an RGBA lighting image.
  *
  * The result is opaque white outside the UV-covered surface. White is the
@@ -952,22 +864,12 @@ export async function bakeLighting(
   if (!covered) {
     return null;
   }
-  // Fill only interior raster gaps, then blur inside UV coverage. Padding the
-  // gutter before blur would let the blur pull the lit gutter back into the
-  // island edge and create bright seams under soft shadows.
+  // Fill only interior raster gaps. Softness is already carried by the
+  // per-light ray sampling; a global image blur would soften hard lights using
+  // an unrelated soft light's setting and break bake/preview parity.
   bleedImageData(data, width, height, 2, coverageMask);
   fillBrightCracks(data, width, height, 2);
-  const softness = Math.max(
-    0,
-    ...lights
-      .filter((light) => light.castShadows)
-      .map((light) => light.shadowSoftness)
-  );
-  const blurRadius = Math.round(1 + softness * 5);
-  blurLighting(data, width, height, blurRadius, coverageMask);
-  // Pad from the already-blurred island edge. The gutter scales with the
-  // penumbra radius so the blur never reaches the neutral white exterior.
-  const gutter = Math.max(4, blurRadius + 2);
+  const gutter = 4;
   bleedImageData(
     data,
     width,
