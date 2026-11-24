@@ -417,7 +417,7 @@ function shadowRayForSample(
       return { direction: base, maxDistance: Infinity };
     }
     const [u, v] = tangentBasis(base);
-    const radius = Math.tan(softness * 0.35) * Math.sqrt((sampleIndex + 0.5) / sampleCount);
+    const radius = Math.tan(softness * 0.04) * Math.sqrt((sampleIndex + 0.5) / sampleCount);
     const angle = sampleIndex * GOLDEN_ANGLE + angleOffset;
     return {
       direction: base
@@ -441,7 +441,7 @@ function shadowRayForSample(
   }
   const base = toLight.multiplyScalar(1 / distance);
   const [u, v] = tangentBasis(base);
-  const sourceRadius = Math.min(distance * 0.8, softness * 1.5);
+  const sourceRadius = Math.min(distance * 0.8, softness * 0.12);
   const radius = sourceRadius * Math.sqrt((sampleIndex + 0.5) / sampleCount);
   const angle = sampleIndex * GOLDEN_ANGLE + angleOffset;
   const sampledLight = light.position
@@ -642,6 +642,52 @@ function dilateMask(
   return result;
 }
 
+/** Remove one-texel sample grid noise without a softness-dependent blur. */
+function boxBlurLighting(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  allowed: Uint8Array
+): void {
+  if (width < 3 || height < 3) {
+    return;
+  }
+  const source = new Uint8ClampedArray(data);
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const pixel = y * width + x;
+      if (allowed[pixel] === 0) {
+        continue;
+      }
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let count = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const sample = (y + dy) * width + (x + dx);
+          if (allowed[sample] === 0) {
+            continue;
+          }
+          const index = sample * 4;
+          r += source[index];
+          g += source[index + 1];
+          b += source[index + 2];
+          count += 1;
+        }
+      }
+      if (count === 0) {
+        continue;
+      }
+      const out = pixel * 4;
+      data[out] = r / count;
+      data[out + 1] = g / count;
+      data[out + 2] = b / count;
+      data[out + 3] = 255;
+    }
+  }
+}
+
 /**
  * Bake direct ambient/directional/point light into an RGBA lighting image.
  *
@@ -785,10 +831,11 @@ export async function bakeLighting(
           } else if (data[pixelIndex * 4 + 3] === 255) {
             continue;
           }
-          const texelSeed =
-            (face + 1) * 73856093 ^
-            (x + 1) * 19349663 ^
-            (y + 1) * 83492791;
+          // Keep the sample pattern stable across a face. Per-texel random
+          // rotation turns a 32-sample penumbra into visible grain in the
+          // baked texture; one stable rotation per face avoids that grain
+          // without introducing a screen-space pattern.
+          const texelSeed = (face + 1) * 73856093;
           const worldPosition = new Vector3()
             .addScaledVector(world[ia], a)
             .addScaledVector(world[ib], b)
@@ -864,11 +911,12 @@ export async function bakeLighting(
   if (!covered) {
     return null;
   }
-  // Fill only interior raster gaps. Softness is already carried by the
-  // per-light ray sampling; a global image blur would soften hard lights using
-  // an unrelated soft light's setting and break bake/preview parity.
+  // Fill only interior raster gaps. The shadow cone is carried by the
+  // per-light ray sampling; this fixed one-texel blur only removes the
+  // sample/texture grid noise, and does not use the maximum light softness.
   bleedImageData(data, width, height, 2, coverageMask);
   fillBrightCracks(data, width, height, 2);
+  boxBlurLighting(data, width, height, coverageMask);
   const gutter = 4;
   bleedImageData(
     data,
