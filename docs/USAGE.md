@@ -63,7 +63,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Subdivide | In the ActionDock, split selected faces into triangles, or split every face once into quads when no face is selected. UVs, materials, and seams are preserved; one undo restores the mesh. |
 | Deform / Noise Displace / Weld | Add from the Modifiers section. Deform twists, bends, or tapers; Noise Displace moves vertices along normals with seeded noise; Weld merges nearby vertices. Each supports per-modifier Apply. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
-| V / E / F buttons | Switch vertex, edge, or face selection mode; 1 / 2 / 3 are the keyboard shortcuts. |
+| Vertex / Edge / Face buttons | Switch selection mode with the geometric mode icons; 1 / 2 / 3 are the keyboard shortcuts. |
 | Shift+Tab | Toggle grid snapping. |
 | Two-finger tap over a pane | Undo while a pane, such as UV or Paint, has focus. |
 | Cmd/Ctrl+D | Duplicate the active mesh object in place. |

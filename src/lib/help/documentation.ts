@@ -29,11 +29,11 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Selection',
         paragraphs: [
-          'The V, E, and F buttons choose vertex, edge, or face selection. A plain click replaces the element selection. Multi, Shift, Cmd, or Ctrl toggles subsequent picks; clicking a selected element removes it. Changing mode clears the element set, while object selection remains in the Scene outliner.',
+          'The vertex, edge, and face buttons choose selection granularity. A plain click replaces the element selection. Multi, Shift, Cmd, or Ctrl toggles subsequent picks; clicking a selected element removes it. Changing mode clears the element set, while object selection remains in the Scene outliner.',
           'The Loop toggle is available in Edge mode. Enabling it expands the current edge selection; it walks through connected quad edges, follows an open boundary, and stops at a pole or a non-quad junction. The same Edge mode supports marking seams for UV work.'
         ],
         controls: [
-          'V / E / F buttons: vertex, edge, or face mode',
+          'Vertex / Edge / Face icons: choose selection granularity',
           '1 / 2 / 3: keyboard selection-mode shortcuts',
           'Multi, Shift, Cmd, Ctrl: toggle selection',
           'Shift+Tab: toggle grid snapping',
@@ -81,7 +81,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'The 3D and UV selections are linked. Selecting a face in the viewport highlights its UV corners, and selecting UV corners updates the viewport selection. Switch to Island mode to work with one connected chart at a time.'
         ],
         controls: [
-          'V / E / F / Island: UV selection mode; 1 / 2 / 3 are the keyboard shortcuts',
+          'Vertex / Edge / Face / Island icons: UV selection mode; 1 / 2 / 3 are the keyboard shortcuts',
           'Seam: mark or clear a chart boundary',
           'Unwrap: build charts from the selected faces and seams',
           'Pin / Unpin: hold one or two UV corners during unwrap'

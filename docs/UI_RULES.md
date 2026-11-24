@@ -89,12 +89,14 @@ Use the least ambiguous representation that still fits the context. Do not add t
 |---|---|---|---|
 | **Icon only** | Universally recognized, frequent, reversible controls in a dense tool or transport surface | Undo/redo, open/save, play/pause, zoom, visibility, view orientation | Accessible name, tooltip, focus state; long-press or first-use discovery on touch |
 | **Icon + short text** | Domain actions, creation actions, expensive actions, and destructive actions | Extrude, Inset, Bevel, Loop Cut, Join, Merge textures, Apply geometry, Delete object | Visible verb label; icon is a scanning aid, not the label |
-| **Text only** | Modes and stateful choices | V/E/F, Replace/Multi, Linear/Step, Mute/Unmute, Local/World | The label must name the state or result, not an internal concept |
+| **Text only** | Stateful choices and non-spatial modes | Replace/Multi, Linear/Step, Mute/Unmute, Local/World | The label must name the state or result, not an internal concept |
+| **Mode icons** | Spatial selection granularity | Vertex, Edge, Face, Island | Distinct geometric glyph; accessible name and shortcut tooltip |
 
 Additional rules:
 
 - **Never icon-only for a destructive action.** Use `DangerAction`, which requires a visible label and handles end alignment.
 - If an action is destructive, expensive, asynchronous, or domain-specific, prefer icon + text even when a symbol exists.
+- Element-mode buttons use distinct vertex, edge, face, and island glyphs rather than initials; All, Multi, and Loop stay text because they are actions/state, not selection granularity.
 - A tooltip is documentation, not a label. Hover is supplemental; touch users must be able to identify the control without hover.
 - Keep icon + text actions separate from adjacent icon-only actions; do not allow them to read as one composite control.
 - Use a standard icon only for its established meaning. Do not reuse a visibility eye for sound, for example; audio uses `volume` / `volume-off` or a text state.

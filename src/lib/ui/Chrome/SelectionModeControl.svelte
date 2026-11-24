@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '../Icons/Icon.svelte';
+  import type { IconName } from '../Icons/types';
   import type { SelectionMode } from '../../scene/MeshNode';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
   import { command, commandTooltipFor, type CommandId } from '../../input/commands';
@@ -15,7 +17,7 @@
   const paintMode = $derived(session.snapshot.workspace === 'paint');
   const modes = $derived<ReadonlyArray<{
     id: ContextMode;
-    short: string;
+    icon: IconName;
     label: string;
     command: CommandId;
   }>>(
@@ -23,13 +25,13 @@
       ? [
           {
             id: 'face',
-            short: 'F',
+            icon: 'selection-face',
             label: command('selection.face').label,
             command: 'selection.face'
           },
           {
             id: 'island',
-            short: 'I',
+            icon: 'selection-island',
             label: command('selection.island').label,
             command: 'selection.island'
           }
@@ -37,26 +39,26 @@
       : [
           {
             id: 'vertex',
-            short: 'V',
+            icon: 'selection-vertex',
             label: command('selection.vertex').label,
             command: 'selection.vertex'
           },
           {
             id: 'edge',
-            short: 'E',
+            icon: 'selection-edge',
             label: command('selection.edge').label,
             command: 'selection.edge'
           },
           {
             id: 'face',
-            short: 'F',
+            icon: 'selection-face',
             label: command('selection.face').label,
             command: 'selection.face'
           },
           ...(session.snapshot.activeEditor === 'uv'
             ? [{
                 id: 'island' as const,
-                short: 'I',
+                icon: 'selection-island' as const,
                 label: command('selection.island').label,
                 command: 'selection.island' as const
               }]
@@ -122,7 +124,7 @@
       title={commandTooltipFor(mode.command)}
       onclick={() => chooseMode(mode.id)}
     >
-      <span class="mode-key" aria-hidden="true">{mode.short}</span>
+      <span class="mode-icon" aria-hidden="true"><Icon name={mode.icon} size={17} /></span>
     </button>
   {/each}
   {#if !paintMode && session.snapshot.activeEditor !== 'uv' && session.snapshot.selectionMode === 'edge'}
@@ -206,13 +208,14 @@
     background: var(--border-subtle);
   }
 
-  .mode-key {
-    font-size: 10px;
-    font-weight: var(--weight-semibold);
-    opacity: 0.8;
+  .mode-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.86;
   }
 
-  .mode-button.active .mode-key {
+  .mode-button.active .mode-icon {
     opacity: 1;
   }
 

@@ -1877,8 +1877,8 @@
         </p>
       {:else if selectionCount === 0}
         <p class="empty-state">
-          No {modeLabel.toLowerCase()} selected. Pick one in the viewport; V/E/F
-          changes mode.
+          No {modeLabel.toLowerCase()} selected. Pick one in the viewport, or
+          use the selection-mode icons.
         </p>
       {:else}
         <div class="selection-summary">
