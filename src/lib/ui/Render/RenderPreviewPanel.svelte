@@ -31,7 +31,7 @@
     `${session.snapshot.renderVirtualWidth}×${session.snapshot.renderVirtualHeight} → ${session.snapshot.renderOutputWidth}×${session.snapshot.renderOutputHeight}`
   );
   const meta = $derived(
-    `${session.snapshot.renderUpscale} · f${Math.round(session.snapshot.animationFrame)}`
+    `PCF preview · f${Math.round(session.snapshot.animationFrame)}`
   );
 
   onMount(() => {

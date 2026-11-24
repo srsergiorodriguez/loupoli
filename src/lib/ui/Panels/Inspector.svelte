@@ -1492,12 +1492,13 @@
             })}
         />
         <p class="texture-note">
+          The live preview always uses PCF; this setting applies to final render and export.
           {#if session.snapshot.renderShadowMode === 'raytraced'}
-            Slow offline direct shadows for the final image. Supports animation and all lights.
+            Ray traced final is slower and supports animation and all lights.
           {:else if session.snapshot.renderShadowMode === 'baked'}
-            Uses existing baked lighting textures. Static objects and lights only; animated geometry or lights will be stale.
+            Baked final uses existing baked lighting textures. Static objects and lights only; animated geometry or lights will be stale.
           {:else}
-            Uses the fast viewport shadow map. Intended for quick final previews.
+            PCF final uses the fast viewport shadow map.
           {/if}
         </p>
         <Switch
