@@ -23,6 +23,15 @@ describe('subdivideMesh', () => {
     expect(() => result.validate()).not.toThrow();
   });
 
+  it('pokes only selected faces without opening neighbor boundaries', () => {
+    const cube = createCubeMesh(1);
+    const result = subdivideMesh(cube, new Set([0]));
+    expect(result.vertexCount).toBe(9);
+    expect(result.faceCount).toBe(9);
+    expect(result.boundaryEdgeCount).toBe(0);
+    expect(() => result.validate()).not.toThrow();
+  });
+
   it('carries seams onto split child edges', () => {
     const cube = createCubeMesh(1);
     const seam = cube.edgeHalfEdge[0];

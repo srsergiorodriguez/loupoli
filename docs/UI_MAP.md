@@ -26,7 +26,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas with optional read-only UV overlay, brush footer |
 | **Render Preview** | Always-open live output inside PaneHost | Dimensions/upscale/frame header, play/pause, live canvas; camera and scene edits refresh it |
 | **Inspector** | Properties of the active object/selection/context | Capability-filtered Inspector Sections, ordered per workspace; full-space About/Documentation modals |
-| **Action Dock** | One-shot topology actions | Extrude, Inset, Bevel (one edge), Loop Cut, Loop Slide (selected loop), Subdivide (whole mesh) |
+| **Action Dock** | One-shot topology actions | Extrude, Inset, Bevel (one edge), Loop Cut, Loop Slide (selected loop), Subdivide (selection or whole mesh) |
 | **Status Bar** | Persistent status | Context hint, mesh counts, and snap state; no renderer internals |
 | **Job Strip** | Active long operation | Top-center progress, completed/total, percent, and Cancel for frame, video, atlas, and lighting-bake jobs |
 | **Notifications** | Operation feedback | Bottom-center toast stack: transient import/export/render results plus dismissible persistent project errors. Recovery uses the separate actionable top banner. |

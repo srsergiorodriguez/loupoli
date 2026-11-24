@@ -11963,7 +11963,11 @@ export class EditorRuntime {
       return;
     }
     try {
-      const after = subdivideMesh(node.mesh);
+      const selectedFaces =
+        this.selection.mode === 'face' && this.selection.count > 0
+          ? new Set(this.selection.values())
+          : undefined;
+      const after = subdivideMesh(node.mesh, selectedFaces);
       const before = node.mesh;
       this.selection.clear();
       this.history.execute(
@@ -11974,7 +11978,7 @@ export class EditorRuntime {
       this.notify(
         'success',
         'Mesh subdivided',
-        `${after.faceCount} quad faces created from ${before.faceCount}.`
+        `${after.faceCount} faces created from ${before.faceCount}.`
       );
     } catch (error) {
       this.projectError = this.errorMessage(error);
