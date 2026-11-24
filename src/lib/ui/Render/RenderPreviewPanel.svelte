@@ -24,7 +24,8 @@
     ) ?? null
   );
   const hasAnimation = $derived(
-    session.snapshot.animationTracks.some((track) => track.hasTrack)
+    session.snapshot.animationTracks.some((track) => track.hasTrack) ||
+      session.snapshot.animationModulators.some((modulator) => modulator.enabled)
   );
   const playing = $derived(session.snapshot.animationPlaying);
   const detail = $derived(
@@ -155,7 +156,7 @@
         pressed={playing}
         disabled={!activeCamera || !hasAnimation || session.snapshot.renderBusy}
         tooltip={!hasAnimation
-          ? 'No animation keys'
+          ? 'No animation keys or modulators'
           : session.snapshot.renderBusy
             ? 'Rendering'
             : playing

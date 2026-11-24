@@ -1313,7 +1313,7 @@ export class AnimationClip {
       this.meshTracks.length > 0 ||
       this.cameraTracks.length > 0 ||
       this.lightTracks.length > 0 ||
-      this.modulators.length > 0 ||
+      this.modulators.some((modulator) => modulator.enabled) ||
       this.audio !== null
     );
   }

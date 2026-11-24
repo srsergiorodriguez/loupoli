@@ -8,12 +8,9 @@
     ModulatorTargetKind,
     ModulatorWaveform
   } from '../../scene/AnimationModulators';
-  import ActionButton from '../Primitives/ActionButton.svelte';
-  import ActionRow from '../Primitives/ActionRow.svelte';
+  import CreateRow from '../Primitives/CreateRow.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
-  import SelectField from '../Primitives/SelectField.svelte';
-  import Switch from '../Primitives/Switch.svelte';
 
   interface Props {
     session: EditorSession;
@@ -21,17 +18,22 @@
 
   let { session }: Props = $props();
 
-  const kinds: ReadonlyArray<{
-    kind: AnimationModulatorKind;
-    label: string;
-    icon: 'sync' | 'checker' | 'volume' | 'rotate';
-    hint: string;
-  }> = [
-    { kind: 'lfo', label: 'LFO', icon: 'sync', hint: 'Waves and BPM pulses' },
-    { kind: 'noise', label: 'Noise', icon: 'checker', hint: 'Deterministic drift' },
-    { kind: 'audio-envelope', label: 'Audio', icon: 'volume', hint: 'Follow peaks' },
-    { kind: 'orbit', label: 'Orbit', icon: 'rotate', hint: 'Camera around a pivot' }
+  const kindOptions = [
+    { value: 'lfo', label: 'LFO' },
+    { value: 'noise', label: 'Noise' },
+    { value: 'audio-envelope', label: 'Audio envelope' },
+    { value: 'orbit', label: 'Camera orbit' }
   ];
+  let modulatorKind = $state<AnimationModulatorKind>('lfo');
+  const kindHint = $derived(
+    modulatorKind === 'lfo'
+      ? 'Waves and BPM-synced pulses; target an object, camera, or light.'
+      : modulatorKind === 'noise'
+        ? 'Deterministic seeded drift; target an object, camera, or light.'
+        : modulatorKind === 'audio-envelope'
+          ? 'Follow the active audio peaks with attack and release.'
+          : 'Move the active camera around a pivot and keep it aimed at the pivot.'
+  );
 
   const modulators = $derived(session.snapshot.animationModulators);
   const targets = $derived.by(() => {
@@ -64,7 +66,7 @@
   ]);
 
   function kindLabel(kind: AnimationModulatorKind): string {
-    return kinds.find((item) => item.kind === kind)?.label ?? 'Modulator';
+    return kindOptions.find((item) => item.value === kind)?.label ?? 'Modulator';
   }
 
   function targetValue(modulator: AnimationModulatorSnapshot): string {
@@ -104,6 +106,30 @@
     ];
   }
 
+  function isVectorProperty(property: ModulatorProperty): boolean {
+    return property === 'position' || property === 'rotation' || property === 'scale';
+  }
+
+  function amplitudeLabel(modulator: AnimationModulatorSnapshot): string {
+    if (modulator.property === 'rotation' || modulator.property === 'fov') {
+      return 'Amplitude (°)';
+    }
+    if (modulator.property === 'scale') {
+      return 'Amplitude (×)';
+    }
+    return modulator.targetKind === 'light' && modulator.property === 'intensity'
+      ? 'Amplitude'
+      : 'Amplitude (units)';
+  }
+
+  function offsetLabel(modulator: AnimationModulatorSnapshot): string {
+    return modulator.property === 'rotation' || modulator.property === 'fov'
+      ? 'Offset (°)'
+      : modulator.targetKind === 'light' && modulator.property === 'intensity'
+        ? 'Offset'
+        : 'Offset (units)';
+  }
+
   function changeTarget(
     modulator: AnimationModulatorSnapshot,
     value: string
@@ -132,308 +158,446 @@
 <div class="modulators">
   <div class="modulators-head">
     <span>Modulators</span>
-    <span>{modulators.length} active</span>
+    <span>{modulators.length} modulator{modulators.length === 1 ? '' : 's'}</span>
   </div>
-  <ActionRow>
-    {#each kinds as item (item.kind)}
-      <ActionButton
-        label={item.label}
-        icon={item.icon}
-        onActivate={() =>
-          session.addAnimationModulator(item.kind)}
-      />
-    {/each}
-  </ActionRow>
-  {#if modulators.length === 0}
-    <p class="mod-hint">
-      LFO for waves and BPM pulses, Noise for drift, Audio for envelope
-      following, Orbit for a camera circle.
-    </p>
-  {:else}
+  <CreateRow
+    label="Modulator type"
+    value={modulatorKind}
+    options={kindOptions}
+    addLabel="Add"
+    onAdd={() => session.addAnimationModulator(modulatorKind)}
+    onChange={(value) => (modulatorKind = value as AnimationModulatorKind)}
+  />
+  <p class="mod-hint">{kindHint}</p>
+
+  {#if modulators.length > 0}
     <div class="mod-list">
-      {#each modulators as modulator (modulator.id)}
-        <div class="mod-card" class:enabled={modulator.enabled}>
-          <div class="mod-card-head">
-            <div class="mod-title">
-              <strong>{kindLabel(modulator.kind)}</strong>
-              <span>{targetLabel(modulator)}</span>
-            </div>
-            <Switch
-              label="Enabled"
-              checked={modulator.enabled}
-              onChange={(value) => update(modulator, { enabled: value })}
-            />
-            <IconButton
-              label="Remove modulator"
-              icon="trash"
-              onActivate={() =>
-                session.removeAnimationModulator(modulator.id)}
-            />
+      {#each modulators as modulator, index (modulator.id)}
+        <div class="mod-card" class:is-disabled={!modulator.enabled}>
+          <div class="mod-head">
+            <button
+              type="button"
+              class="mod-enabled"
+              class:is-active={modulator.enabled}
+              aria-pressed={modulator.enabled}
+              aria-label={modulator.enabled ? 'Disable modulator' : 'Enable modulator'}
+              onclick={() => update(modulator, { enabled: !modulator.enabled })}
+            >
+              <span class="mod-dot" aria-hidden="true"></span>
+              {modulator.enabled ? 'On' : 'Off'}
+            </button>
+            <span class="mod-name">{kindLabel(modulator.kind)}</span>
+            <span class="mod-summary" title={targetLabel(modulator)}>
+              {targetLabel(modulator)}
+            </span>
+            <span class="mod-index text-mono">{index + 1}</span>
+            <span class="mod-actions">
+              <IconButton
+                label="Move modulator up"
+                icon="chevron-up"
+                tooltip="Move modulator up"
+                disabled={index === 0}
+                onActivate={() => session.moveAnimationModulator(modulator.id, -1)}
+              />
+              <IconButton
+                label="Move modulator down"
+                icon="chevron-down"
+                tooltip="Move modulator down"
+                disabled={index === modulators.length - 1}
+                onActivate={() => session.moveAnimationModulator(modulator.id, 1)}
+              />
+              <IconButton
+                label="Remove modulator"
+                icon="trash"
+                tooltip="Remove modulator"
+                onActivate={() =>
+                  session.removeAnimationModulator(modulator.id)}
+              />
+            </span>
           </div>
 
-          <SelectField
-            label="Target"
-            value={targetValue(modulator)}
-            options={targetOptions(modulator)}
-            onChange={(value) => changeTarget(modulator, value)}
-          />
+          <div class="mod-controls">
+            <label class="mod-field">
+              <span>Target</span>
+              <select
+                value={targetValue(modulator)}
+                aria-label="Modulator target"
+                onchange={(event) =>
+                  changeTarget(modulator, event.currentTarget.value)}
+              >
+                {#each targetOptions(modulator) as target (target.value)}
+                  <option value={target.value}>{target.label}</option>
+                {/each}
+              </select>
+            </label>
 
-          {#if modulator.kind !== 'orbit'}
-            <div class="mod-grid">
-              <SelectField
-                label="Property"
-                value={modulator.property}
-                options={propertyOptions(modulator.targetKind)}
-                onChange={(value) =>
-                  update(modulator, {
-                    property: value as ModulatorProperty
-                  })}
-              />
-              {#if modulator.property === 'position' || modulator.property === 'rotation' || modulator.property === 'scale'}
-                <SelectField
-                  label="Axis"
-                  value={modulator.axis}
-                  options={[
-                    { value: 'x', label: 'X' },
-                    { value: 'y', label: 'Y' },
-                    { value: 'z', label: 'Z' }
-                  ]}
-                  onChange={(value) =>
-                    update(modulator, { axis: value as ModulatorAxis })}
-                />
-              {/if}
-            </div>
-          {/if}
+            {#if modulator.kind !== 'orbit'}
+              <div class="mod-field-row">
+                <label class="mod-field">
+                  <span>Property</span>
+                  <select
+                    value={modulator.property}
+                    aria-label="Modulator property"
+                    onchange={(event) =>
+                      update(modulator, {
+                        property: event.currentTarget.value as ModulatorProperty
+                      })}
+                  >
+                    {#each propertyOptions(modulator.targetKind) as property (property.value)}
+                      <option value={property.value}>{property.label}</option>
+                    {/each}
+                  </select>
+                </label>
+                {#if isVectorProperty(modulator.property)}
+                  <label class="mod-field mod-axis-field">
+                    <span>Axis</span>
+                    <select
+                      value={modulator.axis}
+                      aria-label="Modulator axis"
+                      onchange={(event) =>
+                        update(modulator, {
+                          axis: event.currentTarget.value as ModulatorAxis
+                        })}
+                    >
+                      <option value="x">X</option>
+                      <option value="y">Y</option>
+                      <option value="z">Z</option>
+                    </select>
+                  </label>
+                {/if}
+              </div>
+            {/if}
+          </div>
 
           {#if modulator.kind === 'lfo'}
-            <div class="mod-grid">
-              <SelectField
-                label="Wave"
-                value={modulator.waveform}
-                options={[
-                  { value: 'sine', label: 'Sine' },
-                  { value: 'triangle', label: 'Triangle' },
-                  { value: 'square', label: 'Square' },
-                  { value: 'saw', label: 'Saw' }
-                ]}
-                onChange={(value) =>
-                  update(modulator, {
-                    waveform: value as ModulatorWaveform
-                  })}
-              />
-              <SelectField
-                label="Sync"
-                value={modulator.sync}
-                options={[
-                  { value: 'hz', label: 'Hz' },
-                  { value: 'bpm', label: 'BPM' }
-                ]}
-                onChange={(value) =>
-                  update(modulator, {
-                    sync: value === 'bpm' ? 'bpm' : 'hz'
-                  })}
-              />
-              <NumberField
-                label="Rate"
-                value={modulator.rate}
-                step={0.05}
-                precision={2}
-                min={0.001}
-                onCommit={(value) => update(modulator, { rate: value })}
-              />
-              {#if modulator.sync === 'bpm'}
+            <div class="mod-field-row">
+              <label class="mod-field">
+                <span>Wave</span>
+                <select
+                  value={modulator.waveform}
+                  aria-label="LFO waveform"
+                  onchange={(event) =>
+                    update(modulator, {
+                      waveform: event.currentTarget.value as ModulatorWaveform
+                    })}
+                >
+                  <option value="sine">Sine</option>
+                  <option value="triangle">Triangle</option>
+                  <option value="square">Square</option>
+                  <option value="saw">Saw</option>
+                </select>
+              </label>
+              <label class="mod-field">
+                <span>Sync</span>
+                <select
+                  value={modulator.sync}
+                  aria-label="LFO rate sync"
+                  onchange={(event) =>
+                    update(modulator, {
+                      sync: event.currentTarget.value === 'bpm' ? 'bpm' : 'hz'
+                    })}
+                >
+                  <option value="hz">Hz</option>
+                  <option value="bpm">BPM</option>
+                </select>
+              </label>
+            </div>
+            <div class="mod-number-grid">
+              <label class="mod-number">
+                <span>{modulator.sync === 'bpm' ? 'Rate (beats/cycle)' : 'Rate (Hz)'}</span>
                 <NumberField
-                  label="BPM"
-                  value={modulator.bpm}
-                  step={1}
-                  precision={0}
-                  min={1}
-                  max={400}
-                  onCommit={(value) => update(modulator, { bpm: value })}
+                  label="LFO rate"
+                  value={modulator.rate}
+                  step={0.05}
+                  precision={3}
+                  min={0.001}
+                  framed
+                  onCommit={(value) => update(modulator, { rate: value })}
                 />
+              </label>
+              {#if modulator.sync === 'bpm'}
+                <label class="mod-number">
+                  <span>BPM</span>
+                  <NumberField
+                    label="LFO BPM"
+                    value={modulator.bpm}
+                    step={1}
+                    precision={0}
+                    min={1}
+                    max={400}
+                    framed
+                    onCommit={(value) => update(modulator, { bpm: value })}
+                  />
+                </label>
               {/if}
-              <NumberField
-                label="Amplitude"
-                value={modulator.amplitude}
-                step={0.05}
-                precision={3}
-                onCommit={(value) => update(modulator, { amplitude: value })}
-              />
-              <NumberField
-                label="Offset"
-                value={modulator.offset}
-                step={0.05}
-                precision={3}
-                onCommit={(value) => update(modulator, { offset: value })}
-              />
-              <NumberField
-                label="Phase"
-                value={modulator.phase}
-                step={0.05}
-                precision={2}
-                onCommit={(value) => update(modulator, { phase: value })}
-              />
+              <label class="mod-number">
+                <span>{amplitudeLabel(modulator)}</span>
+                <NumberField
+                  label="LFO amplitude"
+                  value={modulator.amplitude}
+                  step={0.05}
+                  precision={3}
+                  framed
+                  onCommit={(value) => update(modulator, { amplitude: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>{offsetLabel(modulator)}</span>
+                <NumberField
+                  label="LFO offset"
+                  value={modulator.offset}
+                  step={0.05}
+                  precision={3}
+                  framed
+                  onCommit={(value) => update(modulator, { offset: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Phase (cycles)</span>
+                <NumberField
+                  label="LFO phase"
+                  value={modulator.phase}
+                  step={0.05}
+                  precision={2}
+                  framed
+                  onCommit={(value) => update(modulator, { phase: value })}
+                />
+              </label>
             </div>
           {:else if modulator.kind === 'noise'}
-            <div class="mod-grid">
-              <NumberField
-                label="Frequency"
-                value={modulator.frequency}
-                step={0.05}
-                precision={2}
-                min={0.001}
-                onCommit={(value) => update(modulator, { frequency: value })}
-              />
-              <NumberField
-                label="Seed"
-                value={modulator.seed}
-                step={1}
-                precision={0}
-                onCommit={(value) => update(modulator, { seed: value })}
-              />
-              <NumberField
-                label="Amplitude"
-                value={modulator.amplitude}
-                step={0.05}
-                precision={3}
-                onCommit={(value) => update(modulator, { amplitude: value })}
-              />
-              <NumberField
-                label="Offset"
-                value={modulator.offset}
-                step={0.05}
-                precision={3}
-                onCommit={(value) => update(modulator, { offset: value })}
-              />
+            <div class="mod-number-grid">
+              <label class="mod-number">
+                <span>Frequency (Hz)</span>
+                <NumberField
+                  label="Noise frequency"
+                  value={modulator.frequency}
+                  step={0.05}
+                  precision={2}
+                  min={0.001}
+                  framed
+                  onCommit={(value) => update(modulator, { frequency: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Seed</span>
+                <NumberField
+                  label="Noise seed"
+                  value={modulator.seed}
+                  step={1}
+                  precision={0}
+                  framed
+                  onCommit={(value) => update(modulator, { seed: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>{amplitudeLabel(modulator)}</span>
+                <NumberField
+                  label="Noise amplitude"
+                  value={modulator.amplitude}
+                  step={0.05}
+                  precision={3}
+                  framed
+                  onCommit={(value) => update(modulator, { amplitude: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>{offsetLabel(modulator)}</span>
+                <NumberField
+                  label="Noise offset"
+                  value={modulator.offset}
+                  step={0.05}
+                  precision={3}
+                  framed
+                  onCommit={(value) => update(modulator, { offset: value })}
+                />
+              </label>
             </div>
           {:else if modulator.kind === 'audio-envelope'}
-            <SelectField
-              label="Audio"
-              value={modulator.audioAssetId}
-              options={audioOptions}
-              onChange={(value) =>
-                update(modulator, { audioAssetId: value })}
-            />
-            <div class="mod-grid">
-              <NumberField
-                label="Gain"
-                value={modulator.gain}
-                step={0.05}
-                precision={2}
-                min={0}
-                onCommit={(value) => update(modulator, { gain: value })}
-              />
-              <NumberField
-                label="Attack"
-                value={modulator.attack}
-                step={0.01}
-                precision={2}
-                min={0.001}
-                onCommit={(value) => update(modulator, { attack: value })}
-              />
-              <NumberField
-                label="Release"
-                value={modulator.release}
-                step={0.01}
-                precision={2}
-                min={0.001}
-                onCommit={(value) => update(modulator, { release: value })}
-              />
-              <NumberField
-                label="Amplitude"
-                value={modulator.amplitude}
-                step={0.05}
-                precision={3}
-                onCommit={(value) => update(modulator, { amplitude: value })}
-              />
-              <NumberField
-                label="Offset"
-                value={modulator.offset}
-                step={0.05}
-                precision={3}
-                onCommit={(value) => update(modulator, { offset: value })}
-              />
+            <label class="mod-field">
+              <span>Audio asset</span>
+              <select
+                value={modulator.audioAssetId}
+                aria-label="Envelope audio asset"
+                onchange={(event) =>
+                  update(modulator, {
+                    audioAssetId: event.currentTarget.value
+                  })}
+              >
+                {#each audioOptions as option (option.value)}
+                  <option value={option.value}>{option.label}</option>
+                {/each}
+              </select>
+            </label>
+            <div class="mod-number-grid">
+              <label class="mod-number">
+                <span>Gain</span>
+                <NumberField
+                  label="Envelope gain"
+                  value={modulator.gain}
+                  step={0.05}
+                  precision={2}
+                  min={0}
+                  framed
+                  onCommit={(value) => update(modulator, { gain: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Attack (s)</span>
+                <NumberField
+                  label="Envelope attack"
+                  value={modulator.attack}
+                  step={0.01}
+                  precision={2}
+                  min={0.001}
+                  framed
+                  onCommit={(value) => update(modulator, { attack: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Release (s)</span>
+                <NumberField
+                  label="Envelope release"
+                  value={modulator.release}
+                  step={0.01}
+                  precision={2}
+                  min={0.001}
+                  framed
+                  onCommit={(value) => update(modulator, { release: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>{amplitudeLabel(modulator)}</span>
+                <NumberField
+                  label="Envelope amplitude"
+                  value={modulator.amplitude}
+                  step={0.05}
+                  precision={3}
+                  framed
+                  onCommit={(value) => update(modulator, { amplitude: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>{offsetLabel(modulator)}</span>
+                <NumberField
+                  label="Envelope offset"
+                  value={modulator.offset}
+                  step={0.05}
+                  precision={3}
+                  framed
+                  onCommit={(value) => update(modulator, { offset: value })}
+                />
+              </label>
             </div>
           {:else if modulator.kind === 'orbit'}
-            <p class="mod-hint">
-              Camera position follows the pivot circle and looks at the pivot.
-            </p>
-            <div class="mod-grid">
-              <NumberField
-                label="Pivot X"
-                value={modulator.pivot[0]}
-                step={0.1}
-                precision={2}
-                onCommit={(value) =>
-                  update(modulator, {
-                    pivot: [value, modulator.pivot[1], modulator.pivot[2]]
-                  })}
-              />
-              <NumberField
-                label="Pivot Y"
-                value={modulator.pivot[1]}
-                step={0.1}
-                precision={2}
-                onCommit={(value) =>
-                  update(modulator, {
-                    pivot: [modulator.pivot[0], value, modulator.pivot[2]]
-                  })}
-              />
-              <NumberField
-                label="Pivot Z"
-                value={modulator.pivot[2]}
-                step={0.1}
-                precision={2}
-                onCommit={(value) =>
-                  update(modulator, {
-                    pivot: [modulator.pivot[0], modulator.pivot[1], value]
-                  })}
-              />
-              <NumberField
-                label="Radius"
-                value={modulator.radius}
-                step={0.1}
-                precision={2}
-                min={0}
-                onCommit={(value) => update(modulator, { radius: value })}
-              />
-              <NumberField
-                label="Height"
-                value={modulator.height}
-                step={0.1}
-                precision={2}
-                onCommit={(value) => update(modulator, { height: value })}
-              />
-              <NumberField
-                label="Angular rate"
-                value={modulator.angularRate}
-                step={0.01}
-                precision={3}
-                onCommit={(value) => update(modulator, { angularRate: value })}
-              />
-              <NumberField
-                label="Phase"
-                value={modulator.phase}
-                step={0.05}
-                precision={2}
-                onCommit={(value) => update(modulator, { phase: value })}
-              />
+            <div class="mod-number-grid">
+              <label class="mod-number">
+                <span>Pivot X</span>
+                <NumberField
+                  label="Orbit pivot X"
+                  value={modulator.pivot[0]}
+                  step={0.1}
+                  precision={2}
+                  framed
+                  onCommit={(value) =>
+                    update(modulator, {
+                      pivot: [value, modulator.pivot[1], modulator.pivot[2]]
+                    })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Pivot Y</span>
+                <NumberField
+                  label="Orbit pivot Y"
+                  value={modulator.pivot[1]}
+                  step={0.1}
+                  precision={2}
+                  framed
+                  onCommit={(value) =>
+                    update(modulator, {
+                      pivot: [modulator.pivot[0], value, modulator.pivot[2]]
+                    })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Pivot Z</span>
+                <NumberField
+                  label="Orbit pivot Z"
+                  value={modulator.pivot[2]}
+                  step={0.1}
+                  precision={2}
+                  framed
+                  onCommit={(value) =>
+                    update(modulator, {
+                      pivot: [modulator.pivot[0], modulator.pivot[1], value]
+                    })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Radius (units)</span>
+                <NumberField
+                  label="Orbit radius"
+                  value={modulator.radius}
+                  step={0.1}
+                  precision={2}
+                  min={0}
+                  framed
+                  onCommit={(value) => update(modulator, { radius: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Height (units)</span>
+                <NumberField
+                  label="Orbit height"
+                  value={modulator.height}
+                  step={0.1}
+                  precision={2}
+                  framed
+                  onCommit={(value) => update(modulator, { height: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Angular rate (Hz)</span>
+                <NumberField
+                  label="Orbit angular rate"
+                  value={modulator.angularRate}
+                  step={0.01}
+                  precision={3}
+                  framed
+                  onCommit={(value) => update(modulator, { angularRate: value })}
+                />
+              </label>
+              <label class="mod-number">
+                <span>Phase (cycles)</span>
+                <NumberField
+                  label="Orbit phase"
+                  value={modulator.phase}
+                  step={0.05}
+                  precision={2}
+                  framed
+                  onCommit={(value) => update(modulator, { phase: value })}
+                />
+              </label>
             </div>
+            <p class="mod-hint">The camera looks at the pivot while orbiting.</p>
           {/if}
 
           {#if modulator.kind !== 'orbit'}
-            <SelectField
-              label="Blend"
-              value={modulator.blend}
-              options={[
-                { value: 'add', label: 'Add to keyed/rest value' },
-                { value: 'replace', label: 'Replace value' }
-              ]}
-              onChange={(value) =>
-                update(modulator, {
-                  blend: value === 'replace' ? 'replace' : 'add'
-                })}
-            />
+            <label class="mod-field">
+              <span>Blend</span>
+              <select
+                value={modulator.blend}
+                aria-label="Modulator blend"
+                onchange={(event) =>
+                  update(modulator, {
+                    blend: event.currentTarget.value === 'replace'
+                      ? 'replace'
+                      : 'add'
+                  })}
+              >
+                <option value="add">Add to keyed/rest value</option>
+                <option value="replace">Replace keyed/rest value</option>
+              </select>
+            </label>
           {/if}
         </div>
       {/each}
@@ -445,74 +609,153 @@
   .modulators {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    padding-bottom: var(--space-2);
+    gap: var(--inspector-row-gap);
+    padding-bottom: var(--inspector-section-pad);
     border-bottom: var(--hairline) solid var(--border-subtle);
   }
 
-  .modulators-head,
-  .mod-card-head {
+  .modulators-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
-  }
-
-  .modulators-head {
     color: var(--text-tertiary);
     font-size: var(--text-2xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
 
-  .mod-title {
+  .mod-list {
     display: flex;
-    min-width: 0;
-    flex: 1 1 auto;
     flex-direction: column;
-    gap: 1px;
+    gap: var(--inspector-row-gap);
   }
 
-  .mod-title strong {
+  .mod-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--inspector-row-gap);
+    padding: var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+  }
+
+  .mod-card.is-disabled {
+    opacity: 0.7;
+  }
+
+  .mod-head {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: var(--space-1);
+  }
+
+  .mod-enabled {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--control-h);
+    min-width: var(--control-h);
+    gap: 5px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    cursor: pointer;
+  }
+
+  .mod-enabled.is-active {
+    color: var(--accent-primary);
+  }
+
+  .mod-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .mod-name {
     color: var(--text-primary);
     font-size: var(--text-xs);
     font-weight: var(--weight-medium);
+    white-space: nowrap;
   }
 
-  .mod-title span {
+  .mod-summary {
     overflow: hidden;
+    flex: 1 1 auto;
     color: var(--text-tertiary);
     font-size: var(--text-2xs);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .mod-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+  .mod-index {
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
   }
 
-  .mod-card {
+  .mod-actions {
+    display: flex;
+    flex: 0 0 auto;
+  }
+
+  .mod-actions :global(.icon-button) {
+    width: var(--control-h);
+    height: var(--control-h);
+  }
+
+  .mod-controls {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    padding: var(--space-2);
+    gap: var(--inspector-row-gap);
+  }
+
+  .mod-field-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 64px;
+    gap: var(--space-1);
+  }
+
+  .mod-field,
+  .mod-number {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--field-label-gap);
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
+  }
+
+  .mod-field select {
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--control-h);
+    min-height: var(--control-h);
+    padding: 0 var(--space-2);
     border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-sm);
     background: var(--bg-input);
-    opacity: 0.65;
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    line-height: normal;
   }
 
-  .mod-card.enabled {
-    opacity: 1;
-    border-color: var(--border-strong);
+  .mod-field select:focus-visible {
+    outline: var(--focus-ring-width) solid var(--border-focus);
+    outline-offset: 1px;
   }
 
-  .mod-grid {
+  .mod-number-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-2);
+    gap: var(--space-1);
   }
 
   .mod-hint {

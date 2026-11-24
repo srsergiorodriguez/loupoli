@@ -1165,6 +1165,10 @@ export class EditorSession {
     this.runtime?.removeAnimationModulator(id);
   }
 
+  moveAnimationModulator(id: string, delta: -1 | 1): void {
+    this.runtime?.moveAnimationModulator(id, delta);
+  }
+
   setAnimationFrame(frame: number): void {
     this.runtime?.setAnimationFrame(frame);
   }

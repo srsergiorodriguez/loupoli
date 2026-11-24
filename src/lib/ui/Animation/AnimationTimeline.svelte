@@ -736,10 +736,11 @@
               aria-label={`Select ${track.targetName} track`}
               aria-pressed={selectedTrack?.id === track.id ||
                 (!selectedTrack && activeTrack?.id === track.id)}
+              title={track.targetName}
               onpointerdown={(event) => event.stopPropagation()}
               onclick={() => selectTrack(track)}
             >
-              <span class="track-name">{track.targetName}</span>
+              <span class="track-name" title={track.targetName}>{track.targetName}</span>
             </button>
             <CompactAction
               label={`Key ${track.targetName}`}
@@ -750,7 +751,6 @@
             <CompactAction
               label={`Remove ${track.targetName} track`}
               icon="trash"
-              text="Remove"
               destructive
               disabled={snapshot.meshPoseEditing}
               onActivate={() => deleteTrack(track)}
@@ -802,7 +802,10 @@
           class:modulator-orbit={modulator.kind === 'orbit'}
         >
           <span class="track-label">
-            <span class="track-name">
+            <span
+              class="track-name"
+              title={`${modulatorKindLabel(modulator.kind)} · ${modulatorTargetName(modulator)}`}
+            >
               {modulatorKindLabel(modulator.kind)} · {modulatorTargetName(modulator)}
             </span>
           </span>
@@ -817,7 +820,7 @@
       {#if activeAudio}
         <div class="timeline-track audio-track">
           <span class="track-label">
-            <span class="track-name">{activeAudio.name}</span>
+            <span class="track-name" title={activeAudio.name}>{activeAudio.name}</span>
             <CompactAction
               label={activeAudio.muted ? 'Unmute audio' : 'Mute audio'}
               icon={activeAudio.muted ? 'volume-off' : 'volume'}
@@ -828,7 +831,6 @@
             <CompactAction
               label="Remove clip audio"
               icon="trash"
-              text="Remove"
               destructive
               onActivate={() => session.removeClipAudio()}
             />

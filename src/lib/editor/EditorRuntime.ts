@@ -7073,6 +7073,26 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Move one modulator within the active clip's evaluation order. */
+  moveAnimationModulator(id: string, delta: -1 | 1): void {
+    const animation = this.document.animation;
+    const list = animation.activeClip.modulators;
+    const index = list.findIndex((modulator) => modulator.id === id);
+    const target = index + delta;
+    if (index < 0 || target < 0 || target >= list.length) {
+      return;
+    }
+    const before = animation.snapshot();
+    const [modulator] = list.splice(index, 1);
+    list.splice(target, 0, modulator);
+    const after = animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Reorder modulator')
+    );
+    this.applyAnimationPose();
+    this.publish();
+  }
+
   /** Remove one procedural modulator from the active clip. */
   removeAnimationModulator(id: string): void {
     const animation = this.document.animation;
