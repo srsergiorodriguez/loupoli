@@ -47,6 +47,12 @@
   );
   const annotationsActive = $derived(session.snapshot.annotationMode);
 
+  const selectionDockVisible = $derived(
+    !annotationsActive &&
+      activeReference === null &&
+      (toolRailVisible || session.snapshot.workspace === 'paint')
+  );
+
   function focusViewport(): void {
     canvas?.focus({ preventScroll: true });
   }
@@ -290,7 +296,7 @@
         class="selection-mode-wrap"
         class:no-selection-mode={!toolRailVisible || activeReference !== null}
       >
-        {#if toolRailVisible && activeReference === null && !annotationsActive}
+        {#if selectionDockVisible}
           <SelectionModeControl {session} />
         {/if}
         <ShadingControl {session} />

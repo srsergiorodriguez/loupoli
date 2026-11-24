@@ -5486,7 +5486,13 @@ export class EditorRuntime {
 
   /** Select all elements in the current mode in the active editor. */
   selectAllActive(): void {
-    if (this.activeEditor === 'paint' || this.getActiveNode()?.reference) {
+    if (this.getActiveNode()?.reference) {
+      return;
+    }
+    if (this.activeEditor === 'paint') {
+      if (this.paintSelectMode) {
+        this.selectAll3d();
+      }
       return;
     }
     if (this.activeEditor === 'uv' && this.uvOpen) {
@@ -15176,6 +15182,14 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Paint hides selection overlays until its local Select mode is active. */
+  private selectionOverlayVisible(): boolean {
+    return (
+      workspaceCan(this.workspace, 'select3d') &&
+      (this.workspace !== 'paint' || this.paintSelectMode)
+    );
+  }
+
   private syncScene(): void {
     this.updateSelectionGizmoFrame();
     this.renderer.setLighting(
@@ -15192,12 +15206,12 @@ export class EditorRuntime {
       this.activeNodeId,
       this.activeGroupId,
       this.selection.mode,
-      workspaceCan(this.workspace, 'select3d')
+      this.selectionOverlayVisible()
         ? this.evaluatedSelectionValues()
         : [],
       workspaceCan(this.workspace, 'edit3d') ? this.transformMode : 'select',
       this.transformOrientation,
-      workspaceCan(this.workspace, 'select3d'),
+      this.selectionOverlayVisible(),
       this.animationPose
     );
     this.renderer.setCameraGizmos(

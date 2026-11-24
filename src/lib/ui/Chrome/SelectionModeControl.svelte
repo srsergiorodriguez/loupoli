@@ -12,41 +12,71 @@
 
   type ContextMode = SelectionMode | 'island';
 
+  const paintMode = $derived(session.snapshot.workspace === 'paint');
   const modes = $derived<ReadonlyArray<{
     id: ContextMode;
     short: string;
     label: string;
     command: CommandId;
-  }>>([
-    {
-      id: 'vertex',
-      short: 'V',
-      label: command('selection.vertex').label,
-      command: 'selection.vertex'
-    },
-    {
-      id: 'edge',
-      short: 'E',
-      label: command('selection.edge').label,
-      command: 'selection.edge'
-    },
-    {
-      id: 'face',
-      short: 'F',
-      label: command('selection.face').label,
-      command: 'selection.face'
-    },
-    ...(session.snapshot.activeEditor === 'uv'
-      ? [{
-          id: 'island' as const,
-          short: 'I',
-          label: command('selection.island').label,
-          command: 'selection.island' as const
-        }]
-      : [])
-  ]);
+  }>>(
+    paintMode
+      ? [
+          {
+            id: 'face',
+            short: 'F',
+            label: command('selection.face').label,
+            command: 'selection.face'
+          },
+          {
+            id: 'island',
+            short: 'I',
+            label: command('selection.island').label,
+            command: 'selection.island'
+          }
+        ]
+      : [
+          {
+            id: 'vertex',
+            short: 'V',
+            label: command('selection.vertex').label,
+            command: 'selection.vertex'
+          },
+          {
+            id: 'edge',
+            short: 'E',
+            label: command('selection.edge').label,
+            command: 'selection.edge'
+          },
+          {
+            id: 'face',
+            short: 'F',
+            label: command('selection.face').label,
+            command: 'selection.face'
+          },
+          ...(session.snapshot.activeEditor === 'uv'
+            ? [{
+                id: 'island' as const,
+                short: 'I',
+                label: command('selection.island').label,
+                command: 'selection.island' as const
+              }]
+            : [])
+        ]
+  );
 
   function chooseMode(mode: ContextMode): void {
+    if (paintMode) {
+      if (
+        session.snapshot.paintSelectMode &&
+        session.snapshot.paintSelectScope === mode
+      ) {
+        session.setPaintSelectMode(false);
+        return;
+      }
+      session.setPaintSelectScope(mode === 'island' ? 'island' : 'face');
+      session.setPaintSelectMode(true);
+      return;
+    }
     if (mode === 'island') {
       session.setUvSelectionMode('island');
       return;
@@ -58,6 +88,12 @@
   }
 
   function isActive(id: ContextMode): boolean {
+    if (paintMode) {
+      return (
+        session.snapshot.paintSelectMode &&
+        session.snapshot.paintSelectScope === id
+      );
+    }
     if (session.snapshot.activeEditor !== 'uv') {
       return session.snapshot.selectionMode === id;
     }
@@ -89,7 +125,7 @@
       <span class="mode-key" aria-hidden="true">{mode.short}</span>
     </button>
   {/each}
-  {#if session.snapshot.activeEditor !== 'uv' && session.snapshot.selectionMode === 'edge'}
+  {#if !paintMode && session.snapshot.activeEditor !== 'uv' && session.snapshot.selectionMode === 'edge'}
     <span class="mode-divider" aria-hidden="true"></span>
     <button
       type="button"

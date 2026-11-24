@@ -96,37 +96,6 @@
         onActivate={() => session.setPaintTool(item.tool)}
       />
     {/each}
-    <span class="paint-divider" aria-hidden="true"></span>
-    <IconButton
-      label="Select faces or UV islands in Paint"
-      icon="cursor"
-      active={session.snapshot.paintSelectMode}
-      pressed={session.snapshot.paintSelectMode}
-      tooltip="Select faces or UV islands in Paint"
-      tooltipPlacement="bottom"
-      onActivate={() =>
-        session.setPaintSelectMode(!session.snapshot.paintSelectMode)}
-    />
-    {#if session.snapshot.paintSelectMode}
-      <IconButton
-        label="Select one face"
-        icon="solid"
-        active={session.snapshot.paintSelectScope === 'face'}
-        pressed={session.snapshot.paintSelectScope === 'face'}
-        tooltip="Select one face"
-        tooltipPlacement="bottom"
-        onActivate={() => session.setPaintSelectScope('face')}
-      />
-      <IconButton
-        label="Select UV island"
-        icon="stack"
-        active={session.snapshot.paintSelectScope === 'island'}
-        pressed={session.snapshot.paintSelectScope === 'island'}
-        tooltip="Select the whole UV island"
-        tooltipPlacement="bottom"
-        onActivate={() => session.setPaintSelectScope('island')}
-      />
-    {/if}
   </div>
   <div class="paint-brush-row">
   <div class="paint-color-pair">
