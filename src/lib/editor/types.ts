@@ -7,7 +7,11 @@ import type {
   AnimationInterpolation,
   AnimationTargetKind
 } from '../scene/SceneAnimation';
-import type { RenderShading, RenderUpscale } from '../render/renderSettings';
+import type {
+  RenderShadowMode,
+  RenderShading,
+  RenderUpscale
+} from '../render/renderSettings';
 import type { AmbientOcclusionSettings } from '../lighting/ao';
 import type {
   Modifier,
@@ -425,6 +429,7 @@ export interface EditorSnapshot {
   readonly renderOutputHeight: number;
   readonly renderUpscale: RenderUpscale;
   readonly renderShading: RenderShading;
+  readonly renderShadowMode: RenderShadowMode;
   readonly nativeMp4Available: boolean;
   readonly renderTransparent: boolean;
   readonly renderBackground: string;

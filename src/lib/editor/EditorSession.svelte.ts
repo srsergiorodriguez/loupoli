@@ -152,6 +152,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   renderOutputHeight: 720,
   renderUpscale: 'nearest',
   renderShading: 'lit',
+  renderShadowMode: 'pcf',
   nativeMp4Available: false,
   renderTransparent: false,
   renderBackground: '#121214',
@@ -1073,6 +1074,7 @@ export class EditorSession {
     renderOutputHeight: number;
     renderUpscale: 'nearest' | 'smooth';
     renderShading: 'lit' | 'texture' | 'solid';
+    renderShadowMode: 'pcf' | 'raytraced' | 'baked';
     renderTransparent: boolean;
     renderBackground: string;
     renderKind: 'still' | 'sequence' | 'webm' | 'mp4';

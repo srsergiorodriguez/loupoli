@@ -1478,6 +1478,28 @@
               renderShading: value as 'lit' | 'texture' | 'solid'
             })}
         />
+        <SelectField
+          label="Final shadows"
+          value={session.snapshot.renderShadowMode}
+          options={[
+            { value: 'pcf', label: 'PCF · fast preview quality' },
+            { value: 'raytraced', label: 'Ray traced · all lights' },
+            { value: 'baked', label: 'Baked · static lighting' }
+          ]}
+          onChange={(value) =>
+            session.updateRenderSettings({
+              renderShadowMode: value as 'pcf' | 'raytraced' | 'baked'
+            })}
+        />
+        <p class="texture-note">
+          {#if session.snapshot.renderShadowMode === 'raytraced'}
+            Slow offline direct shadows for the final image. Supports animation and all lights.
+          {:else if session.snapshot.renderShadowMode === 'baked'}
+            Uses existing baked lighting textures. Static objects and lights only; animated geometry or lights will be stale.
+          {:else}
+            Uses the fast viewport shadow map. Intended for quick final previews.
+          {/if}
+        </p>
         <Switch
           label="Transparent background"
           checked={session.snapshot.renderTransparent}

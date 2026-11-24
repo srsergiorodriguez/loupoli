@@ -297,3 +297,137 @@ export function bvhRayOccluded(
   }
   return false;
 }
+
+/** Nearest camera-ray hit from a BVH traversal. */
+export interface FlatBvhHit {
+  readonly distance: number;
+  /** Offset into the flat triangle array. */
+  readonly triangleOffset: number;
+}
+
+/** Möller–Trumbore distance test used by nearest-hit traversal. */
+function rayTriangleDistance(
+  origin: Vector3,
+  direction: Vector3,
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  maxDistance: number
+): number {
+  const e1x = bx - ax;
+  const e1y = by - ay;
+  const e1z = bz - az;
+  const e2x = cx - ax;
+  const e2y = cy - ay;
+  const e2z = cz - az;
+  const px = direction.y * e2z - direction.z * e2y;
+  const py = direction.z * e2x - direction.x * e2z;
+  const pz = direction.x * e2y - direction.y * e2x;
+  const determinant = e1x * px + e1y * py + e1z * pz;
+  if (Math.abs(determinant) < 1e-9) {
+    return Infinity;
+  }
+  const inverse = 1 / determinant;
+  const tx = origin.x - ax;
+  const ty = origin.y - ay;
+  const tz = origin.z - az;
+  const u = (tx * px + ty * py + tz * pz) * inverse;
+  if (u < 0 || u > 1) {
+    return Infinity;
+  }
+  const qx = ty * e1z - tz * e1y;
+  const qy = tz * e1x - tx * e1z;
+  const qz = tx * e1y - ty * e1x;
+  const v = (direction.x * qx + direction.y * qy + direction.z * qz) * inverse;
+  if (v < 0 || u + v > 1) {
+    return Infinity;
+  }
+  const distance = (e2x * qx + e2y * qy + e2z * qz) * inverse;
+  return distance > 1e-4 && distance < maxDistance ? distance : Infinity;
+}
+
+/** Find the nearest triangle hit along a ray. */
+export function bvhRayHit(
+  bvh: FlatBvh,
+  origin: Vector3,
+  direction: Vector3,
+  maxDistance: number
+): FlatBvhHit | null {
+  const { bounds, leftOrStart, rightOrCount, triangles, stack } = bvh;
+  if (leftOrStart.length === 0) {
+    return null;
+  }
+  const ox = origin.x;
+  const oy = origin.y;
+  const oz = origin.z;
+  const dx = direction.x;
+  const dy = direction.y;
+  const dz = direction.z;
+  const inverseX = Math.abs(dx) > 1e-12 ? 1 / dx : dx >= 0 ? 1e12 : -1e12;
+  const inverseY = Math.abs(dy) > 1e-12 ? 1 / dy : dy >= 0 ? 1e12 : -1e12;
+  const inverseZ = Math.abs(dz) > 1e-12 ? 1 / dz : dz >= 0 ? 1e12 : -1e12;
+  let nearest = maxDistance;
+  let nearestTriangle = -1;
+  let stackPointer = 0;
+  stack[stackPointer++] = 0;
+  while (stackPointer > 0) {
+    const node = stack[--stackPointer];
+    const offset = node * 6;
+    const tx1 = (bounds[offset] - ox) * inverseX;
+    const tx2 = (bounds[offset + 3] - ox) * inverseX;
+    let tMin = Math.min(tx1, tx2);
+    let tMax = Math.max(tx1, tx2);
+    const ty1 = (bounds[offset + 1] - oy) * inverseY;
+    const ty2 = (bounds[offset + 4] - oy) * inverseY;
+    tMin = Math.max(tMin, Math.min(ty1, ty2));
+    tMax = Math.min(tMax, Math.max(ty1, ty2));
+    const tz1 = (bounds[offset + 2] - oz) * inverseZ;
+    const tz2 = (bounds[offset + 5] - oz) * inverseZ;
+    tMin = Math.max(tMin, Math.min(tz1, tz2));
+    tMax = Math.min(tMax, Math.max(tz1, tz2));
+    if (tMax < Math.max(1e-4, tMin) || tMin >= nearest) {
+      continue;
+    }
+    const left = leftOrStart[node];
+    if (left < 0) {
+      const start = -left - 1;
+      const count = rightOrCount[node];
+      for (let index = 0; index < count; index += 1) {
+        const triangle = (start + index) * 9;
+        const distance = rayTriangleDistance(
+          origin,
+          direction,
+          triangles[triangle],
+          triangles[triangle + 1],
+          triangles[triangle + 2],
+          triangles[triangle + 3],
+          triangles[triangle + 4],
+          triangles[triangle + 5],
+          triangles[triangle + 6],
+          triangles[triangle + 7],
+          triangles[triangle + 8],
+          nearest
+        );
+        if (distance < nearest) {
+          nearest = distance;
+          nearestTriangle = triangle;
+        }
+      }
+    } else {
+      if (stackPointer + 2 > stack.length) {
+        throw new Error('The BVH traversal stack overflowed.');
+      }
+      stack[stackPointer++] = rightOrCount[node];
+      stack[stackPointer++] = left;
+    }
+  }
+  return nearestTriangle < 0
+    ? null
+    : { distance: nearest, triangleOffset: nearestTriangle };
+}

@@ -270,7 +270,11 @@ import {
   videoLabel,
   videoMimeFor
 } from '../render/videoExport';
-import type { RenderShading, RenderUpscale } from '../render/renderSettings';
+import type {
+  RenderShadowMode,
+  RenderShading,
+  RenderUpscale
+} from '../render/renderSettings';
 import { planAudioExport } from '../audio/audioExport';
 import {
   AudioAsset,
@@ -795,6 +799,7 @@ export class EditorRuntime {
   private renderOutputHeight = 720;
   private renderUpscale: RenderUpscale = 'nearest';
   private renderShading: RenderShading = 'lit';
+  private renderShadowMode: RenderShadowMode = 'pcf';
   private nativeMp4 = false;
   private renderTransparent = false;
   private renderBackground = '#121214';
@@ -1156,6 +1161,7 @@ export class EditorRuntime {
       renderOutputHeight: this.renderOutputHeight,
       renderUpscale: this.renderUpscale,
       renderShading: this.renderShading,
+      renderShadowMode: this.renderShadowMode,
       nativeMp4Available: this.nativeMp4,
       renderTransparent: this.renderTransparent,
       renderBackground: this.renderBackground,
@@ -6052,6 +6058,7 @@ export class EditorRuntime {
       renderOutputHeight: number;
       renderUpscale: RenderUpscale;
       renderShading: RenderShading;
+      renderShadowMode: RenderShadowMode;
       renderTransparent: boolean;
       renderBackground: string;
       renderKind: 'still' | 'sequence' | 'webm' | 'mp4';
@@ -6088,6 +6095,9 @@ export class EditorRuntime {
     }
     if (patch.renderShading !== undefined) {
       this.renderShading = patch.renderShading;
+    }
+    if (patch.renderShadowMode !== undefined) {
+      this.renderShadowMode = patch.renderShadowMode;
     }
     if (patch.renderTransparent !== undefined) {
       this.renderTransparent = patch.renderTransparent;
@@ -6135,6 +6145,7 @@ export class EditorRuntime {
         width: this.renderVirtualWidth,
         height: this.renderVirtualHeight,
         shading: this.renderShading,
+        shadowMode: this.renderShadowMode,
         camera: view,
         transparent: this.renderTransparent,
         backgroundColor: this.renderBackground
@@ -8210,6 +8221,7 @@ export class EditorRuntime {
         width: this.renderVirtualWidth,
         height: this.renderVirtualHeight,
         shading: this.renderShading,
+        shadowMode: 'pcf',
         camera: view,
         transparent: this.renderTransparent,
         backgroundColor: this.renderBackground
@@ -8323,6 +8335,7 @@ export class EditorRuntime {
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
+          shadowMode: this.renderShadowMode,
           camera: view,
           transparent: this.renderTransparent,
           backgroundColor: this.renderBackground
@@ -8566,6 +8579,7 @@ export class EditorRuntime {
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
+          shadowMode: this.renderShadowMode,
           camera: {
             position: camera.position,
             target: camera.target,
@@ -8757,6 +8771,7 @@ export class EditorRuntime {
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
+          shadowMode: this.renderShadowMode,
           camera: pose,
           transparent: false,
           backgroundColor: this.renderBackground

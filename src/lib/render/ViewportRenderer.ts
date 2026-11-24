@@ -35,6 +35,10 @@ import type { MeshNode, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { SceneGroup } from '../scene/SceneGroup';
 import type { LightSummary } from '../scene/SceneLight';
 import type { RenderStillOptions } from './renderSettings';
+import {
+  FinalShadowTracer,
+  type FinalShadowLight
+} from './FinalShadowTracer';
 import type {
   ShadingMode,
   TransformMode,
@@ -64,12 +68,33 @@ import {
 /** Screen-space radius, in CSS pixels, used for topology picking. */
 export const PICK_RADIUS_CSS = 16;
 
+
+/** Convert one 0–255 sRGB channel to linear light. */
+function srgbToLinear(channel: number): number {
+  const value = channel / 255;
+  return value <= 0.04045
+    ? value / 12.92
+    : Math.pow((value + 0.055) / 1.055, 2.4);
+}
+
+/** Convert linear light to one 0–255 sRGB channel. */
+function linearToSrgb(value: number): number {
+  const clamped = Math.max(0, Math.min(1, value));
+  const channel =
+    clamped <= 0.0031308
+      ? clamped * 12.92
+      : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+  return Math.round(channel * 255);
+}
+
 const DESKTOP_PIXEL_RATIO_CAP = 2;
 const TOUCH_PIXEL_RATIO_CAP = 1.5;
 /** AO preview is CPU-facing; keep the interactive budget bounded. */
 const MAX_AO_PREVIEW_FACES = 16000;
 const DIRECTIONAL_SHADOW_MAP_SIZE = 2048;
 const POINT_SHADOW_MAP_SIZE = 512;
+/** Cap the offline mask so iPad final renders stay bounded. */
+const MAX_FINAL_MASK_WIDTH = 640;
 
 /** Optional callbacks for the editor runtime that owns this viewport. */
 interface ViewportRendererOptions {
@@ -135,10 +160,12 @@ export class ViewportRenderer {
   private readonly documentLights = new Map<
     string,
     {
+      readonly id: string;
       readonly kind: 'directional' | 'point';
       readonly light: DirectionalLight | PointLight;
       readonly target: Object3D | null;
       readonly direction: Vector3;
+      softness: number;
     }
   >();
 
@@ -732,9 +759,9 @@ export class ViewportRenderer {
     });
     target.texture.colorSpace = SRGBColorSpace;
     try {
-      this.setShadingMode(
-        options.shading === 'texture' ? 'unlit' : options.shading
-      );
+      const baked = options.shadowMode === 'baked';
+      const shading = baked ? 'texture' : options.shading;
+      this.setShadingMode(shading === 'texture' ? 'unlit' : shading);
       const camera = new PerspectiveCamera(
         options.camera.fov,
         width / height,
@@ -746,6 +773,18 @@ export class ViewportRenderer {
       camera.lookAt(new Vector3(...options.camera.target));
       camera.updateMatrixWorld(true);
       this.updateAmbientOcclusionPreview(true);
+      if (
+        options.shadowMode === 'raytraced' &&
+        options.shading === 'lit'
+      ) {
+        return this.renderRayTracedStill(
+          target,
+          camera,
+          width,
+          height,
+          options
+        );
+      }
       this.renderer.setRenderTarget(target);
       this.renderer.setViewport(0, 0, width, height);
       this.renderer.setClearColor(
@@ -788,6 +827,176 @@ export class ViewportRenderer {
       target.dispose();
       this.schedule();
     }
+  }
+
+  /**
+   * Compose a clean final frame from per-light unshadowed passes and
+   * CPU-traced visibility masks. This path is offline; it never runs in the
+   * interactive viewport.
+   */
+  private renderRayTracedStill(
+    target: WebGLRenderTarget,
+    camera: PerspectiveCamera,
+    width: number,
+    height: number,
+    options: RenderStillOptions
+  ): ImageData {
+    const maskWidth = Math.max(
+      1,
+      Math.min(width, MAX_FINAL_MASK_WIDTH)
+    );
+    const maskHeight = Math.max(
+      1,
+      Math.round((maskWidth * height) / width)
+    );
+    const tracer = new FinalShadowTracer();
+    tracer.setTriangles(this.collectFinalTriangles());
+    tracer.computeHits(camera, maskWidth, maskHeight);
+    const lights = [...this.documentLights.values()].filter(
+      (entry) => entry.light.visible && entry.light.intensity > 0
+    );
+    const savedLightVisibility = lights.map((entry) => entry.light.visible);
+    const savedLightShadows = lights.map((entry) => entry.light.castShadow);
+    const savedShadowMap = this.renderer.shadowMap.enabled;
+    const savedAmbient = this.sceneAmbient.intensity;
+    const accumulator = new Float32Array(width * height * 3);
+    const alphaAccumulator = new Uint8Array(width * height);
+    const raw = new Uint8Array(width * height * 4);
+    const renderPass = (
+      activeLightId: string | null,
+      ambientIntensity: number,
+      mask: Uint8Array | null
+    ): void => {
+      for (const entry of lights) {
+        entry.light.visible =
+          activeLightId !== null && entry.id === activeLightId;
+        entry.light.castShadow = false;
+      }
+      this.sceneAmbient.intensity = ambientIntensity;
+      this.renderer.shadowMap.enabled = false;
+      this.renderer.setRenderTarget(target);
+      this.renderer.setViewport(0, 0, width, height);
+      this.renderer.setClearColor(new Color(0, 0, 0), 0);
+      this.renderer.clear(true, true, true);
+      this.renderer.render(this.scene, camera);
+      this.renderer.readRenderTargetPixels(target, 0, 0, width, height, raw);
+      for (let pixel = 0; pixel < width * height; pixel += 1) {
+        const source = pixel * 4;
+        const alpha = raw[source + 3];
+        if (alpha === 0) {
+          continue;
+        }
+        let visibility = 1;
+        if (mask !== null) {
+          const maskX = Math.min(
+            maskWidth - 1,
+            Math.floor(((pixel % width) + 0.5) * maskWidth / width)
+          );
+          const maskY = Math.min(
+            maskHeight - 1,
+            Math.floor((Math.floor(pixel / width) + 0.5) * maskHeight / height)
+          );
+          visibility = mask[maskY * maskWidth + maskX] / 255;
+        }
+        const targetOffset = pixel * 3;
+        accumulator[targetOffset] += srgbToLinear(raw[source]) * visibility;
+        accumulator[targetOffset + 1] +=
+          srgbToLinear(raw[source + 1]) * visibility;
+        accumulator[targetOffset + 2] +=
+          srgbToLinear(raw[source + 2]) * visibility;
+        alphaAccumulator[pixel] = Math.max(alphaAccumulator[pixel], alpha);
+      }
+    };
+    try {
+      renderPass(null, savedAmbient, null);
+      for (let index = 0; index < lights.length; index += 1) {
+        const entry = lights[index];
+        let mask: Uint8Array | null = null;
+        if (savedLightShadows[index]) {
+          const light: FinalShadowLight = {
+            id: entry.id,
+            kind: entry.kind,
+            direction: entry.direction,
+            position: entry.light.position,
+            softness: entry.softness,
+            castShadow: true
+          };
+          mask = tracer.maskFor(light, 16);
+        }
+        renderPass(entry.id, 0, mask);
+      }
+    } finally {
+      this.sceneAmbient.intensity = savedAmbient;
+      this.renderer.shadowMap.enabled = savedShadowMap;
+      lights.forEach((entry, index) => {
+        entry.light.visible = savedLightVisibility[index];
+        entry.light.castShadow = savedLightShadows[index];
+      });
+    }
+    const background = new Color(options.backgroundColor);
+    const flipped = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      const sourceY = height - 1 - y;
+      const sourceRow = sourceY * width;
+      const targetRow = y * width;
+      for (let x = 0; x < width; x += 1) {
+        const sourcePixel = sourceRow + x;
+        const targetPixel = targetRow + x;
+        const alpha = alphaAccumulator[sourcePixel] / 255;
+        const sourceOffset = sourcePixel * 3;
+        let r = accumulator[sourceOffset];
+        let g = accumulator[sourceOffset + 1];
+        let b = accumulator[sourceOffset + 2];
+        let outputAlpha = alphaAccumulator[sourcePixel];
+        if (!options.transparent) {
+          r += background.r * (1 - alpha);
+          g += background.g * (1 - alpha);
+          b += background.b * (1 - alpha);
+          outputAlpha = 255;
+        }
+        const targetOffset = targetPixel * 4;
+        flipped[targetOffset] = linearToSrgb(r);
+        flipped[targetOffset + 1] = linearToSrgb(g);
+        flipped[targetOffset + 2] = linearToSrgb(b);
+        flipped[targetOffset + 3] = outputAlpha;
+      }
+    }
+    return new ImageData(flipped, width, height);
+  }
+
+  /** World-space triangles for the final-render camera and shadow tracer. */
+  private collectFinalTriangles(): Float32Array {
+    const data: number[] = [];
+    for (const view of this.nodeViews.values()) {
+      if (view.isReference || !this.isViewVisible(view)) {
+        continue;
+      }
+      const mesh = view.evaluatedMesh;
+      const matrix = view.worldMatrix;
+      for (let face = 0; face < mesh.faceCount; face += 1) {
+        const first = mesh.faceHalfEdge[face];
+        const loop: number[] = [];
+        let halfEdge = first;
+        do {
+          loop.push(mesh.heOrigin[halfEdge]);
+          halfEdge = mesh.heNext[halfEdge];
+        } while (halfEdge !== first && loop.length < 64);
+        if (loop.length < 3) {
+          continue;
+        }
+        for (let corner = 1; corner < loop.length - 1; corner += 1) {
+          for (const vertex of [loop[0], loop[corner], loop[corner + 1]]) {
+            const point = new Vector3(
+              mesh.positions[vertex * 3],
+              mesh.positions[vertex * 3 + 1],
+              mesh.positions[vertex * 3 + 2]
+            ).applyMatrix4(matrix);
+            data.push(point.x, point.y, point.z);
+          }
+        }
+      }
+    }
+    return new Float32Array(data);
   }
 
   /** Frame a camera position and its target for inspection. */
@@ -920,10 +1129,12 @@ export class ViewportRenderer {
   private createDirectionalLight(
     summary: LightSummary
   ): {
+    readonly id: string;
     readonly kind: 'directional';
     readonly light: DirectionalLight;
     readonly target: Object3D;
     readonly direction: Vector3;
+    softness: number;
   } {
     const light = new DirectionalLight(
       new Color(summary.color),
@@ -933,20 +1144,25 @@ export class ViewportRenderer {
     light.target = target;
     light.shadow.camera.up.set(0, 0, 1);
     return {
+      id: summary.id,
       kind: 'directional',
       light,
       target,
+      softness: 0,
       direction: new Vector3(0, 0, -1)
     };
   }
 
   private createPointLight(summary: LightSummary): {
+    readonly id: string;
     readonly kind: 'point';
     readonly light: PointLight;
     readonly target: null;
     readonly direction: Vector3;
+    softness: number;
   } {
     return {
+      id: summary.id,
       kind: 'point',
       light: new PointLight(
         new Color(summary.color),
@@ -955,16 +1171,19 @@ export class ViewportRenderer {
         2
       ),
       target: null,
+      softness: 0,
       direction: new Vector3()
     };
   }
 
   private updateDocumentLight(
     entry: {
+      readonly id: string;
       readonly kind: 'directional' | 'point';
       readonly light: DirectionalLight | PointLight;
       readonly target: Object3D | null;
       readonly direction: Vector3;
+      softness: number;
     },
     summary: LightSummary
   ): void {
@@ -983,6 +1202,7 @@ export class ViewportRenderer {
       ).normalize();
       entry.direction.copy(direction);
       const softness = Math.max(0, Math.min(1, summary.shadowSoftness));
+      entry.softness = softness;
       directional.position.set(
         -direction.x * 10,
         -direction.y * 10,
