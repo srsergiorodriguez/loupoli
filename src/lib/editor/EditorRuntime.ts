@@ -12,6 +12,7 @@ import {
   applyLinearTransform,
   cloneModifiers,
   createModifier,
+  evaluateModifiersWithProvenance,
   invertLinearTransform,
   MODIFIER_DEFINITIONS,
   modifierLabel,
@@ -5688,6 +5689,94 @@ export class EditorRuntime {
       return evaluated.error;
     }
     return null;
+  }
+
+  /**
+   * Bake one modifier and the enabled geometry modifiers above it.
+   *
+   * Applying a modifier later in the stack would otherwise change what the
+   * remaining modifiers receive, so the prefix is baked as one ordered unit.
+   */
+  applyModifier(id: string): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const reason = this.modifierApplyBlockedReason();
+    if (reason) {
+      this.notify('warning', 'Cannot apply modifier', reason);
+      return;
+    }
+    const index = node.modifiers.findIndex((modifier) => modifier.id === id);
+    if (index < 0) {
+      return;
+    }
+    const target = node.modifiers[index];
+    if (
+      !target.enabled ||
+      MODIFIER_DEFINITIONS[target.type].category !== 'geometry'
+    ) {
+      this.notify(
+        'warning',
+        'Cannot apply modifier',
+        'Only enabled geometry modifiers can be applied.'
+      );
+      return;
+    }
+    const prefix = node.modifiers
+      .slice(0, index + 1)
+      .filter(
+        (modifier) =>
+          modifier.enabled &&
+          MODIFIER_DEFINITIONS[modifier.type].category === 'geometry'
+      );
+    if (prefix.length === 0) {
+      return;
+    }
+    let evaluatedMesh;
+    try {
+      evaluatedMesh = evaluateModifiersWithProvenance(node.mesh, prefix).mesh;
+    } catch (error) {
+      this.notify(
+        'warning',
+        'Cannot apply modifier',
+        error instanceof Error ? error.message : String(error)
+      );
+      return;
+    }
+    const before = cloneModifiers(node.modifiers);
+    const removed = new Set(prefix.map((modifier) => modifier.id));
+    const retained = before.filter((modifier) => !removed.has(modifier.id));
+    this.lastLoopCut = null;
+    this.armedAction = null;
+    this.renderer.setActionPreviewLine(null);
+    this.selection.clear();
+    this.selection.setContext(node.id, this.selection.mode);
+    this.history.execute(
+      new CompositeCommand(`Apply ${modifierLabel(target)}`, [
+        new ReplaceMeshCommand(
+          node,
+          node.mesh,
+          evaluatedMesh,
+          `Apply ${modifierLabel(target)}`
+        ),
+        new SetModifiersCommand(
+          node,
+          before,
+          retained,
+          `Apply ${modifierLabel(target)}`
+        )
+      ])
+    );
+    this.syncScene();
+    this.publish();
+    this.notify(
+      'success',
+      'Modifier applied',
+      prefix.length === 1
+        ? `${modifierLabel(target)} was baked into the base mesh.`
+        : `${prefix.length} geometry modifiers through ${modifierLabel(target)} were baked into the base mesh.`
+    );
   }
 
   /** Bake every enabled modifier into the base mesh and clear the stack. */

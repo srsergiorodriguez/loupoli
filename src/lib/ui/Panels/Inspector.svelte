@@ -41,6 +41,7 @@
     type ModifierPatch
   } from '../../editor/types';
   import {
+    MODIFIER_DEFINITIONS,
     MODIFIER_KINDS,
     MODIFIER_LABELS,
     type ModifierAxis,
@@ -2623,6 +2624,35 @@
                     label="Remove modifier"
                     onActivate={() => session.removeModifier(modifier.id)}
                   />
+                  {#if MODIFIER_DEFINITIONS[modifier.type].category === 'geometry'}
+                    <ActionRow align="end">
+                      <span
+                        class="modifier-apply"
+                        title={modifiers
+                          .slice(0, index)
+                          .some((item) =>
+                            item.enabled &&
+                            MODIFIER_DEFINITIONS[item.type].category === 'geometry'
+                          )
+                          ? 'Applies this and earlier enabled geometry modifiers so the remaining stack is unchanged.'
+                          : 'Bake this modifier into the editable base mesh.'}
+                      >
+                        <ActionButton
+                          label={modifiers
+                            .slice(0, index)
+                            .some((item) =>
+                              item.enabled &&
+                              MODIFIER_DEFINITIONS[item.type].category === 'geometry'
+                            )
+                            ? 'Apply through'
+                            : 'Apply modifier'}
+                          icon="merge"
+                          disabled={!modifier.enabled || !session.snapshot.canApplyModifiers}
+                          onActivate={() => session.applyModifier(modifier.id)}
+                        />
+                      </span>
+                    </ActionRow>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -2631,7 +2661,7 @@
           {#if modifiers.length > 0}
             <ActionRow align="end">
               <ActionButton
-                label="Apply geometry"
+                label="Apply all"
                 icon="merge"
                 disabled={!session.snapshot.canApplyModifiers}
                 onActivate={() => session.applyModifierStack()}
@@ -3448,6 +3478,10 @@
     font-family: var(--font-ui);
     font-size: var(--text-xs);
     line-height: normal;
+  }
+
+  .modifier-apply {
+    display: inline-flex;
   }
 
   .modifier-switch {

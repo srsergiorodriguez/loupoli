@@ -1452,6 +1452,10 @@ export class EditorSession {
     this.runtime?.removeModifier(id);
   }
 
+  applyModifier(id: string): void {
+    this.runtime?.applyModifier(id);
+  }
+
   applyModifierStack(): void {
     this.runtime?.applyModifierStack();
   }
