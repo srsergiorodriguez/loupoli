@@ -2198,6 +2198,25 @@ export class EditorRuntime {
     }
   }
 
+  /** Let the job strip paint before a long synchronous export frame. */
+  private async yieldForJobPaint(): Promise<void> {
+    await new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => resolve());
+      } else {
+        window.setTimeout(resolve, 0);
+      }
+    });
+  }
+
+  /** Evaluate one export frame and make every animated light/camera current. */
+  private prepareRenderFrame(frame: number): void {
+    this.setAnimationFrame(frame);
+    // setAnimationFrame already syncs on the normal path; keep this explicit
+    // for exports so animated lights cannot be left one frame behind.
+    this.syncScene();
+  }
+
   /** Request cancellation of the current export or bake. */
   cancelActiveJob(): void {
     if (!this.activeJob || this.jobCancelled) {
@@ -8319,6 +8338,7 @@ export class EditorRuntime {
       `${this.renderOutputWidth} × ${this.renderOutputHeight}`,
       total
     );
+    await this.yieldForJobPaint();
     const frames: { name: string; bytes: Uint8Array }[] = [];
     try {
       const base = (this.projectName || 'render')
@@ -8326,7 +8346,7 @@ export class EditorRuntime {
         .replace(/^-+|-+$/g, '') || 'render';
       for (let frame = start; frame <= end; frame += 1) {
         this.throwIfJobCancelled();
-        this.setAnimationFrame(frame);
+        this.prepareRenderFrame(frame);
         const view = this.activeCameraRenderPose();
         if (!view) {
           throw new Error('The active render camera is unavailable.');
@@ -8570,21 +8590,23 @@ export class EditorRuntime {
       });
       recorder.start(250);
       exportAudio?.start();
+      await this.yieldForJobPaint();
       const framePeriod = 1000 / fps;
       const startedAt = performance.now();
       for (let frame = start; frame <= end; frame += 1) {
         this.throwIfJobCancelled();
-        this.setAnimationFrame(frame);
+        this.prepareRenderFrame(frame);
+        const pose = this.activeCameraRenderPose() ?? {
+          position: camera.position,
+          target: camera.target,
+          fov: camera.fov
+        };
         const image = this.renderer.renderStill({
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
           shadowMode: this.renderShadowMode,
-          camera: {
-            position: camera.position,
-            target: camera.target,
-            fov: camera.fov
-          },
+          camera: pose,
           transparent: false,
           backgroundColor: this.renderBackground
         });
@@ -8615,8 +8637,13 @@ export class EditorRuntime {
       this.throwIfJobCancelled();
       recorder.stop();
       await stopped;
-      this.endJob();
       const bytes = new Uint8Array(await new Blob(chunks, { type: mime }).arrayBuffer());
+      if (bytes.length === 0) {
+        throw new Error(
+          'The video recorder produced no data. Use WebM or a PNG frame sequence instead.'
+        );
+      }
+      this.endJob();
       const base = (this.projectName || 'render')
         .replace(/[^a-z0-9_-]+/gi, '-')
         .replace(/^-+|-+$/g, '') || 'render';
@@ -8759,9 +8786,10 @@ export class EditorRuntime {
     let session: string | null = null;
     try {
       session = await beginNativeMp4(path, width, height, fps);
+      await this.yieldForJobPaint();
       for (let frame = start; frame <= end; frame += 1) {
         this.throwIfJobCancelled();
-        this.setAnimationFrame(frame);
+        this.prepareRenderFrame(frame);
         const pose = this.activeCameraRenderPose() ?? {
           position: camera.position,
           target: camera.target,

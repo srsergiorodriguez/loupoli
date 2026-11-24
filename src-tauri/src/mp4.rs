@@ -169,12 +169,22 @@ impl Mp4Sessions {
       let mut error: *mut c_char = std::ptr::null_mut();
       let result = unsafe { loupoli_mp4_finish(session.handle as *mut c_void, &mut error) };
       unsafe { loupoli_mp4_release(session.handle as *mut c_void) };
-      return if result == 0 {
-        Ok(())
-      } else {
+      if result != 0 {
         let _ = std::fs::remove_file(&session.path);
-        Err(unsafe { take_error(error) })
-      };
+        return Err(unsafe { take_error(error) });
+      }
+      // AVAssetWriter can finalize a zero-byte file if no frame ever reached
+      // the writer. Never leave that file behind as if the export succeeded.
+      let size = std::fs::metadata(&session.path)
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
+      if size == 0 {
+        let _ = std::fs::remove_file(&session.path);
+        return Err(
+          "AVFoundation finalized an empty MP4. No frames were encoded.".into(),
+        );
+      }
+      return Ok(());
     }
     #[allow(unreachable_code)]
     Err("Native MP4 encoding is unavailable on this platform.".into())
