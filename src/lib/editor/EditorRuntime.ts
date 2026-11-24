@@ -8516,9 +8516,9 @@ export class EditorRuntime {
     const total = end - start + 1;
     this.beginJob(
       'video',
-      `Recording ${videoLabel(format)}`,
+      `Rendering ${videoLabel(format)}`,
       `${this.renderOutputWidth} × ${this.renderOutputHeight}`,
-      total
+      total * 2
     );
     const output = document.createElement('canvas');
     output.width = this.renderOutputWidth;
@@ -8536,10 +8536,53 @@ export class EditorRuntime {
     let exportAudio: Awaited<ReturnType<EditorRuntime['prepareExportAudio']>> = null;
     try {
       const fps = Math.max(1, this.document.animation.fps);
-      // A zero-rate stream plus an explicit requestFrame() after every drawn
-      // frame is more reliable than the timer-driven captureStream(fps) path,
-      // especially in WKWebView and headless Chromium.
-      const videoStream = output.captureStream(0);
+      await this.yieldForJobPaint();
+
+      // Render the complete frame set before starting MediaRecorder. Ray
+      // traced frames can take seconds each; feeding them live makes
+      // MediaRecorder timestamps depend on render time (and can produce no
+      // data at all). Pre-rendering decouples expensive frames from capture.
+      const renderedFrames: Blob[] = [];
+      for (let frame = start; frame <= end; frame += 1) {
+        this.throwIfJobCancelled();
+        this.prepareRenderFrame(frame);
+        const pose = this.activeCameraRenderPose() ?? {
+          position: camera.position,
+          target: camera.target,
+          fov: camera.fov
+        };
+        const image = this.renderer.renderStill({
+          width: this.renderVirtualWidth,
+          height: this.renderVirtualHeight,
+          shading: this.renderShading,
+          shadowMode: this.renderShadowMode,
+          camera: pose,
+          transparent: false,
+          backgroundColor: this.renderBackground
+        });
+        const frameCanvas = upscaleRenderImage(
+          image,
+          this.renderOutputWidth,
+          this.renderOutputHeight,
+          this.renderUpscale,
+          {
+            transparent: this.renderTransparent,
+            background: this.renderBackground
+          }
+        );
+        const frameBytes = await canvasToJpeg(frameCanvas, 0.95);
+        renderedFrames.push(
+          new Blob([frameBytes as unknown as BlobPart], { type: 'image/jpeg' })
+        );
+        this.updateJob(frame - start + 1, 'Rendering frames');
+      }
+      this.throwIfJobCancelled();
+      await this.yieldForJobPaint();
+
+      // The frames are already rendered. Use a timed canvas capture stream so
+      // MediaRecorder sees a normal video cadence instead of requestFrame()
+      // bursts, which some browser MP4 encoders drop entirely.
+      const videoStream = output.captureStream(fps);
       exportAudio = await this.prepareExportAudio(start, end);
       const stream = exportAudio
         ? new MediaStream([
@@ -8548,9 +8591,6 @@ export class EditorRuntime {
           ])
         : videoStream;
       activeStream = stream;
-      const track = videoStream.getVideoTracks()[0] as
-        | CanvasCaptureMediaStreamTrack
-        | undefined;
       let recorder: MediaRecorder;
       try {
         recorder = new MediaRecorder(stream, {
@@ -8590,50 +8630,26 @@ export class EditorRuntime {
       });
       recorder.start(250);
       exportAudio?.start();
-      await this.yieldForJobPaint();
       const framePeriod = 1000 / fps;
       const startedAt = performance.now();
-      for (let frame = start; frame <= end; frame += 1) {
+      for (let index = 0; index < renderedFrames.length; index += 1) {
         this.throwIfJobCancelled();
-        this.prepareRenderFrame(frame);
-        const pose = this.activeCameraRenderPose() ?? {
-          position: camera.position,
-          target: camera.target,
-          fov: camera.fov
-        };
-        const image = this.renderer.renderStill({
-          width: this.renderVirtualWidth,
-          height: this.renderVirtualHeight,
-          shading: this.renderShading,
-          shadowMode: this.renderShadowMode,
-          camera: pose,
-          transparent: false,
-          backgroundColor: this.renderBackground
-        });
-        const frameCanvas = upscaleRenderImage(
-          image,
-          this.renderOutputWidth,
-          this.renderOutputHeight,
-          this.renderUpscale,
-          {
-            transparent: this.renderTransparent,
-            background: this.renderBackground
-          }
-        );
-        // MediaRecorder timestamps captures in real time. Wait against the
-        // absolute frame deadline instead of adding a full frame period after
-        // rendering, otherwise render time makes the exported video slower
-        // than animation playback.
-        const deadline = startedAt + (frame - start) * framePeriod;
+        const deadline = startedAt + index * framePeriod;
         const wait = deadline - performance.now();
         if (wait > 0) {
           await new Promise((resolve) => window.setTimeout(resolve, wait));
         }
         this.throwIfJobCancelled();
-        context.drawImage(frameCanvas, 0, 0);
-        track?.requestFrame();
-        this.updateJob(frame - start + 1);
+        const bitmap = await createImageBitmap(renderedFrames[index]);
+        context.drawImage(bitmap, 0, 0, output.width, output.height);
+        bitmap.close();
+        this.updateJob(total + index + 1, 'Encoding video');
       }
+      // Let the capture stream emit one final frame period, then stop. This
+      // is enough for the final chunk without extending the video.
+      await new Promise((resolve) =>
+        window.setTimeout(resolve, Math.max(700, framePeriod * 2))
+      );
       this.throwIfJobCancelled();
       recorder.stop();
       await stopped;
