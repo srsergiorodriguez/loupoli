@@ -72,7 +72,8 @@ export const MESH_ACTIONS = [
   'inset',
   'bevel',
   'loop-cut',
-  'loop-slide'
+  'loop-slide',
+  'subdivide'
 ] as const;
 
 export type MeshActionKind = (typeof MESH_ACTIONS)[number];
@@ -179,6 +180,12 @@ export interface ModifierPatch {
   readonly spacingX?: number;
   readonly spacingY?: number;
   readonly count?: number;
+  readonly mode?: 'bend' | 'twist' | 'taper';
+  readonly amount?: number;
+  readonly strength?: number;
+  readonly frequency?: number;
+  readonly seed?: number;
+  readonly threshold?: number;
   readonly flip?: boolean;
   readonly clip?: boolean;
   readonly merge?: boolean;

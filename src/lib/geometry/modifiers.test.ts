@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HalfEdgeMesh } from './HalfEdgeMesh';
 import {
   createCubeMesh,
   createGridMesh,
@@ -17,6 +18,9 @@ import {
   type OutlineModifier,
   type SolidifyModifier,
   type RadialArrayModifier,
+  type DeformModifier,
+  type NoiseDisplaceModifier,
+  type WeldModifier,
   validateModifier
 } from './modifiers';
 
@@ -350,5 +354,70 @@ describe('modifier registry', () => {
     expect(() =>
       validateModifier({ id: 'm1', type: 'mirror', enabled: true, axis: 'w' })
     ).toThrow(/axis/);
+  });
+});
+
+describe('deform, noise displace, and weld modifiers', () => {
+  it('twists geometry without changing topology', () => {
+    const cube = createCubeMesh(1);
+    const deform: DeformModifier = {
+      ...(createModifier('deform') as DeformModifier),
+      mode: 'twist',
+      axis: 'z',
+      amount: 90
+    };
+    const before = cube.getVertexPosition(0);
+    const result = evaluateModifiers(cube, [deform]);
+    expect(result.vertexCount).toBe(cube.vertexCount);
+    expect(result.faceCount).toBe(cube.faceCount);
+    expect(result.getVertexPosition(0)).not.toEqual(before);
+    expect(() => result.validate()).not.toThrow();
+  });
+
+  it('tapers geometry toward one end', () => {
+    const cube = createCubeMesh(1);
+    const deform: DeformModifier = {
+      ...(createModifier('deform') as DeformModifier),
+      mode: 'taper',
+      axis: 'z',
+      amount: 0.25
+    };
+    const result = evaluateModifiers(cube, [deform]);
+    const low = Math.min(...Array.from({ length: result.vertexCount }, (_, v) => result.getVertexPosition(v)[0]));
+    const high = Math.max(...Array.from({ length: result.vertexCount }, (_, v) => result.getVertexPosition(v)[0]));
+    expect(high - low).toBeLessThan(2);
+    expect(result.vertexCount).toBe(cube.vertexCount);
+  });
+
+  it('is deterministic for the same noise seed and changes with another seed', () => {
+    const grid = createGridMesh(4, 4);
+    const first = createModifier('noise-displace') as NoiseDisplaceModifier;
+    const second: NoiseDisplaceModifier = { ...first, seed: 9 };
+    const a = evaluateModifiers(grid, [first]);
+    const b = evaluateModifiers(grid, [first]);
+    const c = evaluateModifiers(grid, [second]);
+    expect(a.getVertexPosition(1)).toEqual(b.getVertexPosition(1));
+    expect(a.getVertexPosition(1)).not.toEqual(c.getVertexPosition(1));
+    expect(a.vertexCount).toBe(grid.vertexCount);
+  });
+
+  it('welds nearby vertices into shared topology', () => {
+    const quad = (x: number) => ({
+      corners: [
+        { position: [x, 0, 0] as [number, number, number], uv: [0, 0] as [number, number] },
+        { position: [x + 1, 0, 0] as [number, number, number], uv: [1, 0] as [number, number] },
+        { position: [x + 1, 1, 0] as [number, number, number], uv: [1, 1] as [number, number] },
+        { position: [x, 1, 0] as [number, number, number], uv: [0, 1] as [number, number] }
+      ]
+    });
+    const mesh = HalfEdgeMesh.fromPolygons([quad(0), quad(1.005)]);
+    const weld: WeldModifier = {
+      ...(createModifier('weld') as WeldModifier),
+      threshold: 0.02
+    };
+    const result = evaluateModifiers(mesh, [weld]);
+    expect(result.vertexCount).toBe(6);
+    expect(result.faceCount).toBe(2);
+    expect(() => result.validate()).not.toThrow();
   });
 });

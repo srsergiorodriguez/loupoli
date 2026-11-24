@@ -29,7 +29,8 @@
     { kind: 'inset', label: 'Inset', icon: 'inset', command: 'mesh.inset' },
     { kind: 'bevel', label: 'Bevel', icon: 'bevel', command: 'mesh.bevel' },
     { kind: 'loop-cut', label: 'Loop Cut', icon: 'loop-cut', command: 'mesh.loopCut' },
-    { kind: 'loop-slide', label: 'Loop Slide', icon: 'loop-slide', command: 'mesh.loopSlide' }
+    { kind: 'loop-slide', label: 'Loop Slide', icon: 'loop-slide', command: 'mesh.loopSlide' },
+    { kind: 'subdivide', label: 'Subdivide', icon: 'subdivide', command: 'mesh.subdivide' }
   ];
 
   function actionTooltip(action: ActionChoice): string {
@@ -70,6 +71,9 @@
     }
     if (kind === 'loop-cut') {
       return snapshot.selectionMode === 'edge' && count >= 1;
+    }
+    if (kind === 'subdivide') {
+      return snapshot.activeNodeId !== null && snapshot.activeGroupId === null;
     }
     return snapshot.loopSlideAvailable;
   }

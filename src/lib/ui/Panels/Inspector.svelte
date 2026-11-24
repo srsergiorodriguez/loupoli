@@ -785,6 +785,11 @@
       | 'spacingX'
       | 'spacingY'
       | 'count'
+      | 'amount'
+      | 'strength'
+      | 'frequency'
+      | 'seed'
+      | 'threshold'
       | 'mergeThreshold'
       | 'thickness'
       | 'offset',
@@ -2552,6 +2557,113 @@
                             updateModifierNumber(modifier.id, 'count', value)}
                         />
                       </label>
+                    {:else if modifier.type === 'deform'}
+                      <label class="modifier-field">
+                        <span>Mode</span>
+                        <select
+                          value={modifier.mode}
+                          aria-label="Deform mode"
+                          onchange={(event) => {
+                            const mode = event.currentTarget.value as
+                              | 'bend'
+                              | 'twist'
+                              | 'taper';
+                            session.updateModifier(modifier.id, {
+                              mode,
+                              amount: mode === 'taper' ? 0.5 : 30
+                            });
+                          }}
+                        >
+                          <option value="twist">Twist</option>
+                          <option value="bend">Bend</option>
+                          <option value="taper">Taper</option>
+                        </select>
+                      </label>
+                      <label class="modifier-field">
+                        <span>{modifier.mode === 'bend' ? 'Plane axis' : 'Axis'}</span>
+                        <select
+                          value={modifier.axis}
+                          aria-label="Deform axis"
+                          onchange={(event) =>
+                            updateModifierAxis(modifier.id, event)}
+                        >
+                          <option value="x">X</option>
+                          <option value="y">Y</option>
+                          <option value="z">Z</option>
+                        </select>
+                      </label>
+                      <label class="modifier-field">
+                        <span>{modifier.mode === 'taper' ? 'End scale' : 'Angle'}</span>
+                        <NumberField
+                          value={modifier.amount}
+                          label={modifier.mode === 'taper'
+                            ? 'Deform taper end scale'
+                            : 'Deform angle in degrees'}
+                          step={modifier.mode === 'taper' ? 0.05 : 1}
+                          precision={modifier.mode === 'taper' ? 2 : 1}
+                          min={modifier.mode === 'taper' ? 0.05 : -720}
+                          max={modifier.mode === 'taper' ? 10 : 720}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'amount', value)}
+                        />
+                      </label>
+                    {:else if modifier.type === 'noise-displace'}
+                      <label class="modifier-field">
+                        <span>Strength</span>
+                        <NumberField
+                          value={modifier.strength}
+                          label="Noise displacement strength"
+                          step={0.01}
+                          precision={3}
+                          min={-100}
+                          max={100}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'strength', value)}
+                        />
+                      </label>
+                      <label class="modifier-field">
+                        <span>Frequency</span>
+                        <NumberField
+                          value={modifier.frequency}
+                          label="Noise displacement frequency"
+                          step={0.05}
+                          precision={2}
+                          min={0.001}
+                          max={100}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'frequency', value)}
+                        />
+                      </label>
+                      <label class="modifier-field">
+                        <span>Seed</span>
+                        <NumberField
+                          value={modifier.seed}
+                          label="Noise displacement seed"
+                          step={1}
+                          precision={0}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'seed', value)}
+                        />
+                      </label>
+                    {:else if modifier.type === 'weld'}
+                      <label class="modifier-field">
+                        <span>Threshold</span>
+                        <NumberField
+                          value={modifier.threshold}
+                          label="Weld distance threshold"
+                          step={0.001}
+                          precision={4}
+                          min={0.00001}
+                          max={10}
+                          framed
+                          onCommit={(value) =>
+                            updateModifierNumber(modifier.id, 'threshold', value)}
+                        />
+                      </label>
                     {:else if modifier.type === 'outline'}
                       <label class="modifier-field">
                         <span>Units</span>
@@ -2589,7 +2701,7 @@
                             updateModifierColor(modifier.id, value)}
                         />
                       </div>
-                    {:else}
+                    {:else if modifier.type === 'solidify'}
                       <label class="modifier-field">
                         <span>Thickness</span>
                         <NumberField

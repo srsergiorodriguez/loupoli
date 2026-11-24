@@ -456,7 +456,7 @@ Implemented component files and local patterns:
 | `OrientationGizmo` | 1–3 | Interactive camera orientation | Drag-to-orbit; tap axis to snap, center to frame |
 | `ShadingControl` | 1 | Five viewport modes | Labels on wide desktop, 44px icon-only buttons on touch |
 | `SelectionModeControl` | 2 | Vertex/Edge/Face mode switch | 44px targets, active state not color-only |
-| `ActionDock` | 3 | One-shot mesh actions | Bottom-left 2×2 grid, 64×44 minimum targets, contextual disabled states |
+| `ActionDock` | 3 | One-shot mesh actions | Bottom-left 3×2 grid, 64×44 minimum targets, contextual disabled states |
 | `ActionHud` | 2 | Action readout | Bottom-center raised pill; drag/exact/release hints |
 | `SliderField`, `SelectField`, `ColorField`, `ActionButton` | 2 | Shared inspector controls | Range with visible value, labeled select, color field, shared control-height action (44px touch) |
 | `Vector3Field` / field rhythm | 2 | Shared field rows | One vector group per row, 4 px label gap, 6 px row/section rhythm, 12 px section padding, 96 px inline-label column, 3-decimal spatial values |
@@ -519,7 +519,7 @@ Planned primitives not yet extracted:
 
 - **Primary:** 44px minimum height; full-width only for decisive actions such as Add.
 - **Tool rail:** 52px rail on desktop; 44px+ touch targets in the bottom dock (measured 64×52 in the iPad toolrail).
-- **ActionDock:** 64px minimum width, 44px minimum height; 2×2 grid.
+- **ActionDock:** 64px minimum width, 44px minimum height; 3×2 grid.
 - **Inspector controls:** 32px visual on desktop, 44px touch. Inputs, selects, action buttons, and outliner rows share the same height.
 - **HUDs:** non-interactive; minimum height `--control-h`, pointer-events none.
 

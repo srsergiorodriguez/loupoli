@@ -134,6 +134,9 @@
   {:else if name === 'loop-cut'}
     <path d="M4 12a8 8 0 1 1 16 0a8 8 0 0 1-16 0Z" />
     <path d="M4 12h16M12 4v16" />
+  {:else if name === 'subdivide'}
+    <rect x="4" y="4" width="16" height="16" rx="1.5" />
+    <path d="M12 4v16M4 12h16M8 8h8v8H8z" stroke-dasharray="2 1.5" />
   {:else if name === 'loop-slide'}
     <path d="M4 7c4-3 12-3 16 0M4 17c4-3 12-3 16 0" />
     <path d="M13 12h7M17 9l3 3-3 3" />

@@ -44,7 +44,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Transforms and topology',
         paragraphs: [
           'The Move, Rotate, and Scale tools use the object transform when the element set is empty. With elements selected, the gizmo sits at the selection median and moves only those vertices. Typed values in Transform commit exact numbers; Enter confirms and Escape cancels a modal transform.',
-          'Extrude and Inset are face operations available from the ActionDock. Bevel works on one selected interior edge; drag or type its world-space width. Loop Cut uses the first selected edge (or a selected edge loop) and splits the surrounding quad ring. Loop Slide moves the selected edge loop. These operations commit one validated mesh replacement and remain editable through undo.',
+          'Extrude and Inset are face operations available from the ActionDock. Bevel works on one selected interior edge; drag or type its world-space width. Loop Cut uses the first selected edge (or a selected edge loop) and splits the surrounding quad ring. Loop Slide moves the selected edge loop. Subdivide is an immediate whole-mesh linear split into quads, preserving per-face UVs, materials, and seams. These operations commit one validated mesh replacement and remain editable through undo.',
           'With modifiers active, direct vertex edits and topology operations target the base mesh. The stack re-evaluates after each commit, so the displayed surface and the editable base can differ. Each geometry modifier card has Apply modifier, which bakes that modifier into the base mesh. If enabled geometry modifiers sit above it, Apply through also bakes those so the remaining stack evaluates identically. Apply all bakes the whole enabled geometry stack. Render effects such as Outline stay live and are never baked. Shape keys and Mesh Motion block Apply because their indices depend on the current vertex count.'
         ],
         controls: [
@@ -52,8 +52,8 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'Pivot: Median or Object origin (shown with an element selection)',
           'Shift+Tab: toggle grid snapping',
           'E / I / L: extrude, inset, or loop cut',
-          'Action Dock: Bevel one selected edge by dragging or typing an exact width',
-          'Shift+L: loop slide',
+          'Action Dock: Bevel one selected edge by dragging or typing an exact width; Subdivide splits the whole mesh',
+          'Shift+L: loop slide\n          Deform: twist, bend, or taper the active mesh\n          Noise Displace: deterministic seeded normal displacement\n          Weld: merge vertices within a distance threshold',
           'F: frame the selection; Home: reset the view'
         ]
       },

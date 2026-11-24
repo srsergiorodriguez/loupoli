@@ -72,14 +72,57 @@ export interface SolidifyModifier {
   readonly offset: number;
 }
 
+/** Bend, twist, or taper deformation around a local axis. */
+export interface DeformModifier {
+  readonly id: string;
+  readonly type: 'deform';
+  readonly enabled: boolean;
+  readonly mode: 'bend' | 'twist' | 'taper';
+  readonly axis: ModifierAxis;
+  /** Degrees for bend/twist, or the positive-end factor for taper. */
+  readonly amount: number;
+}
+
+/** Deterministic noise displacement along evaluated vertex normals. */
+export interface NoiseDisplaceModifier {
+  readonly id: string;
+  readonly type: 'noise-displace';
+  readonly enabled: boolean;
+  /** Peak displacement in local units. */
+  readonly strength: number;
+  /** Noise cycles per local unit. */
+  readonly frequency: number;
+  readonly seed: number;
+}
+
+/** Collapse nearby vertices to one position. */
+export interface WeldModifier {
+  readonly id: string;
+  readonly type: 'weld';
+  readonly enabled: boolean;
+  /** World/local unit distance within which vertices merge. */
+  readonly threshold: number;
+}
+
 /** Serializable modifier union evaluated over a node's base DCEL. */
-export type Modifier = MirrorModifier | GridArrayModifier | RadialArrayModifier | OutlineModifier | SolidifyModifier;
+export type Modifier =
+  | MirrorModifier
+  | GridArrayModifier
+  | RadialArrayModifier
+  | OutlineModifier
+  | SolidifyModifier
+  | DeformModifier
+  | NoiseDisplaceModifier
+  | WeldModifier;
 
 /** Modifier types exposed by the stack UI. */
 export const MODIFIER_KINDS = [
   'mirror',
   'grid-array',
   'radial-array',
+  'deform',
+  'noise-displace',
+  'weld',
   'outline',
   'solidify'
 ] as const;
@@ -114,6 +157,9 @@ export const MODIFIER_LABELS: Readonly<Record<ModifierKind, string>> = {
   mirror: 'Mirror',
   'grid-array': 'Grid Array',
   'radial-array': 'Radial Array',
+  deform: 'Deform',
+  'noise-displace': 'Noise Displace',
+  weld: 'Weld',
   outline: 'Outline',
   solidify: 'Solidify'
 };
@@ -874,6 +920,322 @@ function solidifyEvaluated(
   return buildEvaluated(faces);
 }
 
+
+function computedVertexNormals(mesh: HalfEdgeMesh): Float32Array {
+  const normals = new Float32Array(mesh.vertexCount * 3);
+  for (let face = 0; face < mesh.faceCount; face += 1) {
+    const normal = mesh.computeFaceNormal(face);
+    const start = mesh.faceHalfEdge[face];
+    let halfEdge = start;
+    do {
+      const vertex = mesh.heOrigin[halfEdge];
+      const offset = vertex * 3;
+      normals[offset] += normal[0];
+      normals[offset + 1] += normal[1];
+      normals[offset + 2] += normal[2];
+      halfEdge = mesh.heNext[halfEdge];
+    } while (halfEdge !== start);
+  }
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    const length = Math.hypot(
+      normals[offset],
+      normals[offset + 1],
+      normals[offset + 2]
+    );
+    if (length <= 1e-8) {
+      throw new Error('A vertex has no stable normal for displacement.');
+    }
+    normals[offset] /= length;
+    normals[offset + 1] /= length;
+    normals[offset + 2] /= length;
+  }
+  return normals;
+}
+
+function deformEvaluated(
+  mesh: HalfEdgeMesh,
+  provenance: ModifierProvenance,
+  modifier: DeformModifier
+): EvaluatedModifierMesh {
+  const axisIndex = modifier.axis === 'x' ? 0 : modifier.axis === 'y' ? 1 : 2;
+  const bounds = mesh.getBounds();
+  const center = [
+    (bounds.min[0] + bounds.max[0]) / 2,
+    (bounds.min[1] + bounds.max[1]) / 2,
+    (bounds.min[2] + bounds.max[2]) / 2
+  ];
+  const span = Math.max(
+    1e-6,
+    bounds.max[axisIndex] - bounds.min[axisIndex]
+  );
+  const positions = mesh.positions.slice();
+  const radians = (modifier.amount * Math.PI) / 180;
+
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    const point = [
+      positions[offset],
+      positions[offset + 1],
+      positions[offset + 2]
+    ] as [number, number, number];
+
+    if (modifier.mode === 'twist') {
+      const t = (point[axisIndex] - center[axisIndex]) / span;
+      const angle = radians * t;
+      const rotated = rotatePosition(point, modifier.axis, angle);
+      positions[offset] = rotated[0];
+      positions[offset + 1] = rotated[1];
+      positions[offset + 2] = rotated[2];
+    } else if (modifier.mode === 'taper') {
+      const t = (point[axisIndex] - center[axisIndex]) / span + 0.5;
+      const factor = 1 + (modifier.amount - 1) * t;
+      const a = (axisIndex + 1) % 3;
+      const b = (axisIndex + 2) % 3;
+      point[a] = center[a] + (point[a] - center[a]) * factor;
+      point[b] = center[b] + (point[b] - center[b]) * factor;
+      positions[offset] = point[0];
+      positions[offset + 1] = point[1];
+      positions[offset + 2] = point[2];
+    } else {
+      const u = (axisIndex + 1) % 3;
+      const v = (axisIndex + 2) % 3;
+      if (Math.abs(radians) > 1e-9) {
+        const radius = span / radians;
+        const theta = ((point[u] - center[u]) / span) * radians;
+        point[u] = center[u] + Math.sin(theta) * radius;
+        point[v] =
+          center[v] +
+          (1 - Math.cos(theta)) * radius +
+          (point[v] - center[v]);
+        positions[offset] = point[0];
+        positions[offset + 1] = point[1];
+        positions[offset + 2] = point[2];
+      }
+    }
+  }
+  return { mesh: mesh.withPositions(positions), provenance };
+}
+
+function hashNoise(value: number, seed: number): number {
+  const n = Math.sin(value * 127.1 + seed * 311.7) * 43758.5453123;
+  return (n - Math.floor(n)) * 2 - 1;
+}
+
+function smoothstep(value: number): number {
+  return value * value * (3 - 2 * value);
+}
+
+function valueNoise3D(
+  x: number,
+  y: number,
+  z: number,
+  seed: number
+): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const iz = Math.floor(z);
+  const fx = smoothstep(x - ix);
+  const fy = smoothstep(y - iy);
+  const fz = smoothstep(z - iz);
+  const sample = (dx: number, dy: number, dz: number): number =>
+    hashNoise(ix + dx + (iy + dy) * 57 + (iz + dz) * 131, seed);
+  const x00 = sample(0, 0, 0) * (1 - fx) + sample(1, 0, 0) * fx;
+  const x10 = sample(0, 1, 0) * (1 - fx) + sample(1, 1, 0) * fx;
+  const x01 = sample(0, 0, 1) * (1 - fx) + sample(1, 0, 1) * fx;
+  const x11 = sample(0, 1, 1) * (1 - fx) + sample(1, 1, 1) * fx;
+  const y0 = x00 * (1 - fy) + x10 * fy;
+  const y1 = x01 * (1 - fy) + x11 * fy;
+  return y0 * (1 - fz) + y1 * fz;
+}
+
+function noiseDisplaceEvaluated(
+  mesh: HalfEdgeMesh,
+  provenance: ModifierProvenance,
+  modifier: NoiseDisplaceModifier
+): EvaluatedModifierMesh {
+  if (modifier.strength === 0) {
+    return { mesh, provenance };
+  }
+  const normals = computedVertexNormals(mesh);
+  const positions = mesh.positions.slice();
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    const x = mesh.positions[offset] * modifier.frequency;
+    const y = mesh.positions[offset + 1] * modifier.frequency;
+    const z = mesh.positions[offset + 2] * modifier.frequency;
+    const displacement =
+      valueNoise3D(x, y, z, modifier.seed) * modifier.strength;
+    positions[offset] += normals[offset] * displacement;
+    positions[offset + 1] += normals[offset + 1] * displacement;
+    positions[offset + 2] += normals[offset + 2] * displacement;
+  }
+  return { mesh: mesh.withPositions(positions), provenance };
+}
+
+function weldEvaluated(
+  mesh: HalfEdgeMesh,
+  provenance: ModifierProvenance,
+  threshold: number
+): EvaluatedModifierMesh {
+  if (threshold <= 0) {
+    return { mesh, provenance };
+  }
+  const parent = new Int32Array(mesh.vertexCount);
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    parent[vertex] = vertex;
+  }
+  const find = (vertex: number): number => {
+    let root = vertex;
+    while (parent[root] !== root) {
+      root = parent[root];
+    }
+    while (parent[vertex] !== vertex) {
+      const next = parent[vertex];
+      parent[vertex] = root;
+      vertex = next;
+    }
+    return root;
+  };
+  const union = (a: number, b: number): void => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) {
+      parent[rootB] = rootA;
+    }
+  };
+  const cell = Math.max(1e-6, threshold);
+  const buckets = new Map<string, number[]>();
+  const bucketKey = (x: number, y: number, z: number): string =>
+    `${x}|${y}|${z}`;
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    const key = bucketKey(
+      Math.floor(mesh.positions[offset] / cell),
+      Math.floor(mesh.positions[offset + 1] / cell),
+      Math.floor(mesh.positions[offset + 2] / cell)
+    );
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.push(vertex);
+    } else {
+      buckets.set(key, [vertex]);
+    }
+  }
+  const thresholdSquared = threshold * threshold;
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    const gx = Math.floor(mesh.positions[offset] / cell);
+    const gy = Math.floor(mesh.positions[offset + 1] / cell);
+    const gz = Math.floor(mesh.positions[offset + 2] / cell);
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dz = -1; dz <= 1; dz += 1) {
+          const bucket = buckets.get(bucketKey(gx + dx, gy + dy, gz + dz));
+          if (!bucket) {
+            continue;
+          }
+          for (const other of bucket) {
+            if (other <= vertex) {
+              continue;
+            }
+            const otherOffset = other * 3;
+            const distance =
+              (mesh.positions[offset] - mesh.positions[otherOffset]) ** 2 +
+              (mesh.positions[offset + 1] - mesh.positions[otherOffset + 1]) ** 2 +
+              (mesh.positions[offset + 2] - mesh.positions[otherOffset + 2]) ** 2;
+            if (distance <= thresholdSquared) {
+              union(vertex, other);
+            }
+          }
+        }
+      }
+    }
+  }
+  const representative = new Int32Array(mesh.vertexCount);
+  const positions = new Float32Array(mesh.vertexCount * 3);
+  const counts = new Uint32Array(mesh.vertexCount);
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const root = find(vertex);
+    representative[vertex] = root;
+    counts[root] += 1;
+    const offset = vertex * 3;
+    positions[root * 3] += mesh.positions[offset];
+    positions[root * 3 + 1] += mesh.positions[offset + 1];
+    positions[root * 3 + 2] += mesh.positions[offset + 2];
+  }
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    if (counts[vertex] > 0) {
+      positions[vertex * 3] /= counts[vertex];
+      positions[vertex * 3 + 1] /= counts[vertex];
+      positions[vertex * 3 + 2] /= counts[vertex];
+    }
+  }
+  const source = collectProvenanceFaces(mesh, provenance);
+  const vertexByPosition = new Map<string, number>();
+  for (let vertex = 0; vertex < mesh.vertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    vertexByPosition.set(
+      `${mesh.positions[offset]}|${mesh.positions[offset + 1]}|${mesh.positions[offset + 2]}`,
+      vertex
+    );
+  }
+  const faces: ProvenanceFace[] = [];
+  const faceKeys = new Set<string>();
+  for (const face of source) {
+    const corners: ProvenanceCorner[] = [];
+    const seen = new Set<number>();
+    for (const corner of face.corners) {
+      const sourceVertex = vertexByPosition.get(
+        `${corner.position[0]}|${corner.position[1]}|${corner.position[2]}`
+      );
+      if (sourceVertex === undefined) {
+        continue;
+      }
+      const root = representative[sourceVertex];
+      if (seen.has(root)) {
+        continue;
+      }
+      seen.add(root);
+      corners.push({
+        position: [
+          positions[root * 3],
+          positions[root * 3 + 1],
+          positions[root * 3 + 2]
+        ],
+        uv: [corner.uv[0], corner.uv[1]],
+        baseVertex: corner.baseVertex,
+        baseEdge: corner.baseEdge,
+        baseLinear: [...corner.baseLinear]
+      });
+    }
+    if (corners.length < 3) {
+      continue;
+    }
+    const key = corners
+      .map((corner) => `${corner.position[0]}|${corner.position[1]}|${corner.position[2]}`)
+      .sort()
+      .join('/');
+    if (faceKeys.has(key)) {
+      continue;
+    }
+    faceKeys.add(key);
+    faces.push({
+      corners,
+      material: face.material,
+      baseFace: face.baseFace
+    });
+  }
+  if (faces.length === 0) {
+    throw new Error('Weld collapsed every face.');
+  }
+  if (faces.length > MAX_MODIFIER_FACES) {
+    throw new Error('Weld exceeds the modifier face limit.');
+  }
+  return buildEvaluated(faces);
+}
+
+
 function isModifierAxis(value: unknown): value is ModifierAxis {
   return value === 'x' || value === 'y' || value === 'z';
 }
@@ -1087,6 +1449,110 @@ const SOLIDIFY_DEFINITION: ModifierDefinition = {
   }
 };
 
+
+const DEFORM_DEFINITION: ModifierDefinition = {
+  kind: 'deform',
+  label: MODIFIER_LABELS.deform,
+  category: 'geometry',
+  create: () => ({
+    id: createModifierId(),
+    type: 'deform',
+    enabled: true,
+    mode: 'twist',
+    axis: 'z',
+    amount: 30
+  }),
+  validate: (value, id, enabled) => {
+    const mode =
+      value.mode === 'bend' || value.mode === 'taper' ? value.mode : 'twist';
+    if (!isModifierAxis(value.axis)) {
+      throw new Error('Deform axis is invalid.');
+    }
+    const amount =
+      typeof value.amount === 'number' && Number.isFinite(value.amount)
+        ? mode === 'taper'
+          ? Math.min(10, Math.max(0.05, value.amount))
+          : Math.min(720, Math.max(-720, value.amount))
+        : mode === 'taper'
+          ? 0.5
+          : 30;
+    return { id, type: 'deform', enabled, mode, axis: value.axis, amount };
+  },
+  evaluate: (mesh, provenance, modifier) => {
+    if (modifier.type !== 'deform') {
+      throw new Error('Deform evaluator received another modifier kind.');
+    }
+    return deformEvaluated(mesh, provenance, modifier);
+  }
+};
+
+const NOISE_DISPLACE_DEFINITION: ModifierDefinition = {
+  kind: 'noise-displace',
+  label: MODIFIER_LABELS['noise-displace'],
+  category: 'geometry',
+  create: () => ({
+    id: createModifierId(),
+    type: 'noise-displace',
+    enabled: true,
+    strength: 0.15,
+    frequency: 2,
+    seed: 1
+  }),
+  validate: (value, id, enabled) => {
+    const strength =
+      typeof value.strength === 'number' && Number.isFinite(value.strength)
+        ? Math.min(100, Math.max(-100, value.strength))
+        : 0.15;
+    const frequency =
+      typeof value.frequency === 'number' && Number.isFinite(value.frequency)
+        ? Math.min(100, Math.max(0.001, value.frequency))
+        : 2;
+    const seed =
+      typeof value.seed === 'number' && Number.isFinite(value.seed)
+        ? Math.round(value.seed)
+        : 1;
+    return {
+      id,
+      type: 'noise-displace',
+      enabled,
+      strength,
+      frequency,
+      seed
+    };
+  },
+  evaluate: (mesh, provenance, modifier) => {
+    if (modifier.type !== 'noise-displace') {
+      throw new Error('Noise displace evaluator received another modifier kind.');
+    }
+    return noiseDisplaceEvaluated(mesh, provenance, modifier);
+  }
+};
+
+const WELD_DEFINITION: ModifierDefinition = {
+  kind: 'weld',
+  label: MODIFIER_LABELS.weld,
+  category: 'geometry',
+  create: () => ({
+    id: createModifierId(),
+    type: 'weld',
+    enabled: true,
+    threshold: 0.01
+  }),
+  validate: (value, id, enabled) => {
+    const threshold =
+      typeof value.threshold === 'number' && Number.isFinite(value.threshold)
+        ? Math.min(10, Math.max(1e-5, value.threshold))
+        : 0.01;
+    return { id, type: 'weld', enabled, threshold };
+  },
+  evaluate: (mesh, provenance, modifier) => {
+    if (modifier.type !== 'weld') {
+      throw new Error('Weld evaluator received another modifier kind.');
+    }
+    return weldEvaluated(mesh, provenance, modifier.threshold);
+  }
+};
+
 /** Complete modifier registry used by creation, validation, evaluation, and the stack UI. */
 export const MODIFIER_DEFINITIONS: Readonly<
   Record<ModifierKind, ModifierDefinition>
@@ -1094,6 +1560,9 @@ export const MODIFIER_DEFINITIONS: Readonly<
   mirror: MIRROR_DEFINITION,
   'grid-array': GRID_ARRAY_DEFINITION,
   'radial-array': RADIAL_ARRAY_DEFINITION,
+  deform: DEFORM_DEFINITION,
+  'noise-displace': NOISE_DISPLACE_DEFINITION,
+  weld: WELD_DEFINITION,
   outline: OUTLINE_DEFINITION,
   solidify: SOLIDIFY_DEFINITION
 };

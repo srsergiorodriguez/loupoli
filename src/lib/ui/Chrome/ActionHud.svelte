@@ -17,7 +17,9 @@
           ? 'Bevel'
           : state?.kind === 'loop-cut'
             ? 'Loop Cut'
-            : 'Loop Slide'
+            : state?.kind === 'subdivide'
+              ? 'Subdivide'
+              : 'Loop Slide'
   );
 
   const prompt = $derived(

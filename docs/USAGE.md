@@ -56,10 +56,12 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | Select object in Paint | Activates that object's assigned texture for painting. |
 | Merge textures | With two or more textured objects selected, pack their UV layouts into one shared atlas. Texture layers are flattened; the operation is undoable. |
-| ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. |
+| ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. Subdivide immediately splits the whole active mesh into one level of quads. |
 | E / I | Arm Extrude / Inset for the current face selection. |
 | Bevel | Select one interior edge, then choose Bevel in the Action Dock. Drag or type the width. One edge per operation; endpoint corners are absorbed by the surrounding faces. Endpoints must be interior valence-three vertices; the topology rebuild resets UV seams. |
 | L / Shift+L | Arm Loop Cut for the selected edge or loop / Loop Slide for the selected edge loop. Loop Cut follows the selected edge; Loop Slide moves either way from its starting position. |
+| Subdivide | In the ActionDock, split every face once into quads. UVs, materials, and seams are preserved; one undo restores the mesh. |
+| Deform / Noise Displace / Weld | Add from the Modifiers section. Deform twists, bends, or tapers; Noise Displace moves vertices along normals with seeded noise; Weld merges nearby vertices. Each supports per-modifier Apply. |
 | Type a number during an action | Exact amount: units for Extrude, percent for Inset and Loop position. Enter applies. |
 | V / E / F buttons | Switch vertex, edge, or face selection mode; 1 / 2 / 3 are the keyboard shortcuts. |
 | Shift+Tab | Toggle grid snapping. |

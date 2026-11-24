@@ -36,6 +36,7 @@ export type CommandId =
   | 'mesh.bevel'
   | 'mesh.loopCut'
   | 'mesh.loopSlide'
+  | 'mesh.subdivide'
   | 'uv.axisU'
   | 'uv.axisV'
   | 'uv.fine'
@@ -100,6 +101,7 @@ const definitions: Record<CommandId, Omit<CommandDefinition, 'id'>> = {
   'mesh.bevel': { label: 'Bevel', scope: '3d', presentation: 'icon-text' },
   'mesh.loopCut': { label: 'Loop Cut', scope: '3d', shortcut: 'loopCut', presentation: 'icon-text', bindings: [{ key: 'l', shift: false }] },
   'mesh.loopSlide': { label: 'Loop Slide', scope: '3d', shortcut: 'loopSlide', presentation: 'icon-text', bindings: [{ key: 'l', shift: true }] },
+  'mesh.subdivide': { label: 'Subdivide', scope: '3d', presentation: 'icon-text' },
   'uv.axisU': { label: 'U axis lock', scope: 'uv', presentation: 'text', bindings: [{ key: 'u' }] },
   'uv.axisV': { label: 'V axis lock', scope: 'uv', presentation: 'text', bindings: [{ key: 'v' }] },
   'uv.fine': { label: 'Fine', scope: 'uv', presentation: 'text' },

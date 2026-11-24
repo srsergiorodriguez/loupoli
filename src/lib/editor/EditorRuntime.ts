@@ -22,6 +22,7 @@ import {
   type ModifierKind
 } from '../geometry/modifiers';
 import { bevelEdge } from '../geometry/bevel';
+import { subdivideMesh } from '../geometry/subdivide';
 import {
   bridgeSelectedEdges,
   deleteSelectedElements,
@@ -11092,6 +11093,10 @@ export class EditorRuntime {
       this.publish();
       return;
     }
+    if (kind === 'subdivide') {
+      this.subdivideActiveMesh();
+      return;
+    }
     const node = this.getActiveNode();
     if (!node || !this.actionAvailable(kind, node)) {
       if (kind === 'loop-slide') {
@@ -11211,6 +11216,9 @@ export class EditorRuntime {
     }
     if (kind === 'loop-slide') {
       return this.activeLoopSlidePlan() !== null;
+    }
+    if (kind === 'subdivide') {
+      return true;
     }
     if (this.selection.mode === 'face') {
       if (kind === 'extrude') {
@@ -11937,6 +11945,41 @@ export class EditorRuntime {
     this.selection.setValues(drag.selection);
     this.syncScene();
     this.publish();
+  }
+
+  /** Split every face on the active mesh into one level of quads. */
+  private subdivideActiveMesh(): void {
+    const node = this.getActiveNode();
+    if (
+      !node ||
+      node.reference ||
+      this.getActiveGroup() !== null ||
+      this.meshPoseEdit ||
+      this.drag ||
+      this.gizmoDrag ||
+      this.modalTransform ||
+      this.actionDrag
+    ) {
+      return;
+    }
+    try {
+      const after = subdivideMesh(node.mesh);
+      const before = node.mesh;
+      this.selection.clear();
+      this.history.execute(
+        new ReplaceMeshCommand(node, before, after, 'Subdivide mesh')
+      );
+      this.syncScene();
+      this.publish();
+      this.notify(
+        'success',
+        'Mesh subdivided',
+        `${after.faceCount} quad faces created from ${before.faceCount}.`
+      );
+    } catch (error) {
+      this.projectError = this.errorMessage(error);
+      this.publish();
+    }
   }
 
   /** Weld the selected vertices to their centroid. */

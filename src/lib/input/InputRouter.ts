@@ -64,7 +64,7 @@ export interface InputRouterHost {
   modalPointerMove(sample: PointerSample): void;
   modalTransformKey(key: string): void;
   commitModalTransform(): void;
-  armAction(kind: 'extrude' | 'inset' | 'loop-cut' | 'loop-slide'): void;
+  armAction(kind: 'extrude' | 'inset' | 'loop-cut' | 'loop-slide' | 'subdivide'): void;
   hasActiveAction(): boolean;
   isActionAdjusting(): boolean;
   actionKey(key: string): boolean;
@@ -699,7 +699,8 @@ export class InputRouter {
       case 'mesh.extrude':
       case 'mesh.inset':
       case 'mesh.loopCut':
-      case 'mesh.loopSlide': {
+      case 'mesh.loopSlide':
+      case 'mesh.subdivide': {
         event.preventDefault();
         const kind =
           matched === 'mesh.extrude'
@@ -708,7 +709,9 @@ export class InputRouter {
               ? 'inset'
               : matched === 'mesh.loopCut'
                 ? 'loop-cut'
-                : 'loop-slide';
+                : matched === 'mesh.subdivide'
+                  ? 'subdivide'
+                  : 'loop-slide';
         this.host.armAction(kind);
         return;
       }

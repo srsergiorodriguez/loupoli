@@ -633,6 +633,28 @@ describe('.lpoli', () => {
         enabled: true,
         thickness: 0.1,
         offset: -1
+      },
+      {
+        id: 'm6',
+        type: 'deform',
+        enabled: true,
+        mode: 'bend',
+        axis: 'z',
+        amount: 45
+      },
+      {
+        id: 'm7',
+        type: 'noise-displace',
+        enabled: true,
+        strength: 0.2,
+        frequency: 3,
+        seed: 7
+      },
+      {
+        id: 'm8',
+        type: 'weld',
+        enabled: false,
+        threshold: 0.02
       }
     ]);
     const bytes = encodeLpoly(document, SETTINGS);
