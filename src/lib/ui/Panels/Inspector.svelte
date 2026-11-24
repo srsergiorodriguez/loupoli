@@ -21,7 +21,8 @@
   import CreateRow from '../Primitives/CreateRow.svelte';
   import DangerAction from '../Primitives/DangerAction.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
-  import ExportObjDialog from './ExportObjDialog.svelte';
+  import ExportModelDialog from './ExportModelDialog.svelte';
+  import type { ModelExportFormat } from '../../io/exportOptions';
   import ExportObjFramesDialog from './ExportObjFramesDialog.svelte';
   import ModulatorPanel from '../Animation/ModulatorPanel.svelte';
   import NewTextureDialog from './NewTextureDialog.svelte';
@@ -390,11 +391,9 @@
     value: kind,
     label: MODIFIER_LABELS[kind]
   }));
-  let objExportOpen = $state(false);
+  let exportDialogFormat = $state<ModelExportFormat | null>(null);
   let objFramesOpen = $state(false);
   let newTextureOpen = $state(false);
-  let objExportScope = $state<ObjExportScope>('scene');
-  let objExportIncludeTexture = $state(true);
   let objFramesScope = $state<ObjExportScope>('scene');
   let objFramesClipId = $state('');
   let objFramesMode = $state<'step' | 'keyed'>('step');
@@ -402,11 +401,8 @@
   let objFramesEnd = $state(48);
   let objFramesStep = $state(1);
   let objFramesIncludeTexture = $state(true);
-  const exportHasTexture = $derived(
-    objExportScope === 'active'
-      ? activeNode?.textureId != null
-      : nodes.some((node) => node.textureId != null)
-  );
+  let objFramesUnifyTextures = $state(false);
+  let objFramesAtlasSize = $state<import('../../io/exportOptions').TextureAtlasSize>('auto');
   const objFramesHasTexture = $derived(
     objFramesScope === 'active'
       ? activeNode?.textureId != null
@@ -441,6 +437,8 @@
     objFramesMode = 'step';
     objFramesStep = 1;
     objFramesIncludeTexture = true;
+    objFramesUnifyTextures = false;
+    objFramesAtlasSize = 'auto';
     objFramesOpen = true;
   }
 
@@ -461,7 +459,9 @@
       endFrame: objFramesEnd,
       step: objFramesStep,
       keyedOnly: objFramesMode === 'keyed',
-      includeTextures: objFramesIncludeTexture
+      includeTextures: objFramesIncludeTexture,
+      unifyTextures: objFramesUnifyTextures,
+      atlasSize: objFramesAtlasSize
     });
     objFramesOpen = false;
   }
@@ -1038,10 +1038,7 @@
               icon: 'save',
               separatorBefore: true,
               disabled: session.snapshot.fileBusy || nodes.length === 0,
-              onSelect: () => {
-                if (!activeNode) objExportScope = 'scene';
-                objExportOpen = true;
-              }
+              onSelect: () => (exportDialogFormat = 'obj')
             },
             {
               label: 'Export OBJ frames…',
@@ -1050,10 +1047,10 @@
               onSelect: openObjFramesExport
             },
             {
-              label: 'Export GLB',
+              label: 'Export GLB…',
               icon: 'save',
               disabled: session.snapshot.fileBusy || nodes.length === 0,
-              onSelect: () => void session.exportGlb()
+              onSelect: () => (exportDialogFormat = 'glb')
             }
           ]}
         />
@@ -3208,19 +3205,20 @@
       }}
     />
   {/if}
-  {#if objExportOpen}
-    <ExportObjDialog
-      scope={objExportScope}
-      includeTexture={objExportIncludeTexture}
-      hasTexture={exportHasTexture}
+  {#if exportDialogFormat !== null}
+    <ExportModelDialog
+      initialFormat={exportDialogFormat}
       hasActive={activeNode !== null}
+      selectedCount={selectedNodeIds.length}
+      hasTexture={nodes.some((node) => node.textureId != null)}
+      clips={animationClips}
+      activeClipId={session.snapshot.animationClipId}
+      projectFps={session.snapshot.animationFps}
       busy={session.snapshot.fileBusy}
-      onScopeChange={(scope) => (objExportScope = scope)}
-      onIncludeTextureChange={(value) => (objExportIncludeTexture = value)}
-      onCancel={() => (objExportOpen = false)}
-      onExport={() => {
-        objExportOpen = false;
-        void session.exportObj(objExportScope, objExportIncludeTexture);
+      onClose={() => (exportDialogFormat = null)}
+      onExport={(options) => {
+        exportDialogFormat = null;
+        void session.exportModel(options);
       }}
     />
   {/if}
@@ -3235,8 +3233,11 @@
       step={objFramesStep}
       frameCount={objFramesCount}
       includeTexture={objFramesIncludeTexture}
+      unifyTextures={objFramesUnifyTextures}
+      atlasSize={objFramesAtlasSize}
       hasTexture={objFramesHasTexture}
       hasActive={activeNode !== null}
+      hasSelected={selectedNodeIds.length > 0}
       busy={session.snapshot.fileBusy}
       onScopeChange={(scope) => (objFramesScope = scope)}
       onClipChange={changeObjFramesClip}
@@ -3245,6 +3246,8 @@
       onEndFrameChange={(frame) => (objFramesEnd = frame)}
       onStepChange={(step) => (objFramesStep = step)}
       onIncludeTextureChange={(value) => (objFramesIncludeTexture = value)}
+      onUnifyTexturesChange={(value) => (objFramesUnifyTextures = value)}
+      onAtlasSizeChange={(value) => (objFramesAtlasSize = value)}
       onCancel={() => (objFramesOpen = false)}
       onExport={() => void submitObjFramesExport()}
     />

@@ -8,6 +8,7 @@ import {
   Matrix3,
   Matrix4,
   DirectionalLight,
+  DoubleSide,
   Mesh,
   MeshBasicMaterial,
   NumberKeyframeTrack,
@@ -49,6 +50,13 @@ import type { SceneGroup } from '../scene/SceneGroup';
 import { createCameraId, type CameraSnapshot } from '../scene/SceneCamera';
 import { createLightId, type LightSnapshot } from '../scene/SceneLight';
 import { transformMatrix, worldTransformForNode } from '../editor/groupTransforms';
+import {
+  applyCameraModulators,
+  applyLightModulators,
+  applyNodeModulators,
+  type AudioEnvelopeData,
+  type ModulatorContext
+} from '../scene/AnimationModulators';
 
 /** Three's Y-up conversion for app Z-up coordinates. */
 const Y_UP_TO_Z_UP = new Matrix4().makeRotationX(Math.PI / 2);
@@ -111,6 +119,16 @@ export interface GlbAnimationExportOptions {
   readonly cameras?: readonly CameraSnapshot[];
   /** Scene lights exported with KHR_lights_punctual. */
   readonly lights?: readonly LightSnapshot[];
+  /** Clip range override; custom mode applies the same range to exported clips. */
+  readonly rangeMode?: 'clip' | 'custom';
+  readonly startFrame?: number;
+  readonly endFrame?: number;
+  /** Animation sample rate; defaults to the project FPS. */
+  readonly sampleFps?: number;
+  /** Bake procedural modulators into sampled transform/camera/light tracks. */
+  readonly bakeModulators?: boolean;
+  /** Audio peak data for envelope modulators. */
+  readonly audio?: ReadonlyMap<string, AudioEnvelopeData>;
 }
 
 interface MotionMorphSample {
@@ -729,13 +747,34 @@ export interface GlbTextureFile {
   readonly bytes: Uint8Array;
 }
 
-function makeMaterial(color: string, textured: boolean): MeshBasicMaterial {
+function makeMaterial(
+  color: string,
+  textured: boolean,
+  doubleSided: boolean
+): MeshBasicMaterial {
   // Baked illumination is already in the texture. An unlit basic material keeps
   // a viewer from adding a second PBR highlight or metallic response.
-  return new MeshBasicMaterial({
+  const material = new MeshBasicMaterial({
     color: textured ? 0xffffff : color,
     toneMapped: false
   });
+  if (doubleSided) {
+    material.side = DoubleSide;
+  }
+  return material;
+}
+
+/** Optional per-node UV remaps and shared atlas texture for an export. */
+export interface GlbExportOptions {
+  readonly uvTransforms?: ReadonlyMap<
+    string,
+    {
+      readonly offsetU: number;
+      readonly offsetV: number;
+      readonly scale: number;
+    }
+  >;
+  readonly atlasTextureId?: string;
 }
 
 /** Export visible nodes as a binary GLB with textures and animation clips. */
@@ -743,7 +782,8 @@ export async function exportGlb(
   nodes: readonly MeshNode[],
   groups: readonly SceneGroup[],
   textures: ReadonlyMap<string, GlbTextureFile> = new Map(),
-  animation?: GlbAnimationExportOptions
+  animation?: GlbAnimationExportOptions,
+  exportOptions: GlbExportOptions = {}
 ): Promise<Uint8Array> {
   const textureCache = new Map<string, Texture>();
   const textureImages: ImageBitmap[] = [];
@@ -828,6 +868,16 @@ export async function exportGlb(
     const normals = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(vertexCount * 2);
     mesh.writeTriangleData(positions, normals, uvs);
+    const uvTransform = exportOptions.uvTransforms?.get(node.id) ?? null;
+    if (uvTransform) {
+      for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+        const offset = vertex * 2;
+        uvs[offset] =
+          uvTransform.offsetU + uvs[offset] * uvTransform.scale;
+        uvs[offset + 1] =
+          uvTransform.offsetV + uvs[offset + 1] * uvTransform.scale;
+      }
+    }
     const baseVertexByRender = new Uint32Array(vertexCount);
     {
       let renderCursor = 0;
@@ -1005,12 +1055,17 @@ export async function exportGlb(
       }
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
-      const texture = node.textureId
-        ? textureCache.get(node.textureId) ?? null
+      const textureId =
+        uvTransform && exportOptions.atlasTextureId
+          ? exportOptions.atlasTextureId
+          : node.textureId;
+      const texture = textureId
+        ? textureCache.get(textureId) ?? null
         : null;
       const material = makeMaterial(
         palette[materialIndex] ?? palette[0],
-        texture !== null
+        texture !== null,
+        node.doubleSided
       );
       material.name = `${node.name}_mat${materialIndex}`;
       material.map = texture;
@@ -1100,25 +1155,57 @@ export async function exportGlb(
   const threeClips: ThreeAnimationClip[] = [];
   if (animation) {
     for (const clip of animation.clips) {
-      const frames: number[] = [];
-      for (let frame = clip.startFrame; frame <= clip.endFrame; frame += 1) {
-        frames.push(frame);
-      }
+      const rangeStart =
+        animation.rangeMode === 'custom'
+          ? Math.max(0, Math.min(clip.startFrame, animation.startFrame ?? clip.startFrame))
+          : clip.startFrame;
+      const rangeEnd =
+        animation.rangeMode === 'custom'
+          ? Math.max(rangeStart, Math.min(clip.endFrame, animation.endFrame ?? clip.endFrame))
+          : clip.endFrame;
+      const projectFps = Math.max(1, animation.fps);
+      const sampleFps = Math.max(
+        1,
+        Math.min(120, animation.sampleFps ?? projectFps)
+      );
+      const duration = (rangeEnd - rangeStart) / projectFps;
+      const sampleCount = Math.max(1, Math.round(duration * sampleFps));
+      const times = Array.from(
+        { length: sampleCount + 1 },
+        (_, index) => index / sampleFps
+      );
+      const frames = times.map((time) => rangeStart + time * projectFps);
       if (frames.length === 0) {
         continue;
       }
-      const times = frames.map(
-        (frame) => (frame - clip.startFrame) / Math.max(1, animation.fps)
+      const modulatorContext: ModulatorContext = {
+        frame: rangeStart,
+        fps: projectFps,
+        audio: animation.audio ?? new Map()
+      };
+      const hasNodeModulators = clip.modulators.some(
+        (modulator) =>
+          modulator.enabled && modulator.targetKind === 'node'
       );
       const tracks: (VectorKeyframeTrack | QuaternionKeyframeTrack | NumberKeyframeTrack)[] = [];
-      if (clip.tracks.length > 0) {
+      if (clip.tracks.length > 0 || (animation.bakeModulators !== false && hasNodeModulators)) {
         for (const context of nodeContexts.values()) {
           const positions: number[] = [];
           const rotations: number[] = [];
           const scales: number[] = [];
           for (const frame of frames) {
             const pose = sampleClipTransformPose(clip, frame);
-            const nodeTransform = pose.get(context.node.id) ?? context.node.transform;
+            const baseNodeTransform =
+              pose.get(context.node.id) ?? context.node.transform;
+            const nodeTransform =
+              animation.bakeModulators === false
+                ? baseNodeTransform
+                : applyNodeModulators(
+                    baseNodeTransform,
+                    clip.modulators,
+                    context.node.id,
+                    { ...modulatorContext, frame }
+                  );
             const parentTransform = context.parent
               ? (pose.get(context.parent.id) ?? context.parent.transform)
               : null;
@@ -1156,13 +1243,28 @@ export async function exportGlb(
         const cameraTrack = clip.cameraTracks.find(
           (track) => track.targetId === context.camera.id
         );
-        if (!cameraTrack) {
+        const hasModulator = clip.modulators.some(
+          (modulator) =>
+            modulator.enabled &&
+            modulator.targetKind === 'camera' &&
+            modulator.targetId === context.camera.id
+        );
+        if (!cameraTrack && !(animation.bakeModulators !== false && hasModulator)) {
           continue;
         }
         const positions: number[] = [];
         const rotations: number[] = [];
         for (const frame of frames) {
-          const pose = cameraTrack.evaluate(frame) ?? context.camera;
+          const basePose = cameraTrack?.evaluate(frame) ?? context.camera;
+          const pose =
+            animation.bakeModulators === false
+              ? basePose
+              : applyCameraModulators(
+                  basePose,
+                  clip.modulators,
+                  context.camera.id,
+                  { ...modulatorContext, frame }
+                );
           const position = yUpPoint(pose.position);
           const target = yUpPoint(pose.target);
           const rotation = cameraQuaternion(position, target);
@@ -1186,14 +1288,29 @@ export async function exportGlb(
         const lightTrack = clip.lightTracks.find(
           (track) => track.targetId === context.light.id
         );
-        if (!lightTrack) {
+        const hasModulator = clip.modulators.some(
+          (modulator) =>
+            modulator.enabled &&
+            modulator.targetKind === 'light' &&
+            modulator.targetId === context.light.id
+        );
+        if (!lightTrack && !(animation.bakeModulators !== false && hasModulator)) {
           continue;
         }
         const positions: number[] = [];
         const rotations: number[] = [];
         const directional = context.object instanceof DirectionalLight;
         for (const frame of frames) {
-          const pose = lightTrack.evaluate(frame) ?? context.light;
+          const basePose = lightTrack?.evaluate(frame) ?? context.light;
+          const pose =
+            animation.bakeModulators === false
+              ? basePose
+              : applyLightModulators(
+                  basePose,
+                  clip.modulators,
+                  context.light.id,
+                  { ...modulatorContext, frame }
+                );
           positions.push(...yUpPoint(pose.position).toArray());
           if (directional) {
             const rotation = lightQuaternion(pose.direction);
@@ -1273,7 +1390,7 @@ export async function exportGlb(
         threeClips.push(
           new ThreeAnimationClip(
             clip.name,
-            (clip.endFrame - clip.startFrame) / Math.max(1, animation.fps),
+            times[times.length - 1] ?? 0,
             tracks
           )
         );

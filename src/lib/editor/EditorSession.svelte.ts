@@ -5,6 +5,10 @@ import type { NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { EditorRuntime } from './EditorRuntime';
 import { workspaceCan, type WorkspaceCapability } from './workspaces';
 import type {
+  ModelExportOptions,
+  ModelExportScope
+} from '../io/exportOptions';
+import type {
   AnimationModulatorKind,
   AnimationModulatorSnapshot,
   ModulatorTargetKind
@@ -1128,7 +1132,7 @@ export class EditorSession {
     return this.runtime?.importObj() ?? Promise.resolve();
   }
 
-  exportObj(scope: 'active' | 'scene' = 'scene', includeTextures = false): Promise<void> {
+  exportObj(scope: ModelExportScope = 'scene', includeTextures = false): Promise<void> {
     return this.runtime?.exportObj(scope, includeTextures) ?? Promise.resolve();
   }
 
@@ -1144,6 +1148,10 @@ export class EditorSession {
 
   exportGlb(): Promise<void> {
     return this.runtime?.exportGlb() ?? Promise.resolve();
+  }
+
+  exportModel(options: ModelExportOptions): Promise<void> {
+    return this.runtime?.exportModel(options) ?? Promise.resolve();
   }
 
   addAnimationModulator(

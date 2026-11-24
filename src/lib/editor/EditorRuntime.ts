@@ -159,6 +159,8 @@ import {
   type ObjTextureFile
 } from '../io/obj';
 import { exportGlb, importGlb } from '../io/gltf';
+import { buildExportAtlas, type ExportAtlasResult } from '../texture/exportAtlas';
+import type { ModelExportOptions } from '../io/exportOptions';
 import { SetAnimationCommand } from './commands/AnimationCommands';
 import { AudioAssetCommand } from './commands/AudioAssetCommand';
 import {
@@ -9439,8 +9441,17 @@ export class EditorRuntime {
     }
   }
 
+  /** Dispatch the shared export dialog to OBJ or GLB. */
+  async exportModel(options: ModelExportOptions): Promise<void> {
+    if (options.format === 'obj') {
+      await this.exportObj(options.scope, options.includeTextures, options);
+    } else {
+      await this.exportGlb(options);
+    }
+  }
+
   /** Export visible objects as a triangulated binary GLB. */
-  async exportGlb(): Promise<void> {
+  async exportGlb(options?: ModelExportOptions): Promise<void> {
     if (this.fileBusy) {
       return;
     }
@@ -9449,26 +9460,80 @@ export class EditorRuntime {
     this.publish();
     try {
       const base = this.exportBaseName(this.projectName);
-      const exportNodes = this.document.nodes.filter((node) => !node.reference);
-      const textures = await this.exportTextureFiles(exportNodes, base);
+      const exportNodes = this.nodesForExportScope(
+        options?.scope ?? 'scene',
+        this.getActiveNode()
+      );
+      const atlas = await this.buildAtlasForExport(exportNodes, options, base);
+      const textures = options?.includeTextures === false
+        ? new Map<string, import('../io/obj').ObjTextureFile>()
+        : await this.exportTextureFiles(exportNodes, base);
+      if (atlas) {
+        textures.set(atlas.textureId, {
+          name: atlas.fileName,
+          bytes: atlas.bytes
+        });
+      }
       const exportableClips = this.document.animation.clips.filter(
         (clip) =>
           clip.tracks.length > 0 ||
           clip.weightTracks.length > 0 ||
           clip.meshTracks.length > 0 ||
           clip.cameraTracks.length > 0 ||
-          clip.lightTracks.length > 0
+          clip.lightTracks.length > 0 ||
+          clip.modulators.length > 0
       ).length;
+      const selectedClip =
+        options?.clipMode === 'active'
+          ? this.document.animation.getClip(options.clipId ?? '') ??
+            this.document.animation.activeClip
+          : null;
+      const clips =
+        options?.includeAnimation === false
+          ? []
+          : selectedClip
+            ? [selectedClip]
+            : this.document.animation.clips;
       const bytes = await exportGlb(
         exportNodes,
         this.document.groups,
         textures,
         {
-          clips: this.document.animation.clips,
+          clips,
           fps: this.document.animation.fps,
-          cameras: this.document.cameraSummaries(),
-          lights: this.document.lightSummaries()
-        }
+          cameras:
+            options?.includeCameras === false
+              ? []
+              : this.document.cameraSummaries(),
+          lights:
+            options?.includeLights === false
+              ? []
+              : this.document.lightSummaries(),
+          ...(options
+            ? {
+                rangeMode: options.rangeMode,
+                startFrame: options.startFrame,
+                endFrame: options.endFrame,
+                sampleFps: options.sampleFps,
+                bakeModulators: options.bakeModulators,
+                audio:
+                  options.bakeModulators === false
+                    ? new Map<string, AudioEnvelopeData>()
+                    : new Map(
+                        this.document.audioAssets.map((asset) => [
+                          asset.id,
+                          { peaks: asset.peaks, duration: asset.duration }
+                        ])
+                      )
+              }
+            : {})
+        },
+        atlas
+          ? {
+              uvTransforms: atlas.transforms,
+              atlasTextureId: atlas.textureId
+            }
+          : {}
       );
       const saved = await saveBinaryFile(
         bytes,
@@ -9495,24 +9560,20 @@ export class EditorRuntime {
 
   /** Export the active object or scene as OBJ/MTL, optionally with textures. */
   async exportObj(
-    scope: 'active' | 'scene' = 'scene',
-    includeTextures = false
+    scope: ObjExportScope = 'scene',
+    includeTextures = false,
+    options?: ModelExportOptions
   ): Promise<void> {
     if (this.fileBusy) {
       return;
     }
     const active = this.getActiveNode();
-    const requested =
-      scope === 'active'
-        ? active && !active.reference
-          ? [active]
-          : []
-        : this.document.nodes.filter((node) => !node.reference);
+    const requested = this.nodesForExportScope(scope, active);
     if (requested.length === 0 || requested.every((node) => !node.visible)) {
       this.projectError =
-        scope === 'active'
-          ? 'Select a visible object before exporting.'
-          : 'There are no visible objects to export.';
+        scope === 'scene'
+          ? 'There are no visible objects to export.'
+          : 'Select at least one visible object before exporting.';
       this.notify('warning', 'Nothing to export', this.projectError);
       this.publish();
       return;
@@ -9524,14 +9585,20 @@ export class EditorRuntime {
       const base = this.exportBaseName(
         scope === 'active' ? active?.name : this.projectName
       );
+      const atlas = await this.buildAtlasForExport(requested, options, base);
       const textures = includeTextures
         ? await this.exportTextureFiles(requested, base)
         : new Map<string, ObjTextureFile>();
       const result = exportObj(requested, this.document.groups, {
-        upAxis: 'y',
+        upAxis: options?.upAxis ?? 'y',
+        scale: options?.scale ?? 1,
         mtlName: `${base}.mtl`,
         includeTextures,
-        textures
+        textures,
+        uvTransforms: atlas?.transforms,
+        atlasTexture: atlas
+          ? { name: atlas.fileName, bytes: atlas.bytes }
+          : undefined
       });
       const saved = await saveFrameSequence(
         [
@@ -9570,19 +9637,14 @@ export class EditorRuntime {
     const clip = animation.getClip(options.clipId) ?? animation.activeClip;
     const scope: ObjExportScope = options.scope;
     const active = this.getActiveNode();
-    const requested =
-      scope === 'active'
-        ? active && !active.reference
-          ? [active]
-          : []
-        : this.document.nodes.filter((node) => !node.reference);
+    const requested = this.nodesForExportScope(scope, active);
     if (requested.length === 0 || requested.every((node) => !node.visible)) {
       this.notify(
         'warning',
         'Nothing to export',
-        scope === 'active'
-          ? 'Select a visible object before exporting.'
-          : 'There are no visible objects to export.'
+        scope === 'scene'
+          ? 'There are no visible objects to export.'
+          : 'Select at least one visible object before exporting.'
       );
       return;
     }
@@ -9624,10 +9686,19 @@ export class EditorRuntime {
         scope === 'active' ? active?.name : this.projectName
       );
       const mtlName = `${base}.mtl`;
+      const atlas = await this.buildAtlasForExport(
+        requested,
+        {
+          unifyTextures: options.unifyTextures,
+          includeTextures: options.includeTextures,
+          atlasSize: options.atlasSize
+        },
+        base
+      );
       const textures = options.includeTextures
         ? await this.exportTextureFiles(requested, base)
         : new Map<string, ObjTextureFile>();
-      const includeTextures = textures.size > 0;
+      const includeTextures = textures.size > 0 || atlas !== null;
       const files: { name: string; bytes: Uint8Array }[] = [];
       let mtlWritten = false;
       animation.setActiveClip(clip.id);
@@ -9638,15 +9709,24 @@ export class EditorRuntime {
           mtlName,
           includeTextures,
           textures,
-          pose: this.animationPose
+          pose: this.animationPose,
+          uvTransforms: atlas?.transforms,
+          atlasTexture: atlas
+            ? { name: atlas.fileName, bytes: atlas.bytes }
+            : undefined
         });
         if (!mtlWritten) {
           files.push({
             name: mtlName,
             bytes: new TextEncoder().encode(result.mtl)
           });
+          if (atlas) {
+            files.push({ name: atlas.fileName, bytes: atlas.bytes });
+          }
           for (const texture of result.textures) {
-            files.push({ name: texture.name, bytes: texture.bytes });
+            if (!atlas || texture.name !== atlas.fileName) {
+              files.push({ name: texture.name, bytes: texture.bytes });
+            }
           }
           mtlWritten = true;
         }
@@ -9681,6 +9761,57 @@ export class EditorRuntime {
       this.fileBusy = false;
       this.publish();
     }
+  }
+
+  /** Build a temporary atlas for textured export nodes, or return null. */
+  private async buildAtlasForExport(
+    nodes: readonly MeshNode[],
+    options:
+      | Pick<ModelExportOptions, 'unifyTextures' | 'includeTextures' | 'atlasSize'>
+      | undefined,
+    base: string
+  ): Promise<ExportAtlasResult | null> {
+    if (
+      !options?.unifyTextures ||
+      !options.includeTextures
+    ) {
+      return null;
+    }
+    const entries = [];
+    for (const node of nodes) {
+      if (node.reference || !node.textureId) {
+        continue;
+      }
+      const asset = this.textureLibrary.get(node.textureId);
+      if (!asset || asset.role === 'reference') {
+        continue;
+      }
+      const evaluated = node.getEvaluatedMesh();
+      if (evaluated.error) {
+        throw new Error(`${node.name}: ${evaluated.error}`);
+      }
+      entries.push({ nodeId: node.id, mesh: evaluated.mesh, asset });
+    }
+    if (entries.length === 0) {
+      return null;
+    }
+    return buildExportAtlas(entries, options.atlasSize, base);
+  }
+
+  /** Resolve the object subset requested by an export scope. */
+  private nodesForExportScope(
+    scope: ObjExportScope,
+    active: MeshNode | null
+  ): MeshNode[] {
+    if (scope === 'active') {
+      return active && !active.reference ? [active] : [];
+    }
+    if (scope === 'selected') {
+      return this.document.nodes.filter(
+        (node) => !node.reference && this.selectedNodeIds.has(node.id)
+      );
+    }
+    return this.document.nodes.filter((node) => !node.reference);
   }
 
   /** Sanitize a project or object name for export file names. */

@@ -1,6 +1,6 @@
 # OBJ and GLB interchange
 
-**Status:** OBJ and GLB import/export are implemented with simple per-face material colors. Both imports are one undoable scene transaction. OBJ preserves quads/n-gons and UVs; GLB is triangulated by definition. OBJ export can target the active object or the whole scene and can include the assigned composite texture as a PNG beside the MTL. Both OBJ and GLB export the evaluated modifier result; GLB embeds assigned composite textures and is validated in Blender with indexed primitives and node TRS transforms.
+**Status:** OBJ and GLB import/export are implemented with simple per-face material colors. Both imports are one undoable scene transaction. OBJ preserves quads/n-gons and UVs; GLB is triangulated by definition. A shared **Export model** dialog exports the active object, selected objects, or the whole scene, with optional texture inclusion, export-time atlas unification, and format-specific options. Both OBJ and GLB export the evaluated modifier result; GLB embeds textures and is validated in Blender with indexed primitives and node TRS transforms.
 
 ## Coordinate boundary
 
@@ -22,10 +22,13 @@ Implemented:
 - Malformed-index validation
 - Export with global OBJ vertex/UV indices
 - Export of an `.obj` and `.mtl` bundle
-- Source choice: active object or whole scene
+- Source choice: active object, selected objects, or whole scene
 - Optional composite texture export as a PNG referenced by `map_Kd`
+- Export-time texture atlas with per-object UV remapping
+- Up-axis and export-scale options
 - Browser ZIP or native folder bundle
 - Evaluated modifier geometry at the current shape weights
+- OBJ frame sequences share the same MTL and optional texture atlas across frames
 
 Limitations:
 
@@ -34,7 +37,7 @@ Limitations:
 - Normal maps are not exported.
 - Shape weights are baked when they are active in the evaluated result; OBJ does not retain morph targets.
 
-![OBJ export options](media/scene-interchange.png)
+![Export options](media/scene-interchange.png)
 
 ## GLB
 
@@ -45,13 +48,21 @@ Implemented with Three's GLTF loader/exporter:
 - Per-corner UVs and split seams preserved
 - Material base colors become the node palette
 - Multiple meshes import as separate nodes
+- Shared Export model dialog with active/selected/scene scope
 - Binary GLB export with triangulated, indexed evaluated geometry and simple materials
 - Embedded assigned composite textures as PNG bufferViews
+- Export-time texture atlas with per-node UV remapping
+- Two-sided scene materials export with `doubleSided`
+- Clip selection: all clips or active clip
+- Clip range override and export sample FPS
+- Procedural modulators baked into sampled transform/camera/light tracks
+- Optional cameras, punctual lights, and animation inclusion
 - Y-up conversion at both boundaries
 - Node TRS output and material names for broad DCC compatibility
 - Scene cameras export as glTF perspective cameras
 - Directional and point lights export with `KHR_lights_punctual`
 - Camera/light animation imports and exports as node position/rotation channels
+- Object/group transform, shape-weight, and Mesh Motion animation export
 - Exported evaluated, textured GLB opened successfully in Blender 5.1
 
 Limitations:
@@ -59,6 +70,8 @@ Limitations:
 - PBR material complexity is reduced to base color plus the assigned composite texture; roughness/metalness remain defaults.
 - GLTF textures and skins are not imported yet. Object, morph, camera, and light animations are imported. Morph targets import into shape keys and export as relative GLB morph targets with influences when exporting the unmodified base mesh.
 - Camera FOV and light intensity are fixed in the GLB because glTF node animation cannot animate camera/light properties; the project file retains their full animation.
+- Procedural texture animation is project-only; glTF has no standard texture-binding animation channel.
+- Audio, annotations, reference planes, and render-only Outline effects are not part of model interchange.
 - glTF stores camera orientation but not the original target distance, so imported camera targets are placed five units ahead along the view direction.
 - Non-manifold GLB triangle soup is rejected with a clear error.
 - Export uses the evaluated modifier mesh and simple per-face colors.

@@ -9,6 +9,8 @@
     kicker?: string;
     width?: string;
     size?: 'compact' | 'full';
+    /** Keep the actions visible and scroll only the body. */
+    scrollBody?: boolean;
     children: Snippet;
     actions?: Snippet;
     onClose: () => void;
@@ -19,6 +21,7 @@
     kicker = '',
     width = '440px',
     size = 'compact',
+    scrollBody = false,
     children,
     actions,
     onClose
@@ -41,6 +44,7 @@
   bind:this={dialog}
   class="modal-dialog loupoli-panel"
   class:full={size === 'full'}
+  class:scroll-body={scrollBody}
   style={`--modal-width:${width}`}
   aria-labelledby={titleId}
   oncancel={close}
@@ -86,28 +90,35 @@
     box-shadow: var(--shadow-panel);
   }
 
+  .modal-dialog.full,
+  .modal-dialog.scroll-body {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
   .modal-dialog.full {
     width: calc(100vw - var(--space-6));
     max-width: none;
     height: calc(100dvh - var(--space-6));
     max-height: calc(100dvh - var(--space-6));
     margin: auto;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
   }
 
-  .modal-dialog.full header {
+  .modal-dialog.full header,
+  .modal-dialog.scroll-body header {
     flex: 0 0 auto;
   }
 
-  .modal-dialog.full .modal-body {
+  .modal-dialog.full .modal-body,
+  .modal-dialog.scroll-body .modal-body {
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
   }
 
-  .modal-dialog.full footer {
+  .modal-dialog.full footer,
+  .modal-dialog.scroll-body footer {
     flex: 0 0 auto;
   }
 

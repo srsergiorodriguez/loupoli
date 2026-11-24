@@ -134,7 +134,7 @@ See [docs/PWA.md](docs/PWA.md) for the full deployment and browser limitations.
   multiple clips, mesh-motion poses, scene cameras, clip audio with waveform
   playback and WebM/MP4 muxing, clean still/frame/MP4 rendering, and cancellable jobs.
 - **Persistence and interchange:** `.lpoli` v11 with binary texture and audio chunks,
-  IndexedDB autosave/recovery, OBJ/GLB import/export, and native file I/O.
+  IndexedDB autosave/recovery, shared OBJ/GLB export options, export-time texture atlases, evaluated animation, and native file I/O.
 - **Platforms:** installable PWA, Tauri desktop shell, and signed iPad
   development build.
 
@@ -174,7 +174,7 @@ Key boundaries:
 Current checks:
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **338 tests across 70 files**.
+- `npm test`: **347 tests across 71 files**.
 - `npm run build`: passes.
 - `cargo test` in `src-tauri`: **7 passing tests**.
 - Signed iPad release installed and launched on an iPad Air with iPadOS 26.6.1.

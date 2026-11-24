@@ -17,7 +17,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 11. [Phase 5A lighting](./PHASE5_LIGHTING.md) — light model, Light workspace, bake, and v4 persistence.
 12. [Render workspace and camera](./RENDER.md) — scene cameras, virtual resolution, and clean still rendering.
 13. [Animation workspace](./ANIMATION.md) — transform tracks, timeline, playback, and persistence.
-14. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, scoped OBJ bundles with optional PNG textures, simple materials, and coordinate conversion.
+14. [OBJ and GLB interchange](./INTERCHANGE.md) — model import/export, shared scoped export dialog, optional or unified textures, simple materials, GLB animation/modulator options, and coordinate conversion.
 15. [Shape keys](./SHAPE_KEYS.md) — morph targets, weights, persistence, and topology guards.
 16. [iOS CI](./CI.md) — manual signed iPad builds on GitHub Actions.
 17. [Root README](../README.md) — product overview, setup, and current capabilities.
@@ -41,7 +41,7 @@ This directory is the documentation set for `loupoli`. It is intentionally organ
 | [Render workspace](./RENDER.md) | Scene camera model, Render workspace, virtual resolution, and still export | Frame/video export or camera animation |
 | [Animation workspace](./ANIMATION.md) | Transform tracks, timeline, playback, and persistence | Camera/shape-key animation design |
 | [UI rules](./UI_RULES.md) | Application bar, modals, toasts, and complete field-row rhythm | Internal help content |
-| [Interchange](./INTERCHANGE.md) | OBJ/GLB import/export, evaluated geometry, simple materials, embedded GLB textures, Y-up conversion | Texture import, skins |
+| [Interchange](./INTERCHANGE.md) | OBJ/GLB import/export, evaluated geometry, scoped exports, export-time texture atlas, simple materials, GLB animation/camera/light options, Y-up conversion | Texture import, skins |
 | [Shape keys](./SHAPE_KEYS.md) | Morph targets, weights, persistence, topology guard | Weight animation and GLB morph export |
 | [iOS CI](./CI.md) | Manual signed IPA workflow, signing secrets, artifact install | Local build instructions |
 | [Root README](../README.md) | Product overview and quick start | Canonical rules or format specifications |

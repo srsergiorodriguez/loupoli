@@ -56,6 +56,7 @@ The Pencil toggle sits before Snap in the status bar and is stored in `localStor
 | Texture + Wire | Texture surface plus a front-only topological wire overlay. Back edges are depth-occluded. |
 | Select object in Paint | Activates that object's assigned texture for painting. |
 | Merge textures | With two or more textured objects selected, pack their UV layouts into one shared atlas. Texture layers are flattened; the operation is undoable. |
+| Export model | Import / Export opens the shared OBJ/GLB dialog. Choose active/selected/scene scope, texture or export-time atlas, OBJ axis/scale, or GLB clip/range/FPS, camera/light, and procedural-modulator options. |
 | ActionDock | Tap/click Extrude, Inset, Bevel, Loop Cut, or Loop Slide to arm it. Drag up/right to set the amount; release applies. Type an exact amount then Enter; Esc cancels. Bevel amount is a world-space width. Subdivide splits the selected faces into triangles, or the whole mesh into quads when nothing is selected. |
 | E / I | Arm Extrude / Inset for the current face selection. |
 | Bevel | Select one interior edge, then choose Bevel in the Action Dock. Drag or type the width. One edge per operation; endpoint corners are absorbed by the surrounding faces. Endpoints must be interior valence-three vertices; the topology rebuild resets UV seams. |

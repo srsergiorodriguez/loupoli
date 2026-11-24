@@ -274,12 +274,14 @@ export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 /** Options for exporting an animated OBJ sequence. */
 export interface ObjFrameExportOptions {
   readonly clipId: string;
-  readonly scope: 'active' | 'scene';
+  readonly scope: 'active' | 'selected' | 'scene';
   readonly startFrame: number;
   readonly endFrame: number;
   readonly step: number;
   readonly keyedOnly: boolean;
   readonly includeTextures: boolean;
+  readonly unifyTextures: boolean;
+  readonly atlasSize: import('../io/exportOptions').TextureAtlasSize;
 }
 
 /** One selected animation key, identified by track and frame. */

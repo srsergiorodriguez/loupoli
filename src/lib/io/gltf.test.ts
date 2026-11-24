@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { exportGlb, importGlb } from './gltf';
-import { createCubeMesh } from '../geometry/primitives';
+import { createCubeMesh, createGridMesh } from '../geometry/primitives';
 import { MeshNode } from '../scene/MeshNode';
 import { AnimationClip } from '../scene/SceneAnimation';
+import { createModulator } from '../scene/AnimationModulators';
 import { SceneGroup } from '../scene/SceneGroup';
 import { SceneCamera } from '../scene/SceneCamera';
 import { SceneLight } from '../scene/SceneLight';
@@ -157,6 +158,7 @@ function readGlbJson(bytes: Uint8Array): {
   extensions?: { KHR_lights_punctual?: { lights?: unknown[] } };
   extensionsUsed?: string[];
   nodes?: { camera?: number; extensions?: unknown }[];
+  materials?: { doubleSided?: boolean }[];
   animations?: { channels?: { target?: { node?: number } }[] }[];
 } {
   const view = new DataView(
@@ -169,6 +171,132 @@ function readGlbJson(bytes: Uint8Array): {
     new TextDecoder().decode(bytes.subarray(20, 20 + length))
   ) as ReturnType<typeof readGlbJson>;
 }
+
+describe('GLB export fidelity', () => {
+  it('preserves the two-sided material flag', async () => {
+    const node = new MeshNode(createCubeMesh(1), 'cube', 'Card', 'node-20');
+    node.doubleSided = true;
+    const bytes = await exportGlb([node], [], new Map());
+    const json = readGlbJson(bytes);
+    expect(json.materials?.[0]?.doubleSided).toBe(true);
+  });
+
+  it('bakes a camera modulator into GLB camera motion', async () => {
+    const node = new MeshNode(createCubeMesh(1), 'cube', 'Body', 'node-23');
+    const camera = new SceneCamera({
+      id: 'camera-23',
+      name: 'Modulated Camera',
+      position: [4, -6, 4],
+      target: [0, 0, 0],
+      fov: 35
+    });
+    const clip = new AnimationClip('Camera LFO', 'clip-23', 0, 8);
+    clip.modulators.push(
+      createModulator('lfo', 'camera', camera.id, {
+        property: 'position',
+        axis: 'z',
+        amplitude: 2,
+        rate: 1,
+        waveform: 'sine'
+      })
+    );
+    const bytes = await exportGlb([node], [], new Map(), {
+      clips: [clip],
+      fps: 24,
+      cameras: [camera.snapshot()],
+      bakeModulators: true
+    });
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    const imported = await importGlb(buffer, 24);
+    const cameraTrack = imported.clips[0]?.cameraTracks?.[0];
+    expect(cameraTrack).toBeDefined();
+    const zValues = cameraTrack?.keyframes.map((key) => key.position[2]) ?? [];
+    expect(Math.max(...zValues) - Math.min(...zValues)).toBeGreaterThan(1);
+  });
+
+  it('samples a custom clip range at the requested FPS', async () => {
+    const node = new MeshNode(createCubeMesh(1), 'cube', 'Range', 'node-22');
+    const clip = new AnimationClip('Range', 'clip-22', 0, 24);
+    const track = clip.ensureTrack(node.id, 'node');
+    track.setKey(0, {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1]
+    });
+    track.setKey(24, {
+      position: [24, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1]
+    });
+    const bytes = await exportGlb([node], [], new Map(), {
+      clips: [clip],
+      fps: 24,
+      rangeMode: 'custom',
+      startFrame: 0,
+      endFrame: 12,
+      sampleFps: 12
+    });
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    const imported = await importGlb(buffer, 24);
+    const keys = imported.clips[0].tracks[0]?.keyframes ?? [];
+    expect(imported.clips[0].endFrame).toBe(12);
+    expect(keys.at(-1)?.transform.position[0]).toBeCloseTo(12);
+  });
+
+  it('bakes procedural node modulators into animation', async () => {
+    const node = new MeshNode(createCubeMesh(1), 'cube', 'Oscillator', 'node-21');
+    const clip = new AnimationClip('LFO', 'clip-21', 0, 8);
+    clip.modulators.push(
+      createModulator('lfo', 'node', node.id, {
+        property: 'position',
+        axis: 'z',
+        amplitude: 1,
+        rate: 1,
+        waveform: 'sine'
+      })
+    );
+    const bytes = await exportGlb([node], [], new Map(), {
+      clips: [clip],
+      fps: 24,
+      bakeModulators: true
+    });
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    const imported = await importGlb(buffer, 24);
+    expect(imported.clips).toHaveLength(1);
+    const keys = imported.clips[0].tracks[0]?.keyframes ?? [];
+    expect(keys.length).toBeGreaterThan(1);
+    expect(Math.max(...keys.map((key) => key.transform.position[2]))).toBeGreaterThan(0.5);
+  });
+});
+
+describe('GLB UV export', () => {
+  it('applies an export-atlas UV transform', async () => {
+    const node = new MeshNode(createGridMesh(2, 2), 'grid', 'UV Grid', 'node-30');
+    const original = node.mesh.getCornerUv(0);
+    const bytes = await exportGlb([node], [], new Map(), undefined, {
+      uvTransforms: new Map([
+        [node.id, { offsetU: 0.4, offsetV: 0.2, scale: 0.25 }]
+      ])
+    });
+    const buffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
+    const imported = await importGlb(buffer, 24);
+    const uv = imported.nodes[0].mesh.getCornerUv(0);
+    expect(uv[0]).toBeCloseTo(0.4 + original[0] * 0.25);
+    expect(uv[1]).toBeCloseTo(0.2 + original[1] * 0.25);
+  });
+});
 
 describe('GLB cameras and lights', () => {
   it('exports cameras, punctual lights, and their animation', async () => {

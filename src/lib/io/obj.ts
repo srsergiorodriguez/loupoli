@@ -26,7 +26,7 @@ export interface ObjImportedObject {
 }
 
 /** Which document objects an OBJ export includes. */
-export type ObjExportScope = 'active' | 'scene';
+export type ObjExportScope = import('./exportOptions').ModelExportScope;
 
 /** One binary texture file to place beside the MTL. */
 export interface ObjTextureFile {
@@ -40,6 +40,14 @@ export interface ObjExportOptions {
   readonly mtlName: string;
   readonly includeTextures?: boolean;
   readonly textures?: ReadonlyMap<string, ObjTextureFile>;
+  /** World-space export scale applied to positions. */
+  readonly scale?: number;
+  readonly uvTransforms?: ReadonlyMap<string, {
+    readonly offsetU: number;
+    readonly offsetV: number;
+    readonly scale: number;
+  }>;
+  readonly atlasTexture?: ObjTextureFile;
   /** Optional animated transform pose keyed by node or group id. */
   readonly pose?: ReadonlyMap<string, NodeTransform>;
 }
@@ -260,10 +268,13 @@ export function exportObj(
       ? node.materialPalette
       : ['#c8c2ad'];
     const materialNames = palette.map((_color, index) => `${objectName}_mat${index}`);
+    const uvTransform = options.uvTransforms?.get(node.id) ?? null;
     const texture =
-      options.includeTextures && node.textureId
-        ? options.textures?.get(node.textureId) ?? null
-        : null;
+      options.includeTextures && options.atlasTexture && uvTransform
+        ? options.atlasTexture
+        : options.includeTextures && node.textureId
+          ? options.textures?.get(node.textureId) ?? null
+          : null;
     if (texture) {
       exportedTextures.set(texture.name, texture);
     }
@@ -275,7 +286,10 @@ export function exportObj(
         positions[vertex * 3 + 1],
         positions[vertex * 3 + 2]
       ).applyMatrix4(matrix);
-      const out = toObjPosition([point.x, point.y, point.z], options.upAxis);
+      const out = toObjPosition(
+        [point.x * (options.scale ?? 1), point.y * (options.scale ?? 1), point.z * (options.scale ?? 1)],
+        options.upAxis
+      );
       obj.push(`v ${out[0]} ${out[1]} ${out[2]}`);
     }
     let uvIndex = uvBase;
@@ -292,9 +306,17 @@ export function exportObj(
       do {
         const vertex = mesh.heOrigin[halfEdge];
         uvIndex += 1;
-        obj.push(
-          `vt ${mesh.heUv[halfEdge * 2]} ${mesh.heUv[halfEdge * 2 + 1]}`
-        );
+        const rawU = mesh.heUv[halfEdge * 2];
+        const rawV = mesh.heUv[halfEdge * 2 + 1];
+        if (uvTransform) {
+          obj.push(
+            `vt ${uvTransform.offsetU + rawU * uvTransform.scale} ${
+              uvTransform.offsetV + rawV * uvTransform.scale
+            }`
+          );
+        } else {
+          obj.push(`vt ${rawU} ${rawV}`);
+        }
         tokens.push(`${vertexBase + vertex + 1}/${uvIndex}`);
         halfEdge = mesh.heNext[halfEdge];
       } while (halfEdge !== first);

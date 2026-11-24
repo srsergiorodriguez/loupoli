@@ -5,6 +5,7 @@
   import SelectField from '../Primitives/SelectField.svelte';
   import Switch from '../Primitives/Switch.svelte';
   import type { ObjExportScope } from '../../io/obj';
+  import type { TextureAtlasSize } from '../../io/exportOptions';
   import type { AnimationClipSummary } from '../../editor/types';
   import { MAX_OBJ_FRAME_EXPORT } from '../../editor/animationFrameExport';
 
@@ -19,8 +20,11 @@
     step: number;
     frameCount: number;
     includeTexture: boolean;
+    unifyTextures: boolean;
+    atlasSize: TextureAtlasSize;
     hasTexture: boolean;
     hasActive: boolean;
+    hasSelected: boolean;
     busy: boolean;
     onScopeChange: (scope: ObjExportScope) => void;
     onClipChange: (clipId: string) => void;
@@ -29,6 +33,8 @@
     onEndFrameChange: (frame: number) => void;
     onStepChange: (step: number) => void;
     onIncludeTextureChange: (include: boolean) => void;
+    onUnifyTexturesChange: (unify: boolean) => void;
+    onAtlasSizeChange: (size: TextureAtlasSize) => void;
     onCancel: () => void;
     onExport: () => void;
   }
@@ -43,8 +49,11 @@
     step,
     frameCount,
     includeTexture,
+    unifyTextures,
+    atlasSize,
     hasTexture,
     hasActive,
+    hasSelected,
     busy,
     onScopeChange,
     onClipChange,
@@ -53,6 +62,8 @@
     onEndFrameChange,
     onStepChange,
     onIncludeTextureChange,
+    onUnifyTexturesChange,
+    onAtlasSizeChange,
     onCancel,
     onExport
   }: Props = $props();
@@ -70,6 +81,8 @@
 <ModalDialog
   title="Export OBJ frames"
   kicker="Animation"
+  width="520px"
+  scrollBody
   onClose={onCancel}
 >
   <SelectField
@@ -78,6 +91,9 @@
     options={[
       ...(hasActive
         ? [{ value: 'active', label: 'Active object' }]
+        : []),
+      ...(hasSelected
+        ? [{ value: 'selected', label: 'Selected objects' }]
         : []),
       { value: 'scene', label: 'Whole scene' }
     ]}
@@ -159,6 +175,27 @@
     />
   {:else}
     <p class="hint">No assigned texture. The sequence will contain OBJ and MTL only.</p>
+  {/if}
+  {#if hasTexture && includeTexture}
+    <Switch
+      label="Unify textures into one atlas"
+      description="Pack textured objects into one export-only PNG."
+      checked={unifyTextures}
+      onChange={onUnifyTexturesChange}
+    />
+    {#if unifyTextures}
+      <SelectField
+        label="Atlas size"
+        value={atlasSize}
+        options={[
+          { value: 'auto', label: 'Auto' },
+          { value: '1024', label: '1024 × 1024' },
+          { value: '2048', label: '2048 × 2048' },
+          { value: '4096', label: '4096 × 4096' }
+        ]}
+        onChange={(value) => onAtlasSizeChange(value as TextureAtlasSize)}
+      />
+    {/if}
   {/if}
 
   {#if tooMany}

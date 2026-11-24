@@ -93,6 +93,47 @@ describe('OBJ interchange', () => {
     expect(exported.textures).toEqual([texture]);
   });
 
+  it('applies an export atlas UV transform and one map_Kd texture', () => {
+    const nodes = importObjNodes(CUBE_OBJ, CUBE_MTL);
+    const atlas = {
+      name: 'Cube-atlas.png',
+      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+    };
+    const uv = nodes[0].mesh.heUv;
+    const exported = exportObj(nodes, [], {
+      upAxis: 'y',
+      mtlName: 'Cube.mtl',
+      includeTextures: true,
+      atlasTexture: atlas,
+      uvTransforms: new Map([
+        [nodes[0].id, { offsetU: 0.25, offsetV: 0.1, scale: 0.2 }]
+      ])
+    });
+    expect(exported.mtl).toContain('map_Kd Cube-atlas.png');
+    expect(exported.textures).toEqual([atlas]);
+    const roundTrip = importObjNodes(exported.obj, exported.mtl);
+    expect(roundTrip[0].mesh.getCornerUv(0)[0]).toBeCloseTo(
+      0.25 + uv[0] * 0.2
+    );
+    expect(roundTrip[0].mesh.getCornerUv(0)[1]).toBeCloseTo(
+      0.1 + uv[1] * 0.2
+    );
+  });
+
+  it('applies OBJ up-axis and export scale options', () => {
+    const nodes = importObjNodes(CUBE_OBJ, CUBE_MTL);
+    const first = nodes[0].mesh.getVertexPosition(0);
+    const exported = exportObj(nodes, [], {
+      upAxis: 'z',
+      mtlName: 'Cube.mtl',
+      scale: 2
+    });
+    const parsed = parseObj(exported.obj, '', { upAxis: 'z', scale: 1 });
+    expect(parsed[0].faces[0].corners[0].position[0]).toBeCloseTo(first[0] * 2);
+    expect(parsed[0].faces[0].corners[0].position[1]).toBeCloseTo(first[1] * 2);
+    expect(parsed[0].faces[0].corners[0].position[2]).toBeCloseTo(first[2] * 2);
+  });
+
   it('exports the evaluated modifier result', () => {
     const nodes = importObjNodes(CUBE_OBJ, CUBE_MTL);
     nodes[0].modifiers = [createModifier('grid-array')];
