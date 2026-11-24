@@ -183,6 +183,9 @@
     <path d="M4.6 10.2 11 3.8l7.2 7.2-6.4 6.4a2.1 2.1 0 0 1-3 0l-4.2-4.2a2.1 2.1 0 0 1 0-3Z" />
     <path d="m8.7 6.1 7.2 7.2" />
     <path d="M18.7 14.3c1.2 1.7 2.1 3.1 2.1 4.5a2.1 2.1 0 0 1-4.2 0c0-1.4.9-2.8 2.1-4.5Z" />
+  {:else if name === 'fill-selection'}
+    <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" stroke-dasharray="3 2.5" />
+    <path d="M7.5 15.5 12 7.5l4.5 8H7.5Z" fill="currentColor" stroke="none" opacity=".85" />
   {:else if name === 'eyedropper'}
     <path d="m14.5 4.5 5 5M13 6l5 5M4 20l3.2-.8 8.3-8.3-2.4-2.4L4.8 16.8 4 20Z" />
     <path d="m11.1 7.5 5.4 5.4" />

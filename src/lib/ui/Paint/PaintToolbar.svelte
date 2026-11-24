@@ -128,7 +128,7 @@
   <span class="paint-divider" aria-hidden="true"></span>
   <IconButton
     label="Fill selected faces or UV islands"
-    icon="fill"
+    icon="fill-selection"
     tooltip="Fill selected faces or UV islands"
     tooltipPlacement="bottom"
     disabled={!canFillSelection}

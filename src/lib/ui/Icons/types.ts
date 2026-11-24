@@ -50,6 +50,7 @@ export type IconName =
   | 'ellipse'
   | 'gradient'
   | 'fill'
+  | 'fill-selection'
   | 'eyedropper'
   | 'bevel'
   | 'more'
