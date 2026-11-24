@@ -62,6 +62,10 @@ export class FinalShadowTracer {
     this.world.copy(camera.matrixWorld);
     const cameraPosition = camera.position;
     const triangles = this.bvh.triangles;
+    const point = new Vector3();
+    const normal = new Vector3();
+    const edge1 = new Vector3();
+    const edge2 = new Vector3();
     for (let y = 0; y < this.height; y += 1) {
       const ndcY = ((y + 0.5) / this.height) * 2 - 1;
       for (let x = 0; x < this.width; x += 1) {
@@ -84,7 +88,7 @@ export class FinalShadowTracer {
         }
         const index = y * this.width + x;
         const offset = index * 3;
-        const point = new Vector3()
+        point
           .copy(cameraPosition)
           .addScaledVector(this.direction, hit.distance);
         points[offset] = point.x;
@@ -100,10 +104,9 @@ export class FinalShadowTracer {
         const cx = triangles[triangle + 6];
         const cy = triangles[triangle + 7];
         const cz = triangles[triangle + 8];
-        const normal = new Vector3()
-          .set(bx - ax, by - ay, bz - az)
-          .cross(new Vector3(cx - ax, cy - ay, cz - az))
-          .normalize();
+        edge1.set(bx - ax, by - ay, bz - az);
+        edge2.set(cx - ax, cy - ay, cz - az);
+        normal.crossVectors(edge1, edge2).normalize();
         if (normal.dot(this.direction) > 0) {
           normal.multiplyScalar(-1);
         }
