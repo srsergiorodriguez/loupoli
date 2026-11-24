@@ -138,8 +138,45 @@
     <rect x="4" y="4" width="16" height="16" rx="1.5" />
     <path d="M12 4v16M4 12h16M8 8h8v8H8z" stroke-dasharray="2 1.5" />
   {:else if name === 'loop-slide'}
-    <path d="M4 7c4-3 12-3 16 0M4 17c4-3 12-3 16 0" />
-    <path d="M13 12h7M17 9l3 3-3 3" />
+    <ellipse cx="12" cy="9.5" rx="7.5" ry="4.5" />
+    <path d="M7 15.2c1.5 1.1 3.1 1.7 5 1.7s3.5-.6 5-1.7" opacity=".55" />
+    <path d="M5 19h14M5 19l2.4-2M5 19l2.4 2M19 19l-2.4-2M19 19l-2.4 2" />
+  {:else if name === 'cube'}
+    <path d="M12 3.5 20 8v8l-8 4.5L4 16V8l8-4.5Z" />
+    <path d="M4 8l8 4.5L20 8M12 12.5v8" />
+  {:else if name === 'sphere'}
+    <circle cx="12" cy="12" r="8" />
+    <path d="M4 12h16M12 4c3 2.5 3 13.5 0 16M12 4c-3 2.5-3 13.5 0 16" />
+  {:else if name === 'cylinder'}
+    <ellipse cx="12" cy="6.5" rx="6.5" ry="2.6" />
+    <path d="M5.5 6.5v11c0 1.5 2.9 2.7 6.5 2.7s6.5-1.2 6.5-2.7v-11" />
+    <path d="M5.5 17.5c0 1.5 2.9 2.7 6.5 2.7s6.5-1.2 6.5-2.7" />
+  {:else if name === 'grid'}
+    <rect x="3.5" y="3.5" width="17" height="17" rx="1" />
+    <path d="M3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17" />
+  {:else if name === 'mesh'}
+    <path d="M12 3 21 19H3L12 3Z" />
+    <path d="M12 3v16M6.5 11h11M3 19l9-6 9 6" opacity=".55" />
+  {:else if name === 'shading-wire'}
+    <path d="M12 3.5 20 8v8l-8 4.5L4 16V8l8-4.5Z" />
+    <path d="M4 8l8 4.5L20 8M12 12.5V20.5M8 5.3l8 4.5M16 5.3l-8 4.5" opacity=".45" />
+  {:else if name === 'shading-solid'}
+    <path d="M12 3.5 20 8v8l-8 4.5L4 16V8l8-4.5Z" fill="currentColor" opacity=".22" stroke="none" />
+    <path d="M12 3.5 20 8l-8 4.5L4 8l8-4.5Z" fill="currentColor" opacity=".8" stroke="none" />
+    <path d="M12 12.5 20 8v8l-8 4.5v-8Z" fill="currentColor" opacity=".45" stroke="none" />
+    <path d="M12 3.5 20 8v8l-8 4.5L4 16V8l8-4.5Z" />
+    <path d="M4 8l8 4.5L20 8M12 12.5v8" />
+  {:else if name === 'shading-texture'}
+    <rect x="3.5" y="3.5" width="17" height="17" rx="2" />
+    <path d="M3.5 12h8.5V3.5H3.5V12ZM12 12h8.5v8.5H12V12Z" fill="currentColor" stroke="none" opacity=".75" />
+  {:else if name === 'shading-texture-wire'}
+    <rect x="3.5" y="3.5" width="17" height="17" rx="2" />
+    <path d="M3.5 12h8.5V3.5H3.5V12ZM12 12h8.5v8.5H12V12Z" fill="currentColor" stroke="none" opacity=".42" />
+    <path d="M3.5 8.4h17M8.4 3.5v17" opacity=".9" />
+  {:else if name === 'shading-lit'}
+    <circle cx="12" cy="12" r="7.5" />
+    <path d="M12 4.5a7.5 7.5 0 0 0 0 15 5.5 5.5 0 0 1 0-15Z" fill="currentColor" stroke="none" opacity=".3" />
+    <circle cx="9.4" cy="9.4" r="2.1" fill="currentColor" stroke="none" opacity=".8" />
   {:else if name === 'seam'}
     <path d="M4 8h4M16 8h4M4 16h4M16 16h4" />
     <path d="M12 3v18" stroke-dasharray="2.5 3" />

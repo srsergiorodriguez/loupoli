@@ -19,11 +19,11 @@
   let { session }: Props = $props();
 
   const choices: readonly ShadingChoice[] = [
-    { mode: 'wireframe', label: 'Wireframe', icon: 'wire' },
-    { mode: 'solid', label: 'Solid', icon: 'solid' },
-    { mode: 'unlit', label: 'Texture', icon: 'unlit' },
-    { mode: 'texture-wire', label: 'Texture + Wire', icon: 'texture-wire' },
-    { mode: 'lit', label: 'Lit', icon: 'lit' }
+    { mode: 'wireframe', label: 'Wireframe', icon: 'shading-wire' },
+    { mode: 'solid', label: 'Solid', icon: 'shading-solid' },
+    { mode: 'unlit', label: 'Texture', icon: 'shading-texture' },
+    { mode: 'texture-wire', label: 'Texture + Wire', icon: 'shading-texture-wire' },
+    { mode: 'lit', label: 'Lit', icon: 'shading-lit' }
   ];
 </script>
 

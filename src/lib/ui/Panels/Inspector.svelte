@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import Icon from '../Icons/Icon.svelte';
+  import type { IconName } from '../Icons/types';
   import IconButton from '../Primitives/IconButton.svelte';
   import Switch from '../Primitives/Switch.svelte';
   import { BRUSH_PRESETS } from '../../paint/presets';
@@ -63,6 +64,15 @@
   }
 
   let { session }: Props = $props();
+
+  const primitiveGlyph: Readonly<Record<PrimitiveKind, IconName>> = {
+    quadsphere: 'sphere',
+    cylinder: 'cylinder',
+    grid: 'grid',
+    cube: 'cube',
+    imported: 'mesh',
+    reference: 'image'
+  };
 
   const counts = $derived(
     session.snapshot.modifiersActive
@@ -854,7 +864,7 @@
             )}
         >
           <span class="object-glyph">
-            <Icon name={node.primitive === 'reference' ? 'image' : 'solid'} size={14} />
+            <Icon name={primitiveGlyph[node.primitive]} size={14} />
           </span>
           <span class="object-name">{node.name}</span>
           <span class="object-kind">
