@@ -35,6 +35,10 @@ import {
   type TextureAnimationTrackSnapshot,
   type AnimationTargetKind
 } from '../scene/SceneAnimation';
+import {
+  normalizeModulator,
+  type AnimationModulatorSnapshot
+} from '../scene/AnimationModulators';
 import type {
   TextureBlendMode,
   TextureLayerRecord,
@@ -68,6 +72,7 @@ const MAX_ANIMATION_TRACKS = 256;
 const MAX_ANIMATION_CLIPS = 32;
 const MAX_MESH_MOTION_VERTICES = 8192;
 const MAX_ANIMATION_KEYS = 4096;
+const MAX_ANIMATION_MODULATORS = 64;
 const MAX_SHAPE_KEYS = 16;
 const MAX_VERTICES = 1_000_000;
 const MAX_HALF_EDGES = 4_000_000;
@@ -1269,6 +1274,38 @@ function validateAudioClip(
   };
 }
 
+/** Validate the optional procedural modulators attached to one clip. */
+function validateAnimationModulators(
+  value: unknown
+): AnimationModulatorSnapshot[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value) || value.length > MAX_ANIMATION_MODULATORS) {
+    throw new Error('The .lpoli animation modulators are invalid.');
+  }
+  const ids = new Set<string>();
+  return value.map((raw) => {
+    if (typeof raw !== 'object' || raw === null) {
+      throw new Error('The .lpoli animation modulator is invalid.');
+    }
+    if (
+      typeof (raw as Partial<AnimationModulatorSnapshot>).targetId !== 'string' ||
+      (raw as Partial<AnimationModulatorSnapshot>).targetId === ''
+    ) {
+      throw new Error('The .lpoli animation modulator target is invalid.');
+    }
+    const modulator = normalizeModulator(
+      raw as AnimationModulatorSnapshot
+    );
+    if (ids.has(modulator.id)) {
+      throw new Error('The .lpoli animation modulator ids must be unique.');
+    }
+    ids.add(modulator.id);
+    return modulator;
+  });
+}
+
 /** Validate v6 clip animation or migrate a legacy flat animation manifest. */
 function validateAnimationManifest(
   value: unknown,
@@ -1362,6 +1399,7 @@ function validateAnimationManifest(
     const cameras = validateCameraAnimationTracks(clip.cameraTracks, trackIds);
     const lights = validateLightAnimationTracks(clip.lightTracks, trackIds);
     const audio = validateAudioClip(clip.audio, audioAssets);
+    const modulators = validateAnimationModulators(clip.modulators);
     totalTracks +=
       textures.trackCount +
       motion.trackCount +
@@ -1383,6 +1421,7 @@ function validateAnimationManifest(
       meshTracks: motion.tracks,
       cameraTracks: cameras.tracks,
       lightTracks: lights.tracks,
+      modulators,
       ...(audio ? { audio } : {})
     };
   });

@@ -260,6 +260,17 @@ import type {
   LightPose
 } from '../scene/SceneAnimation';
 import {
+  applyCameraModulators,
+  applyLightModulators,
+  applyNodeModulators,
+  createModulator,
+  normalizeModulator,
+  type AnimationModulatorKind,
+  type AnimationModulatorSnapshot,
+  type AudioEnvelopeData,
+  type ModulatorTargetKind
+} from '../scene/AnimationModulators';
+import {
   fitRect,
   upscaleRenderImage,
   canvasToPng,
@@ -1203,6 +1214,12 @@ export class EditorRuntime {
       animationLoop: this.animationLoop,
       animationPlaying: this.animationPlaying,
       animationTracks: this.animationTrackSummaries(),
+      animationModulators: this.document.animation.activeClip.modulators.map(
+        (modulator) => ({
+          ...modulator,
+          pivot: [...modulator.pivot] as [number, number, number]
+        })
+      ),
       annotationMode: this.annotationMode,
       annotationCount: this.document.annotations.all.length,
       animationInterpolation: this.animationInterpolation,
@@ -6606,6 +6623,80 @@ export class EditorRuntime {
         this.animationLightPose.set(light.id, lightPose);
       }
     }
+
+    const modulators = this.document.animation.activeClip.modulators;
+    if (modulators.length > 0) {
+      const audio = new Map<string, AudioEnvelopeData>();
+      for (const asset of this.document.audioAssets) {
+        audio.set(asset.id, {
+          peaks: asset.peaks,
+          duration: asset.duration
+        });
+      }
+      const context = {
+        frame: this.animationFrame,
+        fps: this.document.animation.fps,
+        audio
+      };
+      for (const node of this.document.nodes) {
+        if (
+          modulators.some(
+            (modulator) =>
+              modulator.enabled &&
+              modulator.targetKind === 'node' &&
+              modulator.targetId === node.id
+          )
+        ) {
+          const base = this.animationPose.get(node.id) ?? node.transform;
+          this.animationPose.set(
+            node.id,
+            applyNodeModulators(base, modulators, node.id, context)
+          );
+        }
+      }
+      for (const camera of this.document.cameras) {
+        if (
+          !modulators.some(
+            (modulator) =>
+              modulator.enabled &&
+              modulator.targetKind === 'camera' &&
+              modulator.targetId === camera.id
+          )
+        ) {
+          continue;
+        }
+        const base = this.animationCameraPose.get(camera.id) ?? {
+          position: [...camera.position] as import('../geometry/HalfEdgeMesh').Vec3,
+          target: [...camera.target] as import('../geometry/HalfEdgeMesh').Vec3,
+          fov: camera.fov
+        };
+        this.animationCameraPose.set(
+          camera.id,
+          applyCameraModulators(base, modulators, camera.id, context)
+        );
+      }
+      for (const light of this.document.lights) {
+        if (
+          !modulators.some(
+            (modulator) =>
+              modulator.enabled &&
+              modulator.targetKind === 'light' &&
+              modulator.targetId === light.id
+          )
+        ) {
+          continue;
+        }
+        const base = this.animationLightPose.get(light.id) ?? {
+          position: [...light.position] as import('../geometry/HalfEdgeMesh').Vec3,
+          direction: [...light.direction] as import('../geometry/HalfEdgeMesh').Vec3,
+          intensity: light.intensity
+        };
+        this.animationLightPose.set(
+          light.id,
+          applyLightModulators(base, modulators, light.id, context)
+        );
+      }
+    }
     for (const node of this.document.nodes) {
       node.setMotionDeltas(null);
     }
@@ -6908,6 +6999,129 @@ export class EditorRuntime {
       new SetAnimationCommand(animation, before, after, 'Rename animation clip')
     );
     this.publish();
+  }
+
+  /** Add one procedural modulator to the active clip. */
+  addAnimationModulator(
+    kind: AnimationModulatorKind,
+    targetKind?: ModulatorTargetKind,
+    targetId?: string
+  ): void {
+    const animation = this.document.animation;
+    const target = this.resolveModulatorTarget(kind, targetKind, targetId);
+    if (!target) {
+      this.notify(
+        'warning',
+        'Modulator target unavailable',
+        kind === 'orbit'
+          ? 'Add or select a camera before adding an orbit modulator.'
+          : 'Select an object, camera, or light before adding a modulator.'
+      );
+      return;
+    }
+    const before = animation.snapshot();
+    const audioAssetId =
+      this.document.animation.activeClip.audio?.assetId ??
+      this.document.audioAssets[0]?.id ??
+      '';
+    const modulator = createModulator(kind, target.kind, target.id, {
+      property:
+        target.kind === 'camera'
+          ? 'position'
+          : target.kind === 'light'
+            ? 'position'
+            : 'position',
+      axis: kind === 'orbit' ? 'y' : 'z',
+      blend: kind === 'orbit' ? 'replace' : 'add',
+      audioAssetId
+    });
+    animation.activeClip.modulators.push(modulator);
+    const after = animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Add modulator')
+    );
+    this.applyAnimationPose();
+    this.publish();
+  }
+
+  /** Edit one procedural modulator in the active clip. */
+  updateAnimationModulator(
+    id: string,
+    patch: Partial<AnimationModulatorSnapshot>
+  ): void {
+    const animation = this.document.animation;
+    const modulator = animation.activeClip.modulators.find(
+      (candidate) => candidate.id === id
+    );
+    if (!modulator) {
+      return;
+    }
+    const before = animation.snapshot();
+    const index = animation.activeClip.modulators.findIndex(
+      (candidate) => candidate.id === id
+    );
+    const next = normalizeModulator({ ...modulator, ...patch, id });
+    animation.activeClip.modulators[index] = next;
+    const after = animation.snapshot();
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return;
+    }
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Edit modulator')
+    );
+    this.applyAnimationPose();
+    this.publish();
+  }
+
+  /** Remove one procedural modulator from the active clip. */
+  removeAnimationModulator(id: string): void {
+    const animation = this.document.animation;
+    const index = animation.activeClip.modulators.findIndex(
+      (modulator) => modulator.id === id
+    );
+    if (index < 0) {
+      return;
+    }
+    const before = animation.snapshot();
+    animation.activeClip.modulators.splice(index, 1);
+    const after = animation.snapshot();
+    this.history.execute(
+      new SetAnimationCommand(animation, before, after, 'Remove modulator')
+    );
+    this.applyAnimationPose();
+    this.publish();
+  }
+
+  private resolveModulatorTarget(
+    kind: AnimationModulatorKind,
+    targetKind?: ModulatorTargetKind,
+    targetId?: string
+  ): { kind: ModulatorTargetKind; id: string } | null {
+    if (kind === 'orbit') {
+      const camera =
+        (targetKind === 'camera' ? this.document.getCamera(targetId ?? '') : null) ??
+        this.getActiveCamera();
+      return camera ? { kind: 'camera', id: camera.id } : null;
+    }
+    if (targetKind && targetId) {
+      if (
+        (targetKind === 'node' && this.document.getNode(targetId)) ||
+        (targetKind === 'camera' && this.document.getCamera(targetId)) ||
+        (targetKind === 'light' && this.document.getLight(targetId))
+      ) {
+        return { kind: targetKind, id: targetId };
+      }
+    }
+    const node = this.getActiveNode();
+    if (node) {
+      return { kind: 'node', id: node.id };
+    }
+    const camera = this.getActiveCamera();
+    if (camera) {
+      return { kind: 'camera', id: camera.id };
+    }
+    const light = this.document.getLight(this.activeLightId ?? '');
+    return light ? { kind: 'light', id: light.id } : null;
   }
 
   /** Move the playhead and evaluate the animation pose. */

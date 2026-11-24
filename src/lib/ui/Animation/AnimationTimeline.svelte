@@ -39,6 +39,29 @@
   let audioInput = $state<HTMLInputElement>();
 
   const snapshot = $derived(session.snapshot);
+  function modulatorKindLabel(kind: string): string {
+    return kind === 'lfo'
+      ? 'LFO'
+      : kind === 'noise'
+        ? 'Noise'
+        : kind === 'audio-envelope'
+          ? 'Audio'
+          : 'Orbit';
+  }
+
+  function modulatorTargetName(modulator: {
+    targetKind: string;
+    targetId: string;
+  }): string {
+    if (modulator.targetKind === 'camera') {
+      return snapshot.cameras.find((camera) => camera.id === modulator.targetId)?.name ?? 'Camera';
+    }
+    if (modulator.targetKind === 'light') {
+      return snapshot.lights.find((light) => light.id === modulator.targetId)?.name ?? 'Light';
+    }
+    return snapshot.nodes.find((node) => node.id === modulator.targetId)?.name ?? 'Object';
+  }
+
   const animationClips = $derived(snapshot.animationClips);
   const activeClip = $derived(
     animationClips.find((clip) => clip.id === snapshot.animationClipId) ??
@@ -690,7 +713,7 @@
         ></span>
       </span>
     {/if}
-    {#if snapshot.animationTracks.length === 0 && !activeAudio}
+    {#if snapshot.animationTracks.length === 0 && !activeAudio && snapshot.animationModulators.length === 0}
       <p class="timeline-empty">
         Select an object or group. Use the + button on a track to add a key.
       </p>
@@ -769,6 +792,25 @@
                 }}
               ></button>
             {/each}
+          </span>
+        </div>
+      {/each}
+      {#each snapshot.animationModulators as modulator (modulator.id)}
+        <div
+          class="timeline-track modulator-track"
+          class:disabled={!modulator.enabled}
+          class:modulator-orbit={modulator.kind === 'orbit'}
+        >
+          <span class="track-label">
+            <span class="track-name">
+              {modulatorKindLabel(modulator.kind)} · {modulatorTargetName(modulator)}
+            </span>
+          </span>
+          <span class="track-lane">
+            <span
+              class="modulator-band"
+              title={`${modulatorKindLabel(modulator.kind)} · ${modulatorTargetName(modulator)}`}
+            ></span>
           </span>
         </div>
       {/each}
@@ -972,6 +1014,40 @@
 
   .timeline-track.texture-track .track-name {
     color: var(--accent-success);
+  }
+
+  .timeline-track.modulator-track .track-name {
+    color: var(--text-secondary);
+  }
+
+  .timeline-track.modulator-track.disabled {
+    opacity: 0.45;
+  }
+
+  .modulator-band {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    right: 2px;
+    left: 2px;
+    border: 1px solid color-mix(in srgb, var(--accent-primary) 45%, transparent);
+    border-radius: var(--radius-sm);
+    background:
+      repeating-linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--accent-primary) 16%, transparent) 0 6px,
+        transparent 6px 12px
+      );
+  }
+
+  .timeline-track.modulator-orbit .modulator-band {
+    border-color: color-mix(in srgb, var(--axis-color-z) 55%, transparent);
+    background:
+      repeating-linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--axis-color-z) 18%, transparent) 0 6px,
+        transparent 6px 12px
+      );
   }
 
   .timeline-track.audio-track .track-name {

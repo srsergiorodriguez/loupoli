@@ -22,6 +22,7 @@
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import ExportObjDialog from './ExportObjDialog.svelte';
   import ExportObjFramesDialog from './ExportObjFramesDialog.svelte';
+  import ModulatorPanel from '../Animation/ModulatorPanel.svelte';
   import NewTextureDialog from './NewTextureDialog.svelte';
   import ImageImportDialog from './ImageImportDialog.svelte';
   import type { ObjExportScope } from '../../io/obj';
@@ -1097,11 +1098,12 @@
     {#snippet animationSection()}
 <InspectorSection
       title="Animation"
-      meta={`${animationTracks.filter((track) => track.hasTrack).length} track${animationTracks.filter((track) => track.hasTrack).length === 1 ? '' : 's'}`}
+      meta={`${animationTracks.filter((track) => track.hasTrack).length} track${animationTracks.filter((track) => track.hasTrack).length === 1 ? '' : 's'}${session.snapshot.animationModulators.length > 0 ? ` · ${session.snapshot.animationModulators.length} mod${session.snapshot.animationModulators.length === 1 ? '' : 's'}` : ''}`}
       open={sections.animation}
       onToggle={(open) => setSection('animation', open)}
     >
       <div class="module-body">
+        <ModulatorPanel {session} />
         <div class="render-look">
           <div class="render-look-head">
             <span>Mesh motion</span>

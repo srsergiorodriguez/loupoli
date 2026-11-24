@@ -4,6 +4,11 @@ import type { PaintSample } from '../paint/types';
 import type { NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { EditorRuntime } from './EditorRuntime';
 import { workspaceCan, type WorkspaceCapability } from './workspaces';
+import type {
+  AnimationModulatorKind,
+  AnimationModulatorSnapshot,
+  ModulatorTargetKind
+} from '../scene/AnimationModulators';
 import { nativeMp4Available } from '../platform/nativeVideo';
 import {
   DEFAULT_PS1_AFFINE,
@@ -174,6 +179,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   animationLoop: true,
   animationPlaying: false,
   animationTracks: [],
+  animationModulators: [],
   annotationMode: false,
   annotationCount: 0,
   animationInterpolation: 'linear',
@@ -1138,6 +1144,25 @@ export class EditorSession {
 
   exportGlb(): Promise<void> {
     return this.runtime?.exportGlb() ?? Promise.resolve();
+  }
+
+  addAnimationModulator(
+    kind: AnimationModulatorKind,
+    targetKind?: ModulatorTargetKind,
+    targetId?: string
+  ): void {
+    this.runtime?.addAnimationModulator(kind, targetKind, targetId);
+  }
+
+  updateAnimationModulator(
+    id: string,
+    patch: Partial<AnimationModulatorSnapshot>
+  ): void {
+    this.runtime?.updateAnimationModulator(id, patch);
+  }
+
+  removeAnimationModulator(id: string): void {
+    this.runtime?.removeAnimationModulator(id);
   }
 
   setAnimationFrame(frame: number): void {

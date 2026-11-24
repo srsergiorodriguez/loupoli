@@ -451,6 +451,7 @@ export interface EditorSnapshot {
   readonly animationLoop: boolean;
   readonly animationPlaying: boolean;
   readonly animationTracks: readonly AnimationTrackSummary[];
+  readonly animationModulators: readonly import('../scene/AnimationModulators').AnimationModulatorSnapshot[];
   readonly annotationMode: boolean;
   readonly annotationCount: number;
   readonly animationInterpolation: AnimationInterpolation;

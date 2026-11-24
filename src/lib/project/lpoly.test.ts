@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MeshNode } from '../scene/MeshNode';
 import { createModifier, type MirrorModifier } from '../geometry/modifiers';
 import { AudioAsset } from '../audio/AudioAsset';
+import { createModulator } from '../scene/AnimationModulators';
 import { SceneDocument } from '../scene/SceneDocument';
 import {
   createCylinderMesh,
@@ -339,6 +340,47 @@ describe('.lpoli', () => {
     expect(decoded.clips[0].tracks[0].keyframes[0].transform.position).toEqual([
       0, 0, 0
     ]);
+  });
+
+  it('round-trips procedural animation modulators', () => {
+    const document = makeDocument();
+    const node = document.nodes[0];
+    document.animation.activeClip.modulators.push(
+      createModulator('lfo', 'node', node.id, {
+        property: 'position',
+        axis: 'z',
+        waveform: 'square',
+        sync: 'bpm',
+        bpm: 128,
+        amplitude: 0.75
+      }),
+      createModulator('orbit', 'camera', 'camera-1', {
+        pivot: [1, 2, 0],
+        radius: 6,
+        height: 1.5,
+        angularRate: 0.2
+      })
+    );
+    const decoded = decodeLpoly(encodeLpoly(document, SETTINGS)).document.animation;
+    const modulators = decoded.activeClip.modulators;
+    expect(modulators).toHaveLength(2);
+    expect(modulators[0]).toMatchObject({
+      kind: 'lfo',
+      targetKind: 'node',
+      targetId: node.id,
+      axis: 'z',
+      waveform: 'square',
+      sync: 'bpm',
+      bpm: 128,
+      amplitude: 0.75
+    });
+    expect(modulators[1]).toMatchObject({
+      kind: 'orbit',
+      targetKind: 'camera',
+      pivot: [1, 2, 0],
+      radius: 6,
+      height: 1.5
+    });
   });
 
   it('round-trips Step texture animation tracks', () => {

@@ -1,5 +1,10 @@
 import type { Vec3 } from '../geometry/HalfEdgeMesh';
 import type { NodeTransform } from './MeshNode';
+import {
+  createModulatorId,
+  normalizeModulator,
+  type AnimationModulatorSnapshot
+} from './AnimationModulators';
 
 /** Documents that can carry transform animation. */
 export type AnimationTargetKind = 'node' | 'group';
@@ -174,6 +179,7 @@ export interface AnimationClipSnapshot {
   readonly meshTracks?: readonly MeshMotionTrackSnapshot[];
   readonly cameraTracks?: readonly CameraAnimationTrackSnapshot[];
   readonly lightTracks?: readonly LightAnimationTrackSnapshot[];
+  readonly modulators?: readonly AnimationModulatorSnapshot[];
   readonly audio?: AudioClipSnapshot | null;
 }
 
@@ -1078,6 +1084,7 @@ export class AnimationClip {
   readonly meshTracks: MeshMotionTrack[] = [];
   readonly cameraTracks: CameraAnimationTrack[] = [];
   readonly lightTracks: LightAnimationTrack[] = [];
+  readonly modulators: AnimationModulatorSnapshot[] = [];
   audio: AudioClipSnapshot | null = null;
 
   constructor(
@@ -1115,6 +1122,11 @@ export class AnimationClip {
     );
     clip.lightTracks.push(
       ...(snapshot.lightTracks ?? []).map(LightAnimationTrack.fromSnapshot)
+    );
+    clip.modulators.push(
+      ...(snapshot.modulators ?? []).map((modulator) =>
+        normalizeModulator(modulator)
+      )
     );
     if (snapshot.audio) {
       clip.audio = { ...snapshot.audio };
@@ -1301,6 +1313,7 @@ export class AnimationClip {
       this.meshTracks.length > 0 ||
       this.cameraTracks.length > 0 ||
       this.lightTracks.length > 0 ||
+      this.modulators.length > 0 ||
       this.audio !== null
     );
   }
@@ -1335,6 +1348,7 @@ export class AnimationClip {
       meshTracks: this.meshTracks.map((track) => track.snapshot()),
       cameraTracks: this.cameraTracks.map((track) => track.snapshot()),
       lightTracks: this.lightTracks.map((track) => track.snapshot()),
+      modulators: this.modulators.map((modulator) => ({ ...modulator })),
       ...(this.audio ? { audio: { ...this.audio } } : {})
     };
   }
@@ -1350,6 +1364,7 @@ export function estimateAnimationSnapshotBytes(
         bytes +
         128 +
         (clip.audio ? 128 : 0) +
+        (clip.modulators?.length ?? 0) * 320 +
         clip.tracks.reduce(
           (sum, track) => sum + 96 + track.keyframes.length * 128,
           0
@@ -1531,6 +1546,12 @@ export class SceneAnimation {
         })
       )
     );
+    copy.modulators.splice(0, copy.modulators.length,
+      ...copy.modulators.map((modulator) => ({
+        ...modulator,
+        id: createModulatorId()
+      }))
+    );
     this.clips.push(copy);
     this.activeClipId = copy.id;
     return copy;
@@ -1602,9 +1623,16 @@ export class SceneAnimation {
     return this.activeClip.hasContent();
   }
 
-  /** Clear every clip placement that references one audio asset. */
+  /** Clear every clip placement or modulator referencing one audio asset. */
   removeAudioReferences(assetId: string): number {
     let removed = 0;
+    for (const clip of this.clips) {
+      for (const modulator of clip.modulators) {
+        if (modulator.audioAssetId === assetId) {
+          (modulator as { audioAssetId: string }).audioAssetId = '';
+        }
+      }
+    }
     for (const clip of this.clips) {
       if (clip.audio?.assetId === assetId) {
         clip.audio = null;
