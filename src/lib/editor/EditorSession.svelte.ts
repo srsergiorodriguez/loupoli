@@ -61,6 +61,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvBrushSize: 36,
   uvBrushOpacity: 1,
   paintTool: 'brush',
+  paintSelectMode: false,
+  paintSelectScope: 'face',
   paintSecondaryColor: '#1a1a1f',
   paintSecondaryColorAlpha: 1,
   paintHardness: 0.7,
@@ -638,6 +640,14 @@ export class EditorSession {
 
   setPaintTool(tool: 'brush' | 'eraser' | 'line' | 'rectangle' | 'ellipse' | 'gradient' | 'fill'): void {
     this.runtime?.setPaintTool(tool);
+  }
+
+  setPaintSelectMode(enabled: boolean): void {
+    this.runtime?.setPaintSelectMode(enabled);
+  }
+
+  setPaintSelectScope(scope: 'face' | 'island'): void {
+    this.runtime?.setPaintSelectScope(scope);
   }
 
   setPaintSecondaryColor(color: string): void {

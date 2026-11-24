@@ -700,6 +700,8 @@ export class EditorRuntime {
   private uvBrushSize = 36;
   private uvBrushOpacity = 1;
   private paintTool: PaintTool = 'brush';
+  private paintSelectMode = false;
+  private paintSelectScope: 'face' | 'island' = 'face';
   private paintSecondaryColor = '#1a1a1f';
   private paintSecondaryColorAlpha = 1;
   private paintHardness = 0.7;
@@ -1047,6 +1049,8 @@ export class EditorRuntime {
       uvBrushSize: this.uvBrushSize,
       uvBrushOpacity: this.uvBrushOpacity,
       paintTool: this.paintTool,
+      paintSelectMode: this.paintSelectMode,
+      paintSelectScope: this.paintSelectScope,
       paintSecondaryColor: this.paintSecondaryColor,
       paintSecondaryColorAlpha: this.paintSecondaryColorAlpha,
       paintHardness: this.paintHardness,
@@ -3455,6 +3459,30 @@ export class EditorRuntime {
   setPaintTool(tool: PaintTool): void {
     this.paintTool = tool;
     this.paintPreset = null;
+    this.paintSelectMode = false;
+    this.publish();
+  }
+
+  /** Toggle Paint-local face/island selection. */
+  setPaintSelectMode(enabled: boolean): void {
+    if (this.paintSelectMode === enabled) {
+      return;
+    }
+    this.paintSelectMode = enabled;
+    if (enabled && this.selection.mode !== 'face') {
+      this.selection.setMode('face');
+      this.axisLock = null;
+    }
+    this.syncScene();
+    this.publish();
+  }
+
+  /** Choose whether Paint Select picks one face or its whole UV island. */
+  setPaintSelectScope(scope: 'face' | 'island'): void {
+    if (this.paintSelectScope === scope) {
+      return;
+    }
+    this.paintSelectScope = scope;
     this.publish();
   }
 
@@ -4352,6 +4380,67 @@ export class EditorRuntime {
       this.cancelTexturePaint();
     }
     this.projectError = null;
+    if (this.paintSelectMode) {
+      const before = this.captureSelection();
+      if (this.selection.mode !== 'face') {
+        this.selection.setMode('face');
+        this.axisLock = null;
+      }
+      if (this.paintSelectScope === 'face') {
+        this.selectEvaluatedElementAt(
+          sample.clientX,
+          sample.clientY,
+          sample.shiftKey ? 'add' : this.selectionCombineMode,
+          node,
+          false
+        );
+      } else {
+        const evaluated = node.getEvaluatedMesh();
+        const evaluatedFace = this.renderer.pickFace(
+          sample.clientX,
+          sample.clientY
+        );
+        const baseFace =
+          evaluatedFace === null
+            ? null
+            : (evaluated.provenance?.faceBase[evaluatedFace] ?? evaluatedFace);
+        const chart =
+          baseFace === null
+            ? null
+            : extractUvCharts(node.mesh).find((candidate) =>
+                candidate.faces.includes(baseFace)
+              );
+        if (!chart) {
+          this.projectError = 'No UV island contains the selected surface.';
+          this.publish();
+          return false;
+        }
+        if (
+          sample.shiftKey ||
+          this.selectionCombineMode === 'add'
+        ) {
+          this.selection.setValues([
+            ...new Set([...this.selection.values(), ...chart.faces])
+          ]);
+        } else if (this.selectionCombineMode === 'subtract') {
+          const remove = new Set(chart.faces);
+          this.selection.setValues(
+            this.selection.values().filter((face) => !remove.has(face))
+          );
+        } else {
+          this.selection.setValues([...chart.faces]);
+        }
+      }
+      this.syncScene();
+      this.recordSelection(
+        before,
+        this.paintSelectScope === 'island'
+          ? 'Select paint island'
+          : 'Select paint face'
+      );
+      this.publish();
+      return true;
+    }
     this.surfaceCursor = {
       x: sample.clientX,
       y: sample.clientY,

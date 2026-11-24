@@ -44,7 +44,13 @@ const POLICY: Record<Workspace, ReadonlySet<WorkspaceCapability>> = {
     'navigate3d',
     'annotate3d'
   ]),
-  paint: new Set(['paintTexture', 'paintProjected', 'navigate3d', 'annotate3d']),
+  paint: new Set([
+    'paintTexture',
+    'paintProjected',
+    'select3d',
+    'navigate3d',
+    'annotate3d'
+  ]),
   animation: new Set([
     'select3d',
     'edit3d',

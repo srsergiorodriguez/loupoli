@@ -343,6 +343,8 @@ export interface EditorSnapshot {
   readonly uvBrushSize: number;
   readonly uvBrushOpacity: number;
   readonly paintTool: PaintTool;
+  readonly paintSelectMode: boolean;
+  readonly paintSelectScope: 'face' | 'island';
   readonly paintSecondaryColor: string;
   readonly paintSecondaryColorAlpha: number;
   readonly paintHardness: number;

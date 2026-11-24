@@ -23,15 +23,16 @@ describe('workspace capabilities', () => {
   it('grants paint but no selection in Paint', () => {
     expect(workspaceCan('paint', 'paintTexture')).toBe(true);
     expect(workspaceCan('paint', 'paintProjected')).toBe(true);
-    expect(workspaceCan('paint', 'select3d')).toBe(false);
+    expect(workspaceCan('paint', 'select3d')).toBe(true);
     expect(workspaceCan('paint', 'edit3d')).toBe(false);
   });
 });
 
 describe('inspector layout', () => {
-  it('keeps brush and texture adjacent in Paint', () => {
+  it('keeps brush and texture adjacent in Paint after selection', () => {
     expect(inspectorSectionsFor('paint')).toEqual([
       'scene',
+      'selection',
       'brush',
       'texture'
     ]);
