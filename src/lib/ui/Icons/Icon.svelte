@@ -142,20 +142,19 @@
     <path d="M7 15.2c1.5 1.1 3.1 1.7 5 1.7s3.5-.6 5-1.7" opacity=".55" />
     <path d="M5 19h14M5 19l2.4-2M5 19l2.4 2M19 19l-2.4-2M19 19l-2.4 2" />
   {:else if name === 'selection-vertex'}
-    <circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none" />
-    <circle cx="12" cy="12" r="7.2" stroke-dasharray="1.5 2.5" opacity=".8" />
+    <path d="M5 5h8.6L19 10.4V19H5V5Z" />
+    <rect x="7.2" y="7.2" width="4.2" height="4.2" rx=".6" fill="currentColor" stroke="none" />
   {:else if name === 'selection-edge'}
-    <path d="m5.5 17.5 13-11" stroke-width="2.4" />
-    <circle cx="5.5" cy="17.5" r="2" fill="currentColor" stroke="none" />
-    <circle cx="18.5" cy="6.5" r="2" fill="currentColor" stroke="none" />
+    <path d="M5 5h8.6L19 10.4V19H5V5Z" />
+    <rect x="10.7" y="6.9" width="2.6" height="10.2" rx=".6" fill="currentColor" stroke="none" />
   {:else if name === 'selection-face'}
-    <path d="M5 6.5 18.5 5 20 17.5 6 19 5 6.5Z" fill="currentColor" stroke="none" opacity=".72" />
-    <path d="M5 6.5 18.5 5 20 17.5 6 19 5 6.5Z" />
+    <path d="M5 5h8.6L19 10.4V19H5V5Z" />
+    <rect x="7.8" y="7.8" width="8.4" height="8.4" rx=".7" fill="currentColor" stroke="none" />
   {:else if name === 'selection-island'}
-    <path d="M4 6 10.5 4.5 11.5 11 5 12.5 4 6Z" fill="currentColor" stroke="none" opacity=".65" />
-    <path d="M4 6 10.5 4.5 11.5 11 5 12.5 4 6Z" />
-    <path d="M14 13 20 11.5 20 18 14 20 14 13Z" fill="currentColor" stroke="none" opacity=".4" />
-    <path d="M14 13 20 11.5 20 18 14 20 14 13Z" />
+    <rect x="4.5" y="5.5" width="8" height="8" rx="1" fill="currentColor" stroke="none" opacity=".62" />
+    <rect x="4.5" y="5.5" width="8" height="8" rx="1" />
+    <rect x="12.5" y="10.5" width="7" height="8" rx="1" fill="currentColor" stroke="none" opacity=".25" />
+    <rect x="12.5" y="10.5" width="7" height="8" rx="1" />
   {:else if name === 'cube'}
     <path d="M12 3.5 20 8v8l-8 4.5L4 16V8l8-4.5Z" />
     <path d="M4 8l8 4.5L20 8M12 12.5v8" />
