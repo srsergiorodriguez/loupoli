@@ -11,11 +11,10 @@
   } from '../../render/effects';
   import ActionButton from '../Primitives/ActionButton.svelte';
   import ActionRow from '../Primitives/ActionRow.svelte';
+  import CreateRow from '../Primitives/CreateRow.svelte';
+  import DangerAction from '../Primitives/DangerAction.svelte';
   import IconButton from '../Primitives/IconButton.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
-  import SelectField from '../Primitives/SelectField.svelte';
-  import SliderField from '../Primitives/SliderField.svelte';
-  import Switch from '../Primitives/Switch.svelte';
 
   /** Editable project-level material/post effect stack for render output. */
   interface Props {
@@ -33,10 +32,10 @@
   );
   const preset = $derived(detectRenderEffectPreset(effects));
   const kindOptions = [
-    { value: 'vertex-snap', label: 'Material · Vertex snap' },
-    { value: 'affine-texture', label: 'Material · Affine texture' },
-    { value: 'color-depth', label: 'Post · Color depth' },
-    { value: 'dither', label: 'Post · Dither' }
+    { value: 'vertex-snap', label: 'Vertex snap — material' },
+    { value: 'affine-texture', label: 'Affine texture — material' },
+    { value: 'color-depth', label: 'Color depth — post' },
+    { value: 'dither', label: 'Dither — post' }
   ];
   const depthOptions = [
     { value: 'rgb555', label: 'RGB555 · 15-bit' },
@@ -57,203 +56,245 @@
     return renderEffectDefinition(effect.kind).label;
   }
 
-  function indexOf(effect: RenderEffect): number {
-    return effects.findIndex((item) => item.id === effect.id);
+  function cardIndex(effect: RenderEffect): number {
+    return effects.findIndex((item) => item.id === effect.id) + 1;
   }
 </script>
 
 <div class="effect-stack">
   <p class="hint">
-    A project-wide render stack. Material effects feed the PS1 shader; post
-    effects run on the virtual-resolution image before upscale.
+    Project render stack. Material effects run in the PS1 shader; post effects
+    run on the virtual-resolution frame before upscale.
   </p>
 
-  <ActionRow>
-    <ActionButton
-      label="Clean"
-      active={preset === 'clean'}
-      onActivate={() => session.applyRenderEffectPreset('clean')}
-    />
-    <ActionButton
-      label="PS1"
-      active={preset === 'ps1'}
-      onActivate={() => session.applyRenderEffectPreset('ps1')}
-    />
-    <ActionButton
-      label="Dither"
-      active={preset === 'dither'}
-      onActivate={() => session.applyRenderEffectPreset('dither')}
-    />
-    {#if preset === 'custom'}
-      <span class="preset-state">Custom</span>
-    {/if}
-  </ActionRow>
-
-  <div class="stage-head">
-    <span>Material</span>
-    <span>{material.length} effect{material.length === 1 ? '' : 's'}</span>
+  <div class="effect-preset-row">
+    <span class="effect-group-label">Preset</span>
+    <ActionRow>
+      <ActionButton
+        label="Clean"
+        active={preset === 'clean'}
+        onActivate={() => session.applyRenderEffectPreset('clean')}
+      />
+      <ActionButton
+        label="PS1"
+        active={preset === 'ps1'}
+        onActivate={() => session.applyRenderEffectPreset('ps1')}
+      />
+      <ActionButton
+        label="Dither"
+        active={preset === 'dither'}
+        onActivate={() => session.applyRenderEffectPreset('dither')}
+      />
+      {#if preset === 'custom'}
+        <span class="preset-state">Custom</span>
+      {/if}
+    </ActionRow>
   </div>
+
+  <CreateRow
+    label="Effect type"
+    value={newKind}
+    options={kindOptions}
+    onAdd={() => session.addRenderEffect(newKind)}
+    onChange={(value) => (newKind = value as RenderEffectKind)}
+  />
+
+  <div class="effect-group-label">Material</div>
   {#if material.length === 0}
     <p class="hint">No material effects. PS1 adds vertex snap and affine UVs.</p>
   {:else}
-    {#each material as effect (effect.id)}
-      <div class="effect-card" class:is-disabled={!effect.enabled}>
-        <div class="effect-head">
-          <Switch
-            label={label(effect)}
-            checked={effect.enabled}
-            onChange={(checked) => session.setRenderEffectEnabled(effect.id, checked)}
-          />
-          <span class="stage-tag">Material</span>
-          <span class="effect-actions">
-            <IconButton
-              label={`Move ${label(effect)} up`}
-              icon="chevron-up"
-              tooltip="Move effect up"
-              disabled={indexOf(effect) === 0}
-              onActivate={() => session.moveRenderEffect(effect.id, -1)}
-            />
-            <IconButton
-              label={`Move ${label(effect)} down`}
-              icon="chevron-down"
-              tooltip="Move effect down"
-              disabled={indexOf(effect) === effects.length - 1}
-              onActivate={() => session.moveRenderEffect(effect.id, 1)}
-            />
-            <IconButton
-              label={`Remove ${label(effect)}`}
-              icon="trash"
-              tooltip="Remove effect"
-              onActivate={() => session.removeRenderEffect(effect.id)}
-            />
-          </span>
-        </div>
-        {#if effect.kind === 'vertex-snap'}
-          <div class="effect-fields">
-            <div class="effect-field">
-              <span>Width</span>
-              <NumberField
-                label="Vertex snap width"
-                value={effect.width ?? 320}
-                step={1}
-                precision={0}
-                min={1}
-                max={4096}
-                framed
-                onCommit={(value) => update(effect, { width: value })}
+    <div class="effect-list">
+      {#each material as effect (effect.id)}
+        <div class="effect-card" class:is-disabled={!effect.enabled}>
+          <div class="effect-head">
+            <button
+              type="button"
+              class="effect-enabled"
+              class:is-active={effect.enabled}
+              aria-pressed={effect.enabled}
+              aria-label={effect.enabled ? 'Disable effect' : 'Enable effect'}
+              onclick={() =>
+                session.setRenderEffectEnabled(effect.id, !effect.enabled)}
+            >
+              <span class="effect-dot" aria-hidden="true"></span>
+              {effect.enabled ? 'On' : 'Off'}
+            </button>
+            <span class="effect-name">{label(effect)}</span>
+            <span class="effect-index text-mono">{cardIndex(effect)}</span>
+            <span class="effect-actions">
+              <IconButton
+                label={`Move ${label(effect)} up`}
+                icon="chevron-up"
+                tooltip="Move effect up"
+                disabled={effects.indexOf(effect) === 0}
+                onActivate={() => session.moveRenderEffect(effect.id, -1)}
               />
-            </div>
-            <div class="effect-field">
-              <span>Height</span>
-              <NumberField
-                label="Vertex snap height"
-                value={effect.height ?? 240}
-                step={1}
-                precision={0}
-                min={1}
-                max={4096}
-                framed
-                onCommit={(value) => update(effect, { height: value })}
+              <IconButton
+                label={`Move ${label(effect)} down`}
+                icon="chevron-down"
+                tooltip="Move effect down"
+                disabled={effects.indexOf(effect) === effects.length - 1}
+                onActivate={() => session.moveRenderEffect(effect.id, 1)}
               />
-            </div>
+            </span>
           </div>
-        {:else if effect.kind === 'affine-texture'}
-          <p class="effect-note">Affine UV interpolation; use Texture shading to see it.</p>
-        {/if}
-      </div>
-    {/each}
-  {/if}
-
-  <div class="stage-head">
-    <span>Post</span>
-    <span>{post.length} effect{post.length === 1 ? '' : 's'}</span>
-  </div>
-  {#if post.length === 0}
-    <p class="hint">No post effects. Dither applies at virtual resolution.</p>
-  {:else}
-    {#each post as effect (effect.id)}
-      <div class="effect-card" class:is-disabled={!effect.enabled}>
-        <div class="effect-head">
-          <Switch
-            label={label(effect)}
-            checked={effect.enabled}
-            onChange={(checked) => session.setRenderEffectEnabled(effect.id, checked)}
+          <div class="effect-controls">
+            {#if effect.kind === 'vertex-snap'}
+              <label class="effect-field">
+                <span>Width</span>
+                <NumberField
+                  label="Vertex snap width"
+                  value={effect.width ?? 320}
+                  step={1}
+                  precision={0}
+                  min={1}
+                  max={4096}
+                  framed
+                  onCommit={(value) => update(effect, { width: value })}
+                />
+              </label>
+              <label class="effect-field">
+                <span>Height</span>
+                <NumberField
+                  label="Vertex snap height"
+                  value={effect.height ?? 240}
+                  step={1}
+                  precision={0}
+                  min={1}
+                  max={4096}
+                  framed
+                  onCommit={(value) => update(effect, { height: value })}
+                />
+              </label>
+            {:else if effect.kind === 'affine-texture'}
+              <p class="effect-note">
+                Affine UV interpolation; requires Texture shading.
+              </p>
+            {/if}
+          </div>
+          <DangerAction
+            label="Remove effect"
+            onActivate={() => session.removeRenderEffect(effect.id)}
           />
-          <span class="stage-tag">Post</span>
-          <span class="effect-actions">
-            <IconButton
-              label={`Move ${label(effect)} up`}
-              icon="chevron-up"
-              tooltip="Move effect up"
-              disabled={indexOf(effect) === 0}
-              onActivate={() => session.moveRenderEffect(effect.id, -1)}
-            />
-            <IconButton
-              label={`Move ${label(effect)} down`}
-              icon="chevron-down"
-              tooltip="Move effect down"
-              disabled={indexOf(effect) === effects.length - 1}
-              onActivate={() => session.moveRenderEffect(effect.id, 1)}
-            />
-            <IconButton
-              label={`Remove ${label(effect)}`}
-              icon="trash"
-              tooltip="Remove effect"
-              onActivate={() => session.removeRenderEffect(effect.id)}
-            />
-          </span>
         </div>
-        {#if effect.kind === 'color-depth'}
-          <SelectField
-            label="Depth"
-            value={effect.depth ?? 'rgb555'}
-            options={depthOptions}
-            onChange={(value) => update(effect, { depth: value as ColorDepthMode })}
-          />
-        {:else if effect.kind === 'dither'}
-          <SelectField
-            label="Depth"
-            value={effect.depth ?? 'rgb555'}
-            options={depthOptions}
-            onChange={(value) => update(effect, { depth: value as ColorDepthMode })}
-          />
-          <SelectField
-            label="Pattern"
-            value={effect.pattern ?? 'bayer4'}
-            options={patternOptions}
-            onChange={(value) =>
-              update(effect, { pattern: value as DitherPattern })}
-          />
-          <SliderField
-            label="Strength"
-            value={effect.strength ?? 1}
-            min={0}
-            max={1}
-            step={0.01}
-            precision={2}
-            onChange={(value) => update(effect, { strength: value })}
-          />
-        {/if}
-      </div>
-    {/each}
+      {/each}
+    </div>
   {/if}
 
-  <div class="add-effect">
-    <SelectField
-      label="Effect"
-      value={newKind}
-      options={kindOptions}
-      onChange={(value) => (newKind = value as RenderEffectKind)}
-    />
-    <ActionButton
-      label="Add effect"
-      icon="plus"
-      onActivate={() => session.addRenderEffect(newKind)}
-    />
-  </div>
+  <div class="effect-group-label">Post</div>
+  {#if post.length === 0}
+    <p class="hint">No post effects. Dither runs at virtual resolution.</p>
+  {:else}
+    <div class="effect-list">
+      {#each post as effect (effect.id)}
+        <div class="effect-card" class:is-disabled={!effect.enabled}>
+          <div class="effect-head">
+            <button
+              type="button"
+              class="effect-enabled"
+              class:is-active={effect.enabled}
+              aria-pressed={effect.enabled}
+              aria-label={effect.enabled ? 'Disable effect' : 'Enable effect'}
+              onclick={() =>
+                session.setRenderEffectEnabled(effect.id, !effect.enabled)}
+            >
+              <span class="effect-dot" aria-hidden="true"></span>
+              {effect.enabled ? 'On' : 'Off'}
+            </button>
+            <span class="effect-name">{label(effect)}</span>
+            <span class="effect-index text-mono">{cardIndex(effect)}</span>
+            <span class="effect-actions">
+              <IconButton
+                label={`Move ${label(effect)} up`}
+                icon="chevron-up"
+                tooltip="Move effect up"
+                disabled={effects.indexOf(effect) === 0}
+                onActivate={() => session.moveRenderEffect(effect.id, -1)}
+              />
+              <IconButton
+                label={`Move ${label(effect)} down`}
+                icon="chevron-down"
+                tooltip="Move effect down"
+                disabled={effects.indexOf(effect) === effects.length - 1}
+                onActivate={() => session.moveRenderEffect(effect.id, 1)}
+              />
+            </span>
+          </div>
+          <div class="effect-controls">
+            {#if effect.kind === 'color-depth'}
+              <label class="effect-field">
+                <span>Depth</span>
+                <select
+                  value={effect.depth ?? 'rgb555'}
+                  aria-label="Color depth"
+                  onchange={(event) =>
+                    update(effect, {
+                      depth: event.currentTarget.value as ColorDepthMode
+                    })}
+                >
+                  {#each depthOptions as option (option.value)}
+                    <option value={option.value}>{option.label}</option>
+                  {/each}
+                </select>
+              </label>
+            {:else if effect.kind === 'dither'}
+              <label class="effect-field">
+                <span>Depth</span>
+                <select
+                  value={effect.depth ?? 'rgb555'}
+                  aria-label="Dither depth"
+                  onchange={(event) =>
+                    update(effect, {
+                      depth: event.currentTarget.value as ColorDepthMode
+                    })}
+                >
+                  {#each depthOptions as option (option.value)}
+                    <option value={option.value}>{option.label}</option>
+                  {/each}
+                </select>
+              </label>
+              <label class="effect-field">
+                <span>Pattern</span>
+                <select
+                  value={effect.pattern ?? 'bayer4'}
+                  aria-label="Dither pattern"
+                  onchange={(event) =>
+                    update(effect, {
+                      pattern: event.currentTarget.value as DitherPattern
+                    })}
+                >
+                  {#each patternOptions as option (option.value)}
+                    <option value={option.value}>{option.label}</option>
+                  {/each}
+                </select>
+              </label>
+              <label class="effect-field">
+                <span>Strength</span>
+                <NumberField
+                  label="Dither strength"
+                  value={effect.strength ?? 1}
+                  step={0.01}
+                  precision={2}
+                  min={0}
+                  max={1}
+                  framed
+                  onCommit={(value) => update(effect, { strength: value })}
+                />
+              </label>
+            {/if}
+          </div>
+          <DangerAction
+            label="Remove effect"
+            onActivate={() => session.removeRenderEffect(effect.id)}
+          />
+        </div>
+      {/each}
+    </div>
+  {/if}
+
   <p class="hint">
-    Post effects update the render preview, PNG stills, frame sequences, and
-    video. The interactive viewport keeps the material PS1 look only.
+    Post effects update the render preview, stills, frame sequences, and video.
+    The interactive viewport keeps the material PS1 look.
   </p>
 </div>
 
@@ -264,27 +305,17 @@
     gap: var(--inspector-row-gap);
   }
 
-  .stage-head {
+  .effect-preset-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2);
-    margin-top: var(--space-2);
-    padding-top: var(--space-2);
-    border-top: var(--hairline) solid var(--border-subtle);
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: var(--tracking-label);
-    text-transform: uppercase;
+    flex-direction: column;
+    gap: var(--field-label-gap);
   }
 
-  .stage-tag {
-    margin-left: auto;
+  .effect-group-label {
     color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: 9px;
-    letter-spacing: 0.04em;
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    letter-spacing: var(--tracking-label);
     text-transform: uppercase;
   }
 
@@ -296,18 +327,24 @@
     text-transform: uppercase;
   }
 
+  .effect-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--inspector-row-gap);
+  }
+
   .effect-card {
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: var(--inspector-row-gap);
     padding: var(--space-2);
     border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--bg-input);
   }
 
   .effect-card.is-disabled {
-    opacity: 0.62;
+    opacity: 0.7;
   }
 
   .effect-head {
@@ -316,60 +353,89 @@
     gap: var(--space-1);
   }
 
-  .effect-head :global(.switch-row) {
-    flex: 1 1 auto;
-    min-width: 0;
-    padding: 0;
+  .effect-enabled {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--control-h);
+    min-width: var(--control-h);
+    gap: 5px;
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: var(--text-2xs);
+    cursor: pointer;
   }
 
-  .effect-head :global(.switch-row .description) {
-    display: none;
+  .effect-enabled.is-active {
+    color: var(--accent-primary);
+  }
+
+  .effect-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .effect-name {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-primary);
+    font-size: var(--text-xs);
+  }
+
+  .effect-index {
+    color: var(--text-tertiary);
+    font-size: var(--text-2xs);
   }
 
   .effect-actions {
     display: flex;
     align-items: center;
-    gap: 1px;
-    flex: 0 0 auto;
   }
 
-  .effect-fields {
-    display: flex;
-    gap: var(--space-2);
+  .effect-actions :global(.icon-button) {
+    width: var(--control-h);
+    height: var(--control-h);
+  }
+
+  .effect-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-1);
   }
 
   .effect-field {
     display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-width: 0;
-  }
-
-  .effect-field > span {
+    flex-direction: column;
+    gap: var(--field-label-gap);
     color: var(--text-tertiary);
     font-size: var(--text-2xs);
   }
 
-  .effect-field :global(.number-field) {
-    min-width: 0;
+  .effect-field select {
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--control-h);
+    min-height: var(--control-h);
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    line-height: normal;
   }
 
   .effect-note {
+    grid-column: 1 / -1;
     margin: 0;
     color: var(--text-tertiary);
     font-size: var(--text-2xs);
     line-height: var(--leading-ui);
-  }
-
-  .add-effect {
-    display: flex;
-    align-items: end;
-    gap: var(--space-1);
-    margin-top: var(--space-1);
-  }
-
-  .add-effect :global(.select-field) {
-    flex: 1 1 auto;
-    min-width: 0;
   }
 </style>
