@@ -25,6 +25,7 @@
   import type { ModelExportFormat } from '../../io/exportOptions';
   import ExportObjFramesDialog from './ExportObjFramesDialog.svelte';
   import ModulatorPanel from '../Animation/ModulatorPanel.svelte';
+  import RenderEffectsPanel from '../Render/RenderEffectsPanel.svelte';
   import NewTextureDialog from './NewTextureDialog.svelte';
   import ImageImportDialog from './ImageImportDialog.svelte';
   import type { ObjExportScope } from '../../io/obj';
@@ -402,7 +403,7 @@
       (section) =>
         (section !== 'pixel' || session.snapshot.pixelArtMode) &&
         (activeReference === null ||
-          !['selection', 'mesh', 'modifiers', 'clip', 'animation', 'modulators', 'brush', 'pixel', 'texture'].includes(
+          !['selection', 'mesh', 'modifiers', 'clip', 'animation', 'modulators', 'effects', 'brush', 'pixel', 'texture'].includes(
             section
           ))
     )
@@ -1769,22 +1770,6 @@
         {:else}
           <p class="texture-note">Add a camera from the Camera section before rendering.</p>
         {/if}
-        <div class="render-look">
-          <div class="render-look-head">
-            <span>PS1 look</span>
-            <span>Render effect · Opt-in</span>
-          </div>
-          <Switch
-            label="PS1 look"
-            description="Snap vertices to 320 × 240 and use affine UVs."
-            checked={session.snapshot.ps1Snap && session.snapshot.ps1Affine}
-            onChange={(value) => session.setPs1Enabled(value)}
-          />
-          <p class="hint">
-            Switches to Texture + Wire and baked Texture. Choosing another
-            shading exits PS1.
-          </p>
-        </div>
         <ActionRow align="end">
           <ActionButton
             label={session.snapshot.renderBusy
@@ -3336,6 +3321,19 @@
       </InspectorSection>
     {/snippet}
 
+    {#snippet effectsSection()}
+      <InspectorSection
+        title="Render effects"
+        meta={`${session.snapshot.renderEffects.length} effect${session.snapshot.renderEffects.length === 1 ? '' : 's'} · project`}
+        open={sections.effects}
+        onToggle={(open) => setSection('effects', open)}
+      >
+        <div class="module-body">
+          <RenderEffectsPanel {session} />
+        </div>
+      </InspectorSection>
+    {/snippet}
+
       {#key session.snapshot.workspace}
         {#each visibleSections as section (section)}
           {#if section === 'scene'}{@render sceneSection()}
@@ -3344,6 +3342,7 @@
           {:else if section === 'modulators'}{@render modulatorsSection()}
           {:else if section === 'camera'}{@render cameraSection()}
           {:else if section === 'render'}{@render renderSection()}
+          {:else if section === 'effects'}{@render effectsSection()}
           {:else if section === 'light'}{@render lightSection()}
           {:else if section === 'transform'}{@render transformSection()}
           {:else if section === 'selection'}{@render selectionSection()}

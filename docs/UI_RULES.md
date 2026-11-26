@@ -105,7 +105,7 @@ Additional rules:
 
 Texture asset actions use visible commands: New and Duplicate sit together; Delete texture is a separate end-aligned danger action, disabled while assigned or last. Layer-local actions (including Import image and effect creation) live under Add layer. Do not use a three-dot asset menu for these actions.
 
-Snapping is global session state. Its compact status-bar control opens a single popover for world, UV, and rotation steps; the Transform section must not duplicate those controls. PS1 look controls belong under Render, not a standalone Inspector section.
+Snapping is global session state. Its compact status-bar control opens a single popover for world, UV, and rotation steps; the Transform section must not duplicate those controls. PS1 look is a preset inside the Render effects section under Render, not a standalone Inspector section.
 
 ## 9. Shared UI contracts
 
@@ -171,6 +171,7 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Modulators | Add modulator | target, property, axis, amplitude, offset | Remove modulator |
 | Camera | Add from view above list | selected camera name/position/target/FOV; compact Frame/From view/Through toggle on one row | Delete camera isolated last/right |
 | Render | — | output settings below header; Render action in the final row; live preview lives in the pane | — |
+| Render effects | preset buttons + Add effect | material/post cards with enable, parameters, reorder | Remove effect |
 | Shape keys | Add shape key | selected key: name, weight, Key weight, Edit target, Capture current mesh; rows support visibility and drag reorder | Delete shape key, last/right |
 
 - Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.

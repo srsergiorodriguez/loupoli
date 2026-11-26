@@ -8,8 +8,9 @@
 2. [Render workspace](#2-render-workspace)
 3. [Virtual resolution](#3-virtual-resolution)
 4. [Still output](#4-still-output)
-5. [Video and sequences](#5-video-and-sequences)
-6. [Next](#6-next)
+5. [Render effects](#5-render-effects)
+6. [Video and sequences](#6-video-and-sequences)
+7. [Next](#7-next)
 
 ## 1. Camera
 
@@ -47,6 +48,7 @@ Inspector sections:
 - **Scene**
 - **Camera**
 - **Render**
+- **Render effects**
 
 The render path is separate from the interactive viewport state:
 
@@ -86,6 +88,30 @@ The still path:
 
 Rendered focus shadows are baked by the renderer's current light state; baked lighting remains a static-texture result. The offscreen target is sRGB so PNG, sequence, and video colors match the editor preview path.
 
+## 5. Render effects
+
+Render effects are a project-wide, ordered stack. They are optional and are off by default.
+
+```text
+Material stage
+  Vertex snap      320 × 240
+  Affine texture
+Post stage
+  Color depth      RGB555 / RGB332 / 1-bit
+  Dither           Bayer 4×4 / Bayer 8×8
+```
+
+- **Material effects** feed the PS1 unlit shader. Vertex snap changes the projected vertices; affine texture changes UV interpolation. They require Texture shading and switch the viewport/render shading to Texture when enabled.
+- **Post effects** run on the virtual-resolution image after the scene is rendered and before it is upscaled to the output size. This keeps dither cells tied to virtual pixels instead of being enlarged or lost in the output scale.
+- Post effects apply to the live render preview, PNG stills, frame sequences, and video. They do not alter the interactive 3D viewport.
+- Presets are starting points, not hard modes:
+  - **Clean** clears the stack.
+  - **PS1** adds vertex snap, affine texture, and RGB555 Bayer dithering.
+  - **Dither** adds just the dither effect.
+- Editing presets leaves a Custom stack.
+- Color depth and dither are separate effects. Dither performs its own quantized pass; Color depth is useful for comparing quantization without a dither pattern.
+- The stack is part of the project file and autosave checkpoint. Add, remove, reorder, enable, and parameter edits are undoable.
+
 ## 5. Video and sequences
 
 - **PNG frame sequence:** renders each frame at the exact animation time, upscales it, and saves a folder on native platforms or a ZIP in the browser. Verified with a 64×36 sequence and valid PNG entries.
@@ -95,7 +121,7 @@ Rendered focus shadows are baked by the renderer's current light state; baked li
 - PNG stills, sequences, WebM, and MP4 all use the same color-managed frame canvas. Frame-sequence, video, bake-atlas, and lighting-bake operations report progress in the global job strip; Cancel aborts the loop, restores the animation frame, discards partial output, and leaves the texture/document unchanged for bakes.
 - The Frame range is explicit and separate from the animation range.
 
-## 6. Next
+## 7. Next
 
 - Camera animation tracks
 - Render progress/cancel UI and progress reporting

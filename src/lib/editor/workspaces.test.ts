@@ -72,7 +72,8 @@ describe('inspector layout', () => {
     expect(inspectorSectionsFor('render')).toEqual([
       'scene',
       'camera',
-      'render'
+      'render',
+      'effects'
     ]);
   });
 

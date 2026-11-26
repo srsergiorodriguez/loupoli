@@ -104,7 +104,7 @@ Record key: **`current`**
 {
   version: 1,
   checkpoint: Uint8Array,      // complete .lpoli v11 bytes (texture asset and bake PNG chunks included)
-  settings: ProjectSettings,   // shading + PS1 flags
+  settings: ProjectSettings,   // shading + PS1 flags + render effects
   deltas: JournalPatch[],      // transitions since checkpoint
   updatedAt: number
 }
@@ -178,7 +178,8 @@ Rust also validates magic, version, header lengths, file length, and CRC before 
   "settings": {
     "shading": "unlit",
     "ps1Snap": false,
-    "ps1Affine": false
+    "ps1Affine": false,
+    "renderEffects": []
   },
   "textures": {
     "assets": [

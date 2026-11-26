@@ -506,7 +506,7 @@ Implemented component files and local patterns:
 | Transform space controls | 3 | Local/World values and World/Local gizmo | Two aligned rows of shared SegmentedControl; 44px touch targets; labels stay on the control row |
 | `Selection gizmo` / `ObjectGizmo` | 3 | Move/Rotate/Scale axes | Median placement for elements; screen-constant size; enlarged Pencil hit volumes |
 | Grid snap / axis chips | 3 | Snap toggle/step and X/Y/Z locks | 44px chips, accent state, axis colors |
-| PS1 look | 3 | Collapsed render-effect module | Native details/summary; off by default |
+| Render effects | 3 | Render Inspector stack | Material/post cards, Clean/PS1/Dither presets, off by default |
 | Native selects | 2–3 | Primitive palette and modifier parameters | Shared control height; 44px touch target |
 
 Planned primitives not yet extracted:
@@ -651,7 +651,7 @@ Planned primitives not yet extracted:
 - Mesh:
   - Wireframe: 1px-equivalent lines, low-contrast neutral edges; selected/active edges use lime.
   - Solid: warm neutral clay, flat faces, fixed key/fill. No specular.
-- **Unlit/PS1:** correct perspective-correct albedo/texture mapping is the default. Vertex snapping and affine texture interpolation are opt-in PS1 effects in the Inspector. Nearest filtering remains part of the retro look.
+- **Unlit/PS1:** correct perspective-correct albedo/texture mapping is the default. Vertex snapping and affine texture interpolation are material-stage entries in the Render effects stack; dithering and color depth are post-stage entries. Nearest filtering remains part of the retro look.
 - **Bent quads:** a non-planar quad remains a single quad in the UI and wireframe, but its textured surface is rendered as a bilinear patch. The modeler should not see a hard triangle-diagonal texture seam when dragging a corner. Topology counts remain topological; internal render tessellation is not surfaced as topology.
   - Lit: scene lighting with the same faceted surfaces; no PBR gloss in the retro mode.
 - Selection:
@@ -659,7 +659,7 @@ Planned primitives not yet extracted:
   - Edge: 2px screen-consistent highlight; avoid unreliable `gl.lineWidth`.
   - Face: subtle lime tint plus outline or centroid marker; must remain legible in all shading modes.
 - Transform gizmo: conventional axis colors, 12/16px handles, 44px touch target expansion; active axis brightens, locked axes remain indicated.
-- PS1 effect must be visibly intentional but not make editing impossible: optional toggle, never forced on the Solid/Lit modes.
+- PS1 effects must be visibly intentional but not make editing impossible: optional stack/preset, never forced on the Solid/Lit modes.
 - The canvas is never overlaid with scanlines, film grain, CRT curvature, or screen-space noise in the editor UI. The retro effect belongs to the shading mode, not the tools.
 
 ---

@@ -249,7 +249,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
     label: 'Render',
     title: 'Rendering',
     summary:
-      'Render composes a clean image through a saved scene camera. The viewport is a free camera-editing view; the camera and output settings define the capture.',
+      'Render composes a clean image through a saved scene camera. The viewport is a free camera-editing view; the camera, output settings, and project render-effect stack define the capture.',
     image: `${APP_BASE}documentation/render.png`,
     alt: 'Render workspace with a sample model framed by the camera and Camera and Render inspector sections.',
     sections: [
@@ -279,6 +279,21 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'Play/Pause: run the animation in the live preview',
           'Virtual size: camera frame aspect; Output size: delivery canvas with letterboxing when aspects differ',
           'Upscale: nearest or smooth; Shading: Lit, Texture, or Solid; Final shadows: PCF, Ray traced, or Baked'
+        ]
+      },
+      {
+        heading: 'Render effects',
+        paragraphs: [
+          'The Render effects section is an optional, project-wide stack. Material effects feed the PS1 shader: Vertex snap quantizes projected vertices and Affine texture changes UV interpolation. Post effects run after the scene is rendered at virtual resolution and before upscale, so dither cells stay aligned to virtual pixels. Post effects update the live preview, stills, frame sequences, and video but do not alter the interactive viewport.',
+          'Clean clears the stack, PS1 enables vertex snap, affine texture, and RGB555 Bayer dithering, and Dither creates just an ordered-dither effect. Editing any preset makes the stack Custom. Add effect exposes Color depth and Dither; effects can be enabled, disabled, reordered, removed, and edited. The stack is saved with the project and autosave and participates in undo.',
+          'Color depth and dither are separate: Color depth quantizes the image without a pattern, while Dither adds an ordered threshold and quantizes to its own selected depth. Dither supports Bayer 4x4 or 8x8 at RGB555, RGB332, or 1-bit color. Material effects require Texture shading and switch the viewport and final render to Texture when enabled.'
+        ],
+        controls: [
+          'Clean / PS1 / Dither: replace the stack with a preset',
+          'Add effect: append a material or post effect',
+          'Vertex snap width/height: virtual snapping grid in pixels',
+          'Color depth: RGB555, RGB332, or 1-bit quantization',
+          'Dither depth/pattern/strength: quantization target, ordered matrix, and blend amount'
         ]
       },
       {

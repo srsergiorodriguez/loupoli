@@ -7,6 +7,8 @@ import {
   type PrimitiveKind
 } from '../geometry/primitives';
 import type { ShadingMode } from '../editor/types';
+import type { RenderEffect } from '../render/effects';
+import { normalizeRenderEffects } from '../render/effects';
 import {
   cloneModifiers,
   validateModifiers,
@@ -89,6 +91,7 @@ export interface ProjectSettings {
   readonly shading: ShadingMode;
   readonly ps1Snap: boolean;
   readonly ps1Affine: boolean;
+  readonly renderEffects?: readonly RenderEffect[];
 }
 
 /** Decoded scene, viewport settings, and optional v2 texture data. */
@@ -1975,6 +1978,13 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
   ) {
     throw new Error('The .lpoli viewport settings are invalid.');
   }
+  const renderEffects =
+    settings.renderEffects === undefined
+      ? undefined
+      : normalizeRenderEffects(settings.renderEffects);
+  if (settings.renderEffects !== undefined && renderEffects === null) {
+    throw new Error('The .lpoli render effects are invalid.');
+  }
 
   const document = new SceneDocument();
   let cursor = payloadStart;
@@ -2260,7 +2270,8 @@ export function decodeLpoly(bytes: Uint8Array): DecodedProject {
     settings: {
       shading: settings.shading,
       ps1Snap: settings.ps1Snap,
-      ps1Affine: settings.ps1Affine
+      ps1Affine: settings.ps1Affine,
+      ...(renderEffects ? { renderEffects } : {})
     },
     ...(textures ? { textures } : {})
   };

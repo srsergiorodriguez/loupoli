@@ -74,6 +74,32 @@ describe('.lpoli', () => {
   });
 
 
+  it('round-trips a render-effects stack', () => {
+    const document = makeDocument();
+    const settings: ProjectSettings = {
+      ...SETTINGS,
+      renderEffects: [
+        {
+          id: 'snap',
+          kind: 'vertex-snap',
+          enabled: true,
+          width: 320,
+          height: 240
+        },
+        {
+          id: 'dither',
+          kind: 'dither',
+          enabled: true,
+          depth: 'rgb555',
+          pattern: 'bayer4',
+          strength: 0.8
+        }
+      ]
+    };
+    const decoded = decodeLpoly(encodeLpoly(document, settings));
+    expect(decoded.settings.renderEffects).toEqual(settings.renderEffects);
+  });
+
   it('round-trips reference image planes and their texture role', () => {
     const document = makeDocument();
     const node = new MeshNode(

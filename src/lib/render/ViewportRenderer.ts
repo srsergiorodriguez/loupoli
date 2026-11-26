@@ -1078,12 +1078,20 @@ export class ViewportRenderer {
     this.schedule();
   }
 
-  /** Toggle PS1 vertex snapping and affine UV interpolation. */
-  setPs1Options(snap: boolean, affine: boolean): void {
+  /** Toggle PS1 vertex snapping/affine UVs and optionally set their grid. */
+  setPs1Options(
+    snap: boolean,
+    affine: boolean,
+    resolution: readonly [number, number] = [320, 240]
+  ): void {
     const apply = (material: ShaderMaterial): void => {
       const uniforms = material.uniforms as unknown as Ps1Uniforms;
       uniforms.uSnapEnabled.value = snap ? 1 : 0;
       uniforms.uAffineEnabled.value = affine ? 1 : 0;
+      uniforms.uSnapResolution.value.set(
+        Math.max(1, resolution[0]),
+        Math.max(1, resolution[1])
+      );
     };
     apply(this.materials.ps1);
     // Textured nodes use cloned per-asset materials, so the base material

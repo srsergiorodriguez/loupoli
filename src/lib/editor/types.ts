@@ -1,4 +1,5 @@
 import type { AxisProjection } from '../render/CameraRig';
+import type { RenderEffect } from '../render/effects';
 import type { NodeSummary, NodeTransform, SelectionMode } from '../scene/MeshNode';
 import type { GroupSummary } from '../scene/SceneGroup';
 import type { LightSummary } from '../scene/SceneLight';
@@ -324,6 +325,7 @@ export interface EditorSnapshot {
   readonly axisLock: AxisLock;
   readonly ps1Snap: boolean;
   readonly ps1Affine: boolean;
+  readonly renderEffects: readonly RenderEffect[];
   readonly selectedElements: readonly number[];
   readonly selectionCombineMode: SelectionCombineMode;
   readonly activeEditor: EditorPane;

@@ -9,6 +9,11 @@ import type {
   ModelExportScope
 } from '../io/exportOptions';
 import type {
+  RenderEffect,
+  RenderEffectKind,
+  RenderEffectPreset
+} from '../render/effects';
+import type {
   AnimationModulatorKind,
   AnimationModulatorSnapshot,
   ModulatorTargetKind
@@ -42,6 +47,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   axisLock: null,
   ps1Snap: DEFAULT_PS1_SNAP,
   ps1Affine: DEFAULT_PS1_AFFINE,
+  renderEffects: [],
   selectedElements: [],
   selectionCombineMode: 'replace',
   activeEditor: '3d',
@@ -327,6 +333,30 @@ export class EditorSession {
 
   setPs1Enabled(enabled: boolean): void {
     this.runtime?.setPs1Enabled(enabled);
+  }
+
+  applyRenderEffectPreset(preset: RenderEffectPreset): void {
+    this.runtime?.applyRenderEffectPreset(preset);
+  }
+
+  addRenderEffect(kind: RenderEffectKind): void {
+    this.runtime?.addRenderEffect(kind);
+  }
+
+  setRenderEffectEnabled(id: string, enabled: boolean): void {
+    this.runtime?.setRenderEffectEnabled(id, enabled);
+  }
+
+  updateRenderEffect(id: string, patch: Partial<RenderEffect>): void {
+    this.runtime?.updateRenderEffect(id, patch);
+  }
+
+  removeRenderEffect(id: string): void {
+    this.runtime?.removeRenderEffect(id);
+  }
+
+  moveRenderEffect(id: string, direction: -1 | 1): void {
+    this.runtime?.moveRenderEffect(id, direction);
   }
 
   setSelectionMode(mode: SelectionMode): void {

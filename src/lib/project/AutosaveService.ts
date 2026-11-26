@@ -293,6 +293,19 @@ export class AutosaveService {
     this.setState('dirty', null);
   }
 
+  /**
+   * Mark project settings dirty. Settings are part of the full checkpoint, so
+   * the next flush rebuilds the checkpoint even without a scene delta.
+   */
+  markSettingsDirty(): void {
+    if (!this.enabled) {
+      return;
+    }
+    this.dirty = true;
+    this.textureDirty = true;
+    this.setState('dirty', null);
+  }
+
   /** Persist the checkpoint and pending deltas. No-op when already clean. */
   async flush(): Promise<void> {
     if (!this.enabled || !this.dirty) {

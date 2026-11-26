@@ -93,6 +93,7 @@ import { bakeAtlasTargetSize } from '../texture/size';
 import { resampleTextureDataForBakeAtlas } from '../texture/bakeAtlasTexture';
 import { LscmError, packUvChartRects, unwrapUvCharts } from '../geometry/lscm';
 import { ReplaceUvCommand } from './commands/ReplaceUvCommand';
+import { RenderEffectsCommand } from './commands/RenderEffectsCommand';
 import {
   TextureAsset,
   TextureAssetCommand,
@@ -104,6 +105,18 @@ import {
 } from '../texture/TextureAsset';
 import { TextureLibrary } from '../texture/TextureLibrary';
 import { rotateUv, scaleUv, uvMedian, uvScaleFactor } from '../uv/uvTransform';
+import {
+  applyPostEffects,
+  createRenderEffect,
+  materialEffectSettings,
+  postEffectCount,
+  renderEffectDefinition,
+  renderEffectPreset,
+  renderEffectStage,
+  type RenderEffect,
+  type RenderEffectKind,
+  type RenderEffectPreset
+} from '../render/effects';
 import { PaintEngine } from '../paint/PaintEngine';
 import { paintPressure } from '../paint/types';
 import { rgbToHex } from '../paint/color';
@@ -293,6 +306,7 @@ import {
 import type {
   RenderShadowMode,
   RenderShading,
+  RenderStillOptions,
   RenderUpscale
 } from '../render/renderSettings';
 import { planAudioExport } from '../audio/audioExport';
@@ -666,6 +680,8 @@ export class EditorRuntime {
   private axisLock: AxisLock = null;
   private ps1Snap = DEFAULT_PS1_SNAP;
   private ps1Affine = DEFAULT_PS1_AFFINE;
+  private renderEffects: RenderEffect[] = [];
+  private renderEffectSequence = 0;
   private ps1PreviousShading: ShadingMode | null = null;
   private ps1PreviousRenderShading: RenderShading | null = null;
   private activeNodeId: string | null;
@@ -1045,6 +1061,7 @@ export class EditorRuntime {
       axisLock: this.axisLock,
       ps1Snap: this.ps1Snap,
       ps1Affine: this.ps1Affine,
+      renderEffects: this.renderEffects.map((effect) => ({ ...effect })),
       selectedElements,
       selectionCombineMode: this.selectionCombineMode,
       activeEditor: this.activeEditor,
@@ -2309,34 +2326,150 @@ export class EditorRuntime {
     this.publish();
   }
 
-  /** Toggle the single PS1 look (vertex snapping plus affine UVs). */
-  setPs1Enabled(enabled: boolean): void {
-    if (this.ps1Snap === enabled && this.ps1Affine === enabled) {
-      return;
-    }
-    if (enabled) {
-      if (!this.ps1Snap && !this.ps1Affine) {
+  /** Create a stable id for one render effect in the current session. */
+  private nextRenderEffectId(kind: RenderEffectKind): string {
+    let id = '';
+    do {
+      this.renderEffectSequence += 1;
+      id = `effect-${kind}-${this.renderEffectSequence}`;
+    } while (this.renderEffects.some((effect) => effect.id === id));
+    return id;
+  }
+
+  /** Apply one complete effect stack through the undo history. */
+  private commitRenderEffects(
+    effects: readonly RenderEffect[],
+    label: string
+  ): void {
+    const before = this.renderEffects;
+    const after = effects.map((effect) => ({ ...effect }));
+    this.history.execute(
+      new RenderEffectsCommand(
+        (next) => {
+          this.renderEffects = next.map((effect) => ({ ...effect }));
+          this.syncRenderEffectMaterials();
+          this.autosave.markSettingsDirty();
+          this.publish();
+        },
+        before,
+        after,
+        label
+      )
+    );
+  }
+
+  /**
+   * Keep the PS1 material shader in sync with the material-stage effects.
+   * Post effects need no uniforms; they run over the rendered image.
+   */
+  private syncRenderEffectMaterials(): void {
+    const material = materialEffectSettings(this.renderEffects);
+    const wasAny = this.ps1Snap || this.ps1Affine;
+    const any = material.snap || material.affine;
+    this.ps1Snap = material.snap;
+    this.ps1Affine = material.affine;
+    this.renderer.setPs1Options(
+      material.snap,
+      material.affine,
+      material.resolution
+    );
+    if (any) {
+      if (!wasAny) {
         this.ps1PreviousShading = this.shading;
         this.ps1PreviousRenderShading = this.renderShading;
       }
-      this.ps1Snap = true;
-      this.ps1Affine = true;
-      this.renderer.setPs1Options(true, true);
       if (!isPs1ShadingMode(this.shading)) {
-        this.setShadingMode('texture-wire');
+        this.shading = 'texture-wire';
+        this.workspaceShading[this.workspace] = this.shading;
+        this.renderer.setShadingMode(this.shading);
       }
       if (this.renderShading !== 'texture') {
-        this.updateRenderSettings({ renderShading: 'texture' });
+        this.renderShading = 'texture';
       }
-      this.publish();
       return;
     }
-
-    const previousRenderShading = this.deactivatePs1Look() ?? 'lit';
-    if (this.renderShading !== previousRenderShading) {
-      this.updateRenderSettings({ renderShading: previousRenderShading });
+    if (wasAny) {
+      const previous =
+        this.ps1PreviousShading ??
+        DEFAULT_WORKSPACE_SHADING[this.workspace];
+      this.shading = previous;
+      this.workspaceShading[this.workspace] = previous;
+      this.renderer.setShadingMode(previous);
+      this.renderShading = this.ps1PreviousRenderShading ?? 'lit';
+      this.ps1PreviousShading = null;
+      this.ps1PreviousRenderShading = null;
     }
-    this.publish();
+  }
+
+  /** Replace the effect stack with one of the built-in presets. */
+  applyRenderEffectPreset(preset: RenderEffectPreset): void {
+    const effects = renderEffectPreset(preset, (kind) =>
+      this.nextRenderEffectId(kind)
+    );
+    this.commitRenderEffects(
+      effects,
+      preset === 'clean'
+        ? 'Clear render effects'
+        : `Apply ${preset === 'ps1' ? 'PS1' : 'Dither'} effect preset`
+    );
+  }
+
+  /** Append one effect with defaults. */
+  addRenderEffect(kind: RenderEffectKind): void {
+    const effect = createRenderEffect(kind, this.nextRenderEffectId(kind));
+    this.commitRenderEffects(
+      [...this.renderEffects, effect],
+      `Add ${renderEffectDefinition(kind).label} effect`
+    );
+  }
+
+  /** Enable or disable one effect without removing it. */
+  setRenderEffectEnabled(id: string, enabled: boolean): void {
+    this.commitRenderEffects(
+      this.renderEffects.map((effect) =>
+        effect.id === id ? { ...effect, enabled } : effect
+      ),
+      enabled ? 'Enable render effect' : 'Disable render effect'
+    );
+  }
+
+  /** Update the parameters of one effect. */
+  updateRenderEffect(id: string, patch: Partial<RenderEffect>): void {
+    this.commitRenderEffects(
+      this.renderEffects.map((effect) =>
+        effect.id === id ? { ...effect, ...patch, id: effect.id } : effect
+      ),
+      'Edit render effect'
+    );
+  }
+
+  /** Remove one effect from the stack. */
+  removeRenderEffect(id: string): void {
+    const effect = this.renderEffects.find((item) => item.id === id);
+    if (!effect) {
+      return;
+    }
+    this.commitRenderEffects(
+      this.renderEffects.filter((item) => item.id !== id),
+      `Remove ${renderEffectDefinition(effect.kind).label} effect`
+    );
+  }
+
+  /** Move one effect up or down in stack order. */
+  moveRenderEffect(id: string, direction: -1 | 1): void {
+    const index = this.renderEffects.findIndex((effect) => effect.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= this.renderEffects.length) {
+      return;
+    }
+    const effects = [...this.renderEffects];
+    [effects[index], effects[target]] = [effects[target], effects[index]];
+    this.commitRenderEffects(effects, 'Reorder render effects');
+  }
+
+  /** Toggle the single PS1 preset for compatibility with older callers. */
+  setPs1Enabled(enabled: boolean): void {
+    this.applyRenderEffectPreset(enabled ? 'ps1' : 'clean');
   }
 
   /**
@@ -2352,6 +2485,9 @@ export class EditorRuntime {
     const previousRenderShading = this.ps1PreviousRenderShading ?? 'lit';
     this.ps1Snap = false;
     this.ps1Affine = false;
+    this.renderEffects = this.renderEffects.filter(
+      (effect) => renderEffectStage(effect.kind) !== 'material'
+    );
     this.ps1PreviousShading = null;
     this.ps1PreviousRenderShading = null;
     this.renderer.setPs1Options(false, false);
@@ -2672,6 +2808,7 @@ export class EditorRuntime {
     this.workspaceShading = { ...DEFAULT_WORKSPACE_SHADING };
     this.ps1Snap = false;
     this.ps1Affine = false;
+    this.renderEffects = [];
     this.ps1PreviousShading = null;
     this.ps1PreviousRenderShading = null;
     this.timelineVisible = false;
@@ -6488,6 +6625,23 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Render the scene and apply the enabled post-effect stack at virtual size. */
+  private renderStillImage(options: RenderStillOptions): ImageData {
+    const image = this.renderer.renderStill(options);
+    if (postEffectCount(this.renderEffects) === 0) {
+      return image;
+    }
+    const data = applyPostEffects(
+      image.data,
+      image.width,
+      image.height,
+      this.renderEffects
+    );
+    const result = new ImageData(image.width, image.height);
+    result.data.set(data);
+    return result;
+  }
+
   /** Render one still from the active camera and save it as a PNG. */
   async renderStill(): Promise<void> {
     if (this.renderBusy) {
@@ -6505,7 +6659,7 @@ export class EditorRuntime {
     this.projectError = null;
     this.publish();
     try {
-      const image = this.renderer.renderStill({
+      const image = this.renderStillImage({
         width: this.renderVirtualWidth,
         height: this.renderVirtualHeight,
         shading: this.renderShading,
@@ -8798,7 +8952,7 @@ export class EditorRuntime {
     }
     let image: ImageData;
     try {
-      image = this.renderer.renderStill({
+      image = this.renderStillImage({
         width: this.renderVirtualWidth,
         height: this.renderVirtualHeight,
         shading: this.renderShading,
@@ -8913,7 +9067,7 @@ export class EditorRuntime {
         if (!view) {
           throw new Error('The active render camera is unavailable.');
         }
-        const image = this.renderer.renderStill({
+        const image = this.renderStillImage({
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
@@ -9113,7 +9267,7 @@ export class EditorRuntime {
           target: camera.target,
           fov: camera.fov
         };
-        const image = this.renderer.renderStill({
+        const image = this.renderStillImage({
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
@@ -9373,7 +9527,7 @@ export class EditorRuntime {
           target: camera.target,
           fov: camera.fov
         };
-        const image = this.renderer.renderStill({
+        const image = this.renderStillImage({
           width: this.renderVirtualWidth,
           height: this.renderVirtualHeight,
           shading: this.renderShading,
@@ -15880,7 +16034,8 @@ export class EditorRuntime {
     return {
       shading: this.shading,
       ps1Snap: this.ps1Snap,
-      ps1Affine: this.ps1Affine
+      ps1Affine: this.ps1Affine,
+      renderEffects: this.renderEffects.map((effect) => ({ ...effect }))
     };
   }
 
@@ -15978,17 +16133,38 @@ export class EditorRuntime {
     this.timelineVisible = false;
     this.workspaceShading[this.workspace] = decoded.settings.shading;
     this.shading = decoded.settings.shading;
-    const loadedPs1 = decoded.settings.ps1Snap || decoded.settings.ps1Affine;
-    this.ps1Snap = loadedPs1;
-    this.ps1Affine = loadedPs1;
-    if (loadedPs1 && !isPs1ShadingMode(this.shading)) {
-      this.shading = 'texture-wire';
-      this.workspaceShading[this.workspace] = this.shading;
+    const legacyEffects: RenderEffect[] = [];
+    if (decoded.settings.ps1Snap) {
+      legacyEffects.push(
+        createRenderEffect('vertex-snap', 'legacy-vertex-snap')
+      );
+    }
+    if (decoded.settings.ps1Affine) {
+      legacyEffects.push(
+        createRenderEffect('affine-texture', 'legacy-affine-texture')
+      );
+    }
+    this.renderEffects = decoded.settings.renderEffects
+      ? decoded.settings.renderEffects.map((effect) => ({ ...effect }))
+      : legacyEffects;
+    const material = materialEffectSettings(this.renderEffects);
+    this.ps1Snap = material.snap;
+    this.ps1Affine = material.affine;
+    if (material.snap || material.affine) {
+      if (!isPs1ShadingMode(this.shading)) {
+        this.shading = 'texture-wire';
+        this.workspaceShading[this.workspace] = this.shading;
+      }
+      this.renderShading = 'texture';
     }
     this.ps1PreviousShading = null;
     this.ps1PreviousRenderShading = null;
     this.renderer.setShadingMode(this.shading);
-    this.renderer.setPs1Options(this.ps1Snap, this.ps1Affine);
+    this.renderer.setPs1Options(
+      this.ps1Snap,
+      this.ps1Affine,
+      material.resolution
+    );
     this.syncScene();
     this.renderer.resetCameraOrientation();
     this.renderer.frameActiveNode();

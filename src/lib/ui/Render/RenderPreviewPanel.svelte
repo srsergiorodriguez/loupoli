@@ -4,6 +4,7 @@
   import IconButton from '../Primitives/IconButton.svelte';
   import PaneFrame from '../Panels/PaneFrame.svelte';
   import PaneHeader from '../Panels/PaneHeader.svelte';
+  import { postEffectCount } from '../../render/effects';
 
   /** Always-on live output preview through the active render camera. */
   interface Props {
@@ -31,8 +32,11 @@
   const detail = $derived(
     `${session.snapshot.renderVirtualWidth}×${session.snapshot.renderVirtualHeight} → ${session.snapshot.renderOutputWidth}×${session.snapshot.renderOutputHeight}`
   );
+  const effectCount = $derived(
+    postEffectCount(session.snapshot.renderEffects)
+  );
   const meta = $derived(
-    `PCF preview · f${Math.round(session.snapshot.animationFrame)}`
+    `PCF preview · f${Math.round(session.snapshot.animationFrame)}${effectCount > 0 ? ` · ${effectCount} fx` : ''}`
   );
 
   onMount(() => {
