@@ -79,7 +79,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         paragraphs: [
           'UVs are stored per face corner. A seam cuts the corner fan along one edge, allowing the two sides of the surface to use separate coordinates. Seams define chart boundaries; Unwrap operates on the selected faces and their marked cuts.',
           'The 3D and UV selections are linked. Selecting a face in the viewport highlights its UV corners, and selecting UV corners updates the viewport selection. Switch to Island mode to work with one connected chart at a time.',
-          'Unwrap uses seam charts and LSCM. Highly bent branch charts that fold under LSCM automatically retry a harmonic embedding instead of rejecting the whole unwrap. If a chart still cannot be flattened, the error names its face range and highlights those faces in the 3D viewport so the seam can be found.'
+          'Unwrap uses seam charts and LSCM. If LSCM folds a branch chart, it retries a shape-preserving planar projection and then a rigid face net, so the UV layout keeps the cut and hole shape instead of collapsing it to a circle. Charts with holes can remain uncut when the planar fallback is valid; strongly curved holes may still need a seam cut. If a chart cannot be flattened, the error names its face range and highlights those faces in the 3D viewport.'
         ],
         controls: [
           'Vertex / Edge / Face / Island icons: UV selection mode; 1 / 2 / 3 are the keyboard shortcuts',

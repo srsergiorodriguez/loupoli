@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HalfEdgeMesh, type MeshFaceSpec } from './HalfEdgeMesh';
 import { createCubeMesh, createGridMesh, createQuadSphereMesh } from './primitives';
 import { extractUvCharts } from './uvCharts';
 import { LscmError, packUvChartRects, unwrapUvCharts } from './lscm';
@@ -70,6 +71,177 @@ describe('LSCM unwrap', () => {
       }
     }
     expect(points.size).toBe(4);
+  });
+
+  it('unwraps a chart with a hole without requiring a cut', () => {
+    const corners = [
+      [0, 0], [1, 0], [2, 0],
+      [0, 1], [1, 1], [2, 1],
+      [0, 2], [1, 2], [2, 2]
+    ] as const;
+    const faces = [];
+    for (let row = 0; row < 2; row += 1) {
+      for (let column = 0; column < 2; column += 1) {
+        if (row === 0 && column === 0) {
+          continue;
+        }
+        const a = row * 3 + column;
+        const b = a + 1;
+        const c = a + 4;
+        const d = a + 3;
+        faces.push({
+          corners: [a, b, c, d].map((index) => ({
+            position: [corners[index][0], corners[index][1], 0] as [
+              number,
+              number,
+              number
+            ],
+            uv: [corners[index][0] / 2, corners[index][1] / 2] as [
+              number,
+              number
+            ]
+          }))
+        });
+      }
+    }
+    const ring = HalfEdgeMesh.fromPolygons(faces);
+    const charts = extractUvCharts(ring);
+    expect(charts).toHaveLength(1);
+    expect(charts[0].boundaryHalfEdges.length).toBeGreaterThan(4);
+    const uvs = unwrapUvCharts(ring, charts);
+    expect(Array.from(uvs).every((value) => Number.isFinite(value))).toBe(true);
+  });
+
+  it('keeps a cut open in the UV layout', () => {
+    const corners = [
+      [0, 0], [1, 0], [2, 0],
+      [0, 1], [1, 1], [2, 1],
+      [0, 2], [1, 2], [2, 2]
+    ] as const;
+    const faces = [];
+    for (let row = 0; row < 2; row += 1) {
+      for (let column = 0; column < 2; column += 1) {
+        if (row === 0 && column === 0) {
+          continue;
+        }
+        const a = row * 3 + column;
+        const b = a + 1;
+        const c = a + 4;
+        const d = a + 3;
+        faces.push({
+          corners: [a, b, c, d].map((index) => ({
+            position: [corners[index][0], corners[index][1], 0] as [
+              number,
+              number,
+              number
+            ],
+            uv: [corners[index][0] / 2, corners[index][1] / 2] as [
+              number,
+              number
+            ]
+          }))
+        });
+      }
+    }
+    const ring = HalfEdgeMesh.fromPolygons(faces);
+    // Cut from the inner hole to the outer boundary.
+    let cut = -1;
+    for (let edge = 0; edge < ring.edgeCount; edge += 1) {
+      const [a, b] = ring.getEdgeVertices(edge);
+      const pa = ring.getVertexPosition(a);
+      const pb = ring.getVertexPosition(b);
+      if (
+        (pa[0] === 1 && pa[1] === 1 && pb[0] === 1 && pb[1] === 2) ||
+        (pb[0] === 1 && pb[1] === 1 && pa[0] === 1 && pa[1] === 2)
+      ) {
+        cut = edge;
+        break;
+      }
+    }
+    expect(cut).toBeGreaterThanOrEqual(0);
+    ring.setEdgeSeam(cut, true);
+    const charts = extractUvCharts(ring);
+    const uvs = unwrapUvCharts(ring, charts);
+    const a = ring.edgeHalfEdge[cut];
+    const b = ring.heTwin[a];
+    const separation = Math.hypot(
+      uvs[a * 2] - uvs[b * 2],
+      uvs[a * 2 + 1] - uvs[b * 2 + 1]
+    );
+    expect(separation).toBeGreaterThan(1e-4);
+  });
+
+  it('unwraps a synthetic branch hole without inventing a cut', () => {
+    const mesh = createVoxelBranchMesh();
+    const branchBase = [
+      [[1, 0, 2], [1, 1, 2]],
+      [[1, 1, 2], [1, 1, 3]],
+      [[1, 1, 3], [1, 0, 3]],
+      [[1, 0, 3], [1, 0, 2]]
+    ] as const;
+    for (const [from, to] of branchBase) {
+      const edge = findPositionEdge(mesh, from, to);
+      expect(edge).toBeGreaterThanOrEqual(0);
+      mesh.setEdgeSeam(edge, true);
+    }
+    const charts = extractUvCharts(mesh);
+    expect(charts.length).toBeGreaterThanOrEqual(2);
+    const uvs = unwrapUvCharts(mesh, charts);
+    expect(Array.from(uvs).every((value) => Number.isFinite(value))).toBe(true);
+  });
+
+  it('unwraps a synthetic trunk with a branch hole and an open cut', () => {
+    const mesh = createVoxelBranchMesh();
+    const branchBase = [
+      [[1, 0, 2], [1, 1, 2]],
+      [[1, 1, 2], [1, 1, 3]],
+      [[1, 1, 3], [1, 0, 3]],
+      [[1, 0, 3], [1, 0, 2]]
+    ] as const;
+    for (const [from, to] of branchBase) {
+      const edge = findPositionEdge(mesh, from, to);
+      expect(edge).toBeGreaterThanOrEqual(0);
+      mesh.setEdgeSeam(edge, true);
+    }
+    const cutSegments = [
+      findPositionEdge(mesh, [1, 0, 2], [1, 0, 1]),
+      findPositionEdge(mesh, [1, 0, 1], [1, 0, 0])
+    ];
+    expect(cutSegments.every((edge) => edge >= 0)).toBe(true);
+    for (const edge of cutSegments) {
+      mesh.setEdgeSeam(edge, true);
+    }
+    const cut = cutSegments[0];
+
+    const charts = extractUvCharts(mesh);
+    expect(charts.length).toBeGreaterThanOrEqual(2);
+    const uvs = unwrapUvCharts(mesh, charts);
+    expect(Array.from(uvs).every((value) => Number.isFinite(value))).toBe(true);
+
+    const a = mesh.edgeHalfEdge[cut];
+    const b = mesh.heTwin[a];
+    const separation = Math.hypot(
+      uvs[a * 2] - uvs[b * 2],
+      uvs[a * 2 + 1] - uvs[b * 2 + 1]
+    );
+    expect(separation).toBeGreaterThan(1e-4);
+  });
+
+  it('opens a dead-end slit instead of collapsing its two sides', () => {
+    const grid = createGridMesh(2, 2);
+    const cut = findPositionEdge(grid, [0, 1, 0], [1, 1, 0]);
+    expect(cut).toBeGreaterThanOrEqual(0);
+    grid.setEdgeSeam(cut, true);
+    const charts = extractUvCharts(grid);
+    expect(charts).toHaveLength(1);
+    const uvs = unwrapUvCharts(grid, charts);
+    const a = grid.edgeHalfEdge[cut];
+    const b = grid.heTwin[a];
+    const separation = Math.hypot(
+      uvs[a * 2] - uvs[b * 2],
+      uvs[a * 2 + 1] - uvs[b * 2 + 1]
+    );
+    expect(separation).toBeGreaterThan(1e-4);
   });
 
   it('accepts explicit chart pins', () => {
@@ -188,3 +360,73 @@ describe('LSCM unwrap', () => {
       }
     }
   });
+
+
+/** A closed voxel trunk with one side branch and a naturally connected base. */
+function createVoxelBranchMesh(): HalfEdgeMesh {
+  const occupied = new Set<string>();
+  const add = (x: number, y: number, z: number): void => {
+    occupied.add(`${x}|${y}|${z}`);
+  };
+  for (let z = 0; z < 5; z += 1) {
+    add(0, 0, z);
+  }
+  add(1, 0, 2);
+  add(2, 0, 2);
+  add(3, 0, 2);
+
+  const directions: ReadonlyArray<{
+    readonly offset: readonly [number, number, number];
+    readonly corners: ReadonlyArray<readonly [number, number, number]>;
+  }> = [
+    { offset: [1, 0, 0], corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
+    { offset: [-1, 0, 0], corners: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]] },
+    { offset: [0, 1, 0], corners: [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]] },
+    { offset: [0, -1, 0], corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
+    { offset: [0, 0, 1], corners: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
+    { offset: [0, 0, -1], corners: [[0, 0, 0], [0, 1, 0], [1, 1, 0], [1, 0, 0]] }
+  ];
+  const faces: MeshFaceSpec[] = [];
+  for (const key of occupied) {
+    const [x, y, z] = key.split('|').map(Number);
+    for (const { offset, corners } of directions) {
+      if (occupied.has(`${x + offset[0]}|${y + offset[1]}|${z + offset[2]}`)) {
+        continue;
+      }
+      faces.push({
+        corners: corners.map(([dx, dy, dz]) => ({
+          position: [x + dx, y + dy, z + dz] as [number, number, number],
+          uv: [(x + dx) / 4, (z + dz) / 5] as [number, number]
+        }))
+      });
+    }
+  }
+  return HalfEdgeMesh.fromPolygons(faces);
+}
+
+function findPositionEdge(
+  mesh: HalfEdgeMesh,
+  from: readonly [number, number, number],
+  to: readonly [number, number, number]
+): number {
+  for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+    const [a, b] = mesh.getEdgeVertices(edge);
+    const pa = mesh.getVertexPosition(a);
+    const pb = mesh.getVertexPosition(b);
+    const matches = (point: readonly number[]): boolean =>
+      point[0] === from[0] &&
+      point[1] === from[1] &&
+      point[2] === from[2];
+    const matchesOther = (point: readonly number[]): boolean =>
+      point[0] === to[0] &&
+      point[1] === to[1] &&
+      point[2] === to[2];
+    if (
+      (matches(pa) && matchesOther(pb)) ||
+      (matchesOther(pa) && matches(pb))
+    ) {
+      return edge;
+    }
+  }
+  return -1;
+}

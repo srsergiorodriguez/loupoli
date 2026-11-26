@@ -53,74 +53,16 @@ function triangleArea2(a: Vec3, b: Vec3, c: Vec3): number {
   );
 }
 
-/**
- * Recover the ordered boundary loop of a chart.
- *
- * Boundary half-edges run along chart faces. A regular disk has one outgoing
- * boundary edge per UV vertex; a repeated start means the seams create a
- * pinched boundary and this fallback should not run.
- */
-function orderedChartBoundary(
+/** Best-fit plane projection used for charts that are locally near-planar. */
+function projectionFallback(
   mesh: HalfEdgeMesh,
   chart: UvChart
-): number[] | null {
-  if (chart.boundaryHalfEdges.length < 3) {
-    return null;
-  }
-  const byStart = new Map<number, number>();
-  for (const halfEdge of chart.boundaryHalfEdges) {
-    const from = chart.cornerUvVertex.get(halfEdge);
-    if (from === undefined || byStart.has(from)) {
-      return null;
-    }
-    byStart.set(from, halfEdge);
-  }
-  const first = chart.boundaryHalfEdges[0];
-  const start = chart.cornerUvVertex.get(first);
-  if (start === undefined) {
-    return null;
-  }
-  const used = new Set<number>();
-  const loop: number[] = [];
-  let current = first;
-  while (used.size < chart.boundaryHalfEdges.length) {
-    const from = chart.cornerUvVertex.get(current);
-    if (from === undefined || used.has(current)) {
-      return null;
-    }
-    used.add(current);
-    loop.push(from);
-    const to = chart.cornerUvVertex.get(mesh.heNext[current]);
-    if (to === undefined) {
-      return null;
-    }
-    if (to === start) {
-      break;
-    }
-    const next = byStart.get(to);
-    if (next === undefined) {
-      return null;
-    }
-    current = next;
-  }
-  if (used.size !== chart.boundaryHalfEdges.length) {
-    return null;
-  }
-  return loop;
-}
-
-/** Projected 3D extents of a chart's ordered boundary. */
-function chartBoundaryAspect(
-  mesh: HalfEdgeMesh,
-  chart: UvChart,
-  boundary: readonly number[]
-): number {
-  const points = boundary.map((uvVertex) => {
-    const vertex = chart.uvVertices[uvVertex].vertex;
-    return mesh.getVertexPosition(vertex);
-  });
+): Map<number, Vec2> | null {
+  const points = chart.uvVertices.map((vertex) =>
+    mesh.getVertexPosition(vertex.vertex)
+  );
   if (points.length < 3) {
-    return 1;
+    return null;
   }
   const center: Vec3 = [0, 0, 0];
   for (const point of points) {
@@ -158,7 +100,7 @@ function chartBoundaryAspect(
     const next = multiply(axis);
     const length = Math.hypot(next[0], next[1], next[2]);
     if (length <= 1e-12) {
-      return 1;
+      return null;
     }
     axis = [next[0] / length, next[1] / length, next[2] / length];
   }
@@ -181,89 +123,147 @@ function chartBoundaryAspect(
     }
     secondary = [next[0] / length, next[1] / length, next[2] / length];
   }
-  let minA = Infinity;
-  let maxA = -Infinity;
-  let minB = Infinity;
-  let maxB = -Infinity;
-  for (const point of points) {
+  const uvs: Vec2[] = points.map((point) => {
     const x = point[0] - center[0];
     const y = point[1] - center[1];
     const z = point[2] - center[2];
-    const a = x * axis[0] + y * axis[1] + z * axis[2];
-    const b = x * secondary[0] + y * secondary[1] + z * secondary[2];
-    minA = Math.min(minA, a);
-    maxA = Math.max(maxA, a);
-    minB = Math.min(minB, b);
-    maxB = Math.max(maxB, b);
-  }
-  const extentA = Math.max(1e-6, maxA - minA);
-  const extentB = Math.max(1e-6, maxB - minB);
-  return Math.min(4, Math.max(0.25, extentA / extentB));
+    return [
+      x * axis[0] + y * axis[1] + z * axis[2],
+      x * secondary[0] + y * secondary[1] + z * secondary[2]
+    ];
+  });
+  return new Map(uvs.map((uv, index) => [index, uv]));
 }
 
-/** Harmonic disk embedding used when LSCM folds or overlaps a chart. */
-function tutteFallback(
+/** Unfold a chart into a rigid triangle net, preserving every face shape. */
+function unfoldFallback(
   mesh: HalfEdgeMesh,
   chart: UvChart,
   triangles: readonly LocalTriangle[]
 ): Map<number, Vec2> | null {
-  const boundary = orderedChartBoundary(mesh, chart);
-  if (!boundary || boundary.length < 3) {
+  if (triangles.length === 0) {
     return null;
   }
-  const count = chart.uvVertices.length;
-  const boundarySet = new Set(boundary);
-  const neighbors = Array.from({ length: count }, () => new Set<number>());
-  for (const triangle of triangles) {
-    neighbors[triangle.a].add(triangle.b);
-    neighbors[triangle.a].add(triangle.c);
-    neighbors[triangle.b].add(triangle.a);
-    neighbors[triangle.b].add(triangle.c);
-    neighbors[triangle.c].add(triangle.a);
-    neighbors[triangle.c].add(triangle.b);
-  }
-  const uvs: Vec2[] = Array.from({ length: count }, () => [0, 0]);
-  const aspect = chartBoundaryAspect(mesh, chart, boundary);
-  const radiusU = Math.sqrt(aspect) * 0.7;
-  const radiusV = 0.7 / Math.sqrt(aspect);
-  boundary.forEach((vertex, index) => {
-    const angle = (index / boundary.length) * Math.PI * 2;
-    uvs[vertex] = [
-      Math.cos(angle) * radiusU,
-      Math.sin(angle) * radiusV
-    ];
-  });
-  const interior = Array.from({ length: count }, (_, index) => index).filter(
-    (index) => !boundarySet.has(index)
+  const positions = chart.uvVertices.map((vertex) =>
+    mesh.getVertexPosition(vertex.vertex)
   );
-  for (let iteration = 0; iteration < 4000; iteration += 1) {
-    let change = 0;
-    for (const vertex of interior) {
-      let u = 0;
-      let v = 0;
-      let weight = 0;
-      for (const neighbor of neighbors[vertex]) {
-        u += uvs[neighbor][0];
-        v += uvs[neighbor][1];
-        weight += 1;
-      }
-      if (weight === 0) {
-        continue;
-      }
-      const nextU = u / weight;
-      const nextV = v / weight;
-      change = Math.max(
-        change,
-        Math.abs(nextU - uvs[vertex][0]),
-        Math.abs(nextV - uvs[vertex][1])
-      );
-      uvs[vertex] = [nextU, nextV];
+  const distance = (a: number, b: number): number =>
+    Math.hypot(
+      positions[a][0] - positions[b][0],
+      positions[a][1] - positions[b][1],
+      positions[a][2] - positions[b][2]
+    );
+  const edgeKey = (a: number, b: number): string =>
+    a < b ? `${a}:${b}` : `${b}:${a}`;
+  const edgeTriangles = new Map<string, number[]>();
+  triangles.forEach((triangle, index) => {
+    for (const [a, b] of [
+      [triangle.a, triangle.b],
+      [triangle.b, triangle.c],
+      [triangle.c, triangle.a]
+    ]) {
+      const key = edgeKey(a, b);
+      const list = edgeTriangles.get(key) ?? [];
+      list.push(index);
+      edgeTriangles.set(key, list);
     }
-    if (change < 1e-11) {
+  });
+  const placed = new Map<number, Vec2>();
+  const visit = (triangle: LocalTriangle): boolean => {
+    const ab = distance(triangle.a, triangle.b);
+    if (ab <= 1e-9) {
+      return false;
+    }
+    const ac = distance(triangle.a, triangle.c);
+    const bc = distance(triangle.b, triangle.c);
+    const x = (ac * ac - bc * bc + ab * ab) / (2 * ab);
+    const heightSq = ac * ac - x * x;
+    if (heightSq < -1e-8) {
+      return false;
+    }
+    const height = Math.sqrt(Math.max(0, heightSq));
+    placed.set(triangle.a, [0, 0]);
+    placed.set(triangle.b, [ab, 0]);
+    // Choose the positive side for the seed; all later triangles are placed
+    // opposite the already placed neighbor across the shared edge.
+    placed.set(triangle.c, [x, height]);
+    return true;
+  };
+  let start = -1;
+  for (let index = 0; index < triangles.length; index += 1) {
+    if (visit(triangles[index])) {
+      start = index;
       break;
     }
   }
-  return new Map(uvs.map((uv, index) => [index, uv]));
+  if (start < 0) {
+    return null;
+  }
+  const visited = new Set<number>([start]);
+  const queue = [start];
+  while (queue.length > 0) {
+    const current = queue.shift() as number;
+    const triangle = triangles[current];
+    const edges: Array<[number, number, number]> = [
+      [triangle.a, triangle.b, triangle.c],
+      [triangle.b, triangle.c, triangle.a],
+      [triangle.c, triangle.a, triangle.b]
+    ];
+    for (const [a, b, c] of edges) {
+      const currentA = placed.get(a);
+      const currentB = placed.get(b);
+      const currentC = placed.get(c);
+      if (!currentA || !currentB || !currentC) {
+        continue;
+      }
+      for (const neighborIndex of edgeTriangles.get(edgeKey(a, b)) ?? []) {
+        if (neighborIndex === current || visited.has(neighborIndex)) {
+          continue;
+        }
+        const neighbor = triangles[neighborIndex];
+        const third =
+          neighbor.a !== a && neighbor.a !== b
+            ? neighbor.a
+            : neighbor.b !== a && neighbor.b !== b
+              ? neighbor.b
+              : neighbor.c;
+        if (placed.has(third)) {
+          visited.add(neighborIndex);
+          queue.push(neighborIndex);
+          continue;
+        }
+        const da = distance(third, a);
+        const db = distance(third, b);
+        const ab = distance(a, b);
+        if (ab <= 1e-9) {
+          continue;
+        }
+        const along = (da * da - db * db + ab * ab) / (2 * ab);
+        const heightSq = da * da - along * along;
+        if (heightSq < -1e-8) {
+          continue;
+        }
+        const height = Math.sqrt(Math.max(0, heightSq));
+        const dx = (currentB[0] - currentA[0]) / ab;
+        const dy = (currentB[1] - currentA[1]) / ab;
+        const baseX = currentA[0] + dx * along;
+        const baseY = currentA[1] + dy * along;
+        const side = (currentC[0] - currentA[0]) * dy -
+          (currentC[1] - currentA[1]) * dx;
+        const direction = side >= 0 ? -1 : 1;
+        placed.set(third, [
+          baseX - dy * height * direction,
+          baseY + dx * height * direction
+        ]);
+        visited.add(neighborIndex);
+        queue.push(neighborIndex);
+      }
+    }
+  }
+  if (visited.size !== triangles.length) {
+    return null;
+  }
+  return placed;
 }
 
 /** Validation reason for one candidate layout. */
@@ -525,7 +525,7 @@ function unwrapChart(
     residualSq += value * value;
   }
   const tolerance = Math.max(1e-12, residualSq * 1e-18);
-  const maxIterations = Math.max(64, freeVariables.length * 6);
+  const maxIterations = Math.max(256, freeVariables.length * 30);
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     const normalDirection = applyNormal(direction);
     let denominator = 0;
@@ -563,26 +563,38 @@ function unwrapChart(
     uvs[Math.floor(variable / 2)][variable % 2] = x[index];
   }
   let failure = chartUvFailure(uvs, triangles);
-  let fallbackNote = '';
   if (failure !== null && pinnedUvVertices === null) {
-    // LSCM is conformal but not guaranteed to be injective on a highly bent
-    // branch junction. Try a positive-weight harmonic disk embedding before
-    // rejecting the chart.
-    fallbackNote = ' Harmonic fallback was unavailable.';
-    const fallback = tutteFallback(mesh, chart, triangles);
-    if (fallback) {
-      fallbackNote = ' Harmonic fallback also failed validation.';
+    // A projected net preserves the actual cut/hole shape for locally planar
+    // charts; a rigid triangle net handles more curved charts. Neither maps a
+    // long slit boundary to an arbitrary convex circle.
+    const projected = projectionFallback(mesh, chart);
+    if (projected) {
       for (let index = 0; index < uvs.length; index += 1) {
-        const uv = fallback.get(index);
+        const uv = projected.get(index);
         if (uv) {
           uvs[index] = uv;
         }
       }
       failure = chartUvFailure(uvs, triangles);
     }
+    if (failure !== null) {
+      const unfolded = unfoldFallback(mesh, chart, triangles);
+      if (unfolded) {
+        for (let index = 0; index < uvs.length; index += 1) {
+          const uv = unfolded.get(index);
+          if (uv) {
+            uvs[index] = uv;
+          }
+        }
+        failure = chartUvFailure(uvs, triangles);
+      }
+    }
+    if (failure !== null) {
+      failure += ' Planar and rigid-net fallbacks also failed validation.';
+    }
   }
   if (failure !== null) {
-    throw new LscmError(failure + fallbackNote);
+    throw new LscmError(failure);
   }
 
   // Align the longest chart boundary edge horizontally. Pins fix scale and
