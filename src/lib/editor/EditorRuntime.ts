@@ -109,6 +109,7 @@ import {
   applyPostEffects,
   createRenderEffect,
   materialEffectSettings,
+  hasTemporalEffects,
   postEffectCount,
   renderEffectDefinition,
   renderEffectPreset,
@@ -682,6 +683,7 @@ export class EditorRuntime {
   private ps1Affine = DEFAULT_PS1_AFFINE;
   private renderEffects: RenderEffect[] = [];
   private renderEffectSequence = 0;
+  private postPreviousFrame: Uint8ClampedArray | null = null;
   private ps1PreviousShading: ShadingMode | null = null;
   private ps1PreviousRenderShading: RenderShading | null = null;
   private activeNodeId: string | null;
@@ -2347,6 +2349,7 @@ export class EditorRuntime {
       new RenderEffectsCommand(
         (next) => {
           this.renderEffects = next.map((effect) => ({ ...effect }));
+          this.postPreviousFrame = null;
           this.syncRenderEffectMaterials();
           this.autosave.markSettingsDirty();
           this.publish();
@@ -6626,17 +6629,30 @@ export class EditorRuntime {
   }
 
   /** Render the scene and apply the enabled post-effect stack at virtual size. */
-  private renderStillImage(options: RenderStillOptions): ImageData {
+  private renderStillImage(
+    options: RenderStillOptions,
+    resetHistory = false
+  ): ImageData {
     const image = this.renderer.renderStill(options);
     if (postEffectCount(this.renderEffects) === 0) {
+      this.postPreviousFrame = null;
       return image;
     }
     const data = applyPostEffects(
       image.data,
       image.width,
       image.height,
-      this.renderEffects
+      this.renderEffects,
+      {
+        frame: Math.round(this.animationFrame),
+        previous: resetHistory ? null : this.postPreviousFrame
+      }
     );
+    if (hasTemporalEffects(this.renderEffects)) {
+      this.postPreviousFrame = new Uint8ClampedArray(data);
+    } else {
+      this.postPreviousFrame = null;
+    }
     const result = new ImageData(image.width, image.height);
     result.data.set(data);
     return result;
@@ -6667,7 +6683,7 @@ export class EditorRuntime {
         camera: view,
         transparent: this.renderTransparent,
         backgroundColor: this.renderBackground
-      });
+      }, true);
       const canvas = upscaleRenderImage(
         image,
         this.renderOutputWidth,
@@ -9075,7 +9091,7 @@ export class EditorRuntime {
           camera: view,
           transparent: this.renderTransparent,
           backgroundColor: this.renderBackground
-        });
+        }, frame === start);
         const canvas = upscaleRenderImage(
           image,
           this.renderOutputWidth,
@@ -9275,7 +9291,7 @@ export class EditorRuntime {
           camera: pose,
           transparent: false,
           backgroundColor: this.renderBackground
-        });
+        }, frame === start);
         const frameCanvas = upscaleRenderImage(
           image,
           this.renderOutputWidth,
@@ -9535,7 +9551,7 @@ export class EditorRuntime {
           camera: pose,
           transparent: false,
           backgroundColor: this.renderBackground
-        });
+        }, frame === start);
         const canvas = upscaleRenderImage(
           image,
           width,

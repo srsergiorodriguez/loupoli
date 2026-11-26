@@ -96,7 +96,27 @@ Render effects are a project-wide, ordered stack. They are optional and are off 
 Material stage
   Vertex snap      320 × 240
   Affine texture
+
 Post stage
+  Color grade      saturation, contrast, mono / sepia / invert
+  Posterize
+  Pixelate
+  Scanlines
+  Vignette
+  Grain
+  Chroma bleed
+  Chromatic aberration
+  VHS tracking
+  CRT curvature
+  Bloom
+  Aperture grille
+  Interlace
+  Dropout bands
+  Ghost trails
+  Motion blur
+  Compression
+  Film damage
+  Head switching
   Color depth      RGB555 / RGB332 / 1-bit
   Dither           Bayer 4×4 / Bayer 8×8
 ```
@@ -108,11 +128,15 @@ Post stage
   - **Clean** clears the stack.
   - **PS1** adds vertex snap, affine texture, and RGB555 Bayer dithering.
   - **Dither** adds just the dither effect.
+  - **VHS** adds tracking, chromatic aberration, chroma bleed, color grade, scanlines, grain, and vignette.
+  - **CRT** adds scanlines, aperture grille, bloom, and vignette.
+  - **Film** adds color grade, grain, film damage, and vignette.
 - Editing presets leaves a Custom stack.
+- Temporal effects use the current animation frame. Ghost trails blend the previous rendered frame; export sequences and video reset trail history at their first frame. Animated grain, tracking, dropout, film damage, and head switching are deterministic by frame.
 - Color depth and dither are separate effects. Dither performs its own quantized pass; Color depth is useful for comparing quantization without a dither pattern.
 - The stack is part of the project file and autosave checkpoint. Add, remove, reorder, enable, and parameter edits are undoable.
 
-## 5. Video and sequences
+## 6. Video and sequences
 
 - **PNG frame sequence:** renders each frame at the exact animation time, upscales it, and saves a folder on native platforms or a ZIP in the browser. Verified with a 64×36 sequence and valid PNG entries.
 - **WebM:** uses `MediaRecorder` on a canvas capture and is enabled only when the WebView reports support.
