@@ -346,6 +346,10 @@ export interface EditorSnapshot {
   readonly uvSelectedCorners: readonly number[];
   readonly uvPinnedCorners: readonly number[];
   readonly uvPaintMode: boolean;
+  readonly pixelArtMode: boolean;
+  readonly pixelCellSize: number;
+  readonly pixelPadding: number;
+  readonly pixelSnapAll: boolean;
   readonly paintUvOverlay: boolean;
   readonly uvBrushColor: string;
   readonly uvBrushColorAlpha: number;

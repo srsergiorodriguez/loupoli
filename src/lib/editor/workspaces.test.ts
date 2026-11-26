@@ -41,7 +41,8 @@ describe('inspector layout', () => {
   it('keeps selection for UV seams and hides 3D editing sections', () => {
     expect(inspectorSectionsFor('uv')).toEqual([
       'scene',
-      'selection'
+      'selection',
+      'pixel'
     ]);
   });
 

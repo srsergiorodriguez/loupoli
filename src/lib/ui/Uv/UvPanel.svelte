@@ -60,6 +60,7 @@
   const lassoMode = $derived(session.snapshot.lassoMode);
   const activeEditor = $derived(session.snapshot.activeEditor);
   const clampMode = $derived(session.snapshot.uvClampMode);
+  const pixelArtMode = $derived(session.snapshot.pixelArtMode);
   const fineMode = $derived(session.snapshot.uvFineMode);
   const uvZoom = $derived(session.snapshot.uvZoom);
   const uvDragScale = $derived(session.snapshot.uvDragScale);
@@ -766,6 +767,13 @@
         icon="unwrap"
         tooltip="Unwrap UV charts"
         onActivate={() => session.unwrapUv()}
+      />
+      <IconButton
+        label="Pixel art layout"
+        icon="grid"
+        tooltip="Pixel art UV layout"
+        active={pixelArtMode}
+        onActivate={() => session.setPixelArtMode(!pixelArtMode)}
       />
       <IconButton
         label="Stack islands"

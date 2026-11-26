@@ -64,6 +64,10 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvSelectedCorners: [],
   uvPinnedCorners: [],
   uvPaintMode: false,
+  pixelArtMode: false,
+  pixelCellSize: 32,
+  pixelPadding: 2,
+  pixelSnapAll: true,
   paintUvOverlay: true,
   uvBrushColor: '#f2ffe0',
   uvBrushColorAlpha: 1,
@@ -966,6 +970,30 @@ export class EditorSession {
 
   unwrapUv(): void {
     this.runtime?.unwrapUv();
+  }
+
+  setPixelArtMode(enabled: boolean): void {
+    this.runtime?.setPixelArtMode(enabled);
+  }
+
+  setPixelCellSize(size: number): void {
+    this.runtime?.setPixelCellSize(size);
+  }
+
+  setPixelPadding(padding: number): void {
+    this.runtime?.setPixelPadding(padding);
+  }
+
+  setPixelSnapAll(enabled: boolean): void {
+    this.runtime?.setPixelSnapAll(enabled);
+  }
+
+  relaxPixelUv(): void {
+    this.runtime?.relaxPixelUv();
+  }
+
+  packPixelUv(): void {
+    this.runtime?.packPixelUv();
   }
 
   finishUvDrag(): void {

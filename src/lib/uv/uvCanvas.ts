@@ -43,6 +43,13 @@ export interface UvWireframeOptions {
   drawSeams?: boolean;
 }
 
+/** Optional texel-cell overlay for the pixel-art workflow. */
+export interface UvPixelGrid {
+  readonly cellSize: number;
+  readonly textureWidth: number;
+  readonly textureHeight: number;
+}
+
 /**
  * Stroke UV face boundaries and seams through a caller-provided projection.
  *
@@ -133,7 +140,8 @@ export function drawUvCanvas(
   textureAsset: TextureAsset | null = null,
   view?: UvViewState,
   selectionMode: UvSelectionMode = 'vertex',
-  projectionOverride?: UvProjection
+  projectionOverride?: UvProjection,
+  pixelGrid?: UvPixelGrid
 ): void {
   if (width <= 0 || height <= 0) {
     return;
@@ -154,16 +162,39 @@ export function drawUvCanvas(
 
   const projection =
     projectionOverride ?? computeUvProjection(mesh, width, height, 26, view);
+  const imageOrigin = uvToCanvas([0, 1], projection);
+  const imageRect = {
+    x: imageOrigin.x,
+    y: imageOrigin.y,
+    width: projection.scale,
+    height: projection.scale
+  };
   if (textureAsset) {
-    const imageOrigin = uvToCanvas([0, 1], projection);
-    const imageRect = {
-      x: imageOrigin.x,
-      y: imageOrigin.y,
-      width: projection.scale,
-      height: projection.scale
-    };
     drawTextureChecker(context, imageRect);
     drawTextureSurface(context, textureAsset, imageRect);
+  }
+  if (pixelGrid && pixelGrid.textureWidth > 0 && pixelGrid.textureHeight > 0) {
+    context.save();
+    context.beginPath();
+    context.rect(imageRect.x, imageRect.y, imageRect.width, imageRect.height);
+    context.clip();
+    context.strokeStyle = cssToken('--text-tertiary', '#8e8c96');
+    context.globalAlpha = 0.42;
+    context.lineWidth = 1;
+    context.beginPath();
+    const cell = Math.max(1, Math.round(pixelGrid.cellSize));
+    for (let x = cell; x < pixelGrid.textureWidth; x += cell) {
+      const screenX = imageRect.x + (x / pixelGrid.textureWidth) * imageRect.width;
+      context.moveTo(screenX, imageRect.y);
+      context.lineTo(screenX, imageRect.y + imageRect.height);
+    }
+    for (let y = cell; y < pixelGrid.textureHeight; y += cell) {
+      const screenY = imageRect.y + (y / pixelGrid.textureHeight) * imageRect.height;
+      context.moveTo(imageRect.x, screenY);
+      context.lineTo(imageRect.x + imageRect.width, screenY);
+    }
+    context.stroke();
+    context.restore();
   }
   const toPoint = (u: number, v: number): [number, number] => {
     const point = uvToCanvas([u, v], projection);

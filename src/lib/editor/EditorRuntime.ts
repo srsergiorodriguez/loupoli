@@ -82,6 +82,11 @@ import {
   type UvProjectionBase
 } from '../uv/uvView';
 import { drawUvCanvas, drawUvWireframe } from '../uv/uvCanvas';
+import {
+  PixelLayoutError,
+  packUvChartsToPixelGrid,
+  relaxUvCharts
+} from '../uv/pixelArt';
 import { extractUvCharts } from '../geometry/uvCharts';
 import { buildBakeAtlasPlan } from '../uv/bakeAtlas';
 import { bakeAtlasTargetSize } from '../texture/size';
@@ -692,6 +697,10 @@ export class EditorRuntime {
   private uvDragScale: number | null = null;
   private uvSelectionMode: UvSelectionMode = 'vertex';
   private uvClampMode = false;
+  private pixelArtMode = false;
+  private pixelCellSize = 32;
+  private pixelPadding = 2;
+  private pixelSnapAll = true;
   private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
   private lassoSelectionBefore: SelectionSnapshot | null = null;
@@ -1055,6 +1064,10 @@ export class EditorRuntime {
       uvDragScale: this.uvDragScale,
       uvSelectionMode: this.uvSelectionMode,
       uvClampMode: this.uvClampMode,
+      pixelArtMode: this.pixelArtMode,
+      pixelCellSize: this.pixelCellSize,
+      pixelPadding: this.pixelPadding,
+      pixelSnapAll: this.pixelSnapAll,
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvPaintMode: this.uvPaintMode,
@@ -2676,6 +2689,7 @@ export class EditorRuntime {
     this.uvPanX = 0;
     this.uvPanY = 0;
     this.uvError = null;
+    this.pixelArtMode = false;
     this.uvRevision += 1;
     this.pendingRecovery = null;
     this.recoveryAvailable = false;
@@ -3052,6 +3066,114 @@ export class EditorRuntime {
     }
     this.uvClampMode = enabled;
     this.publish();
+  }
+
+  /** Toggle the optional pixel-art UV layout workflow. */
+  setPixelArtMode(enabled: boolean): void {
+    if (this.pixelArtMode === enabled) {
+      return;
+    }
+    this.pixelArtMode = enabled;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Set the uniform pixel cell size in texels. */
+  setPixelCellSize(size: number): void {
+    const next = Math.max(8, Math.min(512, Math.round(size)));
+    if (this.pixelCellSize === next) {
+      return;
+    }
+    this.pixelCellSize = next;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Set the padding around an island inside its pixel cell. */
+  setPixelPadding(padding: number): void {
+    const next = Math.max(0, Math.min(32, Math.round(padding)));
+    if (this.pixelPadding === next) {
+      return;
+    }
+    this.pixelPadding = next;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Toggle snapping interior vertices as well as island boundaries. */
+  setPixelSnapAll(enabled: boolean): void {
+    if (this.pixelSnapAll === enabled) {
+      return;
+    }
+    this.pixelSnapAll = enabled;
+    this.uvRevision += 1;
+    this.publish();
+  }
+
+  /** Relax all chart interiors while preserving seams and boundaries. */
+  relaxPixelUv(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    try {
+      const charts = extractUvCharts(node.mesh);
+      const before = node.mesh.heUv.slice();
+      const after = relaxUvCharts(node.mesh, charts, before);
+      this.history.execute(
+        new ReplaceUvCommand(node.mesh, node.id, before, after)
+      );
+      this.uvError = null;
+      this.uvBaseProjection = null;
+      this.uvRevision += 1;
+      this.publish();
+    } catch (error) {
+      this.uvError =
+        error instanceof PixelLayoutError
+          ? error.message
+          : this.errorMessage(error);
+      this.publish();
+    }
+  }
+
+  /** Pack every chart into uniform pixel cells on the active texture grid. */
+  packPixelUv(): void {
+    const node = this.getActiveNode();
+    if (!node) {
+      return;
+    }
+    const textureId = this.effectiveNodeTextureId(node) ?? node.textureId;
+    const texture = this.textureLibrary.get(textureId);
+    if (!texture) {
+      this.uvError = 'Assign a texture to this object before using pixel-art UV layout.';
+      this.uvRevision += 1;
+      this.publish();
+      return;
+    }
+    try {
+      const charts = extractUvCharts(node.mesh);
+      const before = node.mesh.heUv.slice();
+      const after = packUvChartsToPixelGrid(node.mesh, charts, before, {
+        textureWidth: texture.width,
+        textureHeight: texture.height,
+        cellSize: this.pixelCellSize,
+        padding: this.pixelPadding,
+        snapAllVertices: this.pixelSnapAll
+      });
+      this.history.execute(
+        new ReplaceUvCommand(node.mesh, node.id, before, after)
+      );
+      this.uvError = null;
+      this.uvBaseProjection = null;
+      this.uvRevision += 1;
+      this.publish();
+    } catch (error) {
+      this.uvError =
+        error instanceof PixelLayoutError
+          ? error.message
+          : this.errorMessage(error);
+      this.publish();
+    }
   }
 
   /** Apply a UV lasso to the current entity mode. */
@@ -3858,6 +3980,9 @@ export class EditorRuntime {
       return;
     }
     const projection = this.uvProjection(node.mesh, width, height);
+    const nodeTexture = this.textureLibrary.get(
+      this.effectiveNodeTextureId(node) ?? node.textureId
+    );
     drawUvCanvas(
       canvas,
       node.mesh,
@@ -3868,7 +3993,14 @@ export class EditorRuntime {
       this.textureStack,
       this.uvViewState(),
       this.uvSelectionMode,
-      projection
+      projection,
+      this.pixelArtMode
+        ? {
+            cellSize: this.pixelCellSize,
+            textureWidth: nodeTexture?.width ?? this.textureStack.width,
+            textureHeight: nodeTexture?.height ?? this.textureStack.height
+          }
+        : undefined
     );
   }
 

@@ -122,7 +122,7 @@ See [docs/PWA.md](docs/PWA.md) for the full deployment and browser limitations.
 - **Mesh and modeling:** Z-up WebGL2 viewport, columnar half-edge DCEL with
   explicit boundaries, per-corner UVs, seams, materials, adaptive bilinear
   quads, selection, transforms, topology tools, groups, and modifiers.
-- **UV and paint:** seam charts, LSCM unwrap, pinned unwrap, shared atlases,
+- **UV and paint:** seam charts, LSCM unwrap, pinned unwrap, optional pixel-art cell packing, shared atlases,
   layered textures, paint/eraser/shapes/gradient/fill, projection painting,
   brush presets, pressure and tilt, a broad hardness range for very soft brushes, texture eyedropper, Pencil hover
   and tilt-oriented cursors, adjustable hardness/smoothing/noise, and
@@ -174,7 +174,7 @@ Key boundaries:
 Current checks:
 
 - `npm run check`: 0 errors, 0 warnings.
-- `npm test`: **352 tests across 71 files**.
+- `npm test`: **357 tests across 72 files**.
 - `npm run build`: passes.
 - `cargo test` in `src-tauri`: **7 passing tests**.
 - Signed iPad release installed and launched on an iPad Air with iPadOS 26.6.1.

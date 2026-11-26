@@ -331,13 +331,56 @@
   const textureMeta = $derived(
     `${activeTextureAsset?.width ?? session.snapshot.textureSize} × ${activeTextureAsset?.height ?? session.snapshot.textureHeight} · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
   );
+  const pixelTexture = $derived(
+    textureAssets.find((asset) => asset.id === activeNode?.textureId) ??
+      activeTextureAsset
+  );
+  const pixelCellOptions = $derived.by(() => {
+    const textureSize = pixelTexture
+      ? Math.min(pixelTexture.width, pixelTexture.height)
+      : 0;
+    const values = [8, 16, 32, 64, 128, 256].filter(
+      (value) =>
+        (textureSize <= 0 || value <= textureSize) &&
+        value > session.snapshot.pixelPadding * 2
+    );
+    const current = session.snapshot.pixelCellSize;
+    if (!values.includes(current)) {
+      values.push(current);
+    }
+    return values
+      .sort((a, b) => a - b)
+      .map((value) => ({ value: String(value), label: `${value} px` }));
+  });
+  const pixelPaddingOptions = $derived.by(() => {
+    const values = [0, 1, 2, 4, 8].filter(
+      (value) => value * 2 < session.snapshot.pixelCellSize
+    );
+    if (!values.includes(session.snapshot.pixelPadding)) {
+      values.push(session.snapshot.pixelPadding);
+    }
+    return values
+      .sort((a, b) => a - b)
+      .map((value) => ({ value: String(value), label: `${value} px` }));
+  });
+  const pixelColumns = $derived(
+    pixelTexture
+      ? Math.max(1, Math.floor(pixelTexture.width / session.snapshot.pixelCellSize))
+      : 0
+  );
+  const pixelRows = $derived(
+    pixelTexture
+      ? Math.max(1, Math.floor(pixelTexture.height / session.snapshot.pixelCellSize))
+      : 0
+  );
   const visibleSections = $derived(
     inspectorSectionsFor(session.snapshot.workspace).filter(
       (section) =>
-        activeReference === null ||
-        !['selection', 'mesh', 'shapes', 'modifiers', 'animation', 'brush', 'texture'].includes(
-          section
-        )
+        (section !== 'pixel' || session.snapshot.pixelArtMode) &&
+        (activeReference === null ||
+          !['selection', 'mesh', 'shapes', 'modifiers', 'animation', 'brush', 'pixel', 'texture'].includes(
+            section
+          ))
     )
   );
   const canEdit3d = $derived(session.can('edit3d'));
@@ -3158,6 +3201,69 @@
     </InspectorSection>
 {/snippet}
 
+    {#snippet pixelSection()}
+      <InspectorSection
+        title="Pixel art"
+        meta={pixelTexture
+          ? `${pixelTexture.width} × ${pixelTexture.height}`
+          : 'No texture'}
+        open={sections.pixel}
+        onToggle={(open) => setSection('pixel', open)}
+      >
+        <div class="module-body">
+          <p class="hint">
+            Optional texel layout. Seams, cuts, and holes stay intact; normal
+            UV editing is unchanged.
+          </p>
+          {#if activeNode && pixelTexture}
+            <SelectField
+              label="Cell"
+              value={String(session.snapshot.pixelCellSize)}
+              options={pixelCellOptions}
+              onChange={(value) =>
+                session.setPixelCellSize(Number(value))}
+            />
+            <SelectField
+              label="Padding"
+              value={String(session.snapshot.pixelPadding)}
+              options={pixelPaddingOptions}
+              onChange={(value) => session.setPixelPadding(Number(value))}
+            />
+            <Switch
+              label="Snap all vertices"
+              description="Boundaries always snap; this also quantizes interior vertices."
+              checked={session.snapshot.pixelSnapAll}
+              onChange={(checked) => session.setPixelSnapAll(checked)}
+            />
+            <ActionRow>
+              <ActionButton
+                label="Relax"
+                onActivate={() => session.relaxPixelUv()}
+              />
+              <ActionButton
+                label="Pack cells"
+                icon="grid"
+                variant="primary"
+                onActivate={() => session.packPixelUv()}
+              />
+            </ActionRow>
+            <p class="hint">
+              {pixelColumns} × {pixelRows} cells at
+              {session.snapshot.pixelCellSize}px. Relax and Pack apply to all
+              current seam islands. Uses the current texture resolution; re-pack
+              after resizing it. Thin cuts stay unsnapped so they cannot close.
+            </p>
+          {:else if !activeNode}
+            <p class="hint">Select a mesh object to use pixel cells.</p>
+          {:else}
+            <p class="hint">
+              Assign a texture to this object in Paint to enable pixel cells.
+            </p>
+          {/if}
+        </div>
+      </InspectorSection>
+    {/snippet}
+
       {#key session.snapshot.workspace}
         {#each visibleSections as section (section)}
           {#if section === 'scene'}{@render sceneSection()}
@@ -3171,6 +3277,7 @@
           {:else if section === 'shapes'}{@render shapesSection()}
           {:else if section === 'modifiers'}{@render modifiersSection()}
           {:else if section === 'brush'}{@render brushSection()}
+          {:else if section === 'pixel'}{@render pixelSection()}
           {:else if section === 'texture'}{@render textureSection()}
           {/if}
         {/each}

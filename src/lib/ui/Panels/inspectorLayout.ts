@@ -17,6 +17,7 @@ export type InspectorSectionId =
   | 'shapes'
   | 'modifiers'
   | 'brush'
+  | 'pixel'
   | 'texture';
 
 /** One policy-driven Inspector section. */
@@ -39,6 +40,7 @@ export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'shapes', requires: 'editShapes', order: 24, defaultOpen: false },
   { id: 'modifiers', requires: 'editTopology', order: 40, defaultOpen: false },
   { id: 'brush', requires: 'paintTexture', order: 70, defaultOpen: true },
+  { id: 'pixel', requires: 'editUv', order: 65, defaultOpen: true },
   { id: 'texture', requires: 'paintTexture', order: 80, defaultOpen: true }
 ];
 
