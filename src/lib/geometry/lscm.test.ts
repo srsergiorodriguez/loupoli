@@ -125,13 +125,25 @@ describe('LSCM unwrap', () => {
     expect(Array.from(uvs).every((value) => Number.isFinite(value))).toBe(true);
   });
 
-  it('rejects a closed chart instead of applying collapsed UVs', () => {
+  it('rejects a closed chart with its face range instead of applying collapsed UVs', () => {
     const sphere = createQuadSphereMesh(1.5, 2);
     const charts = extractUvCharts(sphere);
     expect(charts[0].boundaryHalfEdges).toHaveLength(0);
-    expect(() => unwrapUvCharts(sphere, charts)).toThrow(
-      /Mark seams that cut it open/
-    );
+    try {
+      unwrapUvCharts(sphere, charts);
+      throw new Error('Expected the closed chart to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(LscmError);
+      const lscmError = error as LscmError;
+      expect(lscmError.message).toMatch(/Mark seams that cut it open/);
+      expect(lscmError.message).toMatch(/Chart 1\/1/);
+      expect(lscmError.message).toMatch(/faces 0/);
+      expect(lscmError.context).toEqual({
+        chartIndex: 1,
+        chartCount: 1,
+        faces: charts[0].faces
+      });
+    }
     expect(() => unwrapUvCharts(sphere, [])).toThrow(LscmError);
   });
 });

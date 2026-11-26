@@ -2,8 +2,23 @@ import type { HalfEdgeMesh, Vec2, Vec3 } from './HalfEdgeMesh';
 import type { UvChart } from './uvCharts';
 import { chartHasUvOverlap } from './uvValidation';
 
+/** One chart context attached to an unwrap failure. */
+export interface LscmChartContext {
+  readonly chartIndex: number;
+  readonly chartCount: number;
+  readonly faces: readonly number[];
+}
+
 /** A failure that the unwrap UI should surface instead of applying bad UVs. */
-export class LscmError extends Error {}
+export class LscmError extends Error {
+  readonly context: LscmChartContext | null;
+
+  constructor(message: string, context: LscmChartContext | null = null) {
+    super(message);
+    this.name = 'LscmError';
+    this.context = context;
+  }
+}
 
 interface LocalTriangle {
   readonly a: number;
@@ -36,6 +51,256 @@ function triangleArea2(a: Vec3, b: Vec3, c: Vec3): number {
     ab[2] * ac[0] - ab[0] * ac[2],
     ab[0] * ac[1] - ab[1] * ac[0]
   );
+}
+
+/**
+ * Recover the ordered boundary loop of a chart.
+ *
+ * Boundary half-edges run along chart faces. A regular disk has one outgoing
+ * boundary edge per UV vertex; a repeated start means the seams create a
+ * pinched boundary and this fallback should not run.
+ */
+function orderedChartBoundary(
+  mesh: HalfEdgeMesh,
+  chart: UvChart
+): number[] | null {
+  if (chart.boundaryHalfEdges.length < 3) {
+    return null;
+  }
+  const byStart = new Map<number, number>();
+  for (const halfEdge of chart.boundaryHalfEdges) {
+    const from = chart.cornerUvVertex.get(halfEdge);
+    if (from === undefined || byStart.has(from)) {
+      return null;
+    }
+    byStart.set(from, halfEdge);
+  }
+  const first = chart.boundaryHalfEdges[0];
+  const start = chart.cornerUvVertex.get(first);
+  if (start === undefined) {
+    return null;
+  }
+  const used = new Set<number>();
+  const loop: number[] = [];
+  let current = first;
+  while (used.size < chart.boundaryHalfEdges.length) {
+    const from = chart.cornerUvVertex.get(current);
+    if (from === undefined || used.has(current)) {
+      return null;
+    }
+    used.add(current);
+    loop.push(from);
+    const to = chart.cornerUvVertex.get(mesh.heNext[current]);
+    if (to === undefined) {
+      return null;
+    }
+    if (to === start) {
+      break;
+    }
+    const next = byStart.get(to);
+    if (next === undefined) {
+      return null;
+    }
+    current = next;
+  }
+  if (used.size !== chart.boundaryHalfEdges.length) {
+    return null;
+  }
+  return loop;
+}
+
+/** Projected 3D extents of a chart's ordered boundary. */
+function chartBoundaryAspect(
+  mesh: HalfEdgeMesh,
+  chart: UvChart,
+  boundary: readonly number[]
+): number {
+  const points = boundary.map((uvVertex) => {
+    const vertex = chart.uvVertices[uvVertex].vertex;
+    return mesh.getVertexPosition(vertex);
+  });
+  if (points.length < 3) {
+    return 1;
+  }
+  const center: Vec3 = [0, 0, 0];
+  for (const point of points) {
+    center[0] += point[0];
+    center[1] += point[1];
+    center[2] += point[2];
+  }
+  center[0] /= points.length;
+  center[1] /= points.length;
+  center[2] /= points.length;
+  let xx = 0;
+  let xy = 0;
+  let xz = 0;
+  let yy = 0;
+  let yz = 0;
+  let zz = 0;
+  for (const point of points) {
+    const x = point[0] - center[0];
+    const y = point[1] - center[1];
+    const z = point[2] - center[2];
+    xx += x * x;
+    xy += x * y;
+    xz += x * z;
+    yy += y * y;
+    yz += y * z;
+    zz += z * z;
+  }
+  const multiply = (v: Vec3): Vec3 => [
+    xx * v[0] + xy * v[1] + xz * v[2],
+    xy * v[0] + yy * v[1] + yz * v[2],
+    xz * v[0] + yz * v[1] + zz * v[2]
+  ];
+  let axis: Vec3 = [1, 0, 0];
+  for (let iteration = 0; iteration < 20; iteration += 1) {
+    const next = multiply(axis);
+    const length = Math.hypot(next[0], next[1], next[2]);
+    if (length <= 1e-12) {
+      return 1;
+    }
+    axis = [next[0] / length, next[1] / length, next[2] / length];
+  }
+  let secondary: Vec3 =
+    Math.abs(axis[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+  for (let iteration = 0; iteration < 20; iteration += 1) {
+    const dot =
+      secondary[0] * axis[0] +
+      secondary[1] * axis[1] +
+      secondary[2] * axis[2];
+    const projected: Vec3 = [
+      secondary[0] - axis[0] * dot,
+      secondary[1] - axis[1] * dot,
+      secondary[2] - axis[2] * dot
+    ];
+    const next = multiply(projected);
+    const length = Math.hypot(next[0], next[1], next[2]);
+    if (length <= 1e-12) {
+      break;
+    }
+    secondary = [next[0] / length, next[1] / length, next[2] / length];
+  }
+  let minA = Infinity;
+  let maxA = -Infinity;
+  let minB = Infinity;
+  let maxB = -Infinity;
+  for (const point of points) {
+    const x = point[0] - center[0];
+    const y = point[1] - center[1];
+    const z = point[2] - center[2];
+    const a = x * axis[0] + y * axis[1] + z * axis[2];
+    const b = x * secondary[0] + y * secondary[1] + z * secondary[2];
+    minA = Math.min(minA, a);
+    maxA = Math.max(maxA, a);
+    minB = Math.min(minB, b);
+    maxB = Math.max(maxB, b);
+  }
+  const extentA = Math.max(1e-6, maxA - minA);
+  const extentB = Math.max(1e-6, maxB - minB);
+  return Math.min(4, Math.max(0.25, extentA / extentB));
+}
+
+/** Harmonic disk embedding used when LSCM folds or overlaps a chart. */
+function tutteFallback(
+  mesh: HalfEdgeMesh,
+  chart: UvChart,
+  triangles: readonly LocalTriangle[]
+): Map<number, Vec2> | null {
+  const boundary = orderedChartBoundary(mesh, chart);
+  if (!boundary || boundary.length < 3) {
+    return null;
+  }
+  const count = chart.uvVertices.length;
+  const boundarySet = new Set(boundary);
+  const neighbors = Array.from({ length: count }, () => new Set<number>());
+  for (const triangle of triangles) {
+    neighbors[triangle.a].add(triangle.b);
+    neighbors[triangle.a].add(triangle.c);
+    neighbors[triangle.b].add(triangle.a);
+    neighbors[triangle.b].add(triangle.c);
+    neighbors[triangle.c].add(triangle.a);
+    neighbors[triangle.c].add(triangle.b);
+  }
+  const uvs: Vec2[] = Array.from({ length: count }, () => [0, 0]);
+  const aspect = chartBoundaryAspect(mesh, chart, boundary);
+  const radiusU = Math.sqrt(aspect) * 0.7;
+  const radiusV = 0.7 / Math.sqrt(aspect);
+  boundary.forEach((vertex, index) => {
+    const angle = (index / boundary.length) * Math.PI * 2;
+    uvs[vertex] = [
+      Math.cos(angle) * radiusU,
+      Math.sin(angle) * radiusV
+    ];
+  });
+  const interior = Array.from({ length: count }, (_, index) => index).filter(
+    (index) => !boundarySet.has(index)
+  );
+  for (let iteration = 0; iteration < 4000; iteration += 1) {
+    let change = 0;
+    for (const vertex of interior) {
+      let u = 0;
+      let v = 0;
+      let weight = 0;
+      for (const neighbor of neighbors[vertex]) {
+        u += uvs[neighbor][0];
+        v += uvs[neighbor][1];
+        weight += 1;
+      }
+      if (weight === 0) {
+        continue;
+      }
+      const nextU = u / weight;
+      const nextV = v / weight;
+      change = Math.max(
+        change,
+        Math.abs(nextU - uvs[vertex][0]),
+        Math.abs(nextV - uvs[vertex][1])
+      );
+      uvs[vertex] = [nextU, nextV];
+    }
+    if (change < 1e-11) {
+      break;
+    }
+  }
+  return new Map(uvs.map((uv, index) => [index, uv]));
+}
+
+/** Validation reason for one candidate layout. */
+function chartUvFailure(
+  uvs: readonly Vec2[],
+  triangles: readonly LocalTriangle[]
+): string | null {
+  for (const uv of uvs) {
+    if (!Number.isFinite(uv[0]) || !Number.isFinite(uv[1])) {
+      return 'The chart produced a non-finite UV coordinate.';
+    }
+  }
+  let positive = 0;
+  let negative = 0;
+  for (const triangle of triangles) {
+    const a = uvs[triangle.a];
+    const b = uvs[triangle.b];
+    const c = uvs[triangle.c];
+    const area =
+      (b[0] - a[0]) * (c[1] - a[1]) -
+      (c[0] - a[0]) * (b[1] - a[1]);
+    if (Math.abs(area) <= 1e-12) {
+      return 'The chart collapsed to zero-area triangles.';
+    }
+    if (area > 0) {
+      positive += 1;
+    } else {
+      negative += 1;
+    }
+  }
+  if (positive > 0 && negative > 0) {
+    return 'The chart produced flipped UV triangles; adjust seams and retry.';
+  }
+  if (chartHasUvOverlap(uvs, triangles)) {
+    return 'The chart produced overlapping UV triangles; adjust seams or pins and retry.';
+  }
+  return null;
 }
 
 /**
@@ -297,38 +562,27 @@ function unwrapChart(
     const variable = freeVariables[index];
     uvs[Math.floor(variable / 2)][variable % 2] = x[index];
   }
-  for (const uv of uvs) {
-    if (!Number.isFinite(uv[0]) || !Number.isFinite(uv[1])) {
-      throw new LscmError('LSCM produced a non-finite UV coordinate.');
+  let failure = chartUvFailure(uvs, triangles);
+  let fallbackNote = '';
+  if (failure !== null && pinnedUvVertices === null) {
+    // LSCM is conformal but not guaranteed to be injective on a highly bent
+    // branch junction. Try a positive-weight harmonic disk embedding before
+    // rejecting the chart.
+    fallbackNote = ' Harmonic fallback was unavailable.';
+    const fallback = tutteFallback(mesh, chart, triangles);
+    if (fallback) {
+      fallbackNote = ' Harmonic fallback also failed validation.';
+      for (let index = 0; index < uvs.length; index += 1) {
+        const uv = fallback.get(index);
+        if (uv) {
+          uvs[index] = uv;
+        }
+      }
+      failure = chartUvFailure(uvs, triangles);
     }
   }
-
-  // Reject collapsed or folded charts before the UI can apply them. A global
-  // negative orientation is valid; mixed signs mean at least one triangle
-  // flipped relative to its neighbors.
-  let positive = 0;
-  let negative = 0;
-  for (const triangle of triangles) {
-    const a = uvs[triangle.a];
-    const b = uvs[triangle.b];
-    const c = uvs[triangle.c];
-    const area =
-      (b[0] - a[0]) * (c[1] - a[1]) -
-      (c[0] - a[0]) * (b[1] - a[1]);
-    if (Math.abs(area) <= 1e-12) {
-      throw new LscmError('LSCM collapsed a chart to zero-area triangles.');
-    }
-    if (area > 0) {
-      positive += 1;
-    } else {
-      negative += 1;
-    }
-  }
-  if (positive > 0 && negative > 0) {
-    throw new LscmError('LSCM produced flipped UV triangles; adjust seams and retry.');
-  }
-  if (chartHasUvOverlap(uvs, triangles)) {
-    throw new LscmError('LSCM produced overlapping UV triangles; adjust seams or pins and retry.');
+  if (failure !== null) {
+    throw new LscmError(failure + fallbackNote);
   }
 
   // Align the longest chart boundary edge horizontally. Pins fix scale and
@@ -501,7 +755,7 @@ export function unwrapUvCharts(
     throw new LscmError('The mesh has no faces to unwrap.');
   }
   const result = new Float32Array(mesh.heUv);
-  const layouts = charts.map((chart) => {
+  const layouts = charts.map((chart, chartIndex) => {
     const chartPins = pinnedCorners
       ? [
           ...new Set(
@@ -511,11 +765,31 @@ export function unwrapUvCharts(
           )
         ]
       : [];
-    const uvs = unwrapChart(
-      mesh,
-      chart,
-      chartPins.length === 2 ? chartPins : null
-    );
+    let uvs: Map<number, Vec2>;
+    try {
+      uvs = unwrapChart(
+        mesh,
+        chart,
+        chartPins.length === 2 ? chartPins : null
+      );
+    } catch (error) {
+      if (error instanceof LscmError) {
+        const visibleFaces = chart.faces.slice(0, 10).join(', ');
+        const suffix =
+          chart.faces.length > 10
+            ? `, … (${chart.faces.length} faces)`
+            : '';
+        throw new LscmError(
+          `Chart ${chartIndex + 1}/${charts.length} — faces ${visibleFaces}${suffix}: ${error.message}`,
+          {
+            chartIndex: chartIndex + 1,
+            chartCount: charts.length,
+            faces: [...chart.faces]
+          }
+        );
+      }
+      throw error;
+    }
     let minU = Infinity;
     let minV = Infinity;
     let maxU = -Infinity;

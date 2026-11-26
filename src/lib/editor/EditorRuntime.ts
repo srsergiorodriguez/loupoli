@@ -3835,10 +3835,18 @@ export class EditorRuntime {
       this.uvRevision += 1;
       this.publish();
     } catch (error) {
-      this.uvError =
-        error instanceof LscmError
-          ? error.message
-          : this.errorMessage(error);
+      if (error instanceof LscmError && error.context) {
+        this.selection.setMode('face');
+        this.selection.setContext(node.id, 'face');
+        this.selection.setValues(error.context.faces);
+        this.syncScene();
+        this.uvError = `${error.message} The failing chart is highlighted in the 3D viewport.`;
+      } else {
+        this.uvError =
+          error instanceof LscmError
+            ? error.message
+            : this.errorMessage(error);
+      }
       this.publish();
     }
   }
