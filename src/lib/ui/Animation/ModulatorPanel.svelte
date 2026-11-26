@@ -14,9 +14,10 @@
 
   interface Props {
     session: EditorSession;
+    showHeader?: boolean;
   }
 
-  let { session }: Props = $props();
+  let { session, showHeader = true }: Props = $props();
 
   const kindOptions = [
     { value: 'lfo', label: 'LFO' },
@@ -156,10 +157,12 @@
 </script>
 
 <div class="modulators">
-  <div class="modulators-head">
-    <span>Modulators</span>
-    <span>{modulators.length} modulator{modulators.length === 1 ? '' : 's'}</span>
-  </div>
+  {#if showHeader}
+    <div class="modulators-head">
+      <span>Modulators</span>
+      <span>{modulators.length} modulator{modulators.length === 1 ? '' : 's'}</span>
+    </div>
+  {/if}
   <CreateRow
     label="Modulator type"
     value={modulatorKind}

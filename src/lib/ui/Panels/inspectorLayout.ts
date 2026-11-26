@@ -7,6 +7,7 @@ import {
 /** Stable IDs for the Inspector's independently rendered sections. */
 export type InspectorSectionId =
   | 'scene'
+  | 'clip'
   | 'transform'
   | 'light'
   | 'camera'
@@ -14,11 +15,12 @@ export type InspectorSectionId =
   | 'render'
   | 'selection'
   | 'mesh'
-  | 'shapes'
   | 'modifiers'
   | 'brush'
   | 'pixel'
-  | 'texture';
+  | 'texture'
+  | 'modulators';
+
 
 /** One policy-driven Inspector section. */
 export interface InspectorSectionDefinition {
@@ -30,14 +32,15 @@ export interface InspectorSectionDefinition {
 
 export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'scene', order: 10, defaultOpen: true },
+  { id: 'clip', requires: 'editAnimation', order: 20, defaultOpen: true },
   { id: 'light', requires: 'bakeLighting', order: 15, defaultOpen: true },
   { id: 'camera', requires: 'editCamera', order: 20, defaultOpen: true },
   { id: 'animation', requires: 'editAnimation', order: 22, defaultOpen: true },
+  { id: 'modulators', requires: 'editAnimation', order: 24, defaultOpen: false },
   { id: 'render', requires: 'editCamera', order: 25, defaultOpen: true },
   { id: 'transform', requires: 'edit3d', order: 26, defaultOpen: false },
   { id: 'selection', requires: 'select3d', order: 28, defaultOpen: true },
   { id: 'mesh', requires: 'editTopology', order: 30, defaultOpen: false },
-  { id: 'shapes', requires: 'editShapes', order: 24, defaultOpen: false },
   { id: 'modifiers', requires: 'editTopology', order: 40, defaultOpen: false },
   { id: 'brush', requires: 'paintTexture', order: 70, defaultOpen: true },
   { id: 'pixel', requires: 'editUv', order: 65, defaultOpen: true },

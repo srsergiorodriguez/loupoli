@@ -166,14 +166,16 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Scene | primitive select + Add + Reference | Multi, Group, Join/Ungroup | Delete object, last/right |
 | Texture assets | New, import/duplicate overflow | Assign/Unassign, filter, alpha | Delete texture in overflow |
 | Texture layers | Add layer | selection properties | Delete layer, last/right |
-| Animation | — | track + key in timeline | Delete key in timeline header, last/right |
+| Clip | — | clip name, FPS, range, loop, interpolation | — |
+| Object animation | — | Mesh motion, Texture, Shape keys | Delete shape key in the shape-keys block, last/right |
+| Modulators | Add modulator | target, property, axis, amplitude, offset | Remove modulator |
 | Camera | Add from view above list | selected camera name/position/target/FOV; compact Frame/From view/Through toggle on one row | Delete camera isolated last/right |
 | Render | — | output settings below header; Render action in the final row; live preview lives in the pane | — |
-| Shape keys | Add shape key | selected key: name, weight, Edit target, Capture base; rows support visibility and drag reorder | Delete shape key, last/right |
+| Shape keys | Add shape key | selected key: name, weight, Key weight, Edit target, Capture current mesh; rows support visibility and drag reorder | Delete shape key, last/right |
 
 - Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.
 - Track selection is a real button in the track label, separate from Key/Remove actions. Never put `role="button"` on a row that contains buttons or other interactive controls.
-- Shape-key weight keys are timeline keys; the Shape keys Inspector does not duplicate Key/Unkey. Shape-key rows use the same outliner grouping, visibility, and drag-reorder behavior as scene objects and texture layers.
+- Shape-key weight keys remain timeline-owned for selection, deletion, dragging, and interpolation. The Shape keys block also exposes **Key weight** to write the current weight at the playhead. Shape-key rows use the same outliner grouping, visibility, and drag-reorder behavior as scene objects and texture layers.
 - A more-actions (`ThreeDotMenu`) or overflow menu is always the last control in its action row.
 - Camera and Render use `ActionRow` rather than per-section button wrappers; primary/destructive actions sit last and right. The render preview is an always-open PaneHost pane beside the camera view, built from the same PaneFrame as UV and Paint, with live output and a play/pause control.
 - Timeline zoom uses minus/Fit/plus in the timeline header. Ruler ticks adapt to the visible range; wheel pans and Ctrl/Cmd+wheel zooms.

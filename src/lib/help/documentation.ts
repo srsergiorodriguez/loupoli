@@ -211,7 +211,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Tracks and keys',
         paragraphs: [
           'The timeline shows one transform row for the active object or group and one weight row for each shape key. Move the playhead to a whole frame, change the transform or weight, then use + Key on the row. A key stores the visible pose at that frame.',
-          'Diamonds can be dragged between whole frames and selected for interpolation editing. Linear blends between values; Step holds the previous value until the next key. Delete removes the selected key. The Animation section controls FPS, start and end frames, looping, and the default interpolation for new keys. Camera and light animation use the same clip timeline. In Light and Render, the timeline is hidden by default and can be opened from the top-bar Timeline button; Animate always shows it.',
+          'Diamonds can be dragged between whole frames and selected for interpolation editing. Linear blends between values; Step holds the previous value until the next key. Delete removes the selected key. The Clip section controls the clip name, FPS, start and end frames, looping, and the default interpolation for new keys. The Object animation section controls Mesh motion, Texture, and Shape keys for the active object. Modulators have their own collapsed section. Camera and light animation use the same clip timeline. In Light and Render, the timeline is hidden by default and can be opened from the top-bar Timeline button; Animate always shows it.',
           'Modulators add procedural motion on top of the keyed pose: LFO waves and BPM-synced square pulses, deterministic noise, audio-peak envelope following, and camera orbit around a pivot. Each modulator targets an object, camera, or light and can add to or replace the keyed/rest value. Modulators appear as timeline rows and in the Animate inspector; they persist with the clip and are evaluated during playback, stills, and video export. Add audio imports one audio file for the active clip. The waveform lane follows the clip range, starts and stops with playback, and offers mute and remove controls. Audio assets are stored in the project. Browser WebM/MP4 recording and native Apple MP4 export mux the active clip audio; PNG stills and frame sequences are silent.'
         ],
         controls: [
@@ -219,20 +219,21 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'Wheel: pan the timeline; Ctrl/Cmd + wheel: zoom',
           'Delete key: remove the selected diamond',
           'Interpolation: Linear or Step on the selected key',
-          'Add modulator: LFO, Noise, Audio envelope, or Orbit in the Animation inspector\n          Add / Replace audio: timeline clip bar; mute or remove it on the waveform lane'
+          'Add modulator: LFO, Noise, Audio envelope, or Orbit in the Modulators inspector\n          Add / Replace audio: timeline clip bar; mute or remove it on the waveform lane'
         ]
       },
       {
         heading: 'Shape keys',
         paragraphs: [
-          'A shape key stores a complete target position set for one mesh. Add shape key creates a key at zero weight. Edit target captures a live edited mesh into that key and restores the base when you Finish. Capture base does the same from the unchanged base workflow.',
-          'Weight blends the target positions into the evaluated mesh. Shape keys evaluate beneath modifiers. The Shape keys section provides rename, visibility, drag reorder, weight, Edit target, Capture base, and Delete controls.'
+          'A shape key stores a complete target position set for one mesh. Add shape key creates a key at zero weight. Edit target captures a live edited mesh into that key and restores the base when you Finish. Capture current mesh stores the current edited base as the target.',
+          'Weight blends the target positions into the evaluated mesh. Shape keys evaluate beneath modifiers. The Shape keys block inside Object animation provides rename, visibility, drag reorder, weight, Key weight, Edit target, Capture current mesh, and Delete controls. Key weight writes the current weight at the playhead; the timeline still owns key selection, deletion, dragging, and interpolation.'
         ],
         controls: [
           'Add shape key: create a zero-weight target',
           'Edit target: edit the target directly, then Finish',
-          'Capture base: capture the current base mesh',
-          '+ Key on a shape row: store its weight at the frame'
+          'Key weight: store the current weight at the playhead',
+          'Capture current mesh: capture the current base mesh',
+          '+ Key on a shape row: also stores the weight at the frame'
         ]
       },
       {

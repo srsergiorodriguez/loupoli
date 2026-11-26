@@ -83,8 +83,9 @@ describe('inspector layout', () => {
     expect(workspaceCan('animation', 'editLook')).toBe(false);
     expect(inspectorSectionsFor('animation')).toEqual([
       'scene',
+      'clip',
       'animation',
-      'shapes',
+      'modulators',
       'transform',
       'selection'
     ]);
@@ -96,5 +97,8 @@ describe('inspector layout', () => {
     expect(defaults.selection).toBe(true);
     expect(defaults.brush).toBe(true);
     expect(defaults.texture).toBe(true);
+    expect(defaults.clip).toBe(true);
+    expect(defaults.animation).toBe(true);
+    expect(defaults.modulators).toBe(false);
   });
 });

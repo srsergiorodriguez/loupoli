@@ -20,16 +20,16 @@ interface ShapeKey {
 
 ## UI
 
-Animate Inspector → **Shape keys**:
+Animate Inspector → **Object animation** → **Shape keys**:
 
 - Add shape key above the list.
 - Selectable shape-key rows with name, current weight, visibility eye, and drag handle.
 - Rows can be renamed from the selected name field, hidden without losing data, and dragged to reorder; all are undoable and persisted.
-- Selected-key controls: weight, **Edit target**, **Capture base**.
+- Selected-key controls: weight, **Key weight**, **Edit target**, **Capture current mesh**.
 - **Edit target**: enter the stored target, edit it live with the normal mesh tools, then **Finish** to record one undoable capture or **Cancel** to discard.
-- **Capture base**: stores the current edited base mesh as the key target, restores the source base, and leaves weight at 0.
+- **Capture current mesh**: stores the current edited base mesh as the key target, restores the source base, and leaves weight at 0.
 - **Delete shape key**: last, right-aligned, danger.
-- Shape-weight keys are created and removed from the shape key's timeline track, not from this section. Reordering changes list/persistence order; hidden keys keep their weights and tracks but do not contribute to the evaluated mesh.
+- **Key weight** writes the current weight at the playhead from this section. The timeline still owns key selection, deletion, dragging, and interpolation. Reordering changes list/persistence order; hidden keys keep their weights and tracks but do not contribute to the evaluated mesh.
 
 ![Shape keys](media/shape-keys.png)
 

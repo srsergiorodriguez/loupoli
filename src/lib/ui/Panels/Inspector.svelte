@@ -121,6 +121,13 @@
   );
   const animationTracks = $derived(session.snapshot.animationTracks);
   const animationClips = $derived(session.snapshot.animationClips);
+  const activeClip = $derived(
+    animationClips.find(
+      (clip) => clip.id === session.snapshot.animationClipId
+    ) ??
+      animationClips[0] ??
+      null
+  );
   const meshPoseEditing = $derived(session.snapshot.meshPoseEditing);
   const meshPoseFrame = $derived(session.snapshot.meshPoseFrame);
   const activeMeshTrack = $derived(
@@ -137,6 +144,12 @@
         track.targetId === session.snapshot.activeNodeId &&
         track.hasTrack
     ) ?? null
+  );
+  const activeObjectTrackCount = $derived(
+    animationTracks.filter(
+      (track) =>
+        track.targetId === session.snapshot.activeNodeId && track.hasTrack
+    ).length
   );
   const renderKindOptions = $derived.by(() => {
     const options: { value: string; label: string }[] = [
@@ -161,6 +174,17 @@
     shapeKeys.find((key) => key.id === session.snapshot.activeShapeKeyId) ??
       shapeKeys[0] ??
       null
+  );
+  const activeShapeWeightTrack = $derived(
+    activeShapeKey
+      ? animationTracks.find(
+          (track) =>
+            track.kind === 'shape' &&
+            track.targetId === session.snapshot.activeNodeId &&
+            track.shapeKeyId === activeShapeKey.id &&
+            track.hasTrack
+        ) ?? null
+      : null
   );
   const activeLight = $derived(
     lights.find((light) => light.id === session.snapshot.activeLightId) ?? null
@@ -378,7 +402,7 @@
       (section) =>
         (section !== 'pixel' || session.snapshot.pixelArtMode) &&
         (activeReference === null ||
-          !['selection', 'mesh', 'shapes', 'modifiers', 'animation', 'brush', 'pixel', 'texture'].includes(
+          !['selection', 'mesh', 'modifiers', 'clip', 'animation', 'modulators', 'brush', 'pixel', 'texture'].includes(
             section
           ))
     )
@@ -1151,174 +1175,341 @@
     </InspectorSection>
 {/snippet}
 
-    {#snippet animationSection()}
-<InspectorSection
-      title="Animation"
-      meta={`${animationTracks.filter((track) => track.hasTrack).length} track${animationTracks.filter((track) => track.hasTrack).length === 1 ? '' : 's'}${session.snapshot.animationModulators.length > 0 ? ` · ${session.snapshot.animationModulators.length} mod${session.snapshot.animationModulators.length === 1 ? '' : 's'}` : ''}`}
-      open={sections.animation}
-      onToggle={(open) => setSection('animation', open)}
-    >
-      <div class="module-body">
-        <ModulatorPanel {session} />
-        <div class="render-look">
-          <div class="render-look-head">
-            <span>Mesh motion</span>
-            <span>
-              {activeMeshTrack
-                ? `${activeMeshTrack.keyframes.length} key${activeMeshTrack.keyframes.length === 1 ? '' : 's'}`
-                : 'No keys'}
+    {#snippet clipSection()}
+      <InspectorSection
+        title="Clip"
+        meta={`${activeClip?.name ?? 'Animation'} · ${session.snapshot.animationFps} fps`}
+        open={sections.clip}
+        onToggle={(open) => setSection('clip', open)}
+      >
+        <div class="module-body">
+          <div class="selected-name-row">
+            <InlineNameField
+              label="Clip name"
+              value={activeClip?.name ?? 'Animation 1'}
+              onCommit={(value) => session.renameAnimationClip(value)}
+            />
+            <span class="texture-kind">
+              {animationClips.length} clip{animationClips.length === 1 ? '' : 's'}
             </span>
           </div>
-          {#if meshPoseEditing}
-            <div class="shape-edit-banner mesh-pose-banner">
+          <div class="render-field">
+            <span>Frames per second</span>
+            <NumberField
+              label="Frames per second"
+              value={session.snapshot.animationFps}
+              step={1}
+              precision={0}
+              min={1}
+              max={120}
+              disabled={meshPoseEditing}
+              onCommit={(value) => session.setAnimationSettings({ fps: value })}
+            />
+          </div>
+          <div class="render-field">
+            <span>Start frame</span>
+            <NumberField
+              label="Start frame"
+              value={session.snapshot.animationStartFrame}
+              step={1}
+              precision={0}
+              min={0}
+              disabled={meshPoseEditing}
+              onCommit={(value) =>
+                session.setAnimationSettings({ startFrame: value })}
+            />
+          </div>
+          <div class="render-field">
+            <span>End frame</span>
+            <NumberField
+              label="End frame"
+              value={session.snapshot.animationEndFrame}
+              step={1}
+              precision={0}
+              min={1}
+              disabled={meshPoseEditing}
+              onCommit={(value) =>
+                session.setAnimationSettings({ endFrame: value })}
+            />
+          </div>
+          <Switch
+            label="Loop playback"
+            checked={session.snapshot.animationLoop}
+            onChange={(value) => session.setAnimationLoop(value)}
+          />
+          <SelectField
+            label="Interpolation"
+            value={session.snapshot.animationInterpolation}
+            options={[
+              { value: 'linear', label: 'Linear' },
+              { value: 'step', label: 'Step' }
+            ]}
+            onChange={(value) =>
+              session.setAnimationInterpolation(value as 'linear' | 'step')}
+          />
+        </div>
+      </InspectorSection>
+    {/snippet}
+
+    {#snippet shapeKeysBlock()}
+      <div class="render-look shape-keys-block">
+        <div class="render-look-head">
+          <span>Shape keys</span>
+          <span>
+            {shapeKeys.length} key{shapeKeys.length === 1 ? '' : 's'}
+            {#if activeShapeWeightTrack}
+              · {activeShapeWeightTrack.keyframes.length} keyed
+            {/if}
+          </span>
+        </div>
+        {#if activeNode}
+          {#if shapeEditingId}
+            <div class="shape-edit-banner">
               <div>
-                <span class="kicker">Editing mesh pose · frame {meshPoseFrame}</span>
-                <span class="sub">Temporary pose · shape keys paused.</span>
+                <span class="kicker">Editing {editingShapeName}</span>
+                <span class="sub">Live target · one undo step</span>
               </div>
               <div class="shape-edit-actions">
                 <ActionButton
-                  label="Finish pose"
+                  label="Finish"
                   icon="checker"
                   variant="primary"
-                  onActivate={() => session.finishMeshPoseEdit()}
+                  onActivate={() => session.finishShapeEdit()}
                 />
                 <ActionButton
                   label="Cancel"
                   icon="close"
-                  onActivate={() => session.cancelMeshPoseEdit()}
+                  onActivate={() => session.cancelShapeEdit()}
                 />
               </div>
             </div>
-          {:else if activeNode}
-            <ActionButton
-              label="Edit mesh pose"
-              icon="move"
-              variant="primary"
-              disabled={shapeEditingId !== null}
-              onActivate={() => session.beginMeshPoseEdit()}
-            />
-            <p class="hint">Move elements, then Finish to store a key; Cancel discards it.</p>
-            {#if activeMeshTrack && activeMeshTrack.keyframes.length > 0}
-              <p class="hint">
-                Topology editing is locked while this object has Mesh Motion
-                keys.
-              </p>
-            {/if}
           {:else}
-            <p class="hint">Select a mesh object to animate its shape.</p>
-          {/if}
-        </div>
-        <div class="render-look">
-          <div class="render-look-head">
-            <span>Texture</span>
-            <span>
-              {activeTextureTrack
-                ? `${activeTextureTrack.keyframes.length} key${activeTextureTrack.keyframes.length === 1 ? '' : 's'}`
-                : 'No track'}
-            </span>
-          </div>
-          {#if activeNode}
-            {#if activeTextureTrack}
-              <SelectField
-                label="Texture key"
-                value={session.snapshot.activeNodeTextureId ?? ''}
-                options={[
-                  { value: '', label: 'No texture' },
-                  ...textureAssets.map((asset) => ({
-                    value: asset.id,
-                    label: asset.name
-                  }))
-                ]}
-                onChange={(value) =>
-                  session.setActiveTextureKey(value === '' ? null : value)}
+            <ActionRow>
+              <ActionButton
+                label="Add shape key"
+                icon="plus"
+                onActivate={() => session.addShapeKey()}
               />
-              <ActionRow>
+            </ActionRow>
+          {/if}
+          {#if shapeKeys.length === 0}
+            <p class="hint">
+              Add a key, edit its target, then key its weight in the timeline.
+            </p>
+          {:else}
+            <div class="shape-key-list">
+              {#each shapeKeys as key (key.id)}
+                <div data-shape-key-id={key.id}>
+                  <OutlinerRow
+                    active={key.id === activeShapeKey?.id}
+                    hidden={!key.visible}
+                    dragging={draggedShapeKeyId === key.id}
+                    dropTarget={shapeDropTargetId === key.id}
+                    dropAfter={shapeDropAfter}
+                    showVisibility
+                    visible={key.visible}
+                    visibilityLabel={key.visible
+                      ? `Hide ${key.name}`
+                      : `Show ${key.name}`}
+                    dragLabel={`Reorder ${key.name}`}
+                    dragTitle="Drag to reorder"
+                    onDragStart={(event) => beginShapeReorder(event, key.id)}
+                    onToggleVisibility={() =>
+                      session.setShapeKeyVisible(key.id, !key.visible)}
+                    selectLabel={`Select ${key.name}`}
+                    onSelect={() => {
+                      if (!shapeEditingId) session.selectShapeKey(key.id);
+                    }}
+                  >
+                    <span class="object-glyph">
+                      <Icon name="checker" size={13} />
+                    </span>
+                    <span class="object-name">{key.name}</span>
+                    <span class="object-kind">{key.weight.toFixed(2)}</span>
+                  </OutlinerRow>
+                </div>
+              {/each}
+            </div>
+            {#if activeShapeKey}
+              <div class="shape-key-detail">
+                <InlineNameField
+                  label="Shape key name"
+                  value={activeShapeKey.name}
+                  onCommit={(value) =>
+                    session.renameShapeKey(activeShapeKey.id, value)}
+                />
+                {#if shapeEditingId}
+                  <p class="hint">Edit the target, then Finish.</p>
+                {:else}
+                  <SliderField
+                    label="Weight"
+                    value={activeShapeKey.weight}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    precision={2}
+                    onChange={(value) =>
+                      session.setShapeKeyWeight(activeShapeKey.id, value)}
+                  />
+                  <ActionRow>
+                    <ActionButton
+                      label="Key weight"
+                      icon="plus"
+                      onActivate={() =>
+                        session.keyShapeWeight(activeShapeKey.id)}
+                    />
+                    <ActionButton
+                      label="Edit target"
+                      icon="cursor"
+                      variant="primary"
+                      onActivate={() =>
+                        session.beginShapeEdit(activeShapeKey.id)}
+                    />
+                    <ActionButton
+                      label="Capture current mesh"
+                      icon="checker"
+                      onActivate={() =>
+                        session.captureShapeKeyFromMesh(activeShapeKey.id)}
+                    />
+                  </ActionRow>
+                  <p class="hint">
+                    {#if activeShapeWeightTrack}
+                      {activeShapeWeightTrack.keyframes.length} weight
+                      key{activeShapeWeightTrack.keyframes.length === 1 ? '' : 's'} in the timeline.
+                    {:else}
+                      No weight keys yet; Key weight writes one at the playhead.
+                    {/if}
+                  </p>
+                  <DangerAction
+                    label="Delete shape key"
+                    onActivate={() => session.removeShapeKey(activeShapeKey.id)}
+                  />
+                {/if}
+              </div>
+            {/if}
+          {/if}
+        {:else}
+          <p class="hint">Select an object to edit its shape keys.</p>
+        {/if}
+      </div>
+    {/snippet}
+
+    {#snippet animationSection()}
+      <InspectorSection
+        title="Object animation"
+        meta={`${activeNode?.name ?? 'No object'} · ${activeObjectTrackCount} track${activeObjectTrackCount === 1 ? '' : 's'}`}
+        open={sections.animation}
+        onToggle={(open) => setSection('animation', open)}
+      >
+        <div class="module-body">
+          <div class="render-look">
+            <div class="render-look-head">
+              <span>Mesh motion</span>
+              <span>
+                {activeMeshTrack
+                  ? `${activeMeshTrack.keyframes.length} key${activeMeshTrack.keyframes.length === 1 ? '' : 's'}`
+                  : 'No keys'}
+              </span>
+            </div>
+            {#if meshPoseEditing}
+              <div class="shape-edit-banner mesh-pose-banner">
+                <div>
+                  <span class="kicker">Editing mesh pose · frame {meshPoseFrame}</span>
+                  <span class="sub">Temporary pose · shape keys paused.</span>
+                </div>
+                <div class="shape-edit-actions">
+                  <ActionButton
+                    label="Finish pose"
+                    icon="checker"
+                    variant="primary"
+                    onActivate={() => session.finishMeshPoseEdit()}
+                  />
+                  <ActionButton
+                    label="Cancel"
+                    icon="close"
+                    onActivate={() => session.cancelMeshPoseEdit()}
+                  />
+                </div>
+              </div>
+            {:else if activeNode}
+              <ActionButton
+                label="Edit mesh pose"
+                icon="move"
+                variant="primary"
+                disabled={shapeEditingId !== null}
+                onActivate={() => session.beginMeshPoseEdit()}
+              />
+              <p class="hint">
+                Move elements, then Finish to store a key; Cancel discards it.
+              </p>
+              {#if activeMeshTrack && activeMeshTrack.keyframes.length > 0}
+                <p class="hint">
+                  Topology editing is locked while this object has Mesh Motion
+                  keys.
+                </p>
+              {/if}
+            {:else}
+              <p class="hint">Select a mesh object to animate its shape.</p>
+            {/if}
+          </div>
+          <div class="render-look">
+            <div class="render-look-head">
+              <span>Texture</span>
+              <span>
+                {activeTextureTrack
+                  ? `${activeTextureTrack.keyframes.length} key${activeTextureTrack.keyframes.length === 1 ? '' : 's'}`
+                  : 'No track'}
+              </span>
+            </div>
+            {#if activeNode}
+              {#if activeTextureTrack}
+                <SelectField
+                  label="Texture key"
+                  value={session.snapshot.activeNodeTextureId ?? ''}
+                  options={[
+                    { value: '', label: 'No texture' },
+                    ...textureAssets.map((asset) => ({
+                      value: asset.id,
+                      label: asset.name
+                    }))
+                  ]}
+                  onChange={(value) =>
+                    session.setActiveTextureKey(value === '' ? null : value)}
+                />
+                <ActionRow>
+                  <ActionButton
+                    label="Key current"
+                    icon="image"
+                    onActivate={() => session.keyActiveTexture()}
+                  />
+                </ActionRow>
+              {:else}
                 <ActionButton
-                  label="Key current"
+                  label="Key texture"
                   icon="image"
                   onActivate={() => session.keyActiveTexture()}
                 />
-              </ActionRow>
-
+              {/if}
             {:else}
-              <ActionButton
-                label="Key texture"
-                icon="image"
-                onActivate={() => session.keyActiveTexture()}
-              />
-
+              <p class="hint">Select a mesh object to animate its texture.</p>
             {/if}
-          {:else}
-            <p class="hint">Select a mesh object to animate its texture.</p>
-          {/if}
+          </div>
+          {@render shapeKeysBlock()}
         </div>
-        <div class="selected-name-row">
-          <InlineNameField
-            label="Animation clip name"
-            value={session.snapshot.animationClips.find(
-              (clip) => clip.id === session.snapshot.animationClipId
-            )?.name ?? 'Animation 1'}
-            onCommit={(value) => session.renameAnimationClip(value)}
-          />
-          <span class="texture-kind">
-            {session.snapshot.animationClips.length} clip{session.snapshot.animationClips.length === 1 ? '' : 's'}
-          </span>
-        </div>
-        <div class="render-field">
-          <span>Frames per second</span>
-          <NumberField
-            label="Frames per second"
-            value={session.snapshot.animationFps}
-            step={1}
-            precision={0}
-            min={1}
-            max={120}
-            disabled={meshPoseEditing}
-            onCommit={(value) => session.setAnimationSettings({ fps: value })}
-          />
-        </div>
-        <div class="render-field">
-          <span>Start frame</span>
-          <NumberField
-            label="Start frame"
-            value={session.snapshot.animationStartFrame}
-            step={1}
-            precision={0}
-            min={0}
-            disabled={meshPoseEditing}
-            onCommit={(value) => session.setAnimationSettings({ startFrame: value })}
-          />
-        </div>
-        <div class="render-field">
-          <span>End frame</span>
-          <NumberField
-            label="End frame"
-            value={session.snapshot.animationEndFrame}
-            step={1}
-            precision={0}
-            min={1}
-            disabled={meshPoseEditing}
-            onCommit={(value) => session.setAnimationSettings({ endFrame: value })}
-          />
-        </div>
-        <Switch
-          label="Loop playback"
-          checked={session.snapshot.animationLoop}
-          onChange={(value) => session.setAnimationLoop(value)}
-        />
-        <SelectField
-          label="Interpolation"
-          value={session.snapshot.animationInterpolation}
-          options={[
-            { value: 'linear', label: 'Linear' },
-            { value: 'step', label: 'Step' }
-          ]}
-          onChange={(value) =>
-            session.setAnimationInterpolation(value as 'linear' | 'step')}
-        />
+      </InspectorSection>
+    {/snippet}
 
-      </div>
-    </InspectorSection>
+    {#snippet modulatorsSection()}
+      <InspectorSection
+        title="Modulators"
+        meta={`${session.snapshot.animationModulators.length} modulator${session.snapshot.animationModulators.length === 1 ? '' : 's'}`}
+        open={sections.modulators}
+        onToggle={(open) => setSection('modulators', open)}
+      >
+        <div class="module-body">
+          <ModulatorPanel {session} showHeader={false} />
+        </div>
+      </InspectorSection>
     {/snippet}
 
     {#snippet cameraSection()}
@@ -2273,125 +2464,6 @@
     </InspectorSection>
 {/snippet}
 
-    {#snippet shapesSection()}
-<InspectorSection
-      title="Shape keys"
-      meta={`${shapeKeys.length} key${shapeKeys.length === 1 ? '' : 's'}`}
-      open={sections.shapes}
-      onToggle={(open) => setSection('shapes', open)}
-    >
-      <div class="module-body">
-        {#if activeNode}
-          {#if shapeEditingId}
-            <div class="shape-edit-banner">
-              <div>
-                <span class="kicker">Editing {editingShapeName}</span>
-                <span class="sub">Live target · one undo step</span>
-              </div>
-              <div class="shape-edit-actions">
-                <ActionButton
-                  label="Finish"
-                  icon="checker"
-                  variant="primary"
-                  onActivate={() => session.finishShapeEdit()}
-                />
-                <ActionButton
-                  label="Cancel"
-                  icon="close"
-                  onActivate={() => session.cancelShapeEdit()}
-                />
-              </div>
-            </div>
-          {:else}
-            <ActionRow>
-              <ActionButton
-                label="Add shape key"
-                icon="plus"
-                onActivate={() => session.addShapeKey()}
-              />
-            </ActionRow>
-          {/if}
-          {#if shapeKeys.length === 0}
-            <p class="hint">Add or capture a key, then key its weight in the timeline.</p>
-          {:else}
-            <div class="shape-key-list">
-              {#each shapeKeys as key (key.id)}
-                <div data-shape-key-id={key.id}>
-                  <OutlinerRow
-                    active={key.id === activeShapeKey?.id}
-                    hidden={!key.visible}
-                    dragging={draggedShapeKeyId === key.id}
-                    dropTarget={shapeDropTargetId === key.id}
-                    dropAfter={shapeDropAfter}
-                    showVisibility
-                    visible={key.visible}
-                    visibilityLabel={key.visible ? `Hide ${key.name}` : `Show ${key.name}`}
-                    dragLabel={`Reorder ${key.name}`}
-                    dragTitle="Drag to reorder"
-                    onDragStart={(event) => beginShapeReorder(event, key.id)}
-                    onToggleVisibility={() => session.setShapeKeyVisible(key.id, !key.visible)}
-                    selectLabel={`Select ${key.name}`}
-                    onSelect={() => {
-                      if (!shapeEditingId) session.selectShapeKey(key.id);
-                    }}
-                  >
-                    <span class="object-glyph"><Icon name="checker" size={13} /></span>
-                    <span class="object-name">{key.name}</span>
-                    <span class="object-kind">{key.weight.toFixed(2)}</span>
-                  </OutlinerRow>
-                </div>
-              {/each}
-            </div>
-            {#if activeShapeKey}
-              <div class="shape-key-detail">
-                <InlineNameField
-                  label="Shape key name"
-                  value={activeShapeKey.name}
-                  onCommit={(value) => session.renameShapeKey(activeShapeKey.id, value)}
-                />
-                {#if shapeEditingId}
-                  <p class="hint">Edit the target, then Finish.</p>
-                {:else}
-                  <SliderField
-                    label="Weight"
-                    value={activeShapeKey.weight}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    precision={2}
-                    onChange={(value) =>
-                      session.setShapeKeyWeight(activeShapeKey.id, value)}
-                  />
-                  <ActionRow>
-                    <ActionButton
-                      label="Edit target"
-                      icon="cursor"
-                      variant="primary"
-                      onActivate={() => session.beginShapeEdit(activeShapeKey.id)}
-                    />
-                    <ActionButton
-                      label="Capture base"
-                      icon="checker"
-                      onActivate={() =>
-                        session.captureShapeKeyFromMesh(activeShapeKey.id)}
-                    />
-                  </ActionRow>
-                  <DangerAction
-                    label="Delete shape key"
-                    onActivate={() => session.removeShapeKey(activeShapeKey.id)}
-                  />
-
-                {/if}
-              </div>
-            {/if}
-          {/if}
-        {:else}
-          <p class="hint">Select an object to edit its shape keys.</p>
-        {/if}
-      </div>
-    </InspectorSection>
-    {/snippet}
-
     {#snippet modifiersSection()}
 <InspectorSection
         title="Modifiers"
@@ -3267,14 +3339,15 @@
       {#key session.snapshot.workspace}
         {#each visibleSections as section (section)}
           {#if section === 'scene'}{@render sceneSection()}
+          {:else if section === 'clip'}{@render clipSection()}
           {:else if section === 'animation'}{@render animationSection()}
+          {:else if section === 'modulators'}{@render modulatorsSection()}
           {:else if section === 'camera'}{@render cameraSection()}
           {:else if section === 'render'}{@render renderSection()}
           {:else if section === 'light'}{@render lightSection()}
           {:else if section === 'transform'}{@render transformSection()}
           {:else if section === 'selection'}{@render selectionSection()}
           {:else if section === 'mesh'}{@render meshSection()}
-          {:else if section === 'shapes'}{@render shapesSection()}
           {:else if section === 'modifiers'}{@render modifiersSection()}
           {:else if section === 'brush'}{@render brushSection()}
           {:else if section === 'pixel'}{@render pixelSection()}
