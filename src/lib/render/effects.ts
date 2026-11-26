@@ -181,7 +181,7 @@ export function createRenderEffect(
     case 'chromatic-aberration':
       return { id, kind, enabled: true, amount: 1.5, mode: 'horizontal' };
     case 'vhs-tracking':
-      return { id, kind, enabled: true, amount: 1.2, frequency: 0.08, speed: 1 };
+      return { id, kind, enabled: true, amount: 0.8, frequency: 0.05, speed: 0.6 };
     case 'crt-curvature':
       return { id, kind, enabled: true, amount: 0.08 };
     case 'bloom':
@@ -319,9 +319,9 @@ export function normalizeRenderEffect(value: unknown): RenderEffect | null {
     case 'vhs-tracking':
       return {
         ...base,
-        amount: clampNumber(raw.amount, 1.2, 0, 16),
-        frequency: clampNumber(raw.frequency, 0.08, 0.001, 1),
-        speed: clampNumber(raw.speed, 1, 0, 4)
+        amount: clampNumber(raw.amount, 0.8, 0, 16),
+        frequency: clampNumber(raw.frequency, 0.05, 0.001, 1),
+        speed: clampNumber(raw.speed, 0.6, 0, 4)
       };
     case 'crt-curvature':
       return { ...base, amount: clampNumber(raw.amount, 0.08, 0, 0.5) };
@@ -698,11 +698,13 @@ function applyVhsTracking(
   frame: number
 ): Uint8ClampedArray {
   const result = copyImage(data);
-  const amount = effect.amount ?? 1.2;
-  const frequency = effect.frequency ?? 0.08;
-  const speed = effect.speed ?? 1;
+  const amount = effect.amount ?? 0.8;
+  const frequency = effect.frequency ?? 0.05;
+  const speed = effect.speed ?? 0.6;
   for (let y = 0; y < height; y += 1) {
-    const band = hash(0, y, 3, frame) > 0.985 ? amount * 4 : 0;
+    // Rare, short tracking tears. Full-strength tape damage on every few
+    // rows reads as broken scanlines rather than a subtle VHS wobble.
+    const band = hash(0, y, 3, frame) > 0.998 ? amount * 1.8 : 0;
     const shift = Math.sin(y * frequency + frame * speed) * amount + band;
     for (let x = 0; x < width; x += 1) {
       const index = (y * width + x) * 4;
