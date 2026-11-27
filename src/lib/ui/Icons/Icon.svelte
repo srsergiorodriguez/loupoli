@@ -252,8 +252,8 @@
     <circle cx="12" cy="12" r="1.6" fill="currentColor" />
     <circle cx="19" cy="12" r="1.6" fill="currentColor" />
   {:else if name === 'pin'}
-    <path d="m9 4 6 2-1.5 4 3.5 3.5-2 2L11.5 12 7 13.5 6 8l3-4Z" />
-    <path d="m10 14-4 6" />
+    <path d="M12 17v5" />
+    <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
   {:else if name === 'unwrap'}
     <rect x="3.5" y="4.5" width="7" height="6" rx=".8" />
     <rect x="13.5" y="4.5" width="7" height="6" rx=".8" />

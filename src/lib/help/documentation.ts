@@ -94,6 +94,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Editing the layout',
         paragraphs: [
           'Fit frames the current charts in the pane. Drag selected corners, or use G, R, and S for move, rotate, and scale. U and V lock the transform to one texture axis. Clamp keeps direct transforms inside the 0–1 square; it is off by default because rotation can move a different corner outside first.',
+          'Pin uses exactly two selected corners as fixed anchors for the next Unwrap. Pins are session-only and do not lock normal UV transforms; select two different corners and pin again to replace them, or press the active pin button to clear.',
           'Stack compares the topology of two islands and copies the active island layout when vertex, edge, face, and boundary counts match. It is useful for repeated shapes that need identical UV layouts. Mirror stack applies a reflected correspondence for symmetric albedo; the texture is intentionally mirrored on the copied island.'
         ],
         controls: [

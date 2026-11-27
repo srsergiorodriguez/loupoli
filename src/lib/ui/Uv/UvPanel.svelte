@@ -703,7 +703,7 @@
   <PaneHeader
     label="UV"
     active={activeEditor === 'uv'}
-    meta={`${selectedCount} corner${selectedCount === 1 ? '' : 's'} · ${Math.round(uvZoom * 100)}%${uvDragScale !== null ? ` · ×${uvDragScale.toFixed(2)}` : ''}`}
+    meta={`${pinnedCount === 2 ? '2 unwrap pins · ' : ''}${selectedCount} corner${selectedCount === 1 ? '' : 's'} · ${Math.round(uvZoom * 100)}%${uvDragScale !== null ? ` · ×${uvDragScale.toFixed(2)}` : ''}`}
   >
     {#snippet actions()}
       <IconButton
@@ -771,9 +771,13 @@
         onActivate={() => session.syncUvFrom3d()}
       />
       <IconButton
-        label="Pin UVs"
+        label={pinnedCount === 2 ? 'Clear unwrap pins' : 'Pin unwrap anchors'}
         icon="pin"
-        tooltip={pinnedCount === 2 ? 'Clear UV pins' : 'Pin selected corners'}
+        tooltip={pinnedCount === 2
+          ? 'Clear unwrap pins'
+          : selectedCount === 2
+            ? 'Pin 2 corners as unwrap anchors'
+            : 'Select exactly 2 corners to pin'}
         active={pinnedCount === 2}
         disabled={pinnedCount !== 2 && selectedCount !== 2}
         onActivate={() => session.toggleUvPins()}
