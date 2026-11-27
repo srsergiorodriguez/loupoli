@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import { createCubeMesh } from '../geometry/primitives';
 import {
   applyUvView,
@@ -34,6 +35,27 @@ describe('UV view math', () => {
     expect(mesh.getCornerUv(hit as number)[0]).toBeCloseTo(uv[0]);
     expect(mesh.getCornerUv(hit as number)[1]).toBeCloseTo(uv[1]);
     expect(pickUvCorner(mesh, point.x + 40, point.y + 40, projection)).toBeNull();
+  });
+
+  it('can fit the texture unit square instead of only the UV bounds', () => {
+    const mesh = HalfEdgeMesh.fromPolygons([
+      {
+        corners: [
+          { position: [0, 0, 0], uv: [0.2, 0.2] },
+          { position: [1, 0, 0], uv: [0.8, 0.2] },
+          { position: [1, 1, 0], uv: [0.8, 0.8] },
+          { position: [0, 1, 0], uv: [0.2, 0.8] }
+        ]
+      }
+    ]);
+    const boundsOnly = fitUvProjection(mesh, 400, 400, 0);
+    const withSquare = fitUvProjection(mesh, 400, 400, 0, true);
+    expect(boundsOnly.scale).toBeGreaterThan(withSquare.scale);
+    expect(withSquare.scale).toBeCloseTo(400, 5);
+    expect(withSquare.offsetX).toBeCloseTo(0, 5);
+    expect(withSquare.offsetY).toBeCloseTo(0, 5);
+    expect(uvToCanvas([0, 0], withSquare)).toEqual({ x: 0, y: 400 });
+    expect(uvToCanvas([1, 1], withSquare)).toEqual({ x: 400, y: 0 });
   });
 
   it('applies zoom and pan after fitting', () => {

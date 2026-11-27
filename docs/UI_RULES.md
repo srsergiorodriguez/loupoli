@@ -105,7 +105,7 @@ Additional rules:
 
 Texture asset actions use visible commands: New and Duplicate sit together; Delete texture is a separate end-aligned danger action, disabled while assigned or last. Layer-local actions (including Import image and effect creation) live under Add layer. Do not use a three-dot asset menu for these actions.
 
-Snapping is global session state. Its compact status-bar control opens a single popover for world, UV, and rotation steps; the Transform section must not duplicate those controls. PS1 look is a preset inside the Render effects section under Render, not a standalone Inspector section.
+Snapping is global session state. Its compact status-bar control opens a single popover for world, UV, rotation, and scale-factor steps; the Transform section must not duplicate those controls. PS1 look is a preset inside the Render effects section under Render, not a standalone Inspector section.
 
 ## 9. Shared UI contracts
 

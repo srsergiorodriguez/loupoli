@@ -1,23 +1,54 @@
 import { describe, expect, it } from 'vitest';
 import { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import { createCubeMesh, createGridMesh } from '../geometry/primitives';
-import { extractUvCharts } from '../geometry/uvCharts';
+import { extractUvCharts, type UvChart } from '../geometry/uvCharts';
 import {
   PixelLayoutError,
   packUvChartsToPixelGrid,
   relaxUvCharts
 } from './pixelArt';
 
+function chartBounds(
+  chart: UvChart,
+  uvs: Float32Array,
+  width: number,
+  height: number
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const vertex of chart.uvVertices) {
+    const corner = vertex.corners[0];
+    const x = uvs[corner * 2] * width;
+    const y = (1 - uvs[corner * 2 + 1]) * height;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function overlaps(
+  a: { minX: number; minY: number; maxX: number; maxY: number },
+  b: { minX: number; minY: number; maxX: number; maxY: number }
+): boolean {
+  return (
+    a.minX < b.maxX &&
+    a.maxX > b.minX &&
+    a.minY < b.maxY &&
+    a.maxY > b.minY
+  );
+}
+
 describe('pixel art UV layout', () => {
-  it('packs an island onto integer texel boundaries', () => {
+  it('packs every chart onto the 1 px texel grid', () => {
     const mesh = createGridMesh(2, 2);
     const charts = extractUvCharts(mesh);
     const uvs = packUvChartsToPixelGrid(mesh, charts, mesh.heUv, {
       textureWidth: 64,
-      textureHeight: 64,
-      cellSize: 32,
-      padding: 2,
-      snapAllVertices: true
+      textureHeight: 64
     });
     for (const value of uvs) {
       expect(Number.isFinite(value)).toBe(true);
@@ -30,15 +61,25 @@ describe('pixel art UV layout', () => {
       expect(Math.abs(uPixels - Math.round(uPixels))).toBeLessThan(1e-6);
       expect(Math.abs(vPixels - Math.round(vPixels))).toBeLessThan(1e-6);
     }
+    const bounds = charts.map((chart) => chartBounds(chart, uvs, 64, 64));
+    for (let a = 0; a < bounds.length; a += 1) {
+      expect(bounds[a].minX).toBeGreaterThanOrEqual(1);
+      expect(bounds[a].minY).toBeGreaterThanOrEqual(1);
+      expect(bounds[a].maxX).toBeLessThanOrEqual(63);
+      expect(bounds[a].maxY).toBeLessThanOrEqual(63);
+      for (let b = a + 1; b < bounds.length; b += 1) {
+        expect(overlaps(bounds[a], bounds[b])).toBe(false);
+      }
+    }
   });
 
-  it('places multiple islands in separate uniform cells', () => {
+  it('preserves relative island scale when packing', () => {
     const mesh = HalfEdgeMesh.fromPolygons([
       {
         corners: [
           { position: [0, 0, 0], uv: [0, 0] },
-          { position: [1, 0, 0], uv: [1, 0] },
-          { position: [1, 1, 0], uv: [1, 1] },
+          { position: [1, 0, 0], uv: [2, 0] },
+          { position: [1, 1, 0], uv: [2, 1] },
           { position: [0, 1, 0], uv: [0, 1] }
         ]
       },
@@ -55,19 +96,12 @@ describe('pixel art UV layout', () => {
     expect(charts).toHaveLength(2);
     const uvs = packUvChartsToPixelGrid(mesh, charts, mesh.heUv, {
       textureWidth: 128,
-      textureHeight: 128,
-      cellSize: 32,
-      padding: 1,
-      snapAllVertices: true
+      textureHeight: 128
     });
-    const cellKeys = new Set<string>();
-    for (const chart of charts) {
-      const corner = chart.uvVertices[0].corners[0];
-      const u = Math.floor((uvs[corner * 2] * 128) / 32);
-      const v = Math.floor((uvs[corner * 2 + 1] * 128) / 32);
-      cellKeys.add(`${u}:${v}`);
-    }
-    expect(cellKeys.size).toBe(charts.length);
+    const bounds = charts.map((chart) => chartBounds(chart, uvs, 128, 128));
+    const widthA = bounds[0].maxX - bounds[0].minX;
+    const widthB = bounds[1].maxX - bounds[1].minX;
+    expect(widthA / widthB).toBeCloseTo(2, 0);
   });
 
   it('relaxes interior vertices without changing finite UVs', () => {
@@ -101,10 +135,7 @@ describe('pixel art UV layout', () => {
     const charts = extractUvCharts(mesh);
     const uvs = packUvChartsToPixelGrid(mesh, charts, mesh.heUv, {
       textureWidth: 64,
-      textureHeight: 64,
-      cellSize: 32,
-      padding: 2,
-      snapAllVertices: true
+      textureHeight: 64
     });
     const a = mesh.edgeHalfEdge[cut];
     const b = mesh.heTwin[a];
@@ -115,16 +146,13 @@ describe('pixel art UV layout', () => {
     expect(separation).toBeGreaterThan(1e-5);
   });
 
-  it('rejects a cell layout that has too few cells', () => {
+  it('rejects charts that cannot fit the texture', () => {
     const mesh = createCubeMesh();
     const charts = extractUvCharts(mesh);
     expect(() =>
       packUvChartsToPixelGrid(mesh, charts, mesh.heUv, {
-        textureWidth: 64,
-        textureHeight: 64,
-        cellSize: 64,
-        padding: 2,
-        snapAllVertices: true
+        textureWidth: 2,
+        textureHeight: 2
       })
     ).toThrow(PixelLayoutError);
   });

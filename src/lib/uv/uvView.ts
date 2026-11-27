@@ -49,12 +49,13 @@ export function fitUvProjection(
   mesh: HalfEdgeMesh,
   width: number,
   height: number,
-  padding = 24
+  padding = 24,
+  includeUnitSquare = false
 ): UvProjectionBase {
-  let minU = Infinity;
-  let minV = Infinity;
-  let maxU = -Infinity;
-  let maxV = -Infinity;
+  let minU = includeUnitSquare ? 0 : Infinity;
+  let minV = includeUnitSquare ? 0 : Infinity;
+  let maxU = includeUnitSquare ? 1 : -Infinity;
+  let maxV = includeUnitSquare ? 1 : -Infinity;
   for (let halfEdge = 0; halfEdge < mesh.halfEdgeCount; halfEdge += 1) {
     const offset = halfEdge * 2;
     const u = mesh.heUv[offset];

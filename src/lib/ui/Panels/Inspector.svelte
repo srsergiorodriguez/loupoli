@@ -360,44 +360,6 @@
     textureAssets.find((asset) => asset.id === activeNode?.textureId) ??
       activeTextureAsset
   );
-  const pixelCellOptions = $derived.by(() => {
-    const textureSize = pixelTexture
-      ? Math.min(pixelTexture.width, pixelTexture.height)
-      : 0;
-    const values = [8, 16, 32, 64, 128, 256].filter(
-      (value) =>
-        (textureSize <= 0 || value <= textureSize) &&
-        value > session.snapshot.pixelPadding * 2
-    );
-    const current = session.snapshot.pixelCellSize;
-    if (!values.includes(current)) {
-      values.push(current);
-    }
-    return values
-      .sort((a, b) => a - b)
-      .map((value) => ({ value: String(value), label: `${value} px` }));
-  });
-  const pixelPaddingOptions = $derived.by(() => {
-    const values = [0, 1, 2, 4, 8].filter(
-      (value) => value * 2 < session.snapshot.pixelCellSize
-    );
-    if (!values.includes(session.snapshot.pixelPadding)) {
-      values.push(session.snapshot.pixelPadding);
-    }
-    return values
-      .sort((a, b) => a - b)
-      .map((value) => ({ value: String(value), label: `${value} px` }));
-  });
-  const pixelColumns = $derived(
-    pixelTexture
-      ? Math.max(1, Math.floor(pixelTexture.width / session.snapshot.pixelCellSize))
-      : 0
-  );
-  const pixelRows = $derived(
-    pixelTexture
-      ? Math.max(1, Math.floor(pixelTexture.height / session.snapshot.pixelCellSize))
-      : 0
-  );
   const visibleSections = $derived(
     inspectorSectionsFor(session.snapshot.workspace).filter(
       (section) =>
@@ -2056,6 +2018,22 @@
         checked={activeNode?.doubleSided ?? false}
         onChange={(value) => session.setActiveNodeDoubleSided(value)}
       />
+      <ActionRow align="end">
+        <ActionButton
+          label="Apply all transforms"
+          icon="merge"
+          disabled={!session.snapshot.canApplyTransforms}
+          onActivate={() => session.applyAllTransforms()}
+        />
+      </ActionRow>
+      {#if session.snapshot.applyTransformsBlockedReason}
+        <p class="hint">{session.snapshot.applyTransformsBlockedReason}</p>
+      {:else}
+        <p class="hint">
+          Bakes object position, rotation, and scale into the mesh and shape
+          keys. Group transforms remain.
+        </p>
+      {/if}
       {/if}
     </InspectorSection>
 {/snippet}
@@ -3269,46 +3247,36 @@
       >
         <div class="module-body">
           <p class="hint">
-            Optional texel layout. Seams, cuts, and holes stay intact; normal
-            UV editing is unchanged.
+            Fixed one-texel grid with 1 px padding between islands. Islands keep
+            their relative size; Relax and Pack apply to all seam islands.
           </p>
           {#if activeNode && pixelTexture}
-            <SelectField
-              label="Cell"
-              value={String(session.snapshot.pixelCellSize)}
-              options={pixelCellOptions}
-              onChange={(value) =>
-                session.setPixelCellSize(Number(value))}
-            />
-            <SelectField
-              label="Padding"
-              value={String(session.snapshot.pixelPadding)}
-              options={pixelPaddingOptions}
-              onChange={(value) => session.setPixelPadding(Number(value))}
-            />
-            <Switch
-              label="Snap all vertices"
-              description="Boundaries always snap; this also quantizes interior vertices."
-              checked={session.snapshot.pixelSnapAll}
-              onChange={(checked) => session.setPixelSnapAll(checked)}
-            />
+            <dl class="stats">
+              <div>
+                <dt>Grid</dt>
+                <dd class="text-mono">1 px</dd>
+              </div>
+              <div>
+                <dt>Padding</dt>
+                <dd class="text-mono">1 px</dd>
+              </div>
+            </dl>
             <ActionRow>
               <ActionButton
                 label="Relax"
                 onActivate={() => session.relaxPixelUv()}
               />
               <ActionButton
-                label="Pack cells"
+                label="Pack islands"
                 icon="grid"
                 variant="primary"
                 onActivate={() => session.packPixelUv()}
               />
             </ActionRow>
             <p class="hint">
-              {pixelColumns} × {pixelRows} cells at
-              {session.snapshot.pixelCellSize}px. Relax and Pack apply to all
-              current seam islands. Uses the current texture resolution; re-pack
-              after resizing it. Thin cuts stay unsnapped so they cannot close.
+              Pack uses the current texture resolution; re-pack after resizing
+              it. It expects a non-overlapping unwrap. Thin cuts stay unsnapped
+              so they cannot close.
             </p>
           {:else if !activeNode}
             <p class="hint">Select a mesh object to use pixel cells.</p>

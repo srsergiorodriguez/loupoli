@@ -6,10 +6,11 @@ import { chartHasUvOverlap } from '../geometry/uvValidation';
 export interface PixelLayoutOptions {
   readonly textureWidth: number;
   readonly textureHeight: number;
-  readonly cellSize: number;
-  readonly padding: number;
-  readonly snapAllVertices: boolean;
 }
+
+/** Fixed texel margin and inter-island gap for the pixel-art layout. */
+const PIXEL_MARGIN = 1;
+const PIXEL_GAP = 1;
 
 /** One chart-local triangle used by the UV validators. */
 interface PixelTriangle {
@@ -120,50 +121,6 @@ function boundaryVertices(mesh: HalfEdgeMesh, chart: UvChart): Set<number> {
 }
 
 /**
- * True when both sides of a seam are boundary edges of the same chart.
- *
- * Snapping such a chart can close the slit, so those islands keep their
- * aligned (but unsnapped) coordinates while ordinary islands get quantized.
- */
-function hasOpenCut(mesh: HalfEdgeMesh, chart: UvChart): boolean {
-  const seen = new Set<number>();
-  for (const halfEdge of chart.boundaryHalfEdges) {
-    const edge = mesh.heEdge[halfEdge];
-    if (seen.has(edge)) {
-      return true;
-    }
-    seen.add(edge);
-  }
-  return false;
-}
-
-function rotatedBounds(
-  points: readonly Vec2[],
-  angle: number
-): { readonly points: Vec2[]; readonly width: number; readonly height: number } {
-  const radians = (angle * Math.PI) / 180;
-  const cos = Math.cos(radians);
-  const sin = Math.sin(radians);
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  const rotated = points.map(([x, y]) => {
-    const next: Vec2 = [x * cos - y * sin, x * sin + y * cos];
-    minX = Math.min(minX, next[0]);
-    maxX = Math.max(maxX, next[0]);
-    minY = Math.min(minY, next[1]);
-    maxY = Math.max(maxY, next[1]);
-    return next;
-  });
-  return {
-    points: rotated,
-    width: Math.max(maxX - minX, 1e-9),
-    height: Math.max(maxY - minY, 1e-9)
-  };
-}
-
-/**
  * Relax interior UV vertices toward their neighbors while keeping seams,
  * holes, and island boundaries fixed.
  */
@@ -225,12 +182,90 @@ export function relaxUvCharts(
   return result;
 }
 
+interface PackedRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+function chartPixelBounds(
+  chart: UvChart,
+  uvs: Float32Array,
+  textureWidth: number,
+  textureHeight: number
+): { minX: number; minY: number; width: number; height: number } {
+  const points = localUvs(chart, uvs);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [u, v] of points) {
+    const x = u * textureWidth;
+    const y = (1 - v) * textureHeight;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return {
+    minX,
+    minY,
+    width: Math.max(maxX - minX, 1e-9),
+    height: Math.max(maxY - minY, 1e-9)
+  };
+}
+
+function tryPack(
+  bounds: readonly { width: number; height: number }[],
+  scale: number,
+  width: number,
+  height: number
+): PackedRect[] | null {
+  const order = bounds
+    .map((rect, index) => ({
+      index,
+      width: Math.max(1, Math.ceil(rect.width * scale)),
+      height: Math.max(1, Math.ceil(rect.height * scale))
+    }))
+    .sort((a, b) =>
+      b.height - a.height || b.width - a.width || a.index - b.index
+    );
+  const placements = new Array<PackedRect>(bounds.length);
+  let x = PIXEL_MARGIN;
+  let y = PIXEL_MARGIN;
+  let rowHeight = 0;
+  for (const rect of order) {
+    if (rect.width > width - PIXEL_MARGIN * 2) {
+      return null;
+    }
+    if (x + rect.width > width - PIXEL_MARGIN) {
+      x = PIXEL_MARGIN;
+      y += rowHeight + PIXEL_GAP;
+      rowHeight = 0;
+    }
+    if (y + rect.height > height - PIXEL_MARGIN) {
+      return null;
+    }
+    placements[rect.index] = {
+      x,
+      y,
+      width: rect.width,
+      height: rect.height
+    };
+    x += rect.width + PIXEL_GAP;
+    rowHeight = Math.max(rowHeight, rect.height);
+  }
+  return placements;
+}
+
 /**
- * Pack every chart into a uniform cell on the texture's texel grid.
+ * Pack every chart into the texture's integer texel grid.
  *
- * Each island is rotated in 90-degree steps, scaled uniformly into its cell,
- * translated to a whole-texel cell origin, and snapped to texel boundaries.
- * This is intentionally a separate, opt-in layout from normal UV unwrapping.
+ * Islands keep their relative size. A single scale is chosen for all charts so
+ * texel density is preserved; each island is shelf-packed at whole-pixel
+ * dimensions with one pixel between islands and one pixel around the border.
+ * No island is rotated or stretched independently.
  */
 export function packUvChartsToPixelGrid(
   mesh: HalfEdgeMesh,
@@ -238,106 +273,97 @@ export function packUvChartsToPixelGrid(
   uvs: Float32Array,
   options: PixelLayoutOptions
 ): Float32Array {
-  const { textureWidth, textureHeight, cellSize, padding, snapAllVertices } = options;
+  const { textureWidth, textureHeight } = options;
   if (
     !Number.isFinite(textureWidth) ||
     !Number.isFinite(textureHeight) ||
-    textureWidth <= 0 ||
-    textureHeight <= 0
+    textureWidth < 3 ||
+    textureHeight < 3
   ) {
     throw new PixelLayoutError('Assign a texture before using pixel-art UV layout.');
   }
-  if (
-    !Number.isInteger(cellSize) ||
-    !Number.isInteger(padding) ||
-    cellSize <= 0 ||
-    padding < 0 ||
-    padding * 2 >= cellSize
-  ) {
-    throw new PixelLayoutError('Pixel cell size and padding are invalid.');
+  if (charts.length === 0) {
+    return uvs.slice();
   }
-  const columns = Math.floor(textureWidth / cellSize);
-  const rows = Math.floor(textureHeight / cellSize);
-  if (columns < 1 || rows < 1) {
-    throw new PixelLayoutError(
-      `A ${cellSize}px cell does not fit a ${textureWidth} × ${textureHeight} texture.`
+  const bounds = charts.map((chart) =>
+    chartPixelBounds(chart, uvs, textureWidth, textureHeight)
+  );
+  let upperBound = Infinity;
+  for (const rect of bounds) {
+    upperBound = Math.min(
+      upperBound,
+      (textureWidth - PIXEL_MARGIN * 2) / rect.width,
+      (textureHeight - PIXEL_MARGIN * 2) / rect.height
     );
   }
-  if (charts.length > columns * rows) {
+  if (!Number.isFinite(upperBound) || upperBound <= 0) {
+    throw new PixelLayoutError('The texture is too small for the UV islands.');
+  }
+  let scale = Math.min(1, upperBound);
+  let placements = tryPack(bounds, scale, textureWidth, textureHeight);
+  if (!placements) {
+    let low = 0;
+    let high = upperBound;
+    placements = null;
+    for (let iteration = 0; iteration < 40; iteration += 1) {
+      const middle = (low + high) * 0.5;
+      const candidate = tryPack(bounds, middle, textureWidth, textureHeight);
+      if (candidate) {
+        placements = candidate;
+        scale = middle;
+        low = middle;
+      } else {
+        high = middle;
+      }
+    }
+  }
+  if (!placements) {
     throw new PixelLayoutError(
-      `${charts.length} islands do not fit in ${columns} × ${rows} cells at ${cellSize}px. Use a larger texture or a smaller cell.`
+      `${charts.length} islands do not fit in ${textureWidth} × ${textureHeight} pixels with 1 px padding.`
     );
   }
   const result = uvs.slice();
-  const innerSize = cellSize - padding * 2;
   charts.forEach((chart, chartIndex) => {
-    const source = localUvs(chart, result);
-    const pixelPoints = source.map(
-      ([u, v]) => [u * textureWidth, (1 - v) * textureHeight] as Vec2
-    );
-    let best: { angle: number; points: Vec2[]; width: number; height: number; scale: number } | null =
-      null;
-    for (const angle of [0, 90, 180, 270]) {
-      const bounded = rotatedBounds(pixelPoints, angle);
-      const scale = Math.min(innerSize / bounded.width, innerSize / bounded.height);
-      if (
-        best === null ||
-        scale > best.scale + 1e-9 ||
-        (Math.abs(scale - best.scale) <= 1e-9 && angle === 0)
-      ) {
-        best = { angle, ...bounded, scale };
-      }
-    }
-    if (!best) {
-      throw new PixelLayoutError('A pixel-art island has no usable orientation.');
-    }
-    let minX = Infinity;
-    let minY = Infinity;
-    for (const [x, y] of best.points) {
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-    }
-    const column = chartIndex % columns;
-    const row = Math.floor(chartIndex / columns);
-    const cellX = column * cellSize;
-    const cellY = row * cellSize;
-    const boundary = boundaryVertices(mesh, chart);
-    const aligned = best.points.map(([x, y]) => {
-      const px = cellX + padding + (x - minX) * best!.scale;
-      const py = cellY + padding + (y - minY) * best!.scale;
-      return [px / textureWidth, 1 - py / textureHeight] as Vec2;
-    });
-    const snapped = best.points.map(([x, y], index) => {
-      let px = cellX + padding + (x - minX) * best!.scale;
-      let py = cellY + padding + (y - minY) * best!.scale;
-      if (snapAllVertices || boundary.has(index)) {
-        px = Math.min(
-          cellX + cellSize - padding,
-          Math.max(cellX + padding, Math.round(px))
-        );
-        py = Math.min(
-          cellY + cellSize - padding,
-          Math.max(cellY + padding, Math.round(py))
-        );
-      }
-      return [px / textureWidth, 1 - py / textureHeight] as Vec2;
-    });
+    const rect = bounds[chartIndex];
+    const placement = placements![chartIndex];
+    const scaleX = placement.width / rect.width;
+    const scaleY = placement.height / rect.height;
+    const local = localUvs(chart, result);
+    const snap = (points: readonly Vec2[], rounded: boolean): Vec2[] =>
+      points.map(([u, v]) => {
+        const x = u * textureWidth;
+        const y = (1 - v) * textureHeight;
+        let px = placement.x + (x - rect.minX) * scaleX;
+        let py = placement.y + (y - rect.minY) * scaleY;
+        if (rounded) {
+          px = Math.round(px);
+          py = Math.round(py);
+        }
+        px = Math.min(placement.x + placement.width, Math.max(placement.x, px));
+        py = Math.min(placement.y + placement.height, Math.max(placement.y, py));
+        return [px / textureWidth, 1 - py / textureHeight] as Vec2;
+      });
     const triangles = localTriangles(mesh, chart);
-    const cut = hasOpenCut(mesh, chart);
-    let local = cut ? aligned : snapped;
+    let next = snap(local, true);
     try {
-      validateChart(chartIndex, charts.length, chart, local, triangles);
+      validateChart(chartIndex, charts.length, chart, next, triangles);
     } catch (error) {
-      // Quantizing a very thin cut/slit can collapse a triangle. Keep the
-      // aligned island (still inside its integer cell) rather than failing the
-      // whole layout or producing a broken UV.
       if (!(error instanceof PixelLayoutError)) {
         throw error;
       }
-      validateChart(chartIndex, charts.length, chart, aligned, triangles);
-      local = aligned;
+      next = snap(local, false);
+      try {
+        validateChart(chartIndex, charts.length, chart, next, triangles);
+      } catch (fallbackError) {
+        if (!(fallbackError instanceof PixelLayoutError)) {
+          throw fallbackError;
+        }
+        throw new PixelLayoutError(
+          `${fallbackError.message} Unwrap the mesh before packing pixel UVs.`
+        );
+      }
     }
-    writeChartUvs(result, chart, local);
+    writeChartUvs(result, chart, next);
   });
   return result;
 }

@@ -51,6 +51,7 @@ import {
   planeBasis,
   shortestAngleDelta,
   snapScalar,
+  snapScaleFactor,
   worldAxis,
   type GizmoAxis,
   type GizmoHandle
@@ -234,6 +235,8 @@ import {
   ReplaceMeshCommand,
   type ReplaceMeshLoopTransition
 } from './commands/ReplaceMeshCommand';
+import { ApplyNodeTransformsCommand } from './commands/ApplyNodeTransformsCommand';
+import { bakeNodeTransform, identityTransform } from './applyTransforms';
 import { SetModifiersCommand } from './commands/SetModifiersCommand';
 import { RenameGroupCommand, RenameNodeCommand } from './commands/RenameCommands';
 import { JoinNodesCommand, type JoinedSource } from './commands/JoinNodesCommand';
@@ -679,6 +682,7 @@ export class EditorRuntime {
   private snapStep = 0.1;
   private uvSnapStep = 0.01;
   private rotationSnapStep = 15;
+  private scaleSnapStep = 0.1;
   private axisLock: AxisLock = null;
   private ps1Snap = DEFAULT_PS1_SNAP;
   private ps1Affine = DEFAULT_PS1_AFFINE;
@@ -718,9 +722,6 @@ export class EditorRuntime {
   private uvSelectionMode: UvSelectionMode = 'vertex';
   private uvClampMode = false;
   private pixelArtMode = false;
-  private pixelCellSize = 32;
-  private pixelPadding = 2;
-  private pixelSnapAll = true;
   private uvActiveChart: number | null = null;
   private readonly uvSelection = new Set<number>();
   private lassoSelectionBefore: SelectionSnapshot | null = null;
@@ -1071,6 +1072,7 @@ export class EditorRuntime {
       snapStep: this.snapStep,
       uvSnapStep: this.uvSnapStep,
       rotationSnapStep: this.rotationSnapStep,
+      scaleSnapStep: this.scaleSnapStep,
       axisLock: this.axisLock,
       ps1Snap: this.ps1Snap,
       ps1Affine: this.ps1Affine,
@@ -1096,9 +1098,8 @@ export class EditorRuntime {
       uvSelectionMode: this.uvSelectionMode,
       uvClampMode: this.uvClampMode,
       pixelArtMode: this.pixelArtMode,
-      pixelCellSize: this.pixelCellSize,
-      pixelPadding: this.pixelPadding,
-      pixelSnapAll: this.pixelSnapAll,
+      canApplyTransforms: this.canApplyTransforms(),
+      applyTransformsBlockedReason: this.applyTransformsBlockedReason(),
       uvSelectedCorners: Array.from(this.uvSelection).sort((a, b) => a - b),
       uvPinnedCorners: Array.from(this.uvPins).sort((a, b) => a - b),
       uvPaintMode: this.uvPaintMode,
@@ -2567,6 +2568,15 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Change the scale-factor snap increment. */
+  setScaleSnapStep(step: number): void {
+    if (!Number.isFinite(step) || step <= 0 || step === this.scaleSnapStep) {
+      return;
+    }
+    this.scaleSnapStep = step;
+    this.publish();
+  }
+
   /** Change the rotation snap angle in degrees. */
   setRotationSnapStep(step: number): void {
     if (!Number.isFinite(step) || step <= 0 || step === this.rotationSnapStep) {
@@ -3157,7 +3167,8 @@ export class EditorRuntime {
             node.mesh,
             this.uvCanvasWidth,
             this.uvCanvasHeight,
-            24
+            24,
+            this.pixelArtMode
           )
         : null;
     this.uvBaseNodeId = node?.id ?? null;
@@ -3186,7 +3197,7 @@ export class EditorRuntime {
       base.height !== height ||
       this.uvBaseNodeId !== nodeId
     ) {
-      base = fitUvProjection(mesh, width, height, 24);
+      base = fitUvProjection(mesh, width, height, 24, this.pixelArtMode);
       this.uvBaseProjection = base;
       this.uvBaseNodeId = nodeId;
     }
@@ -3257,44 +3268,65 @@ export class EditorRuntime {
     this.publish();
   }
 
+  /** Whether the active mesh can bake its local transform into rest data. */
+  private canApplyTransforms(): boolean {
+    const node = this.getActiveNode();
+    return node !== null && !node.reference && !node.motionTracked;
+  }
+
+  /** UI explanation for why Apply transforms is unavailable. */
+  private applyTransformsBlockedReason(): string {
+    const node = this.getActiveNode();
+    if (!node) {
+      return '';
+    }
+    if (node.reference) {
+      return 'Reference planes use placement transforms, not mesh transforms.';
+    }
+    if (node.motionTracked) {
+      return 'Remove Mesh Motion tracks before applying transforms.';
+    }
+    return '';
+  }
+
+  /**
+   * Bake the active mesh node's local position, rotation, and scale into the
+   * editable mesh and shape keys, then reset the node transform to identity.
+   */
+  applyAllTransforms(): void {
+    const node = this.getActiveNode();
+    if (!node || !this.canApplyTransforms()) {
+      return;
+    }
+    const beforeMesh = node.mesh;
+    const beforeTransform = this.cloneTransform(node.transform);
+    const baked = bakeNodeTransform(
+      beforeMesh,
+      beforeTransform,
+      node.shapeKeys
+    );
+    this.history.execute(
+      new ApplyNodeTransformsCommand(
+        node,
+        beforeMesh,
+        baked.mesh,
+        beforeTransform,
+        identityTransform(),
+        baked.shapeKeys
+      )
+    );
+    this.lastLoopCut = null;
+    this.uvBaseProjection = null;
+    this.publish();
+  }
+
   /** Toggle the optional pixel-art UV layout workflow. */
   setPixelArtMode(enabled: boolean): void {
     if (this.pixelArtMode === enabled) {
       return;
     }
     this.pixelArtMode = enabled;
-    this.uvRevision += 1;
-    this.publish();
-  }
-
-  /** Set the uniform pixel cell size in texels. */
-  setPixelCellSize(size: number): void {
-    const next = Math.max(8, Math.min(512, Math.round(size)));
-    if (this.pixelCellSize === next) {
-      return;
-    }
-    this.pixelCellSize = next;
-    this.uvRevision += 1;
-    this.publish();
-  }
-
-  /** Set the padding around an island inside its pixel cell. */
-  setPixelPadding(padding: number): void {
-    const next = Math.max(0, Math.min(32, Math.round(padding)));
-    if (this.pixelPadding === next) {
-      return;
-    }
-    this.pixelPadding = next;
-    this.uvRevision += 1;
-    this.publish();
-  }
-
-  /** Toggle snapping interior vertices as well as island boundaries. */
-  setPixelSnapAll(enabled: boolean): void {
-    if (this.pixelSnapAll === enabled) {
-      return;
-    }
-    this.pixelSnapAll = enabled;
+    this.uvBaseProjection = null;
     this.uvRevision += 1;
     this.publish();
   }
@@ -3345,9 +3377,6 @@ export class EditorRuntime {
       const after = packUvChartsToPixelGrid(node.mesh, charts, before, {
         textureWidth: texture.width,
         textureHeight: texture.height,
-        cellSize: this.pixelCellSize,
-        padding: this.pixelPadding,
-        snapAllVertices: this.pixelSnapAll
       });
       this.history.execute(
         new ReplaceUvCommand(node.mesh, node.id, before, after)
@@ -4185,7 +4214,7 @@ export class EditorRuntime {
       projection,
       this.pixelArtMode
         ? {
-            cellSize: this.pixelCellSize,
+            cellSize: 1,
             textureWidth: nodeTexture?.width ?? this.textureStack.width,
             textureHeight: nodeTexture?.height ?? this.textureStack.height
           }
@@ -14604,7 +14633,10 @@ export class EditorRuntime {
       next.rotation = [euler.x, euler.y, euler.z];
       value = angleDegrees;
     } else {
-      const factor = this.modalScaleFactor(modal, numeric);
+      let factor = this.modalScaleFactor(modal, numeric);
+      if (numeric === null && this.snapEnabled) {
+        factor = snapScaleFactor(factor, this.scaleSnapStep, true);
+      }
       next.scale = [...modal.before.scale];
       if (modal.axis) {
         const index =
@@ -15114,6 +15146,9 @@ export class EditorRuntime {
         );
         axisIndex = drag.axis === 'x' ? 0 : drag.axis === 'y' ? 1 : 2;
       }
+      if (this.snapEnabled) {
+        factor = snapScaleFactor(factor, this.scaleSnapStep, true);
+      }
       if (uniform || drag.orientation === 'local') {
         for (let index = 0; index < positions.length; index += 1) {
           const offset = [
@@ -15420,7 +15455,10 @@ export class EditorRuntime {
         return;
       }
       const delta = parameter - drag.startParameter;
-      const factor = Math.max(0.001, 1 + delta / (drag.size * 0.9));
+      let factor = Math.max(0.001, 1 + delta / (drag.size * 0.9));
+      if (this.snapEnabled) {
+        factor = snapScaleFactor(factor, this.scaleSnapStep, true);
+      }
       const axisIndex = drag.axis === 'x' ? 0 : drag.axis === 'y' ? 1 : 2;
       next.scale = [...drag.before.scale];
       next.scale[axisIndex] = clampScaleComponent(

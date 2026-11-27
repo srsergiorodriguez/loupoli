@@ -7,6 +7,7 @@ import {
   planeBasis,
   shortestAngleDelta,
   snapScalar,
+  snapScaleFactor,
   worldAxis
 } from './gizmoMath';
 
@@ -51,5 +52,9 @@ describe('gizmo math', () => {
     expect(snapScalar(-0.62, 0.25)).toBe(-0.5);
     expect(snapScalar(1.13, 0.5)).toBe(1);
     expect(snapScalar(2.3, 0)).toBe(2.3);
+    expect(snapScaleFactor(1.37, 0.1, true)).toBeCloseTo(1.4);
+    expect(snapScaleFactor(0.84, 0.25, true)).toBeCloseTo(0.75);
+    expect(snapScaleFactor(1.37, 0.1, false)).toBeCloseTo(1.37);
+    expect(snapScaleFactor(-2, 0.1, true)).toBe(0.001);
   });
 });

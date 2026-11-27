@@ -97,6 +97,9 @@ export const UV_SNAP_STEPS = [0.01, 0.05, 0.1, 0.25] as const;
 /** Rotation snap angles in degrees. */
 export const ROTATION_SNAP_STEPS = [1, 5, 15, 45] as const;
 
+/** Scale-factor snap increments. */
+export const SCALE_SNAP_STEPS = [0.01, 0.05, 0.1, 0.25, 0.5] as const;
+
 /** The optional world-axis lock for vertex drags. */
 export type AxisLock = 'x' | 'y' | 'z' | null;
 
@@ -322,6 +325,7 @@ export interface EditorSnapshot {
   readonly snapStep: number;
   readonly uvSnapStep: number;
   readonly rotationSnapStep: number;
+  readonly scaleSnapStep: number;
   readonly axisLock: AxisLock;
   readonly ps1Snap: boolean;
   readonly ps1Affine: boolean;
@@ -350,9 +354,8 @@ export interface EditorSnapshot {
   readonly uvPinnedCorners: readonly number[];
   readonly uvPaintMode: boolean;
   readonly pixelArtMode: boolean;
-  readonly pixelCellSize: number;
-  readonly pixelPadding: number;
-  readonly pixelSnapAll: boolean;
+  readonly canApplyTransforms: boolean;
+  readonly applyTransformsBlockedReason: string;
   readonly paintUvOverlay: boolean;
   readonly uvBrushColor: string;
   readonly uvBrushColorAlpha: number;

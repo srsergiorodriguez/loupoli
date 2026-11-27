@@ -106,3 +106,15 @@ export function snapScalar(value: number, step: number): number {
   }
   return Math.round(value / step) * step;
 }
+
+/** Snap a scale factor to its configured increment, preserving positivity. */
+export function snapScaleFactor(
+  factor: number,
+  step: number,
+  enabled: boolean
+): number {
+  if (!enabled) {
+    return Math.max(0.001, factor);
+  }
+  return Math.max(0.001, snapScalar(factor, step));
+}

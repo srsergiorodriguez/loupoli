@@ -43,7 +43,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
       {
         heading: 'Transforms and topology',
         paragraphs: [
-          'The Move, Rotate, and Scale tools use the object transform when the element set is empty. With elements selected, the gizmo sits at the selection median and moves only those vertices. Typed values in Transform commit exact numbers; Enter confirms and Escape cancels a modal transform.',
+          'The Move, Rotate, and Scale tools use the object transform when the element set is empty. With elements selected, the gizmo sits at the selection median and moves only those vertices. Shift+Tab enables snapping for translation, rotation, and pointer-driven scale factors; typed values in Transform stay exact. Enter confirms and Escape cancels a modal transform. Mesh includes Apply all transforms, which bakes the object position, rotation, and scale into rest geometry and shape keys while preserving group transforms.',
           'Extrude and Inset are face operations available from the ActionDock. Bevel works on one selected interior edge; drag or type its world-space width. Loop Cut uses the first selected edge (or a selected edge loop) and splits the surrounding quad ring. Loop Slide moves the selected edge loop. Subdivide is an immediate linear split: selected faces are poked into triangles, or the whole mesh is split into quads when no face is selected. Per-face UVs, materials, and seams are preserved. These operations commit one validated mesh replacement and remain editable through undo.',
           'With modifiers active, direct vertex edits and topology operations target the base mesh. The stack re-evaluates after each commit, so the displayed surface and the editable base can differ. Each geometry modifier card has Apply modifier, which bakes that modifier into the base mesh. If enabled geometry modifiers sit above it, Apply through also bakes those so the remaining stack evaluates identically. Apply all bakes the whole enabled geometry stack. Render effects such as Outline stay live and are never baked. Shape keys and Mesh Motion block Apply because their indices depend on the current vertex count.'
         ],
@@ -54,7 +54,8 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'E / I / L: extrude, inset, or loop cut',
           'Action Dock: Bevel one selected edge by dragging or typing an exact width; Subdivide splits the whole mesh',
           'Shift+L: loop slide\n          Deform: twist, bend, or taper the active mesh\n          Noise Displace: deterministic seeded normal displacement\n          Weld: merge vertices within a distance threshold',
-          'F: frame the selection; Home: reset the view'
+          'F: frame the selection; Home: reset the view',
+          'Mesh → Apply all transforms: bake the object transform into the mesh'
         ]
       },
       {
@@ -80,7 +81,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'UVs are stored per face corner. A seam cuts the corner fan along one edge, allowing the two sides of the surface to use separate coordinates. Seams define chart boundaries; Unwrap operates on the selected faces and their marked cuts.',
           'The 3D and UV selections are linked. Selecting a face in the viewport highlights its UV corners, and selecting UV corners updates the viewport selection. Switch to Island mode to work with one connected chart at a time.',
           'Unwrap uses seam charts and LSCM. If LSCM folds a branch chart, it retries a shape-preserving planar projection and then a rigid face net, so the UV layout keeps the cut and hole shape instead of collapsing it to a circle. Charts with holes can remain uncut when the planar fallback is valid; strongly curved holes may still need a seam cut. If a chart cannot be flattened, the error names its face range and highlights those faces in the 3D viewport.',
-          'The optional Pixel art layout toggle adds texel-cell controls to the UV Inspector. Pack cells rotates each seam island in 90-degree steps, fits it into a uniform cell on the active texture grid, and snaps it to texel boundaries; Relax smooths interior UVs first. Use a larger cell or padding for pixel-art atlases. The normal unwrap and free UV editing workflow remains unchanged.'
+          'The optional Pixel art layout toggle adds a fixed 1 px texel grid and 1 px padding to the UV Inspector. Pack islands shelf-packs seam islands at integer texel dimensions using one shared scale, preserving relative texel density without independently rotating or stretching islands. Relax smooths interior UVs first. Pack expects a non-overlapping unwrap. The normal unwrap and free UV editing workflow remains unchanged.'
         ],
         controls: [
           'Vertex / Edge / Face / Island icons: UV selection mode; 1 / 2 / 3 are the keyboard shortcuts',

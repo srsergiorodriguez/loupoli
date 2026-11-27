@@ -19,7 +19,7 @@ export interface ReplaceMeshLoopTransition {
   readonly after: ReplaceMeshLoopContext | null;
 }
 
-function meshBytes(mesh: HalfEdgeMesh): number {
+export function meshBytes(mesh: HalfEdgeMesh): number {
   return (
     mesh.positions.byteLength +
     mesh.vertexOut.byteLength +

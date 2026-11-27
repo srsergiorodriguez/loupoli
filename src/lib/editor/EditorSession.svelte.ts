@@ -44,6 +44,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   snapStep: 0.1,
   uvSnapStep: 0.01,
   rotationSnapStep: 15,
+  scaleSnapStep: 0.1,
   axisLock: null,
   ps1Snap: DEFAULT_PS1_SNAP,
   ps1Affine: DEFAULT_PS1_AFFINE,
@@ -72,9 +73,8 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   uvPinnedCorners: [],
   uvPaintMode: false,
   pixelArtMode: false,
-  pixelCellSize: 32,
-  pixelPadding: 2,
-  pixelSnapAll: true,
+  canApplyTransforms: false,
+  applyTransformsBlockedReason: '',
   paintUvOverlay: true,
   uvBrushColor: '#f2ffe0',
   uvBrushColorAlpha: 1,
@@ -326,6 +326,10 @@ export class EditorSession {
 
   setRotationSnapStep(step: number): void {
     this.runtime?.setRotationSnapStep(step);
+  }
+
+  setScaleSnapStep(step: number): void {
+    this.runtime?.setScaleSnapStep(step);
   }
 
   setAxisLock(axis: AxisLock): void {
@@ -1015,17 +1019,6 @@ export class EditorSession {
     this.runtime?.setPixelArtMode(enabled);
   }
 
-  setPixelCellSize(size: number): void {
-    this.runtime?.setPixelCellSize(size);
-  }
-
-  setPixelPadding(padding: number): void {
-    this.runtime?.setPixelPadding(padding);
-  }
-
-  setPixelSnapAll(enabled: boolean): void {
-    this.runtime?.setPixelSnapAll(enabled);
-  }
 
   relaxPixelUv(): void {
     this.runtime?.relaxPixelUv();
@@ -1033,6 +1026,10 @@ export class EditorSession {
 
   packPixelUv(): void {
     this.runtime?.packPixelUv();
+  }
+
+  applyAllTransforms(): void {
+    this.runtime?.applyAllTransforms();
   }
 
   finishUvDrag(): void {

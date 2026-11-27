@@ -5,6 +5,7 @@
   import {
     GRID_SNAP_STEPS,
     ROTATION_SNAP_STEPS,
+    SCALE_SNAP_STEPS,
     UV_SNAP_STEPS
   } from '../../editor/types';
   import type { EditorSession } from '../../editor/EditorSession.svelte';
@@ -86,9 +87,18 @@
     }))}
     onChange={(value) => session.setRotationSnapStep(Number(value))}
   />
+  <SelectField
+    label="Scale"
+    value={String(session.snapshot.scaleSnapStep)}
+    options={SCALE_SNAP_STEPS.map((step) => ({
+      value: String(step),
+      label: `×${step}`
+    }))}
+    onChange={(value) => session.setScaleSnapStep(Number(value))}
+  />
   <p class="snap-hint">
-    World applies to object and vertex moves and action amounts. UV and
-    rotation have independent steps.
+    World applies to object and vertex moves and action amounts. UV, rotation,
+    and scale factors have independent steps.
   </p>
 </div>
 
