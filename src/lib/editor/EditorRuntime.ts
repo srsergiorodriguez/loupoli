@@ -44,6 +44,7 @@ import { InputRouter, type InputRouterHost, type PointerSample } from '../input/
 import type { AxisName } from '../render/CameraRig';
 import { ViewportRenderer } from '../render/ViewportRenderer';
 import type { GizmoHit, GizmoMode } from '../render/ObjectGizmo';
+import type { SurfaceHit } from '../render/SurfaceHit';
 import {
   GIZMO_AXIS_VECTORS,
   angleAroundAxis,
@@ -734,7 +735,7 @@ export class EditorRuntime {
     asset: TextureAsset;
     nodeId: string;
     pointerId: number;
-    lastFace: number | null;
+    lastFaces: Set<number>;
   } | null = null;
   private uvPaintMode = false;
   private paintUvOverlay = true;
@@ -4813,7 +4814,7 @@ export class EditorRuntime {
         asset,
         nodeId: node.id,
         pointerId: sample.pointerId,
-        lastFace: null
+        lastFaces: new Set()
       };
       this.uvRevision += 1;
       this.renderer.refreshTexture();
@@ -4845,27 +4846,78 @@ export class EditorRuntime {
       asset.activeLayerId,
       this.paintSettings(radius)
     );
-    const point = {
-      x: hit.uv[0] * asset.width,
-      y: (1 - hit.uv[1]) * asset.height,
-      pressure: this.projectionPressure(sample),
-      tiltX: sample.tiltX,
-      tiltY: sample.tiltY
-    };
+    const surface = this.projectedFaceHits(sample, asset);
+    if (!surface) {
+      return false;
+    }
+    const point = this.projectedPaintPoint(sample, surface.center, asset);
     if (!engine.begin(point)) {
       return false;
+    }
+    const extra = surface.hits
+      .filter((candidate) => candidate.face !== surface.center.face)
+      .map((candidate) => ({
+        sample: this.projectedPaintPoint(sample, candidate, asset),
+        connect: false
+      }));
+    if (extra.length > 0) {
+      engine.updateProjectedBatch(extra);
     }
     this.projectedPaint = {
       engine,
       asset,
       nodeId: node.id,
       pointerId: sample.pointerId,
-      lastFace: hit.face
+      lastFaces: new Set(surface.hits.map((candidate) => candidate.face))
     };
     this.uvRevision += 1;
     this.renderer.refreshTexture();
     this.publish();
     return true;
+  }
+
+  /** Convert one surface hit into a texture-space projected paint sample. */
+  private projectedPaintPoint(
+    sample: PointerSample,
+    hit: SurfaceHit,
+    asset: TextureAsset
+  ): PaintSample {
+    return {
+      x: hit.uv[0] * asset.width,
+      y: (1 - hit.uv[1]) * asset.height,
+      pressure: this.projectionPressure(sample),
+      tiltX: sample.tiltX,
+      tiltY: sample.tiltY,
+      surfaceKey: hit.face
+    };
+  }
+
+  /**
+   * Pick the visible faces touched by the brush disc, not only the face under
+   * the pointer centre. This lets a projected dab cross a UV seam while each
+   * face keeps its own texture-space stroke continuity.
+   */
+  private projectedFaceHits(
+    sample: PointerSample,
+    asset: TextureAsset
+  ): { center: SurfaceHit; hits: SurfaceHit[] } | null {
+    const center = this.renderer.pickSurface(sample.clientX, sample.clientY);
+    if (!center) {
+      return null;
+    }
+    const byFace = new Map<number, SurfaceHit>([[center.face, center]]);
+    const radius = Math.max(3, this.brushScreenDiameter(center, asset) * 0.45);
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (index / 8) * Math.PI * 2;
+      const hit = this.renderer.pickSurface(
+        sample.clientX + Math.cos(angle) * radius,
+        sample.clientY + Math.sin(angle) * radius
+      );
+      if (hit && hit.nodeId === center.nodeId && !byFace.has(hit.face)) {
+        byFace.set(hit.face, hit);
+      }
+    }
+    return { center, hits: [...byFace.values()] };
   }
 
   /** Build a texture-space path for the seam-bounded UV chart of one face. */
@@ -5035,26 +5087,25 @@ export class EditorRuntime {
       connect: boolean;
     }[] = [];
     for (const sample of samples) {
-      const hit = this.renderer.pickSurface(sample.clientX, sample.clientY);
-      if (!hit || hit.nodeId !== state.nodeId) {
-        state.lastFace = null;
+      const surface = this.projectedFaceHits(sample, state.asset);
+      if (!surface) {
+        state.lastFaces.clear();
         continue;
       }
-      const point = {
-        x: hit.uv[0] * state.asset.width,
-        y: (1 - hit.uv[1]) * state.asset.height,
-        pressure: this.projectionPressure(sample),
-        tiltX: sample.tiltX,
-        tiltY: sample.tiltY
-      };
-      const connect = state.lastFace !== null && state.lastFace === hit.face;
-      updates.push({ sample: point, connect });
-      state.lastFace = hit.face;
+      for (const hit of surface.hits) {
+        updates.push({
+          sample: this.projectedPaintPoint(sample, hit, state.asset),
+          connect: state.lastFaces.has(hit.face)
+        });
+      }
+      state.lastFaces = new Set(
+        surface.hits.map((candidate) => candidate.face)
+      );
       updated = true;
       finalHit = true;
       lastClientX = sample.clientX;
       lastClientY = sample.clientY;
-      lastScreenSize = this.brushScreenDiameter(hit, state.asset);
+      lastScreenSize = this.brushScreenDiameter(surface.center, state.asset);
       lastTiltX = sample.tiltX;
       lastTiltY = sample.tiltY;
     }
