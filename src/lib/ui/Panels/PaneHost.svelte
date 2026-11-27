@@ -227,7 +227,10 @@
     flex: 1 1 auto;
     width: 100%;
     max-width: none;
-    padding-left: var(--space-1);
+    /* Match the Application Bar gutters so the maximized pane aligns with the
+       top bar instead of hugging the window edge. */
+    padding-left: calc(var(--safe-left) + var(--space-3));
+    padding-right: 0;
   }
 
   .pane-host--maximized .pane-resizer {
