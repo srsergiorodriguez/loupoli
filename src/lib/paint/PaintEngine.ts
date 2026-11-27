@@ -38,11 +38,6 @@ export class PaintEngine {
   private context: OffscreenCanvasRenderingContext2D | null = null;
   private gpu: GpuStampSurface | null = null;
   private sampler: StrokeSampler | null = null;
-  private projectedSamplers: Map<number, StrokeSampler> | null = null;
-  private projectedCpu: Map<
-    number,
-    { filtered: PaintSample; lastStamp: PaintSample }
-  > | null = null;
   private readonly random = strokeRandom(
     (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0
   );
@@ -79,12 +74,6 @@ export class PaintEngine {
       (this.settings.tool === 'brush' || this.settings.tool === 'eraser') &&
       this.beginGpu(sample)
     ) {
-      if (sample.surfaceKey !== undefined) {
-        this.projectedSamplers = new Map([
-          [sample.surfaceKey, this.sampler as StrokeSampler]
-        ]);
-        this.sampler = null;
-      }
       this.asset.refreshPreview();
       return true;
     }
@@ -92,20 +81,6 @@ export class PaintEngine {
       this.changed = this.floodFill(sample);
     } else if (this.settings.tool === 'brush' || this.settings.tool === 'eraser') {
       this.stamp(sample, sample);
-    }
-    if (
-      sample.surfaceKey !== undefined &&
-      (this.settings.tool === 'brush' || this.settings.tool === 'eraser')
-    ) {
-      this.projectedCpu = new Map([
-        [
-          sample.surfaceKey,
-          {
-            filtered: this.filtered ?? sample,
-            lastStamp: this.lastStamp ?? sample
-          }
-        ]
-      ]);
     }
     this.asset.refreshPreview();
     return true;
@@ -258,106 +233,6 @@ export class PaintEngine {
     this.changed = true;
   }
 
-  /**
-   * Continue a projected surface stroke.
-   *
-   * `connect` is false across a face boundary or after the pointer left the
-   * mesh. A disconnected sample still stamps one dab but never draws a line
-   * through unrelated UV-island space.
-   */
-  updateProjected(sample: PaintSample, connect: boolean): void {
-    this.updateProjectedBatch([{ sample, connect }]);
-  }
-
-  /**
-   * Apply a frame of projected surface samples through the shared dab core.
-   * Each `surfaceKey` owns its own sampler, so a brush that covers several
-   * faces never draws a line between their separate UV islands.
-   */
-  updateProjectedBatch(
-    updates: readonly { sample: PaintSample; connect: boolean }[]
-  ): void {
-    if (
-      !this.context ||
-      !this.start ||
-      this.manual ||
-      updates.length === 0
-    ) {
-      return;
-    }
-    const final = updates[updates.length - 1]?.sample;
-    if (!final) {
-      return;
-    }
-    this.last = final;
-    if (this.settings.tool !== 'brush' && this.settings.tool !== 'eraser') {
-      return;
-    }
-    if (this.gpu && this.projectedSamplers) {
-      const dabs: StrokeDab[] = [];
-      for (const update of updates) {
-        const key = update.sample.surfaceKey ?? 0;
-        let sampler = this.projectedSamplers.get(key);
-        if (!sampler) {
-          sampler = this.createSampler();
-          this.projectedSamplers.set(key, sampler);
-          dabs.push(...sampler.begin(update.sample));
-        } else {
-          dabs.push(
-            ...(update.connect
-              ? sampler.add(update.sample)
-              : sampler.reset(update.sample))
-          );
-        }
-      }
-      this.applyGpuDabs(dabs);
-      return;
-    }
-    if (this.projectedCpu) {
-      for (const update of updates) {
-        const key = update.sample.surfaceKey ?? 0;
-        let state = this.projectedCpu.get(key);
-        if (!state || !update.connect) {
-          state = { filtered: update.sample, lastStamp: update.sample };
-          this.projectedCpu.set(key, state);
-        }
-        const savedFiltered = this.filtered;
-        const savedLastStamp = this.lastStamp;
-        this.filtered = state.filtered;
-        this.lastStamp = state.lastStamp;
-        this.stamp(state.filtered, update.sample);
-        state.filtered = this.filtered ?? update.sample;
-        state.lastStamp = this.lastStamp ?? update.sample;
-        this.filtered = savedFiltered;
-        this.lastStamp = savedLastStamp;
-      }
-      this.asset.refreshPreview();
-      return;
-    }
-    if (this.gpu && this.sampler) {
-      const dabs: StrokeDab[] = [];
-      for (const update of updates) {
-        dabs.push(
-          ...(update.connect
-            ? this.sampler.add(update.sample)
-            : this.sampler.reset(update.sample))
-        );
-      }
-      this.applyGpuDabs(dabs);
-      return;
-    }
-    for (const update of updates) {
-      if (update.connect) {
-        this.stamp(this.filtered ?? this.start, update.sample);
-      } else {
-        this.filtered = update.sample;
-        this.lastStamp = update.sample;
-        this.stamp(update.sample, update.sample);
-      }
-    }
-    this.asset.refreshPreview();
-  }
-
   /** Finish the gesture and return the dirty bounds, if anything changed. */
   finish(): PaintBounds | null {
     if (!this.context || !this.start) {
@@ -366,30 +241,6 @@ export class PaintEngine {
     if (this.manual) {
       this.changed = this.changed || this.bounds.minX !== Infinity;
       this.asset.refreshPreview();
-      this.context = null;
-      return this.changed ? this.bounds : null;
-    }
-    if (this.projectedCpu) {
-      this.projectedCpu = null;
-      this.filtered = null;
-      this.lastStamp = null;
-      this.changed = this.changed || this.bounds.minX !== Infinity;
-      this.asset.refreshPreview();
-      this.context = null;
-      return this.changed ? this.bounds : null;
-    }
-    if (this.gpu && this.projectedSamplers) {
-      const dabs: StrokeDab[] = [];
-      for (const sampler of this.projectedSamplers.values()) {
-        dabs.push(...sampler.finish());
-      }
-      this.applyGpuDabs(dabs);
-      this.projectedSamplers = null;
-      this.projectedCpu = null;
-      this.changed = this.changed || this.bounds.minX !== Infinity;
-      this.asset.refreshPreview();
-      this.gpu = null;
-      this.sampler = null;
       this.context = null;
       return this.changed ? this.bounds : null;
     }
@@ -424,8 +275,6 @@ export class PaintEngine {
     this.gpu?.reset();
     this.gpu = null;
     this.sampler = null;
-    this.projectedSamplers = null;
-    this.projectedCpu = null;
     this.context = null;
     this.manual = false;
     this.asset.cancelPaint();
@@ -438,14 +287,7 @@ export class PaintEngine {
       return false;
     }
     this.gpu = gpu;
-    this.sampler = this.createSampler();
-    this.applyGpuDabs(this.sampler.begin(sample));
-    return true;
-  }
-
-  /** Build one sampler for a texture-space or per-surface projected stroke. */
-  private createSampler(): StrokeSampler {
-    return new StrokeSampler({
+    this.sampler = new StrokeSampler({
       radius: this.settings.radius,
       hardness: this.settings.hardness,
       spacing: this.settings.spacing,
@@ -458,6 +300,8 @@ export class PaintEngine {
       taperIn: this.settings.taperIn,
       random: this.random
     });
+    this.applyGpuDabs(this.sampler.begin(sample));
+    return true;
   }
 
   /**

@@ -44,7 +44,6 @@ import { InputRouter, type InputRouterHost, type PointerSample } from '../input/
 import type { AxisName } from '../render/CameraRig';
 import { ViewportRenderer } from '../render/ViewportRenderer';
 import type { GizmoHit, GizmoMode } from '../render/ObjectGizmo';
-import type { SurfaceHit } from '../render/SurfaceHit';
 import {
   GIZMO_AXIS_VECTORS,
   angleAroundAxis,
@@ -120,6 +119,7 @@ import {
   type RenderEffectPreset
 } from '../render/effects';
 import { PaintEngine } from '../paint/PaintEngine';
+import { ProjectedPaintSession } from '../paint/ProjectedPaintSession';
 import { paintPressure } from '../paint/types';
 import { rgbToHex } from '../paint/color';
 import { brushPreset, type BrushPresetId } from '../paint/presets';
@@ -730,13 +730,22 @@ export class EditorRuntime {
   private paintEngine: PaintEngine | null = null;
   private projectedPending: PointerSample[] = [];
   private projectedFrame = 0;
-  private projectedPaint: {
-    engine: PaintEngine;
-    asset: TextureAsset;
-    nodeId: string;
-    pointerId: number;
-    lastFaces: Set<number>;
-  } | null = null;
+  private projectedPaint:
+    | {
+        mode: 'engine';
+        engine: PaintEngine;
+        asset: TextureAsset;
+        nodeId: string;
+        pointerId: number;
+      }
+    | {
+        mode: 'session';
+        session: ProjectedPaintSession;
+        asset: TextureAsset;
+        nodeId: string;
+        pointerId: number;
+      }
+    | null = null;
   private uvPaintMode = false;
   private paintUvOverlay = true;
   private uvBrushColor = '#f2ffe0';
@@ -4810,11 +4819,11 @@ export class EditorRuntime {
       }
       engine.fillProjected(fill.path, fill.bounds);
       this.projectedPaint = {
+        mode: 'engine',
         engine,
         asset,
         nodeId: node.id,
-        pointerId: sample.pointerId,
-        lastFaces: new Set()
+        pointerId: sample.pointerId
       };
       this.uvRevision += 1;
       this.renderer.refreshTexture();
@@ -4840,84 +4849,49 @@ export class EditorRuntime {
       this.publish();
       return true;
     }
-    const radius = this.projectionRadius();
-    const engine = new PaintEngine(
+    const mesh = this.renderer.projectPaintMesh();
+    const rect = this.renderer.getCanvasRect();
+    if (!mesh || rect.width <= 0 || rect.height <= 0) {
+      this.projectError = 'The active surface cannot be projected for painting.';
+      this.publish();
+      return false;
+    }
+    const screenRadius = Math.max(
+      1,
+      this.brushScreenDiameter(hit, asset) * 0.5
+    );
+    const session = new ProjectedPaintSession(
       asset,
       asset.activeLayerId,
-      this.paintSettings(radius)
+      this.paintSettings(1),
+      mesh,
+      rect.width,
+      rect.height,
+      screenRadius
     );
-    const surface = this.projectedFaceHits(sample, asset);
-    if (!surface) {
+    const screenPoint = {
+      x: sample.clientX - rect.left,
+      y: sample.clientY - rect.top,
+      pressure: this.projectionPressure(sample),
+      tiltX: sample.tiltX,
+      tiltY: sample.tiltY
+    };
+    if (!session.begin(screenPoint)) {
+      this.projectError = 'The active texture layer cannot be painted.';
+      this.publish();
       return false;
-    }
-    const point = this.projectedPaintPoint(sample, surface.center, asset);
-    if (!engine.begin(point)) {
-      return false;
-    }
-    const extra = surface.hits
-      .filter((candidate) => candidate.face !== surface.center.face)
-      .map((candidate) => ({
-        sample: this.projectedPaintPoint(sample, candidate, asset),
-        connect: false
-      }));
-    if (extra.length > 0) {
-      engine.updateProjectedBatch(extra);
     }
     this.projectedPaint = {
-      engine,
+      mode: 'session',
+      session,
       asset,
       nodeId: node.id,
-      pointerId: sample.pointerId,
-      lastFaces: new Set(surface.hits.map((candidate) => candidate.face))
+      pointerId: sample.pointerId
     };
     this.uvRevision += 1;
     this.renderer.refreshTexture();
     this.publish();
     return true;
-  }
-
-  /** Convert one surface hit into a texture-space projected paint sample. */
-  private projectedPaintPoint(
-    sample: PointerSample,
-    hit: SurfaceHit,
-    asset: TextureAsset
-  ): PaintSample {
-    return {
-      x: hit.uv[0] * asset.width,
-      y: (1 - hit.uv[1]) * asset.height,
-      pressure: this.projectionPressure(sample),
-      tiltX: sample.tiltX,
-      tiltY: sample.tiltY,
-      surfaceKey: hit.face
-    };
-  }
-
-  /**
-   * Pick the visible faces touched by the brush disc, not only the face under
-   * the pointer centre. This lets a projected dab cross a UV seam while each
-   * face keeps its own texture-space stroke continuity.
-   */
-  private projectedFaceHits(
-    sample: PointerSample,
-    asset: TextureAsset
-  ): { center: SurfaceHit; hits: SurfaceHit[] } | null {
-    const center = this.renderer.pickSurface(sample.clientX, sample.clientY);
-    if (!center) {
-      return null;
-    }
-    const byFace = new Map<number, SurfaceHit>([[center.face, center]]);
-    const radius = Math.max(3, this.brushScreenDiameter(center, asset) * 0.45);
-    for (let index = 0; index < 8; index += 1) {
-      const angle = (index / 8) * Math.PI * 2;
-      const hit = this.renderer.pickSurface(
-        sample.clientX + Math.cos(angle) * radius,
-        sample.clientY + Math.sin(angle) * radius
-      );
-      if (hit && hit.nodeId === center.nodeId && !byFace.has(hit.face)) {
-        byFace.set(hit.face, hit);
-      }
-    }
-    return { center, hits: [...byFace.values()] };
   }
 
   /** Build a texture-space path for the seam-bounded UV chart of one face. */
@@ -5075,51 +5049,31 @@ export class EditorRuntime {
     if (!state || state.pointerId !== finalSample.pointerId) {
       return;
     }
-    let updated = false;
-    let finalHit = false;
-    let lastClientX = finalSample.clientX;
-    let lastClientY = finalSample.clientY;
-    let lastScreenSize = this.surfaceCursor?.size ?? 2;
-    let lastTiltX = finalSample.tiltX;
-    let lastTiltY = finalSample.tiltY;
-    const updates: {
-      sample: PaintSample;
-      connect: boolean;
-    }[] = [];
-    for (const sample of samples) {
-      const surface = this.projectedFaceHits(sample, state.asset);
-      if (!surface) {
-        state.lastFaces.clear();
-        continue;
-      }
-      for (const hit of surface.hits) {
-        updates.push({
-          sample: this.projectedPaintPoint(sample, hit, state.asset),
-          connect: state.lastFaces.has(hit.face)
-        });
-      }
-      state.lastFaces = new Set(
-        surface.hits.map((candidate) => candidate.face)
-      );
-      updated = true;
-      finalHit = true;
-      lastClientX = sample.clientX;
-      lastClientY = sample.clientY;
-      lastScreenSize = this.brushScreenDiameter(surface.center, state.asset);
-      lastTiltX = sample.tiltX;
-      lastTiltY = sample.tiltY;
+    if (state.mode !== 'session') {
+      return;
     }
-    if (updates.length > 0) {
-      state.engine.updateProjectedBatch(updates);
-    }
-    this.surfaceCursor = finalHit
-      ? {
-          x: lastClientX,
-          y: lastClientY,
-          size: lastScreenSize,
-          ...this.paintCursorTilt(lastTiltX, lastTiltY)
-        }
+    const rect = this.renderer.getCanvasRect();
+    const screenSamples = samples.map((sample) => ({
+      x: sample.clientX - rect.left,
+      y: sample.clientY - rect.top,
+      pressure: this.projectionPressure(sample),
+      tiltX: sample.tiltX,
+      tiltY: sample.tiltY
+    }));
+    const updated = state.session.addBatch(screenSamples);
+    const lastSample = samples[samples.length - 1];
+    const hit = lastSample
+      ? this.renderer.pickSurface(lastSample.clientX, lastSample.clientY)
       : null;
+    this.surfaceCursor =
+      hit && hit.nodeId === state.nodeId
+        ? {
+            x: lastSample.clientX,
+            y: lastSample.clientY,
+            size: this.brushScreenDiameter(hit, state.asset),
+            ...this.paintCursorTilt(lastSample.tiltX, lastSample.tiltY)
+          }
+        : null;
     if (updated) {
       this.uvRevision += 1;
       this.renderer.refreshTexture();
@@ -5138,7 +5092,11 @@ export class EditorRuntime {
       return;
     }
     this.projectedPaint = null;
-    state.engine.finish();
+    if (state.mode === 'session') {
+      state.session.finish();
+    } else {
+      state.engine.finish();
+    }
     const patch = state.asset.endPaint();
     if (patch) {
       this.history.execute(new PaintTextureCommand(state.asset, patch));
@@ -5163,7 +5121,11 @@ export class EditorRuntime {
     }
     this.projectedPaint = null;
     this.surfaceCursor = null;
-    state.engine.cancel();
+    if (state.mode === 'session') {
+      state.session.cancel();
+    } else {
+      state.engine.cancel();
+    }
     this.renderer.refreshTexture();
     this.publish();
   }

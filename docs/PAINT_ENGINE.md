@@ -7,16 +7,16 @@ The paint engine converts pointer input into one consistent raster stroke whethe
 ## Pipeline
 
 ```text
-Paint pane:   CSS point -> texture point
-Projection:   screen ray -> surface UV -> texture point
+Paint pane:   CSS point -> texture point -> StrokeSampler -> GPU dabs
+Projection:   screen point -> StrokeSampler -> screen brush mask
                          ↓
-                 StrokeSampler
+      evaluated mesh depth prepass (visible surface only)
                          ↓
-            GPU coverage-mask dabs
+  UV-space mesh raster samples the screen mask per texel
                          ↓
-       dirty-region layer composite
+             texture-space coverage mask
                          ↓
-             pane canvas + 3D texture
+  dirty-region layer composite -> pane canvas + 3D texture
 ```
 
 ### Brush presets and dynamics
@@ -25,7 +25,7 @@ Bundled presets set brush hardness, smoothing, spacing, noise, pressure response
 
 ### Brush size
 
-Brush Size is a **texture-space diameter in texels**, shared by the Paint pane and projected painting. Zoom and surface orientation change the on-screen outline, not the resulting texture dab size.
+In the Paint pane, Brush Size is a **texture-space diameter in texels**. Projection converts the local UV density under the first surface hit into a screen-space radius and holds that radius for the gesture, so a stroke crossing charts with different UV density remains continuous on screen. Zoom and surface orientation still change the resulting texel footprint.
 
 ### `StrokeSampler`
 
@@ -36,21 +36,29 @@ Brush Size is a **texture-space diameter in texels**, shared by the Paint pane a
 - Pressure-adjusted radius and spacing.
 - Optional pressure-opacity modulation (off by default).
 - Jitter and noise.
-- Continuity resets at UV/face boundaries.
+- A single screen-space path for projected strokes, with no resets at UV or face boundaries.
 
 Both adapters feed the same class. Pointer-event frequency must not change the visible stroke.
 
-### GPU coverage surface
+### GPU coverage surfaces
 
-`GpuStampSurface` rasterizes brush tips through WebGL2:
+`GpuStampSurface` rasterizes pane brush tips through WebGL2:
 
 - One cached GPU context.
 - Instanced dab quads with hardness falloff.
-- A coverage mask accumulated with premultiplied source-over.
+- A coverage mask accumulated with MAX blending.
 - Color and stroke opacity applied once when the mask is presented.
 - Eraser strokes reuse the same mask and composite with destination-out.
 
-The mask is presented only in the dirty rectangle. The preview layer is rebuilt from the committed layer plus the current mask, so opacity is not double-applied.
+`GpuProjectedPaintSurface` handles projected Brush and Eraser:
+
+- Rasterizes dabs into a viewport-sized screen mask with MAX blending.
+- Renders an encoded visible-surface depth prepass.
+- Rasterizes the evaluated mesh in UV space with perspective-correct screen coordinates.
+- Rejects texels behind the visible surface and samples the screen brush mask.
+- Accumulates a texture-space coverage mask, colorized once per dirty rectangle.
+
+Both masks are presented only in their dirty rectangles. The preview layer is rebuilt from the committed layer plus the current mask, so opacity is not double-applied.
 
 ### Layer compositing
 
@@ -70,7 +78,7 @@ Image import is previewed with an initial Contain/Cover/Stretch/Native fit, then
 
 ### Input parity
 
-Pane and projected painting share one pressure policy: pen pressure is clamped to 0.1–1 with a 0.5 fallback for a zero-pressure contact, while mouse and touch always use 1. Both paths feed the same texture-space `PaintEngine` and `StrokeSampler`.
+Pane and projected painting share one pressure policy: pen pressure is clamped to 0.1–1 with a 0.5 fallback for a zero-pressure contact, while mouse and touch always use 1. Both paths use `StrokeSampler` and the same paint settings. Projected strokes use screen-space sampling so internal UV seams do not split the gesture.
 
 ### Opacity policy
 
@@ -85,10 +93,10 @@ The stroke remains a scratch-layer transaction. On pointer-up, the existing loca
 
 ## Invariants
 
-1. The same texture-space sample sequence must produce the same dabs in the pane and projection paths.
+1. Pane and projection share pressure, spacing, tilt, smoothing, taper, noise, and opacity policy.
 2. Stroke opacity is applied once, not once per dab.
 3. Only the dirty rectangle is composited and presented.
-4. Projection never crosses a UV island or face discontinuity.
+4. Projected paint crosses UV seams continuously, never paints hidden surfaces, and never spills into unrelated charts.
 5. The pane and 3D view read the same composited texture.
 6. CPU stamping remains only as a fallback for a failed WebGL context or for non-stroke shape tools.
 

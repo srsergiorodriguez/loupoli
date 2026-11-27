@@ -46,6 +46,7 @@ import type {
 } from '../editor/types';
 import { ObjectGizmo, type GizmoHit } from './ObjectGizmo';
 import type { SurfaceHit } from './SurfaceHit';
+import type { ProjectedPaintMesh } from './PaintProjection';
 import { CameraRig, type AxisProjection, type AxisName } from './CameraRig';
 import { ViewportGrid } from './Grid';
 import { MeshNodeView } from './MeshNodeView';
@@ -1556,6 +1557,15 @@ export class ViewportRenderer {
       x: rect.left + ((projected.x + 1) * 0.5) * rect.width,
       y: rect.top + ((1 - projected.y) * 0.5) * rect.height
     };
+  }
+
+  /** Build the evaluated active mesh for the projected-paint pass. */
+  projectPaintMesh(): ProjectedPaintMesh | null {
+    const view = this.activeView();
+    if (!view) {
+      return null;
+    }
+    return view.projectPaintMesh(this.cameraRig.camera);
   }
 
   /** Pick the frontmost surface point and interpolated UV on the active node. */

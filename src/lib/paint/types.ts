@@ -55,8 +55,6 @@ export interface PaintSample {
   readonly pressure: number;
   readonly tiltX?: number;
   readonly tiltY?: number;
-  /** Projected surface face, used for per-face stroke continuity. */
-  readonly surfaceKey?: number;
 }
 
 /** Normalize pointer pressure into the range used by every paint surface. */

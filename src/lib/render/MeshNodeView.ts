@@ -1,6 +1,7 @@
 import {
   Box3,
   BufferAttribute,
+  Vector4,
   BufferGeometry,
   Color,
   CylinderGeometry,
@@ -31,6 +32,7 @@ import type { HalfEdgeMesh } from '../geometry/HalfEdgeMesh';
 import type { ShadingMode } from '../editor/types';
 import type { ViewportMaterials } from './materials';
 import type { SurfaceHit } from './SurfaceHit';
+import type { ProjectedPaintMesh } from './PaintProjection';
 
 /** Shared materials supplied by the viewport to every node view. */
 export interface NodeViewSharedMaterials {
@@ -1127,6 +1129,75 @@ export class MeshNodeView {
       return null;
     }
     return this.mesh.faceFromRenderTriangle(triangle);
+  }
+
+  /**
+   * Build non-indexed UV and screen-space triangles for projected painting.
+   *
+   * The UV is the texture coordinate; the screen triple is the clip-space
+   * position used by the projection surface to fill the screen brush mask.
+   */
+  projectPaintMesh(camera: Camera): ProjectedPaintMesh | null {
+    const sourceCount = this.trianglePositions.length / 3;
+    if (sourceCount === 0) {
+      return null;
+    }
+    this.group.updateMatrixWorld(true);
+    camera.updateMatrixWorld();
+    const data = new Float32Array(sourceCount * 6);
+    const world = new Vector3();
+    const clip = new Vector4();
+    let write = 0;
+    for (let triangle = 0; triangle < sourceCount / 3; triangle += 1) {
+      const start = write;
+      let valid = true;
+      for (let corner = 0; corner < 3; corner += 1) {
+        const index = triangle * 3 + corner;
+        world
+          .fromArray(this.trianglePositions, index * 3)
+          .applyMatrix4(this.group.matrixWorld);
+        clip
+          .set(world.x, world.y, world.z, 1)
+          .applyMatrix4(camera.matrixWorldInverse)
+          .applyMatrix4(camera.projectionMatrix);
+        if (!Number.isFinite(clip.x) || !Number.isFinite(clip.y) ||
+            !Number.isFinite(clip.z) || !Number.isFinite(clip.w) ||
+            clip.w <= 1e-6) {
+          valid = false;
+          break;
+        }
+        const ndcX = clip.x / clip.w;
+        const ndcY = clip.y / clip.w;
+        const ndcZ = clip.z / clip.w;
+        if (
+          !Number.isFinite(ndcX) ||
+          !Number.isFinite(ndcY) ||
+          !Number.isFinite(ndcZ) ||
+          ndcZ < -1 ||
+          ndcZ > 1
+        ) {
+          valid = false;
+          break;
+        }
+        data[write++] = this.triangleUvs[index * 2];
+        data[write++] = this.triangleUvs[index * 2 + 1];
+        data[write++] = ndcX;
+        data[write++] = ndcY;
+        data[write++] = ndcZ;
+        data[write++] = clip.w;
+      }
+      if (!valid) {
+        write = start;
+        continue;
+      }
+    }
+    if (write === 0) {
+      return null;
+    }
+    return {
+      data: data.subarray(0, write),
+      vertexCount: write / 6
+    };
   }
 
   /**
