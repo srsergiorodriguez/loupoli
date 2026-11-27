@@ -170,8 +170,8 @@ These are mandatory reuse rules. A new surface that duplicates one of these patt
 | Object animation | — | Mesh motion, Texture, Shape keys | Delete shape key in the shape-keys block, last/right |
 | Modulators | Add modulator | target, property, axis, amplitude, offset | Remove modulator |
 | Camera | Add from view above list | selected camera name/position/target/FOV; compact Frame/From view/Through toggle on one row | Delete camera isolated last/right |
-| Render | — | output settings below header; Render action in the final row; live preview lives in the pane | — |
 | Render effects | preset buttons + Add effect | material/post cards with enable, parameters, reorder | Remove effect |
+| Render | — | output settings below header; Render action in the final row; live preview lives in the pane | — |
 | Shape keys | Add shape key | selected key: name, weight, Key weight, Edit target, Capture current mesh; rows support visibility and drag reorder | Delete shape key, last/right |
 
 - Timeline tracks own key creation: each row has a **+ Key** control. Key deletion lives in the timeline header or Delete/Backspace on a focused diamond. Diamonds can be dragged between integer frames.

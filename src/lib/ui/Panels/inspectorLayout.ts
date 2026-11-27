@@ -39,7 +39,7 @@ export const INSPECTOR_SECTIONS: readonly InspectorSectionDefinition[] = [
   { id: 'animation', requires: 'editAnimation', order: 22, defaultOpen: true },
   { id: 'modulators', requires: 'editAnimation', order: 24, defaultOpen: false },
   { id: 'render', requires: 'editCamera', order: 25, defaultOpen: true },
-  { id: 'effects', requires: 'editCamera', order: 27, defaultOpen: true },
+  { id: 'effects', requires: 'editCamera', order: 24, defaultOpen: true },
   { id: 'transform', requires: 'edit3d', order: 26, defaultOpen: false },
   { id: 'selection', requires: 'select3d', order: 28, defaultOpen: true },
   { id: 'mesh', requires: 'editTopology', order: 30, defaultOpen: false },

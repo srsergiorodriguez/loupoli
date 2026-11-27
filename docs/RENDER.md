@@ -47,8 +47,8 @@ Inspector sections:
 
 - **Scene**
 - **Camera**
-- **Render**
 - **Render effects**
+- **Render**
 
 The render path is separate from the interactive viewport state:
 
