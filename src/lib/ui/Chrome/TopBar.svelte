@@ -191,10 +191,18 @@
     <span class="divider divider--actions" aria-hidden="true"></span>
     <span class="inspector-toggle">
       <IconButton
-        label={session.sidebarVisible ? 'Collapse sidebar' : 'Open sidebar'}
+        label={session.snapshot.paneMaximized
+          ? 'Open sidebar'
+          : session.sidebarVisible
+            ? 'Collapse sidebar'
+            : 'Open sidebar'}
         icon="sliders"
         onActivate={() => session.toggleInspector()}
-        tooltip={session.sidebarVisible ? 'Collapse sidebar' : 'Open sidebar'}
+        tooltip={session.snapshot.paneMaximized
+          ? 'Restore split and open sidebar'
+          : session.sidebarVisible
+            ? 'Collapse sidebar'
+            : 'Open sidebar'}
       />
     </span>
   </div>

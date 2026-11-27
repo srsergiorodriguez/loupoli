@@ -36,7 +36,8 @@
   let paneEpoch = $state(0);
   let resumeTimer = 0;
   const toolRailVisible = $derived(
-    session.snapshot.activeEditor !== 'paint' &&
+    !session.snapshot.paneMaximized &&
+      session.snapshot.activeEditor !== 'paint' &&
       session.snapshot.workspace !== 'light' &&
       session.snapshot.workspace !== 'render'
   );
@@ -94,6 +95,11 @@
     }
 
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && session.snapshot.paneMaximized) {
+        event.preventDefault();
+        session.setPaneMaximized(false);
+        return;
+      }
       if (event.key === 'Escape' && session.inspectorOpen) {
         session.closeInspector();
       }
@@ -225,6 +231,7 @@
     class:uv-open={session.snapshot.uvOpen}
     class:pane-open={session.snapshot.uvOpen ||
       session.snapshot.workspace === 'render'}
+    class:pane-maximized={session.snapshot.paneMaximized}
     style={`--pane-width:${
       (session.snapshot.uvOpen
         ? session.snapshot.uvSplit
@@ -381,10 +388,11 @@
         <ActionDock {session} />
       {/if}
       <ActionHud state={session.snapshot.actionState} />
-      {#if session.snapshot.workspace === 'animation' ||
-        ((session.snapshot.workspace === 'render' ||
-          session.snapshot.workspace === 'light') &&
-          session.snapshot.timelineVisible)}
+      {#if !session.snapshot.paneMaximized &&
+        (session.snapshot.workspace === 'animation' ||
+          ((session.snapshot.workspace === 'render' ||
+            session.snapshot.workspace === 'light') &&
+            session.snapshot.timelineVisible))}
         <AnimationTimeline {session} />
       {/if}
     {:else}
@@ -412,6 +420,7 @@
         width={session.snapshot.uvOpen
           ? session.snapshot.uvSplit
           : session.snapshot.renderPreviewSplit}
+        maximized={session.snapshot.paneMaximized}
         onResize={(fraction) =>
           session.snapshot.uvOpen
             ? session.setUvSplit(fraction)
@@ -452,9 +461,11 @@
   {#if toolRailVisible}
     <ToolRail {session} onFocusViewport={focusViewport} />
   {/if}
-  {#key paneEpoch}
-    <Inspector {session} />
-  {/key}
+  {#if !session.snapshot.paneMaximized}
+    {#key paneEpoch}
+      <Inspector {session} />
+    {/key}
+  {/if}
   <StatusBar {session} />
   <JobProgress {session} />
   <ToastStack {session} />
@@ -488,6 +499,18 @@
   }
 
   .viewport.pane-open {
+    right: calc(var(--safe-right) + var(--space-3));
+  }
+
+  .viewport.pane-maximized {
+    right: calc(var(--safe-right) + var(--space-3));
+  }
+
+  .viewport.pane-maximized .viewport-stage {
+    display: none;
+  }
+
+  .app-shell[data-sidebar-open='true'] .viewport.pane-maximized {
     right: calc(var(--safe-right) + var(--space-3));
   }
 

@@ -56,6 +56,7 @@ const INITIAL_SNAPSHOT: EditorSnapshot = {
   loopSelect: false,
   selectedPosition: null,
   uvOpen: false,
+  paneMaximized: false,
   uvSplit: 0.38,
   uvLayout: 'bottom',
   uvZoom: 1,
@@ -381,6 +382,14 @@ export class EditorSession {
 
   toggleUvView(): void {
     this.runtime?.toggleUvView();
+  }
+
+  togglePaneMaximized(): void {
+    this.runtime?.togglePaneMaximized();
+  }
+
+  setPaneMaximized(enabled: boolean): void {
+    this.runtime?.setPaneMaximized(enabled);
   }
 
   setPaintUvOverlay(enabled: boolean): void {
@@ -1701,6 +1710,16 @@ export class EditorSession {
   }
 
   toggleInspector(): void {
+    if (this.snapshot.paneMaximized) {
+      this.runtime?.setPaneMaximized(false);
+      if (this.compactLayout) {
+        this.inspectorOpen = true;
+      } else {
+        this.sidebarOpen = true;
+        this.persistSidebar();
+      }
+      return;
+    }
     if (this.compactLayout) {
       this.inspectorOpen = !this.inspectorOpen;
       return;

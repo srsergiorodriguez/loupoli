@@ -334,6 +334,7 @@ export interface EditorSnapshot {
   readonly loopSelect: boolean;
   readonly selectedPosition: [number, number, number] | null;
   readonly uvOpen: boolean;
+  readonly paneMaximized: boolean;
   readonly uvSplit: number;
   readonly uvLayout: UvLayout;
   readonly uvZoom: number;

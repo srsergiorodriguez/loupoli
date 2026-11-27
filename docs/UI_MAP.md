@@ -20,7 +20,7 @@ This is the authoritative map of the application shell. New controls must be ass
 | **Tool Rail** | Active-pointer tools shared across editors | Select, Lasso, Move, Rotate, Scale |
 | **Selection Bar** | Element mode and selection combination | Vertex/Edge/Face mode icons (1/2/3 keyboard), Island (UV only), Loop (3D Edge only), All, Multi |
 | **Viewport Stage** | 3D editing surface plus its overlays | Viewport context strip, compact Selection Bar, icon-only Shading Bar, bottom-right View Gizmo, lasso, transform/action HUD, Action Dock; Light workspace adds selectable/draggable light markers and arrow-tip direction handles |
-| **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width; used by UV, Paint, and Render preview |
+| **PaneHost** | Workspace-owned auxiliary pane | 44 px edge divider, resizable width, and maximize/restore; used by UV, Paint, and Render preview |
 | **PaneFrame** | Shared pane interior | PaneHeader, optional PaneToolbar, flexible body, optional footer; used by UV, Paint, and Render preview |
 | **UV Editor** | UV chart-editing surface inside PaneHost | UV Toolbar, UV Canvas, UV Footer |
 | **Paint Editor** | Texture-space painting surface inside PaneHost | Paint header, texture canvas with optional read-only UV overlay, brush footer |
@@ -68,7 +68,7 @@ The Viewport Stage owns overlays so they adapt to the visible 3D rectangle, not 
 5. The Tool Rail owns pointer tools, not selection combination.
 6. The Action Dock owns one-shot topology commands.
 7. The Application Bar owns document-level actions only, including New Project.
-8. A workspace owns its PaneHost placement; UV, Paint, and Render preview share the side-by-side pane host and resizable divider.
+8. A workspace owns its PaneHost placement; UV, Paint, and Render preview share the side-by-side pane host, resizable divider, and maximize/restore control. A maximized pane replaces the 3D viewport and Inspector but keeps the Application Bar and Status Bar.
 
 ## Active editor
 

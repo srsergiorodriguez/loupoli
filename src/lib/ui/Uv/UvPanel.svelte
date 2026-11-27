@@ -61,6 +61,7 @@
   const activeEditor = $derived(session.snapshot.activeEditor);
   const clampMode = $derived(session.snapshot.uvClampMode);
   const pixelArtMode = $derived(session.snapshot.pixelArtMode);
+  const paneMaximized = $derived(session.snapshot.paneMaximized);
   const fineMode = $derived(session.snapshot.uvFineMode);
   const uvZoom = $derived(session.snapshot.uvZoom);
   const uvDragScale = $derived(session.snapshot.uvDragScale);
@@ -633,6 +634,11 @@
       return;
     }
     event.preventDefault();
+    if (paneMaximized) {
+      event.stopPropagation();
+      session.setPaneMaximized(false);
+      return;
+    }
     if (keyboardKind) {
       cancelKeyboardTransform();
       return;
@@ -698,7 +704,17 @@
     label="UV"
     active={activeEditor === 'uv'}
     meta={`${selectedCount} corner${selectedCount === 1 ? '' : 's'} · ${Math.round(uvZoom * 100)}%${uvDragScale !== null ? ` · ×${uvDragScale.toFixed(2)}` : ''}`}
-  />
+  >
+    {#snippet actions()}
+      <IconButton
+        label={paneMaximized ? 'Restore UV pane' : 'Maximize UV pane'}
+        icon={paneMaximized ? 'minimize' : 'maximize'}
+        active={paneMaximized}
+        tooltip={paneMaximized ? 'Restore split' : 'Maximize pane'}
+        onActivate={() => session.togglePaneMaximized()}
+      />
+    {/snippet}
+  </PaneHeader>
 {/snippet}
 
 {#snippet uvToolbar()}

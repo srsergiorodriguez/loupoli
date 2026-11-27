@@ -79,6 +79,8 @@ export type IconName =
   | 'sync'
   | 'autosave'
   | 'lock'
+  | 'maximize'
+  | 'minimize'
   | 'play'
   | 'pause'
   | 'rewind'

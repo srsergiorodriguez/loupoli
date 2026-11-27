@@ -258,6 +258,7 @@ If any answer is missing, do not add the control.
 - Camera pan/orbit/zoom never mutate selection. Only a no-move click/tap on empty viewport space clears it.
 - A selection gesture applies its pick exactly once. Pointer-up resolves only the deferred empty-click case; it must never re-run additive selection or toggle the pick back off.
 - Workspace panes use the shared PaneHost and PaneFrame; the divider hit area straddles the pane edge, and the canvas/overlay body has one positioning context.
+- UV, Paint, and Render preview panes expose the same maximize/restore control in PaneHeader. Maximize hides the 3D stage, Inspector, Tool Rail, timeline, and other 3D HUDs; the Application Bar and Status Bar remain. The split fraction is preserved. Escape restores the split first, the Inspector button restores and opens the Inspector, and changing workspace exits maximize.
 - New Project is a command-owned document reset and defaults to a Cube.
 
 ## 14. UV interaction

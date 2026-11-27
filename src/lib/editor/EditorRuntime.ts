@@ -700,6 +700,7 @@ export class EditorRuntime {
   private activeEditor: EditorPane = '3d';
   private workspace: Workspace = 'model';
   private uvOpen = false;
+  private paneMaximized = false;
   private uvSplit = 0.38;
   private uvLayout: 'bottom' | 'side' = 'bottom';
   private uvZoom = 1;
@@ -1072,6 +1073,7 @@ export class EditorRuntime {
       loopSelect: this.loopSelect,
       selectedPosition,
       uvOpen: this.uvOpen,
+      paneMaximized: this.paneMaximized,
       uvSplit: this.uvSplit,
       uvLayout: this.uvLayout,
       uvZoom: this.uvZoom,
@@ -2805,6 +2807,7 @@ export class EditorRuntime {
     this.selection.clear();
     this.selection.setContext(this.activeNodeId, 'vertex');
     this.uvOpen = false;
+    this.paneMaximized = false;
     this.uvPaintMode = false;
     this.activeEditor = '3d';
     this.workspace = 'model';
@@ -2845,6 +2848,26 @@ export class EditorRuntime {
     void this.autosave.clear().then(() => this.initializePersistence());
   }
 
+  /** Expand the active editor/render pane over the viewport and Inspector. */
+  setPaneMaximized(enabled: boolean): void {
+    if (enabled && !this.uvOpen && this.workspace !== 'render') {
+      return;
+    }
+    if (this.paneMaximized === enabled) {
+      return;
+    }
+    this.paneMaximized = enabled;
+    this.publish();
+    // The 3D stage is removed from layout while maximized; re-measure after
+    // Svelte restores it so the canvas returns at the correct aspect.
+    requestAnimationFrame(() => this.renderer.refreshViewport());
+  }
+
+  /** Toggle the active pane between split and maximized layout. */
+  togglePaneMaximized(): void {
+    this.setPaneMaximized(!this.paneMaximized);
+  }
+
   /** Open or close the UV editing split. */
   toggleUvView(): void {
     if (this.uvOpen) {
@@ -2868,6 +2891,20 @@ export class EditorRuntime {
   setWorkspace(
     workspace: 'model' | 'light' | 'uv' | 'paint' | 'animation' | 'render'
   ): void {
+    const currentPane = this.uvOpen
+      ? 'editor'
+      : this.workspace === 'render'
+        ? 'render'
+        : null;
+    const nextPane =
+      workspace === 'uv' || workspace === 'paint'
+        ? 'editor'
+        : workspace === 'render'
+          ? 'render'
+          : null;
+    if (currentPane !== nextPane) {
+      this.paneMaximized = false;
+    }
     if (workspace !== 'paint') {
       this.paintEyedropper = false;
       if (this.imagePlacement) {
@@ -3007,6 +3044,7 @@ export class EditorRuntime {
       this.renderer.setActionPreviewLine(null);
     }
     this.uvOpen = true;
+    this.paneMaximized = false;
     this.workspace = 'uv';
     this.applyWorkspaceShading('uv');
     this.activeEditor = 'uv';
@@ -3032,6 +3070,7 @@ export class EditorRuntime {
     this.cancelUvDrag();
     this.cancelTexturePaint();
     this.uvOpen = false;
+    this.paneMaximized = false;
     this.workspace = 'model';
     this.applyWorkspaceShading('model');
     this.activeEditor = '3d';

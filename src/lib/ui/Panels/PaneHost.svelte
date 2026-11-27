@@ -8,6 +8,7 @@
     label: string;
     width: number;
     orientation?: 'side' | 'bottom';
+    maximized?: boolean;
     onResize: (fraction: number) => void;
     children: Snippet;
   }
@@ -16,6 +17,7 @@
     label,
     width,
     orientation = 'side',
+    maximized = false,
     onResize,
     children
   }: Props = $props();
@@ -119,12 +121,14 @@
 <aside
   class="pane-host"
   class:pane-host--bottom={orientation === 'bottom'}
+  class:pane-host--maximized={maximized}
   bind:this={host}
   style={`--pane-width:${width * 100}%; --pane-height:${width * 100}%`}
   aria-label={label}
 >
-  <div
-    class="pane-resizer"
+  {#if !maximized}
+    <div
+      class="pane-resizer"
     role="slider"
     aria-label={`Resize ${label}`}
     aria-orientation={orientation === 'bottom' ? 'horizontal' : 'vertical'}
@@ -132,9 +136,10 @@
     aria-valuemin="25"
     aria-valuemax="65"
     tabindex="0"
-    onpointerdown={startResize}
-    onkeydown={resizeKey}
-  ></div>
+      onpointerdown={startResize}
+      onkeydown={resizeKey}
+    ></div>
+  {/if}
   <div class="pane-content">
     {@render children()}
   </div>
@@ -218,10 +223,26 @@
     outline-offset: 2px;
   }
 
+  .pane-host--maximized {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    padding-left: var(--space-1);
+  }
+
+  .pane-host--maximized .pane-resizer {
+    display: none;
+  }
+
   @media (max-width: 899px) {
     .pane-host {
       flex-basis: clamp(280px, var(--pane-width, 42%), calc(100% - 330px));
       max-width: calc(100% - 330px);
+    }
+
+    .pane-host--maximized {
+      flex-basis: 100%;
+      max-width: none;
     }
   }
 </style>

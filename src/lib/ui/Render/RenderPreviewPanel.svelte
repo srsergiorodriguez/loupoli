@@ -29,6 +29,7 @@
       session.snapshot.animationModulators.some((modulator) => modulator.enabled)
   );
   const playing = $derived(session.snapshot.animationPlaying);
+  const paneMaximized = $derived(session.snapshot.paneMaximized);
   const detail = $derived(
     `${session.snapshot.renderVirtualWidth}×${session.snapshot.renderVirtualHeight} → ${session.snapshot.renderOutputWidth}×${session.snapshot.renderOutputHeight}`
   );
@@ -168,6 +169,14 @@
               : 'Play animation'}
         tooltipPlacement="bottom"
         onActivate={togglePlayback}
+      />
+      <IconButton
+        label={paneMaximized ? 'Restore render preview' : 'Maximize render preview'}
+        icon={paneMaximized ? 'minimize' : 'maximize'}
+        active={paneMaximized}
+        tooltip={paneMaximized ? 'Restore split' : 'Maximize pane'}
+        tooltipPlacement="bottom"
+        onActivate={() => session.togglePaneMaximized()}
       />
     {/snippet}
   </PaneHeader>

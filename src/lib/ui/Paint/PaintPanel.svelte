@@ -5,6 +5,7 @@
   import PaneHeader from '../Panels/PaneHeader.svelte';
   import PaintToolbar from './PaintToolbar.svelte';
   import ActionButton from '../Primitives/ActionButton.svelte';
+  import IconButton from '../Primitives/IconButton.svelte';
   import ActionMenu from '../Primitives/ActionMenu.svelte';
   import NumberField from '../Primitives/NumberField.svelte';
   import { paintPressure, type PaintSample } from '../../paint/types';
@@ -16,6 +17,8 @@
   }
 
   let { session }: Props = $props();
+  const paneMaximized = $derived(session.snapshot.paneMaximized);
+
   let host: HTMLDivElement;
   let canvas: HTMLCanvasElement;
   let width = $state(0);
@@ -1015,6 +1018,12 @@
     if (event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
+    if (event.key === 'Escape' && paneMaximized) {
+      event.preventDefault();
+      event.stopPropagation();
+      session.setPaneMaximized(false);
+      return;
+    }
     if (eyedropper) {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -1068,7 +1077,17 @@
     active={activeEditor === 'paint'}
     detail={activeAsset ? `${activeAsset.name} · ${activeLayer?.name ?? 'No layer'}` : activeLayer?.name ?? 'No layer'}
     meta={`${activeAsset?.width ?? 0} × ${activeAsset?.height ?? 0} · ${activeLayer?.kind ?? '—'}`}
-  />
+  >
+    {#snippet actions()}
+      <IconButton
+        label={paneMaximized ? 'Restore Paint pane' : 'Maximize Paint pane'}
+        icon={paneMaximized ? 'minimize' : 'maximize'}
+        active={paneMaximized}
+        tooltip={paneMaximized ? 'Restore split' : 'Maximize pane'}
+        onActivate={() => session.togglePaneMaximized()}
+      />
+    {/snippet}
+  </PaneHeader>
 {/snippet}
 
 {#snippet paintToolbar()}

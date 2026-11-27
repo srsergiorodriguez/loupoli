@@ -100,7 +100,8 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'G / R / S: move, rotate, or scale UV corners',
           'U / V: lock the U or V axis',
           'Shift: fine transform precision',
-          'Fit: frame the UV layout'
+          'Fit: frame the UV layout',
+          'Maximize pane: hide the 3D viewport and Inspector for more UV space; Escape or the Inspector button restores the split'
         ]
       },
       {
@@ -144,6 +145,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
           'B / E: brush or eraser in the toolbar',
           'Left drag: paint, or select with Face/Island active in the Paint selection dock; middle/right drag: pan the texture pane',
           'Wheel: zoom; MMB/Alt: orbit over the 3D model; Space: pan the 3D view',
+          'Maximize pane: hide the 3D viewport and Inspector; Escape or the Inspector button restores the split',
           'Pen pressure and tilt: brush radius, opacity, and stamp shape'
         ]
       },
@@ -270,7 +272,7 @@ export const DOCUMENTATION: readonly DocumentationPage[] = [
         heading: 'Output',
         paragraphs: [
           'Virtual resolution is the internal render size and defines the camera frame; the camera frustum marker follows its aspect. Output resolution is the saved image size. Upscale chooses nearest or smooth sampling between them. If the two aspect ratios differ, the virtual frame is letterboxed or pillarboxed into the output, with background or transparent bars, never stretched. Shading selects Lit, Texture, or Solid; the background can be transparent or a solid color. Final shadows chooses PCF for a fast final image, Ray traced for offline per-light direct shadows on animated scenes, or Baked for existing static lighting textures. The live preview always uses PCF so it stays responsive; the selected final mode applies to stills, frame sequences, and video exports.',
-          'The docked preview pane is always visible and updates live through the active camera whenever the camera, scene, lighting, or animation pose changes. Play and Pause run the existing animation playback without leaving Render. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM appears when the WebView supports it. Render MP4 is native on macOS/iPad and uses the WebView recorder when the browser advertises MP4 support; browser video first renders the frame range, then encodes it, so the progress strip shows rendering and encoding phases. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
+          'The docked preview pane is always visible and updates live through the active camera whenever the camera, scene, lighting, or animation pose changes. Its header includes the same maximize/restore control as UV and Paint; maximizing hides the 3D viewport, Inspector, and timeline while keeping the Application Bar and Status Bar. Escape restores the split. Play and Pause run the existing animation playback without leaving Render. Render PNG writes one still. Render frames writes a PNG sequence. Render WebM appears when the WebView supports it. Render MP4 is native on macOS/iPad and uses the WebView recorder when the browser advertises MP4 support; browser video first renders the frame range, then encodes it, so the progress strip shows rendering and encoding phases. PNG stills, sequences, and video frames use the same color-managed frame path. Rendered output uses the evaluated modifier geometry and the assigned texture, and excludes editor helpers.'
         ],
         controls: [
           'Output kind: still, frame sequence, WebM, or MP4. Long exports and bakes show progress in the global strip and can be cancelled. MP4 is native on macOS/iPad; other platforms use the WebView recorder when available. Video export is silent; audio is not part of the project timeline.',

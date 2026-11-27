@@ -289,6 +289,10 @@
   {:else if name === 'rewind'}
     <path d="M6 5v14" />
     <path d="M18 5 9 12l9 7V5Z" />
+  {:else if name === 'maximize'}
+    <path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5" />
+  {:else if name === 'minimize'}
+    <path d="M9 4v5H4M15 4v5h5M15 20v-5h5M9 20v-5H4" />
   {:else if name === 'lock'}
     <rect x="5" y="10" width="14" height="10" rx="2" />
     <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
