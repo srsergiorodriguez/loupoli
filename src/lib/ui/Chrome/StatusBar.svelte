@@ -82,8 +82,8 @@
     align-items: center;
     height: calc(var(--status-h) + var(--safe-bottom));
     padding:
-      0 calc(var(--safe-right) + var(--space-3))
-      var(--safe-bottom) calc(var(--safe-left) + var(--space-3));
+      0 var(--app-inset-right)
+      var(--safe-bottom) var(--app-inset-left);
     border-top: var(--hairline) solid var(--border-subtle);
     background: var(--bg-panel);
     -webkit-backdrop-filter: blur(var(--blur-panel));

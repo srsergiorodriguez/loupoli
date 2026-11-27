@@ -112,7 +112,7 @@
   .action-dock {
     position: fixed;
     z-index: var(--z-hud);
-    left: calc(var(--safe-left) + var(--space-3));
+    left: var(--app-inset-left);
     bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
     padding: 4px;
     border-radius: var(--radius-lg);

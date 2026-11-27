@@ -229,7 +229,7 @@
     max-width: none;
     /* Match the Application Bar gutters so the maximized pane aligns with the
        top bar instead of hugging the window edge. */
-    padding-left: calc(var(--safe-left) + var(--space-3));
+    padding-left: var(--app-inset-left);
     padding-right: 0;
   }
 

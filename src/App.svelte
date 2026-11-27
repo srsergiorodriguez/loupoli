@@ -499,11 +499,11 @@
   }
 
   .viewport.pane-open {
-    right: calc(var(--safe-right) + var(--space-3));
+    right: var(--app-inset-right);
   }
 
   .viewport.pane-maximized {
-    right: calc(var(--safe-right) + var(--space-3));
+    right: var(--app-inset-right);
   }
 
   .viewport.pane-maximized .viewport-stage {
@@ -511,7 +511,7 @@
   }
 
   .app-shell[data-sidebar-open='true'] .viewport.pane-maximized {
-    right: calc(var(--safe-right) + var(--space-3));
+    right: var(--app-inset-right);
   }
 
   .surface-paint-cursor {
@@ -593,7 +593,7 @@
   }
 
   .viewport-context.no-toolrail {
-    left: calc(var(--safe-left) + var(--space-3));
+    left: var(--app-inset-left);
   }
 
   .context-editor {
@@ -657,7 +657,7 @@
   }
 
   .selection-mode-wrap.no-selection-mode {
-    left: calc(var(--safe-left) + var(--space-3));
+    left: var(--app-inset-left);
   }
 
   .selection-mode-wrap :global(.selection-mode),
@@ -692,7 +692,7 @@
     position: absolute;
     z-index: var(--z-hud);
     bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
-    left: calc(var(--safe-left) + var(--space-3));
+    left: var(--app-inset-left);
     display: flex;
     align-items: center;
     gap: var(--space-2);
@@ -759,12 +759,12 @@
   @media (max-width: 899px) {
     .viewport-context {
       top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-      left: calc(var(--safe-left) + var(--space-3));
+      left: var(--app-inset-left);
     }
 
     .selection-mode-wrap {
       top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2 + 25px);
-      left: calc(var(--safe-left) + var(--space-3));
+      left: var(--app-inset-left);
     }
   }
 

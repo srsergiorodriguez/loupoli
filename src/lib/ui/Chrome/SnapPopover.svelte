@@ -96,7 +96,7 @@
   .snap-popover {
     position: fixed;
     z-index: var(--z-popover);
-    right: calc(var(--safe-right) + var(--space-3));
+    right: var(--app-inset-right);
     bottom: calc(var(--status-h) + var(--safe-bottom) + var(--space-2));
     box-sizing: border-box;
     width: min(300px, calc(100vw - var(--space-4)));

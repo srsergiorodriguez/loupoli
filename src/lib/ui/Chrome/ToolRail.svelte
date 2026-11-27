@@ -88,7 +88,7 @@
     position: fixed;
     z-index: var(--z-chrome);
     top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-    left: calc(var(--safe-left) + var(--space-3));
+    left: var(--app-inset-left);
     display: flex;
     flex-direction: column;
     align-items: center;

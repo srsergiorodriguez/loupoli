@@ -126,6 +126,11 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
 
+  /* Shared application frame gutters */
+  --app-gutter-x: var(--space-3);
+  --app-inset-left: calc(var(--safe-left) + var(--app-gutter-x));
+  --app-inset-right: calc(var(--safe-right) + var(--app-gutter-x));
+
   /* Glass and elevation */
   --blur-panel: 8px;
   --blur-strong: 16px;

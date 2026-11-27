@@ -220,8 +220,8 @@
     position: fixed;
     z-index: var(--z-chrome);
     top: calc(var(--safe-top) + var(--space-3));
-    left: calc(var(--safe-left) + var(--space-3));
-    right: calc(var(--safe-right) + var(--space-3));
+    left: var(--app-inset-left);
+    right: var(--app-inset-right);
     height: var(--topbar-h);
     display: flex;
     align-items: center;

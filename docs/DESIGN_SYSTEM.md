@@ -285,7 +285,7 @@ Use the 4px scale exclusively. The primary layout rhythm is:
 - Between groups: 16px.
 - Between major sections: 24px.
 - Panel gap: 12px.
-- Floating panels sit 12px from safe-area edges.
+- Floating panels use the shared application gutters: `--app-gutter-x` (12px) derives `--app-inset-left` and `--app-inset-right` from the safe-area insets. TopBar, workspace panes, Inspector, Tool Rail, Status Bar, and HUD clusters consume those tokens rather than repeating safe-area arithmetic.
 
 ### 4.3 Surfaces
 

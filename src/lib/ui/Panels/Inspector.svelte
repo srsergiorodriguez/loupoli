@@ -3438,7 +3438,7 @@
     position: fixed;
     z-index: var(--z-panel);
     top: calc(var(--safe-top) + var(--topbar-h) + var(--space-3) * 2);
-    right: calc(var(--safe-right) + var(--space-3));
+    right: var(--app-inset-right);
     bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
     display: flex;
     flex-direction: column;
@@ -4123,9 +4123,9 @@
   @media (max-width: 899px) {
     .inspector {
       top: auto;
-      right: calc(var(--safe-right) + var(--space-3));
+      right: var(--app-inset-right);
       bottom: calc(var(--safe-bottom) + var(--status-h) + var(--space-3));
-      left: calc(var(--safe-left) + var(--space-3));
+      left: var(--app-inset-left);
       width: auto;
       max-height: min(55dvh, 560px);
       background: var(--bg-panel-strong);
