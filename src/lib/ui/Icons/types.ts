@@ -39,6 +39,8 @@ export type IconName =
   | 'sphere'
   | 'cylinder'
   | 'grid'
+  | 'pixel-grid'
+  | 'pack'
   | 'mesh'
   | 'shading-wire'
   | 'shading-solid'

@@ -136,7 +136,7 @@
   />
   <IconButton
     label={session.snapshot.pixelArtMode ? 'Hide pixel grid' : 'Show pixel grid'}
-    icon="grid"
+    icon="pixel-grid"
     active={session.snapshot.pixelArtMode}
     pressed={session.snapshot.pixelArtMode}
     tooltip={session.snapshot.pixelArtMode ? 'Hide 1 px pixel grid' : 'Show 1 px pixel grid'}

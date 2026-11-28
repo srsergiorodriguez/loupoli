@@ -2934,7 +2934,6 @@
             />
             <ActionButton
               label="Custom size"
-              icon="grid"
               onActivate={() => (newTextureOpen = true)}
             />
             <ActionButton
@@ -3273,7 +3272,7 @@
               />
               <ActionButton
                 label="Pack islands"
-                icon="grid"
+                icon="pack"
                 variant="primary"
                 onActivate={() => session.packPixelUv()}
               />

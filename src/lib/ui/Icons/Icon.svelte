@@ -168,6 +168,21 @@
   {:else if name === 'grid'}
     <rect x="3.5" y="3.5" width="17" height="17" rx="1" />
     <path d="M3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17" />
+  {:else if name === 'pixel-grid'}
+    <rect x="4" y="4" width="4" height="4" rx=".5" />
+    <rect x="10" y="4" width="4" height="4" rx=".5" />
+    <rect x="16" y="4" width="4" height="4" rx=".5" />
+    <rect x="4" y="10" width="4" height="4" rx=".5" />
+    <rect x="10" y="10" width="4" height="4" rx=".5" />
+    <rect x="16" y="10" width="4" height="4" rx=".5" />
+    <rect x="4" y="16" width="4" height="4" rx=".5" />
+    <rect x="10" y="16" width="4" height="4" rx=".5" />
+    <rect x="16" y="16" width="4" height="4" rx=".5" />
+  {:else if name === 'pack'}
+    <rect x="3.5" y="3.5" width="17" height="17" rx="1.2" />
+    <rect x="6" y="6" width="5" height="5" rx=".6" />
+    <rect x="13" y="6" width="5" height="8" rx=".6" />
+    <rect x="6" y="13" width="5" height="5" rx=".6" />
   {:else if name === 'mesh'}
     <path d="M12 3 21 19H3L12 3Z" />
     <path d="M12 3v16M6.5 11h11M3 19l9-6 9 6" opacity=".55" />

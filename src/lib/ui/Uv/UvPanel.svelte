@@ -790,7 +790,7 @@
       />
       <IconButton
         label="Pixel art layout"
-        icon="grid"
+        icon="pixel-grid"
         tooltip="Pixel art UV layout"
         active={pixelArtMode}
         onActivate={() => session.setPixelArtMode(!pixelArtMode)}
