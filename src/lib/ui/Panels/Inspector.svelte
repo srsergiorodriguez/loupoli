@@ -2829,7 +2829,12 @@
                 ...[64, 128, 256, 512, 1024, 2048, 4096].map((size) => ({
                   label: `${size}² texture`,
                   onSelect: () => session.createTextureAsset(size, size)
-                }))
+                })),
+                {
+                  label: 'Custom size…',
+                  separatorBefore: true,
+                  onSelect: () => (newTextureOpen = true)
+                }
               ]}
             />
             <ActionButton
@@ -2837,10 +2842,6 @@
               icon="copy"
               disabled={session.snapshot.fileBusy}
               onActivate={() => void session.duplicateActiveTextureAsset()}
-            />
-            <ActionButton
-              label="Custom size"
-              onActivate={() => (newTextureOpen = true)}
             />
           </ActionRow>
           <div class="texture-property-pair">
