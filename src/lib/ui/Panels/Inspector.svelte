@@ -190,23 +190,36 @@
   const activeLight = $derived(
     lights.find((light) => light.id === session.snapshot.activeLightId) ?? null
   );
-  function objectCount(count: number): string {
-    return `${count} ${count === 1 ? 'object' : 'objects'}`;
+  /** Count plus a correctly inflected noun for compact Inspector labels. */
+  function plural(
+    count: number,
+    singular: string,
+    pluralForm = `${singular}s`
+  ): string {
+    return `${count} ${count === 1 ? singular : pluralForm}`;
+  }
+
+  const PRIMITIVE_ITEM_KIND: Readonly<Record<PrimitiveKind, string>> = {
+    quadsphere: 'Sphere',
+    cube: 'Cube',
+    cylinder: 'Cylinder',
+    grid: 'Grid',
+    imported: 'Mesh',
+    reference: 'Reference'
+  };
+
+  function itemKind(node: (typeof nodes)[number]): string {
+    return PRIMITIVE_ITEM_KIND[node.primitive];
   }
 
   const activeItemKind = $derived(
     activeGroup
-      ? objectCount(nodes.filter((node) => node.parentId === activeGroup.id).length)
+      ? plural(
+          nodes.filter((node) => node.parentId === activeGroup.id).length,
+          'object'
+        )
       : activeNode
-        ? activeNode.primitive === 'reference'
-          ? 'Reference'
-          : activeNode.primitive === 'quadsphere'
-            ? 'Sphere'
-            : activeNode.primitive === 'cube'
-              ? 'Cube'
-              : activeNode.primitive === 'cylinder'
-                ? 'Cylinder'
-                : 'Grid'
+        ? itemKind(activeNode)
         : ''
   );
   const modifiers = $derived(session.snapshot.modifiers);
@@ -281,7 +294,7 @@
   );
 
   const sceneMeta = $derived(
-    `${sceneNodes.length} ${sceneNodes.length === 1 ? 'object' : 'objects'}${
+    `${plural(sceneNodes.length, 'object')}${
       selectedNodeIds.length > 1 ? ` · ${selectedNodeIds.length} selected` : ''
     }`
   );
@@ -334,8 +347,8 @@
     return 'Extrude or transform the selected faces.';
   });
   const transformMeta = $derived(
-    activeNodeId === null
-      ? 'Local'
+    activeTransform === null
+      ? 'No object'
       : session.snapshot.workspace === 'animation'
         ? transformValueSpace === 'local'
           ? 'Local (keyed)'
@@ -354,7 +367,7 @@
           : 'Disabled'
   );
   const textureMeta = $derived(
-    `${activeTextureAsset?.width ?? session.snapshot.textureSize} × ${activeTextureAsset?.height ?? session.snapshot.textureHeight} · ${textureLayers.length} layer${textureLayers.length === 1 ? '' : 's'}`
+    `${activeTextureAsset?.width ?? session.snapshot.textureSize} × ${activeTextureAsset?.height ?? session.snapshot.textureHeight} · ${plural(textureLayers.length, 'layer')}`
   );
   const pixelTexture = $derived(
     textureAssets.find((asset) => asset.id === activeNode?.textureId) ??
@@ -498,70 +511,91 @@
 
   const SECTION_STORAGE_KEY = 'loupoli:inspector:sections:v4';
   let sections = $state<Record<SectionKey, boolean>>({ ...SECTION_DEFAULTS });
-  let draggedNodeId = $state<string | null>(null);
-  let dropTargetId = $state<string | null>(null);
-  let dropAfter = $state(false);
-  let reorderPointerId: number | null = null;
-  let draggedLayerId = $state<string | null>(null);
-  let layerDropTargetId = $state<string | null>(null);
-  let layerDropAfter = $state(false);
-  let layerReorderPointerId: number | null = null;
-  let draggedShapeKeyId = $state<string | null>(null);
-  let shapeDropTargetId = $state<string | null>(null);
-  let shapeDropAfter = $state(false);
-  let shapeReorderPointerId: number | null = null;
+  type ReorderKind = 'node' | 'layer' | 'shape';
+  interface ReorderState {
+    readonly kind: ReorderKind;
+    readonly id: string;
+    readonly pointerId: number;
+    readonly targetId: string | null;
+    readonly after: boolean;
+  }
 
-  onDestroy(() => {
-    cleanupReorder();
-    cleanupLayerReorder();
-    cleanupShapeReorder();
-  });
+  const REORDER_TARGETS: Readonly<
+    Record<ReorderKind, { readonly selector: string; readonly data: string }>
+  > = {
+    node: { selector: '[data-node-id]', data: 'nodeId' },
+    layer: { selector: '[data-texture-layer-id]', data: 'textureLayerId' },
+    shape: { selector: '[data-shape-key-id]', data: 'shapeKeyId' }
+  };
 
-  function beginReorder(event: PointerEvent, nodeId: string): void {
-    if (!canEdit3d || (event.pointerType === 'mouse' && event.button !== 0)) {
+  let reorder = $state<ReorderState | null>(null);
+
+  onDestroy(cleanupReorder);
+
+  function beginReorder(
+    kind: ReorderKind,
+    event: PointerEvent,
+    id: string
+  ): void {
+    if (
+      (kind === 'node' && !canEdit3d) ||
+      (event.pointerType === 'mouse' && event.button !== 0)
+    ) {
       return;
     }
     event.preventDefault();
-    draggedNodeId = nodeId;
-    dropTargetId = null;
-    reorderPointerId = event.pointerId;
+    reorder = {
+      kind,
+      id,
+      pointerId: event.pointerId,
+      targetId: null,
+      after: false
+    };
     window.addEventListener('pointermove', reorderMove);
     window.addEventListener('pointerup', reorderEnd);
     window.addEventListener('pointercancel', cleanupReorder);
   }
 
   function reorderMove(event: PointerEvent): void {
-    if (event.pointerId !== reorderPointerId || !draggedNodeId) {
+    const current = reorder;
+    if (!current || event.pointerId !== current.pointerId) {
       return;
     }
     event.preventDefault();
+    const config = REORDER_TARGETS[current.kind];
     const target = document
       .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>('[data-node-id]');
-    if (!target) {
-      dropTargetId = null;
+      ?.closest<HTMLElement>(config.selector);
+    const id = target?.dataset[config.data] ?? null;
+    if (!id || id === current.id) {
+      if (current.targetId !== null) {
+        reorder = { ...current, targetId: null };
+      }
       return;
     }
-    const id = target.dataset.nodeId ?? null;
-    if (!id || id === draggedNodeId) {
-      dropTargetId = null;
-      return;
-    }
-    const rect = target.getBoundingClientRect();
-    dropTargetId = id;
-    dropAfter = event.clientY > rect.top + rect.height / 2;
+    const rect = target!.getBoundingClientRect();
+    reorder = {
+      ...current,
+      targetId: id,
+      after: event.clientY > rect.top + rect.height / 2
+    };
   }
 
   function reorderEnd(event: PointerEvent): void {
-    if (event.pointerId !== reorderPointerId) {
+    const current = reorder;
+    if (!current || event.pointerId !== current.pointerId) {
       return;
     }
-    const source = draggedNodeId;
-    const target = dropTargetId;
-    const after = dropAfter;
     cleanupReorder();
-    if (source && target) {
-      session.reorderNode(source, target, after);
+    if (!current.targetId) {
+      return;
+    }
+    if (current.kind === 'node') {
+      session.reorderNode(current.id, current.targetId, current.after);
+    } else if (current.kind === 'layer') {
+      session.reorderTextureLayer(current.id, current.targetId, current.after);
+    } else {
+      session.reorderShapeKeys(current.id, current.targetId, current.after);
     }
   }
 
@@ -569,126 +603,7 @@
     window.removeEventListener('pointermove', reorderMove);
     window.removeEventListener('pointerup', reorderEnd);
     window.removeEventListener('pointercancel', cleanupReorder);
-    reorderPointerId = null;
-    draggedNodeId = null;
-    dropTargetId = null;
-    dropAfter = false;
-  }
-
-  function beginLayerReorder(event: PointerEvent, layerId: string): void {
-    if (event.pointerType === 'mouse' && event.button !== 0) {
-      return;
-    }
-    event.preventDefault();
-    draggedLayerId = layerId;
-    layerDropTargetId = null;
-    layerReorderPointerId = event.pointerId;
-    window.addEventListener('pointermove', reorderLayerMove);
-    window.addEventListener('pointerup', reorderLayerEnd);
-    window.addEventListener('pointercancel', cleanupLayerReorder);
-  }
-
-  function reorderLayerMove(event: PointerEvent): void {
-    if (event.pointerId !== layerReorderPointerId || !draggedLayerId) {
-      return;
-    }
-    event.preventDefault();
-    const target = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>('[data-texture-layer-id]');
-    if (!target) {
-      layerDropTargetId = null;
-      return;
-    }
-    const id = target.dataset.textureLayerId ?? null;
-    if (!id || id === draggedLayerId) {
-      layerDropTargetId = null;
-      return;
-    }
-    const rect = target.getBoundingClientRect();
-    layerDropTargetId = id;
-    layerDropAfter = event.clientY > rect.top + rect.height / 2;
-  }
-
-  function reorderLayerEnd(event: PointerEvent): void {
-    if (event.pointerId !== layerReorderPointerId) {
-      return;
-    }
-    const source = draggedLayerId;
-    const target = layerDropTargetId;
-    const after = layerDropAfter;
-    cleanupLayerReorder();
-    if (source && target) {
-      session.reorderTextureLayer(source, target, after);
-    }
-  }
-
-  function cleanupLayerReorder(): void {
-    window.removeEventListener('pointermove', reorderLayerMove);
-    window.removeEventListener('pointerup', reorderLayerEnd);
-    window.removeEventListener('pointercancel', cleanupLayerReorder);
-    layerReorderPointerId = null;
-    draggedLayerId = null;
-    layerDropTargetId = null;
-    layerDropAfter = false;
-  }
-
-  function beginShapeReorder(event: PointerEvent, keyId: string): void {
-    if (event.pointerType === 'mouse' && event.button !== 0) {
-      return;
-    }
-    event.preventDefault();
-    draggedShapeKeyId = keyId;
-    shapeDropTargetId = null;
-    shapeReorderPointerId = event.pointerId;
-    window.addEventListener('pointermove', reorderShapeMove);
-    window.addEventListener('pointerup', reorderShapeEnd);
-    window.addEventListener('pointercancel', cleanupShapeReorder);
-  }
-
-  function reorderShapeMove(event: PointerEvent): void {
-    if (event.pointerId !== shapeReorderPointerId || !draggedShapeKeyId) {
-      return;
-    }
-    event.preventDefault();
-    const target = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>('[data-shape-key-id]');
-    if (!target) {
-      shapeDropTargetId = null;
-      return;
-    }
-    const id = target.dataset.shapeKeyId ?? null;
-    if (!id || id === draggedShapeKeyId) {
-      shapeDropTargetId = null;
-      return;
-    }
-    const rect = target.getBoundingClientRect();
-    shapeDropTargetId = id;
-    shapeDropAfter = event.clientY > rect.top + rect.height / 2;
-  }
-
-  function reorderShapeEnd(event: PointerEvent): void {
-    if (event.pointerId !== shapeReorderPointerId) {
-      return;
-    }
-    const source = draggedShapeKeyId;
-    const target = shapeDropTargetId;
-    const after = shapeDropAfter;
-    cleanupShapeReorder();
-    if (source && target) {
-      session.reorderShapeKeys(source, target, after);
-    }
-  }
-
-  function cleanupShapeReorder(): void {
-    window.removeEventListener('pointermove', reorderShapeMove);
-    window.removeEventListener('pointerup', reorderShapeEnd);
-    window.removeEventListener('pointercancel', cleanupShapeReorder);
-    shapeReorderPointerId = null;
-    draggedShapeKeyId = null;
-    shapeDropTargetId = null;
-    shapeDropAfter = false;
+    reorder = null;
   }
 
   function toggleNodeVisibility(
@@ -861,6 +776,17 @@
     session.updateModifier(modifierId, { units } as ModifierPatch);
   }
 
+  /** True when Apply through would also bake earlier geometry modifiers. */
+  function hasEarlierGeometry(index: number): boolean {
+    return modifiers
+      .slice(0, index)
+      .some(
+        (item) =>
+          item.enabled &&
+          MODIFIER_DEFINITIONS[item.type].category === 'geometry'
+      );
+  }
+
   function toggleAxis(axis: Exclude<AxisLock, null>): void {
     session.setAxisLock(
       session.snapshot.axisLock === axis ? null : axis
@@ -875,14 +801,14 @@
           selected={selectedNodeIds.includes(node.id)}
           {child}
           hidden={!node.visible}
-          dragging={draggedNodeId === node.id}
-          dropTarget={dropTargetId === node.id}
-          dropAfter={dropAfter}
+          dragging={reorder?.kind === 'node' && reorder.id === node.id}
+          dropTarget={reorder?.kind === 'node' && reorder.targetId === node.id}
+          dropAfter={reorder?.kind === 'node' && reorder.after}
           nodeId={node.id}
           dragLabel={`Drag to reorder ${node.name}`}
           dragTitle={canEdit3d ? 'Drag to reorder' : 'Reordering is available in Model'}
           dragDisabled={!canEdit3d}
-          onDragStart={(event) => beginReorder(event, node.id)}
+          onDragStart={(event) => beginReorder('node', event, node.id)}
           visible={node.visible}
           visibilityLabel={node.visible ? `Hide ${node.name}` : `Show ${node.name}`}
           onToggleVisibility={(event) => toggleNodeVisibility(event, node.id, node.visible)}
@@ -897,19 +823,7 @@
             <Icon name={primitiveGlyph[node.primitive]} size={14} />
           </span>
           <span class="object-name">{node.name}</span>
-          <span class="object-kind">
-            {node.primitive === 'reference'
-              ? 'Reference'
-              : node.primitive === 'quadsphere'
-                ? 'Sphere'
-                : node.primitive === 'cube'
-                  ? 'Cube'
-                  : node.primitive === 'cylinder'
-                    ? 'Cylinder'
-                    : node.primitive === 'imported'
-                      ? 'Mesh'
-                      : 'Grid'}
-          </span>
+          <span class="object-kind">{itemKind(node)}</span>
         </OutlinerRow>
       {/snippet}
 
@@ -951,6 +865,23 @@
         aria-label="Replace reference image"
         onchange={replaceReferenceImage}
       />
+      {#if canEdit3d}
+        <CreateRow
+          label="Primitive type"
+          value={primitive}
+          options={primitiveOptions}
+          onChange={(value) => (primitive = value as PrimitiveKind)}
+          onAdd={addPrimitive}
+        >
+          <ActionButton
+            label="Reference"
+            icon="image"
+            disabled={session.snapshot.fileBusy}
+            onActivate={() => referenceImportInput.click()}
+          />
+        </CreateRow>
+      {/if}
+
       <div class="object-list">
         {#each groups as group (group.id)}
           <OutlinerRow
@@ -967,7 +898,7 @@
             <span class="object-glyph"><Icon name="folder" size={14} /></span>
             <span class="object-name">{group.name}</span>
             <span class="object-kind">
-              {objectCount(sceneNodes.filter((node) => node.parentId === group.id).length)}
+              {plural(sceneNodes.filter((node) => node.parentId === group.id).length, 'object')}
             </span>
           </OutlinerRow>
           {#each sceneNodes.filter((node) => node.parentId === group.id) as node (node.id)}
@@ -1024,23 +955,6 @@
           </ActionRow>
           <p class="hint">Editor-only; excluded from renders and exports.</p>
         </div>
-      {/if}
-
-      {#if canEdit3d}
-        <CreateRow
-          label="Primitive type"
-          value={primitive}
-          options={primitiveOptions}
-          onChange={(value) => (primitive = value as PrimitiveKind)}
-          onAdd={addPrimitive}
-        >
-          <ActionButton
-            label="Reference"
-            icon="image"
-            disabled={session.snapshot.fileBusy}
-            onActivate={() => referenceImportInput.click()}
-          />
-        </CreateRow>
       {/if}
 
       <ActionRow>
@@ -1153,7 +1067,7 @@
               onCommit={(value) => session.renameAnimationClip(value)}
             />
             <span class="texture-kind">
-              {animationClips.length} clip{animationClips.length === 1 ? '' : 's'}
+              {plural(animationClips.length, 'clip')}
             </span>
           </div>
           <div class="render-field">
@@ -1219,7 +1133,7 @@
         <div class="render-look-head">
           <span>Shape keys</span>
           <span>
-            {shapeKeys.length} key{shapeKeys.length === 1 ? '' : 's'}
+            {plural(shapeKeys.length, 'key')}
             {#if activeShapeWeightTrack}
               · {activeShapeWeightTrack.keyframes.length} keyed
             {/if}
@@ -1266,9 +1180,9 @@
                   <OutlinerRow
                     active={key.id === activeShapeKey?.id}
                     hidden={!key.visible}
-                    dragging={draggedShapeKeyId === key.id}
-                    dropTarget={shapeDropTargetId === key.id}
-                    dropAfter={shapeDropAfter}
+                    dragging={reorder?.kind === 'shape' && reorder.id === key.id}
+                    dropTarget={reorder?.kind === 'shape' && reorder.targetId === key.id}
+                    dropAfter={reorder?.kind === 'shape' && reorder.after}
                     showVisibility
                     visible={key.visible}
                     visibilityLabel={key.visible
@@ -1276,7 +1190,7 @@
                       : `Show ${key.name}`}
                     dragLabel={`Reorder ${key.name}`}
                     dragTitle="Drag to reorder"
-                    onDragStart={(event) => beginShapeReorder(event, key.id)}
+                    onDragStart={(event) => beginReorder('shape', event, key.id)}
                     onToggleVisibility={() =>
                       session.setShapeKeyVisible(key.id, !key.visible)}
                     selectLabel={`Select ${key.name}`}
@@ -1301,9 +1215,7 @@
                   onCommit={(value) =>
                     session.renameShapeKey(activeShapeKey.id, value)}
                 />
-                {#if shapeEditingId}
-                  <p class="hint">Edit the target, then Finish.</p>
-                {:else}
+                {#if !shapeEditingId}
                   <SliderField
                     label="Weight"
                     value={activeShapeKey.weight}
@@ -1337,8 +1249,8 @@
                   </ActionRow>
                   <p class="hint">
                     {#if activeShapeWeightTrack}
-                      {activeShapeWeightTrack.keyframes.length} weight
-                      key{activeShapeWeightTrack.keyframes.length === 1 ? '' : 's'} in the timeline.
+                      {plural(activeShapeWeightTrack.keyframes.length, 'weight key')}
+                      in the timeline.
                     {:else}
                       No weight keys yet; Key weight writes one at the playhead.
                     {/if}
@@ -1360,7 +1272,7 @@
     {#snippet animationSection()}
       <InspectorSection
         title="Object animation"
-        meta={`${activeNode?.name ?? 'No object'} · ${activeObjectTrackCount} track${activeObjectTrackCount === 1 ? '' : 's'}`}
+        meta={`${activeNode?.name ?? 'No object'} · ${plural(activeObjectTrackCount, 'track')}`}
         open={sections.animation}
         onToggle={(open) => setSection('animation', open)}
       >
@@ -1370,7 +1282,7 @@
               <span>Mesh motion</span>
               <span>
                 {activeMeshTrack
-                  ? `${activeMeshTrack.keyframes.length} key${activeMeshTrack.keyframes.length === 1 ? '' : 's'}`
+                  ? plural(activeMeshTrack.keyframes.length, 'key')
                   : 'No keys'}
               </span>
             </div>
@@ -1420,7 +1332,7 @@
               <span>Texture</span>
               <span>
                 {activeTextureTrack
-                  ? `${activeTextureTrack.keyframes.length} key${activeTextureTrack.keyframes.length === 1 ? '' : 's'}`
+                  ? plural(activeTextureTrack.keyframes.length, 'key')
                   : 'No track'}
               </span>
             </div>
@@ -1465,7 +1377,7 @@
     {#snippet modulatorsSection()}
       <InspectorSection
         title="Modulators"
-        meta={`${session.snapshot.animationModulators.length} modulator${session.snapshot.animationModulators.length === 1 ? '' : 's'}`}
+        meta={plural(session.snapshot.animationModulators.length, 'modulator')}
         open={sections.modulators}
         onToggle={(open) => setSection('modulators', open)}
       >
@@ -1478,7 +1390,7 @@
     {#snippet cameraSection()}
 <InspectorSection
       title="Camera"
-      meta={`${cameras.length} camera${cameras.length === 1 ? '' : 's'}`}
+      meta={plural(cameras.length, 'camera')}
       open={sections.camera}
       onToggle={(open) => setSection('camera', open)}
     >
@@ -1491,7 +1403,7 @@
           />
         </ActionRow>
         {#if activeCamera && animationTracks.some((track) => track.kind === 'camera' && track.targetId === activeCamera.id)}
-          <p class="hint">Camera edits auto-key on this track.</p>
+          <p class="hint">Edits auto-key while this track exists.</p>
         {/if}
         <div class="object-list">
           {#each cameras as camera (camera.id)}
@@ -1515,7 +1427,7 @@
           {/each}
         </div>
         {#if cameras.length === 0}
-          <p class="hint">Add a camera from the current viewport view for rendering.</p>
+          <p class="hint">No cameras yet.</p>
         {/if}
         {#if activeCamera}
           <div class="selected-name-row">
@@ -1704,13 +1616,13 @@
             })}
         />
         <p class="texture-note">
-          The live preview always uses PCF; this setting applies to final render and export.
+          Preview uses PCF.
           {#if session.snapshot.renderShadowMode === 'raytraced'}
-            Ray traced final is slower and supports animation and all lights.
+            Final: ray traced, all lights, slower.
           {:else if session.snapshot.renderShadowMode === 'baked'}
-            Baked final uses existing baked lighting textures. Static objects and lights only; animated geometry or lights will be stale.
+            Final: existing baked lighting; static objects and lights only.
           {:else}
-            PCF final uses the fast viewport shadow map.
+            Final: PCF viewport shadows.
           {/if}
         </p>
         <Switch
@@ -1730,7 +1642,7 @@
         {#if activeCamera}
           <p class="texture-note">Rendering through {activeCamera.name}.</p>
         {:else}
-          <p class="texture-note">Add a camera from the Camera section before rendering.</p>
+          <p class="texture-note">Add a camera in Camera first.</p>
         {/if}
         <ActionRow align="end">
           <ActionButton
@@ -1765,12 +1677,12 @@
     {#snippet lightSection()}
 <InspectorSection
       title="Lighting"
-      meta={`${lights.length} light${lights.length === 1 ? '' : 's'}`}
+      meta={plural(lights.length, 'light')}
       open={sections.light}
       onToggle={(open) => setSection('light', open)}
     >
       <div class="module-body">
-        <ActionRow align="between">
+        <ActionRow>
           <ActionMenu
             label="Add light"
             icon="plus"
@@ -1788,13 +1700,9 @@
               }
             ]}
           />
-          <span class="texture-note">{lights.length} {lights.length === 1 ? 'light' : 'lights'}</span>
         </ActionRow>
         {#if activeLight && animationTracks.some((track) => track.kind === 'light' && track.targetId === activeLight.id)}
-          <p class="hint">
-            Light position, direction, and intensity auto-key at the current
-            frame while its animation track exists.
-          </p>
+          <p class="hint">Edits auto-key while this track exists.</p>
         {/if}
         <div class="light-list">
           {#each lights as light (light.id)}
@@ -1812,12 +1720,12 @@
                 <Icon name={light.kind === 'directional' ? 'sun' : 'lamp'} size={14} />
               </span>
               <span class="object-name">{light.name}</span>
-              <span class="object-kind">{light.kind}</span>
+              <span class="object-kind">{light.kind === 'directional' ? 'Directional' : 'Point'}</span>
             </OutlinerRow>
           {/each}
         </div>
         {#if lights.length === 0}
-          <p class="hint">Add a directional or point light to illuminate the model.</p>
+          <p class="hint">No lights yet.</p>
         {/if}
         {#if activeLight}
           <div class="selected-name-row">
@@ -1826,7 +1734,7 @@
               value={activeLight.name}
               onCommit={(value) => session.updateActiveLight({ name: value })}
             />
-            <span class="texture-kind">{activeLight.kind}</span>
+            <span class="texture-kind">{activeLight.kind === 'directional' ? 'Directional' : 'Point'}</span>
           </div>
           <ColorField
             label="Color"
@@ -1898,12 +1806,6 @@
           onChange={(value) => session.setAmbientIntensity(value)}
         />
         <div class="light-divider"></div>
-        <div class="light-subhead">
-          <span>Ambient occlusion</span>
-          <span class="texture-note">
-            {session.snapshot.ambientOcclusion.enabled ? 'Preview + bake' : 'Off'}
-          </span>
-        </div>
         <Switch
           label="Ambient occlusion"
           description="Preview crevice shading in Lit and include it in Bake lighting."
@@ -1962,15 +1864,13 @@
         {/if}
         <div class="light-divider"></div>
         <div class="light-bake">
-          <span>
-            Bake active object lighting into a texture layer
-            {#if activeNode}
-              <strong>{activeNode.name}</strong>
-            {:else}
-              <strong>select an object first</strong>
-            {/if}
+          <span class="light-bake-title">Bake lighting</span>
+          <span class="texture-note">
+            {activeNode ? activeNode.name : 'Select an object first.'}
           </span>
-          <span class="texture-note">Direct light, shadows, and AO (when enabled). Overlapping UVs bake into a copy.</span>
+          <span class="texture-note">
+            Direct light, shadows, and AO. Overlapping UVs bake into a copy.
+          </span>
           <ActionButton
             label={session.snapshot.bakeBusy ? 'Baking…' : 'Bake lighting'}
             icon="lit"
@@ -2033,7 +1933,7 @@
       </dl>
       <Switch
         label="Two-sided"
-        description="Render backfaces. Use with transparent/Cutout textures for foliage cards and other billboard planes."
+        description="Render backfaces for foliage cards and other billboard planes."
         checked={activeNode?.doubleSided ?? false}
         onChange={(value) => session.setActiveNodeDoubleSided(value)}
       />
@@ -2070,7 +1970,7 @@
 
       {:else if activeNodeId === null}
         <p class="empty-state">
-          The scene is empty. Add a QuadSphere, Cylinder, or Grid above.
+          Scene is empty. Add a primitive above.
         </p>
       {:else if selectionCount === 0}
         <p class="empty-state">
@@ -2194,7 +2094,7 @@
             </ActionRow>
             {#if session.snapshot.seamCount > 0}
               <p class="hint">
-                {session.snapshot.seamCount} seam{session.snapshot.seamCount === 1 ? '' : 's'} on this mesh.
+                {plural(session.snapshot.seamCount, 'seam')} on this mesh.
               </p>
             {/if}
           </div>
@@ -2242,7 +2142,7 @@
               max={512}
               step={1}
               precision={0}
-              unit="px"
+              unit="texels"
               onChange={(value) => session.setUvBrushSize(value)}
             />
             <SliderField
@@ -2314,7 +2214,7 @@
               onChange={(value) => session.setPaintNoise(value)}
             />
             <SliderField
-              label="Taper in (px)"
+              label="Taper in (texels)"
               value={session.snapshot.paintTaperIn}
               min={0}
               max={256}
@@ -2441,7 +2341,7 @@
       >
         <div id="modifiers-body" class="module-body">
         {#if activeNodeId === null}
-          <p class="empty-state">Select a mesh object to edit its stack.</p>
+          <p class="empty-state">Select a mesh object to edit its modifier stack.</p>
         {:else}
           <CreateRow
             label="Modifier type"
@@ -2822,30 +2722,16 @@
                       </label>
                     {/if}
                   </div>
-                  <DangerAction
-                    label="Remove modifier"
-                    onActivate={() => session.removeModifier(modifier.id)}
-                  />
                   {#if MODIFIER_DEFINITIONS[modifier.type].category === 'geometry'}
                     <ActionRow align="end">
                       <span
                         class="modifier-apply"
-                        title={modifiers
-                          .slice(0, index)
-                          .some((item) =>
-                            item.enabled &&
-                            MODIFIER_DEFINITIONS[item.type].category === 'geometry'
-                          )
+                        title={hasEarlierGeometry(index)
                           ? 'Applies this and earlier enabled geometry modifiers so the remaining stack is unchanged.'
                           : 'Bake this modifier into the editable base mesh.'}
                       >
                         <ActionButton
-                          label={modifiers
-                            .slice(0, index)
-                            .some((item) =>
-                              item.enabled &&
-                              MODIFIER_DEFINITIONS[item.type].category === 'geometry'
-                            )
+                          label={hasEarlierGeometry(index)
                             ? 'Apply through'
                             : 'Apply modifier'}
                           icon="merge"
@@ -2855,6 +2741,10 @@
                       </span>
                     </ActionRow>
                   {/if}
+                  <DangerAction
+                    label="Remove modifier"
+                    onActivate={() => session.removeModifier(modifier.id)}
+                  />
                 </div>
               {/each}
             </div>
@@ -2917,8 +2807,18 @@
             </span>
           </div>
           <div class="texture-asset-meta">
-            <span>{textureUsage} object{textureUsage === 1 ? '' : 's'}</span>
-            <span>{activeTextureAsset?.filter ?? 'nearest'}</span>
+            <span>{plural(textureUsage, 'object')}</span>
+            <ActionButton
+              label={selectionUsesActiveTexture ? 'Unassign' : 'Assign'}
+              icon={selectionUsesActiveTexture ? 'close' : 'texture-wire'}
+              disabled={selectedNodeIds.length === 0}
+              onActivate={() =>
+                session.assignTextureToSelection(
+                  selectionUsesActiveTexture
+                    ? null
+                    : session.snapshot.textureAssetId
+                )}
+            />
           </div>
           <ActionRow>
             <ActionMenu
@@ -2929,17 +2829,8 @@
                 ...[64, 128, 256, 512, 1024, 2048, 4096].map((size) => ({
                   label: `${size}² texture`,
                   onSelect: () => session.createTextureAsset(size, size)
-                })),
-                {
-                  label: 'Custom size…',
-                  separatorBefore: true,
-                  onSelect: () => (newTextureOpen = true)
-                }
+                }))
               ]}
-            />
-            <ActionButton
-              label="Custom size"
-              onActivate={() => (newTextureOpen = true)}
             />
             <ActionButton
               label="Duplicate"
@@ -2948,14 +2839,8 @@
               onActivate={() => void session.duplicateActiveTextureAsset()}
             />
             <ActionButton
-              label={selectionUsesActiveTexture ? 'Unassign' : 'Assign'}
-              icon={selectionUsesActiveTexture ? 'close' : 'texture-wire'}
-              onActivate={() =>
-                session.assignTextureToSelection(
-                  selectionUsesActiveTexture
-                    ? null
-                    : session.snapshot.textureAssetId
-                )}
+              label="Custom size"
+              onActivate={() => (newTextureOpen = true)}
             />
           </ActionRow>
           <div class="texture-property-pair">
@@ -3043,12 +2928,12 @@
               <OutlinerRow
                 active={session.snapshot.textureActiveId === layer.id}
                 hidden={!layer.visible}
-                dragging={draggedLayerId === layer.id}
-                dropTarget={layerDropTargetId === layer.id}
-                dropAfter={layerDropAfter}
+                dragging={reorder?.kind === 'layer' && reorder.id === layer.id}
+                dropTarget={reorder?.kind === 'layer' && reorder.targetId === layer.id}
+                dropAfter={reorder?.kind === 'layer' && reorder.after}
                 textureLayerId={layer.id}
                 dragLabel={`Drag to reorder ${layer.name}`}
-                onDragStart={(event) => beginLayerReorder(event, layer.id)}
+                onDragStart={(event) => beginReorder('layer', event, layer.id)}
                 visible={layer.visible}
                 visibilityLabel={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
                 onToggleVisibility={() => session.toggleTextureLayer(layer.id)}
@@ -3256,8 +3141,7 @@
       >
         <div class="module-body">
           <p class="hint">
-            Fixed one-texel grid with 1 px padding between islands. Islands keep
-            their relative size; Relax and Pack apply to all seam islands.
+            1 px grid with 1 px island padding. Packing keeps relative island size.
           </p>
           {#if activeNode && pixelTexture}
             <dl class="stats">
@@ -3283,15 +3167,14 @@
               />
             </ActionRow>
             <p class="hint">
-              Pack uses the current texture resolution; re-pack after resizing
-              it. It expects a non-overlapping unwrap. Thin cuts stay unsnapped
-              so they cannot close.
+              Pack uses the current texture resolution; re-pack after resizing.
+              It expects a non-overlapping unwrap; thin cuts stay unsnapped.
             </p>
           {:else if !activeNode}
-            <p class="hint">Select a mesh object to use pixel cells.</p>
+            <p class="hint">Select a mesh object to use the pixel grid.</p>
           {:else}
             <p class="hint">
-              Assign a texture to this object in Paint to enable pixel cells.
+              Assign a texture in Paint to enable the pixel grid.
             </p>
           {/if}
         </div>
@@ -3301,7 +3184,7 @@
     {#snippet effectsSection()}
       <InspectorSection
         title="Render effects"
-        meta={`${session.snapshot.renderEffects.length} effect${session.snapshot.renderEffects.length === 1 ? '' : 's'} · project`}
+        meta={`${plural(session.snapshot.renderEffects.length, 'effect')} · project`}
         open={sections.effects}
         onToggle={(open) => setSection('effects', open)}
       >
@@ -3636,17 +3519,6 @@
     box-shadow: inset 0 0 0 1px currentColor;
   }
 
-  .modifier-field select {
-    min-height: var(--control-h);
-    min-width: 0;
-    border: var(--hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    color: var(--text-secondary);
-    font-family: var(--font-body);
-    font-size: var(--text-2xs);
-  }
-
   .modifier-error {
     margin: 0;
     padding: var(--space-2);
@@ -3860,6 +3732,8 @@
   .texture-asset-meta {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: var(--space-2);
     color: var(--text-tertiary);
     font-family: var(--font-mono);
@@ -3870,12 +3744,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--inspector-row-gap);
-  }
-
-  .texture-usage {
-    color: var(--text-tertiary);
-    font-family: var(--font-mono);
-    font-size: var(--text-2xs);
   }
 
   .texture-note {
@@ -3917,6 +3785,11 @@
     color: var(--text-tertiary);
     font-size: var(--text-2xs);
     line-height: var(--leading-ui);
+  }
+
+  .light-bake-title {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
   }
 
   .texture-layer-swatch {
@@ -4019,20 +3892,6 @@
   .render-field :global(.number-field) {
     max-width: 96px;
     justify-self: end;
-  }
-
-  .animation-track-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .animation-keys {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    max-height: 112px;
-    overflow-y: auto;
   }
 
   .shape-key-list {

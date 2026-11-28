@@ -789,10 +789,11 @@
         onActivate={() => session.unwrapUv()}
       />
       <IconButton
-        label="Pixel art layout"
+        label={pixelArtMode ? 'Hide pixel grid' : 'Show pixel grid'}
         icon="pixel-grid"
-        tooltip="Pixel art UV layout"
+        tooltip={pixelArtMode ? 'Hide 1 px pixel grid' : 'Show 1 px pixel grid'}
         active={pixelArtMode}
+        pressed={pixelArtMode}
         onActivate={() => session.setPixelArtMode(!pixelArtMode)}
       />
       <IconButton
