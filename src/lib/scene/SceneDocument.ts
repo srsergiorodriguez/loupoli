@@ -5,6 +5,7 @@ import {
   type PrimitiveKind
 } from '../geometry/primitives';
 import { applyDefaultSeams } from '../geometry/defaultSeams';
+import { unwrapDefaultPrimitive } from '../geometry/defaultUvs';
 import { MeshNode, type NodeSummary } from './MeshNode';
 import { SceneGroup, type GroupSummary } from './SceneGroup';
 import {
@@ -55,6 +56,7 @@ export class SceneDocument {
     const document = new SceneDocument();
     const mesh = createPrimitiveMesh(kind);
     applyDefaultSeams(mesh, kind);
+    unwrapDefaultPrimitive(mesh);
     document.insertNode(
       new MeshNode(mesh, kind, PRIMITIVE_LABELS[kind], undefined, textureId)
     );
@@ -321,6 +323,7 @@ export class SceneDocument {
     const name = index === 1 ? base : `${base} ${index}`;
     const mesh = createPrimitiveMesh(kind);
     applyDefaultSeams(mesh, kind);
+    unwrapDefaultPrimitive(mesh);
     return new MeshNode(mesh, kind, name, undefined, textureId);
   }
 
