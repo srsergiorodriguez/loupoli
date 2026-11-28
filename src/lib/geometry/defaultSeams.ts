@@ -33,6 +33,15 @@ export function applyDefaultSeams(
   kind: PrimitiveKind
 ): void {
   if (kind === 'grid') {
+    // A grid is already one open chart. Mark only its perimeter edges as
+    // seams; the interior remains continuous and no extra chart is created.
+    for (let edge = 0; edge < mesh.edgeCount; edge += 1) {
+      const halfEdge = mesh.edgeHalfEdge[edge];
+      const twin = mesh.heTwin[halfEdge];
+      if (twin < 0 || mesh.heFace[twin] < 0) {
+        mesh.setEdgeSeam(edge, true);
+      }
+    }
     return;
   }
   const faceCount = mesh.faceCount;
@@ -89,14 +98,18 @@ export function applyDefaultSeams(
       mesh.setEdgeSeam(edge, true);
     }
   }
-  // Keep each default chart simple enough for the vertex-indexed LSCM chart
-  // model: two-face cube strips and one grid patch per QuadSphere side.
+  // Cube: a standard six-face cross net. The four side faces remain a ring,
+  // while the top and bottom attach to the front face. This gives LSCM one
+  // disk chart instead of three unrelated strips. The other primitives keep
+  // their full patch boundaries.
   const connectedPairs =
     kind === 'cube'
       ? [
-          [0, 2],
-          [1, 3],
-          [4, 5]
+          [2, 3],
+          [3, 4],
+          [4, 5],
+          [1, 2],
+          [0, 2]
         ]
       : [];
   for (const [first, second] of connectedPairs) {
