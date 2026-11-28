@@ -1982,6 +1982,25 @@
     </InspectorSection>
 {/snippet}
 
+    {#snippet applyTransformsAction()}
+      <ActionRow align="end">
+        <ActionButton
+          label="Apply transforms"
+          icon="merge"
+          disabled={!session.snapshot.canApplyTransforms}
+          onActivate={() => session.applyAllTransforms()}
+        />
+      </ActionRow>
+      {#if session.snapshot.applyTransformsBlockedReason}
+        <p class="hint">{session.snapshot.applyTransformsBlockedReason}</p>
+      {:else}
+        <p class="hint">
+          Bakes position, rotation, and scale into the mesh and shape keys.
+          Group transforms remain.
+        </p>
+      {/if}
+    {/snippet}
+
     {#snippet meshSection()}
 <InspectorSection
       title="Mesh"
@@ -2018,22 +2037,6 @@
         checked={activeNode?.doubleSided ?? false}
         onChange={(value) => session.setActiveNodeDoubleSided(value)}
       />
-      <ActionRow align="end">
-        <ActionButton
-          label="Apply all transforms"
-          icon="merge"
-          disabled={!session.snapshot.canApplyTransforms}
-          onActivate={() => session.applyAllTransforms()}
-        />
-      </ActionRow>
-      {#if session.snapshot.applyTransformsBlockedReason}
-        <p class="hint">{session.snapshot.applyTransformsBlockedReason}</p>
-      {:else}
-        <p class="hint">
-          Bakes object position, rotation, and scale into the mesh and shape
-          keys. Group transforms remain.
-        </p>
-      {/if}
       {/if}
     </InspectorSection>
 {/snippet}
@@ -2419,7 +2422,9 @@
               onCommit={commitScale}
             />
           </div>
-
+          {#if activeNodeId !== null}
+            {@render applyTransformsAction()}
+          {/if}
         {:else}
           <p class="empty-state">No active object to transform.</p>
         {/if}
