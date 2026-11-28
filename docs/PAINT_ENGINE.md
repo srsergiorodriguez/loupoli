@@ -25,7 +25,7 @@ Bundled presets set brush hardness, smoothing, spacing, noise, pressure response
 
 ### Brush size
 
-In the Paint pane, Brush Size is a **texture-space diameter in texels**. Projection converts the local UV density under the first surface hit into a screen-space radius and holds that radius for the gesture, so a stroke crossing charts with different UV density remains continuous on screen. Zoom and surface orientation still change the resulting texel footprint.
+In the Paint pane, Brush Size is a **texture-space diameter in texels, from 1 to 512**. Projection converts the local UV density under the first surface hit into a screen-space radius and holds that radius for the gesture, so a stroke crossing charts with different UV density remains continuous on screen. Zoom and surface orientation still change the resulting texel footprint.
 
 ### `StrokeSampler`
 

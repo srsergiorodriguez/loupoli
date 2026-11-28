@@ -124,7 +124,7 @@
   {#if session.snapshot.paintTool !== 'gradient'}
     <BrushPreview {settings} />
   {/if}
-  <span class="paint-size">{session.snapshot.uvBrushSize} texels</span>
+  <span class="paint-size">{session.snapshot.uvBrushSize} texel{session.snapshot.uvBrushSize === 1 ? '' : 's'}</span>
   <span class="paint-divider" aria-hidden="true"></span>
   <IconButton
     label="Fill selected faces or UV islands"
@@ -133,6 +133,15 @@
     tooltipPlacement="bottom"
     disabled={!canFillSelection}
     onActivate={() => session.fillPaintSelection()}
+  />
+  <IconButton
+    label={session.snapshot.pixelArtMode ? 'Hide pixel grid' : 'Show pixel grid'}
+    icon="grid"
+    active={session.snapshot.pixelArtMode}
+    pressed={session.snapshot.pixelArtMode}
+    tooltip={session.snapshot.pixelArtMode ? 'Hide 1 px pixel grid' : 'Show 1 px pixel grid'}
+    tooltipPlacement="bottom"
+    onActivate={() => session.setPixelArtMode(!session.snapshot.pixelArtMode)}
   />
   <IconButton
     label={session.snapshot.paintUvOverlay ? 'Hide UV overlay' : 'Show UV overlay'}

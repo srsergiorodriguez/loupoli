@@ -126,6 +126,7 @@ import { rgbToHex } from '../paint/color';
 import { brushPreset, type BrushPresetId } from '../paint/presets';
 import {
   drawTextureChecker,
+  drawTexturePixelGrid,
   drawTextureSurface,
   prepareTextureSurface
 } from '../texture/TextureSurface';
@@ -3809,7 +3810,7 @@ export class EditorRuntime {
   }
 
   setUvBrushSize(size: number): void {
-    this.uvBrushSize = Math.min(512, Math.max(2, size));
+    this.uvBrushSize = Math.min(512, Math.max(1, size));
     this.publish();
   }
 
@@ -4284,6 +4285,15 @@ export class EditorRuntime {
     };
     drawTextureChecker(context, textureRect);
     drawTextureSurface(context, this.textureStack, textureRect);
+    if (this.pixelArtMode) {
+      drawTexturePixelGrid(
+        context,
+        textureRect,
+        this.textureStack.width,
+        this.textureStack.height,
+        1
+      );
+    }
     this.drawImagePlacement(context, textureRect);
     const node = this.getActiveNode();
     if (this.paintUvOverlay && node) {
@@ -5009,7 +5019,7 @@ export class EditorRuntime {
     asset: TextureAsset
   ): number {
     const texelsPerCss = Math.max(1e-6, hit.uvPerCssPixel * asset.width);
-    return Math.max(2, Math.min(320, this.uvBrushSize / texelsPerCss));
+    return Math.max(1, Math.min(320, this.uvBrushSize / texelsPerCss));
   }
 
   /** Schedule one projected paint pass for the next displayed frame. */

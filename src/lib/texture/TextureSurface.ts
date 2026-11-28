@@ -113,6 +113,59 @@ export function drawTextureChecker(
 }
 
 /**
+ * Draw a one-texel grid clipped to a texture preview.
+ *
+ * The grid is skipped when its screen cells would be too dense to read, which
+ * keeps the fitted view from turning into a solid overlay.
+ */
+export function drawTexturePixelGrid(
+  context: CanvasRenderingContext2D,
+  rect: TextureSurfaceRect,
+  textureWidth: number,
+  textureHeight: number,
+  cellSize = 1
+): void {
+  if (
+    rect.width <= 0 ||
+    rect.height <= 0 ||
+    textureWidth <= 0 ||
+    textureHeight <= 0
+  ) {
+    return;
+  }
+  const cell = Math.max(1, Math.round(cellSize));
+  const screenCell =
+    (rect.width / Math.max(1, textureWidth)) * cell;
+  if (screenCell < 2.5) {
+    return;
+  }
+  const color =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue('--text-tertiary')
+      .trim() || '#8e8c96';
+  context.save();
+  context.beginPath();
+  context.rect(rect.x, rect.y, rect.width, rect.height);
+  context.clip();
+  context.strokeStyle = color;
+  context.globalAlpha = 0.42;
+  context.lineWidth = 1;
+  context.beginPath();
+  for (let x = cell; x < textureWidth; x += cell) {
+    const screenX = rect.x + (x / textureWidth) * rect.width;
+    context.moveTo(screenX, rect.y);
+    context.lineTo(screenX, rect.y + rect.height);
+  }
+  for (let y = cell; y < textureHeight; y += cell) {
+    const screenY = rect.y + (y / textureHeight) * rect.height;
+    context.moveTo(rect.x, screenY);
+    context.lineTo(rect.x + rect.width, screenY);
+  }
+  context.stroke();
+  context.restore();
+}
+
+/**
  * Draw the asset composite with the asset's own sampling filter.
  *
  * No caller is allowed to choose a different smoothing mode for the same

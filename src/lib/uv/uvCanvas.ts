@@ -9,6 +9,7 @@ import {
 import type { TextureAsset } from '../texture/TextureAsset';
 import {
   drawTextureChecker,
+  drawTexturePixelGrid,
   drawTextureSurface,
   prepareTextureSurface
 } from '../texture/TextureSurface';
@@ -174,27 +175,13 @@ export function drawUvCanvas(
     drawTextureSurface(context, textureAsset, imageRect);
   }
   if (pixelGrid && pixelGrid.textureWidth > 0 && pixelGrid.textureHeight > 0) {
-    context.save();
-    context.beginPath();
-    context.rect(imageRect.x, imageRect.y, imageRect.width, imageRect.height);
-    context.clip();
-    context.strokeStyle = cssToken('--text-tertiary', '#8e8c96');
-    context.globalAlpha = 0.42;
-    context.lineWidth = 1;
-    context.beginPath();
-    const cell = Math.max(1, Math.round(pixelGrid.cellSize));
-    for (let x = cell; x < pixelGrid.textureWidth; x += cell) {
-      const screenX = imageRect.x + (x / pixelGrid.textureWidth) * imageRect.width;
-      context.moveTo(screenX, imageRect.y);
-      context.lineTo(screenX, imageRect.y + imageRect.height);
-    }
-    for (let y = cell; y < pixelGrid.textureHeight; y += cell) {
-      const screenY = imageRect.y + (y / pixelGrid.textureHeight) * imageRect.height;
-      context.moveTo(imageRect.x, screenY);
-      context.lineTo(imageRect.x + imageRect.width, screenY);
-    }
-    context.stroke();
-    context.restore();
+    drawTexturePixelGrid(
+      context,
+      imageRect,
+      pixelGrid.textureWidth,
+      pixelGrid.textureHeight,
+      pixelGrid.cellSize
+    );
   }
   const toPoint = (u: number, v: number): [number, number] => {
     const point = uvToCanvas([u, v], projection);

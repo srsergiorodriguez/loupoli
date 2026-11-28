@@ -66,7 +66,7 @@
       }
     );
     return Math.max(
-      2,
+      1,
       (session.snapshot.uvBrushSize / activeAsset.width) * bounds.width
     );
   });

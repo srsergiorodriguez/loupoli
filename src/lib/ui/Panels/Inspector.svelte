@@ -2235,7 +2235,7 @@
             <SliderNumberField
               label="Size"
               value={session.snapshot.uvBrushSize}
-              min={2}
+              min={1}
               max={512}
               step={1}
               precision={0}
@@ -2931,6 +2931,11 @@
                   onSelect: () => (newTextureOpen = true)
                 }
               ]}
+            />
+            <ActionButton
+              label="Custom size"
+              icon="grid"
+              onActivate={() => (newTextureOpen = true)}
             />
             <ActionButton
               label="Duplicate"
